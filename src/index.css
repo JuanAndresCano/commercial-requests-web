@@ -4,100 +4,95 @@
 
 @layer base {
   :root {
-    /* Stripe-inspired palette */
-    --background: 220 30% 98%;
-    --foreground: 213 73% 14%;
+    /* Clean admin neutral palette */
+    --background: 0 0% 100%;
+    --foreground: 222 22% 18%;
 
     --card: 0 0% 100%;
-    --card-foreground: 213 73% 14%;
+    --card-foreground: 222 22% 18%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 213 73% 14%;
+    --popover-foreground: 222 22% 18%;
 
-    /* Deep navy primary (Stripe #0A2540) */
-    --primary: 213 73% 14%;
+    /* Primary = navy used sparingly */
+    --primary: 215 60% 24%;
     --primary-foreground: 0 0% 100%;
 
-    /* Indigo accent (Stripe #635BFF) */
-    --accent: 244 100% 68%;
+    /* Accent = calm blue (links, actions) */
+    --accent: 217 85% 50%;
     --accent-foreground: 0 0% 100%;
 
-    /* Cyan glow (#00D4FF) */
-    --brand-cyan: 191 100% 50%;
+    --brand-cyan: 217 85% 50%;
 
-    --secondary: 220 25% 96%;
-    --secondary-foreground: 213 73% 14%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 22% 18%;
 
-    --muted: 220 20% 95%;
-    --muted-foreground: 215 16% 45%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    --destructive: 0 78% 58%;
+    --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 69% 38%;
-    --warning: 38 95% 50%;
-    --info: 217 91% 60%;
+    --success: 152 55% 38%;
+    --warning: 38 92% 48%;
+    --info: 217 85% 50%;
 
-    --border: 220 18% 91%;
-    --input: 220 18% 91%;
-    --ring: 244 100% 68%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 85% 50%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
-    /* Gradients */
-    --gradient-brand: linear-gradient(135deg, hsl(244 100% 68%) 0%, hsl(191 100% 50%) 100%);
-    --gradient-hero: radial-gradient(ellipse at top, hsl(244 100% 68% / 0.08), transparent 60%),
-                     radial-gradient(ellipse at bottom right, hsl(191 100% 50% / 0.06), transparent 60%);
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 30% 99%) 100%);
-    --gradient-navy: linear-gradient(135deg, hsl(213 73% 14%) 0%, hsl(220 60% 22%) 100%);
+    /* Kept for compatibility but flattened */
+    --gradient-brand: hsl(217 85% 50%);
+    --gradient-hero: none;
+    --gradient-card: hsl(0 0% 100%);
+    --gradient-navy: hsl(215 60% 24%);
 
-    /* Shadows */
-    --shadow-xs: 0 1px 2px hsl(213 73% 14% / 0.04);
-    --shadow-sm: 0 1px 3px hsl(213 73% 14% / 0.06), 0 1px 2px hsl(213 73% 14% / 0.04);
-    --shadow-md: 0 4px 12px hsl(213 73% 14% / 0.06), 0 2px 4px hsl(213 73% 14% / 0.04);
-    --shadow-lg: 0 12px 32px hsl(213 73% 14% / 0.08), 0 4px 12px hsl(213 73% 14% / 0.04);
-    --shadow-glow: 0 8px 32px hsl(244 100% 68% / 0.18);
+    --shadow-xs: 0 1px 2px hsl(220 30% 15% / 0.04);
+    --shadow-sm: 0 1px 2px hsl(220 30% 15% / 0.05);
+    --shadow-md: 0 2px 6px hsl(220 30% 15% / 0.06);
+    --shadow-lg: 0 4px 12px hsl(220 30% 15% / 0.08);
+    --shadow-glow: 0 1px 2px hsl(220 30% 15% / 0.05);
 
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 213 73% 14%;
-    --sidebar-primary: 244 100% 68%;
+    --sidebar-foreground: 222 22% 18%;
+    --sidebar-primary: 217 85% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 25% 96%;
-    --sidebar-accent-foreground: 213 73% 14%;
-    --sidebar-border: 220 18% 91%;
-    --sidebar-ring: 244 100% 68%;
-
-    --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 222 22% 18%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 85% 50%;
   }
 
   .dark {
-    --background: 213 50% 7%;
-    --foreground: 220 30% 96%;
-    --card: 213 45% 10%;
-    --card-foreground: 220 30% 96%;
-    --popover: 213 45% 10%;
-    --popover-foreground: 220 30% 96%;
-    --primary: 244 100% 68%;
+    --background: 222 22% 10%;
+    --foreground: 210 20% 96%;
+    --card: 222 22% 12%;
+    --card-foreground: 210 20% 96%;
+    --popover: 222 22% 12%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 217 85% 55%;
     --primary-foreground: 0 0% 100%;
-    --accent: 244 100% 68%;
+    --accent: 217 85% 55%;
     --accent-foreground: 0 0% 100%;
-    --secondary: 213 35% 14%;
-    --secondary-foreground: 220 30% 96%;
-    --muted: 213 35% 14%;
-    --muted-foreground: 215 20% 65%;
-    --destructive: 0 78% 58%;
+    --secondary: 222 18% 16%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 222 18% 16%;
+    --muted-foreground: 220 10% 65%;
+    --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 213 30% 18%;
-    --input: 213 30% 18%;
-    --ring: 244 100% 68%;
-    --sidebar-background: 213 50% 7%;
-    --sidebar-foreground: 220 30% 96%;
-    --sidebar-primary: 244 100% 68%;
+    --border: 222 15% 20%;
+    --input: 222 15% 20%;
+    --ring: 217 85% 55%;
+    --sidebar-background: 222 22% 10%;
+    --sidebar-foreground: 210 20% 96%;
+    --sidebar-primary: 217 85% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 213 35% 14%;
-    --sidebar-accent-foreground: 220 30% 96%;
-    --sidebar-border: 213 30% 18%;
-    --sidebar-ring: 244 100% 68%;
+    --sidebar-accent: 222 18% 16%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 222 15% 20%;
+    --sidebar-ring: 217 85% 55%;
   }
 }
 
@@ -114,34 +109,10 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "ss01", "cv11";
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: "Urbanist", system-ui, sans-serif;
-    letter-spacing: -0.02em;
-  }
-}
-
-@layer components {
-  .surface-card {
-    background: var(--gradient-card);
-    box-shadow: var(--shadow-sm);
-    border: 1px solid hsl(var(--border));
-  }
-  .text-gradient-brand {
-    background: var(--gradient-brand);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .bg-hero {
-    background-image: var(--gradient-hero);
-  }
-  .bg-grid {
-    background-image:
-      linear-gradient(to right, hsl(var(--border) / 0.6) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--border) / 0.6) 1px, transparent 1px);
-    background-size: 48px 48px;
+    letter-spacing: -0.01em;
   }
 }

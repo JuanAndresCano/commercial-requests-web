@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, FileType, Send, Edit3, Building2, User, GraduationCap, Briefcase, Network, Layers } from "lucide-react";
+import { ArrowLeft, FileText, FileType, Send, Edit3 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { AppShell } from "@/components/AppShell";
@@ -17,27 +17,27 @@ export default function RequestDetail() {
   const req = MOCK_REQUESTS.find((r) => r.id === id) ?? MOCK_REQUESTS[3];
 
   const meta = [
-    { icon: Network, label: "Nodo asignado", value: req.node },
-    { icon: Layers, label: "Líder de Producto", value: req.productLeader },
-    { icon: Briefcase, label: "KAM responsable", value: req.kam },
-    { icon: GraduationCap, label: "Profesor responsable", value: req.professor ?? "—" },
+    { label: "Nodo asignado", value: req.node },
+    { label: "Líder de Producto", value: req.productLeader },
+    { label: "KAM responsable", value: req.kam },
+    { label: "Profesor", value: req.professor ?? "Sin asignar" },
   ];
 
   return (
     <AppShell>
-      <div className="animate-fade-in">
-        <Link to="/solicitudes" className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
+      <div>
+        <Link to="/solicitudes" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Volver a solicitudes
         </Link>
 
         {/* Header */}
-        <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mt-3 flex flex-col gap-3 rounded-md border border-border bg-card p-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-xs font-semibold uppercase tracking-wider text-muted-foreground">{req.id}</p>
-            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">{req.title}</h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <p className="font-mono text-xs text-muted-foreground">{req.id}</p>
+            <h1 className="mt-0.5 font-display text-xl font-bold tracking-tight">{req.title}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusBadge status={req.status} />
-              <span className="rounded-md border border-border bg-secondary px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+              <span className="rounded border border-border bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 {req.type}
               </span>
               <span className="text-xs text-muted-foreground">
@@ -49,41 +49,30 @@ export default function RequestDetail() {
             <Button variant="outline" asChild>
               <Link to={`/solicitudes/${req.id}/resumen`}><Edit3 className="h-4 w-4" /> Ver resumen</Link>
             </Button>
-            <Button variant="hero">
+            <Button>
               <Send className="h-4 w-4" /> Enviar a cliente
             </Button>
           </div>
         </div>
 
         {/* Meta grid */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {meta.map((m) => {
-            const Icon = m.icon;
-            return (
-              <div key={m.label} className="rounded-xl border border-border bg-card p-5 shadow-xs">
-                <div className="flex items-center gap-2">
-                  <Icon className="h-3.5 w-3.5 text-accent" />
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{m.label}</p>
-                </div>
-                <p className="mt-2 font-display text-base font-bold leading-snug text-foreground">{m.value}</p>
-              </div>
-            );
-          })}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {meta.map((m) => (
+            <div key={m.label} className="rounded-md border border-border bg-card p-4">
+              <p className="text-xs font-medium text-muted-foreground">{m.label}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">{m.value}</p>
+            </div>
+          ))}
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
           {/* Basic info */}
-          <section className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-            <div className="flex items-center gap-3 border-b border-border pb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10">
-                <Building2 className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <h2 className="font-display text-lg font-bold">Información básica</h2>
-                <p className="text-xs text-muted-foreground">Datos de la solicitud</p>
-              </div>
+          <section className="lg:col-span-2 rounded-md border border-border bg-card p-5">
+            <div className="border-b border-border pb-3">
+              <h2 className="font-display text-base font-bold">Información básica</h2>
+              <p className="text-xs text-muted-foreground">Datos de la solicitud</p>
             </div>
-            <dl className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+            <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
               <Info label="Empresa" value={req.company} />
               <Info label="Tipo de empresa" value="Privada" />
               <Info label="Sector" value="Financiero" />
@@ -95,22 +84,22 @@ export default function RequestDetail() {
             </dl>
 
             {/* Documents */}
-            <div className="mt-8">
-              <h3 className="font-display text-sm font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="mt-6">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Documentos de propuesta
               </h3>
-              <div className="mt-3 space-y-2">
+              <div className="mt-2 space-y-2">
                 {DOCS.map((d) => (
                   <div
                     key={d.name}
-                    className="group flex items-center justify-between rounded-xl border border-border bg-background p-4 transition-all hover:border-accent/40 hover:bg-card"
+                    className="flex items-center justify-between rounded-md border border-border bg-background p-3"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${d.type === "pdf" ? "bg-destructive/10 text-destructive" : "bg-info/10 text-info"}`}>
-                        {d.type === "pdf" ? <FileText className="h-5 w-5" /> : <FileType className="h-5 w-5" />}
+                      <div className="flex h-8 w-8 items-center justify-center rounded bg-secondary text-muted-foreground">
+                        {d.type === "pdf" ? <FileText className="h-4 w-4" /> : <FileType className="h-4 w-4" />}
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-foreground">{d.name}</p>
+                        <p className="text-sm font-medium text-foreground">{d.name}</p>
                         <p className="text-xs text-muted-foreground">{d.size} · {d.date}</p>
                       </div>
                     </div>
@@ -122,34 +111,34 @@ export default function RequestDetail() {
           </section>
 
           {/* Cost */}
-          <aside className="space-y-6">
-            <div className="overflow-hidden rounded-2xl border border-border bg-gradient-navy p-6 text-white shadow-lg">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-white/60">Costeo final</p>
-              <p className="mt-2 text-xs text-white/70">Costo total del programa (COP)</p>
-              <p className="mt-3 font-display text-4xl font-bold tracking-tight">
+          <aside className="space-y-4">
+            <div className="rounded-md border border-border bg-card p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Costeo final</p>
+              <p className="mt-1 text-xs text-muted-foreground">Costo total del programa (COP)</p>
+              <p className="mt-2 font-display text-2xl font-bold tracking-tight text-foreground">
                 {formatCop(req.totalCostCop ?? 4_000_000)}
               </p>
-              <Button variant="hero" className="mt-6 w-full">
+              <Button className="mt-4 w-full">
                 <Send className="h-4 w-4" /> Enviar a cliente
               </Button>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-              <h3 className="font-display text-sm font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="rounded-md border border-border bg-card p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Personas asignadas
               </h3>
-              <div className="mt-4 space-y-3">
+              <div className="mt-3 space-y-2.5">
                 {[
                   { role: "KAM", name: req.kam },
                   { role: "Líder de producto", name: req.productLeader },
                   { role: "Profesor", name: req.professor ?? "Sin asignar" },
                 ].map((p) => (
                   <div key={p.role} className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-brand text-xs font-bold text-white">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-foreground">
                       {p.name.split(" ").map((s) => s[0]).slice(0, 2).join("")}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{p.name}</p>
+                      <p className="truncate text-sm font-medium">{p.name}</p>
                       <p className="text-xs text-muted-foreground">{p.role}</p>
                     </div>
                   </div>
@@ -166,8 +155,8 @@ export default function RequestDetail() {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-sm font-semibold text-foreground">{value}</dd>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 text-sm font-medium text-foreground">{value}</dd>
     </div>
   );
 }

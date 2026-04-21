@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Edit3, Printer, Building2, User, ClipboardList, GraduationCap, MessageSquare } from "lucide-react";
+import { ArrowLeft, Edit3, Printer } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -7,7 +7,6 @@ import { MOCK_REQUESTS } from "@/lib/mock-data";
 
 const SECTIONS = [
   {
-    icon: Building2,
     title: "Empresa",
     fields: [
       ["Nombre de la empresa", "Razón social S.A."],
@@ -18,7 +17,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: User,
     title: "Contacto",
     fields: [
       ["Nombre", "Juan Pérez"],
@@ -29,7 +27,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: ClipboardList,
     title: "Requerimiento",
     fields: [
       ["Tipo de requerimiento", "Capacitación"],
@@ -46,7 +43,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: GraduationCap,
     title: "Formación previa",
     fields: [
       ["¿Han tenido formación previa?", "No"],
@@ -56,7 +52,6 @@ const SECTIONS = [
     ],
   },
   {
-    icon: MessageSquare,
     title: "Observaciones",
     fields: [["¿Alguna otra observación?", "—"]],
   },
@@ -68,73 +63,61 @@ export default function RequestSummary() {
 
   return (
     <AppShell>
-      <div className="animate-fade-in">
-        <Link to={`/solicitudes/${req.id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
+      <div>
+        <Link to={`/solicitudes/${req.id}`} className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Volver al detalle
         </Link>
 
         {/* Header */}
-        <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mt-3 flex flex-col gap-3 rounded-md border border-border bg-card p-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="font-mono text-xs font-semibold uppercase tracking-wider text-muted-foreground">{req.id}</p>
-            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">{req.title}</h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <p className="font-mono text-xs text-muted-foreground">{req.id}</p>
+            <h1 className="mt-0.5 font-display text-xl font-bold tracking-tight">{req.title}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusBadge status={req.status} />
-              <span className="rounded-md border border-border bg-secondary px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+              <span className="rounded border border-border bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 {req.type}
               </span>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button variant="outline"><Printer className="h-4 w-4" /> Imprimir</Button>
-            <Button variant="hero"><Edit3 className="h-4 w-4" /> Editar</Button>
+            <Button><Edit3 className="h-4 w-4" /> Editar</Button>
           </div>
         </div>
 
         {/* Admin summary */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["Nodo", req.node],
             ["Líder de Producto", req.productLeader],
             ["KAM responsable", req.kam],
             ["Profesor", req.professor ?? "Sin asignar"],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-xl border border-border bg-card p-5 shadow-xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
-              <p className="mt-2 font-display text-sm font-bold leading-snug text-foreground">{value}</p>
+            <div key={label} className="rounded-md border border-border bg-card p-4">
+              <p className="text-xs font-medium text-muted-foreground">{label}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
             </div>
           ))}
         </div>
 
         {/* Sections */}
-        <div className="mt-6 space-y-6">
-          {SECTIONS.map((s, i) => {
-            const Icon = s.icon;
-            return (
-              <section
-                key={s.title}
-                style={{ animationDelay: `${i * 60}ms` }}
-                className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8 animate-fade-in"
-              >
-                <div className="flex items-center gap-3 border-b border-border pb-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10">
-                    <Icon className="h-5 w-5 text-accent" />
+        <div className="mt-4 space-y-4">
+          {SECTIONS.map((s) => (
+            <section key={s.title} className="rounded-md border border-border bg-card p-5">
+              <h2 className="border-b border-border pb-3 font-display text-base font-bold">{s.title}</h2>
+              <dl className="mt-4 divide-y divide-border">
+                {s.fields.map(([label, value]) => (
+                  <div key={label} className="grid grid-cols-1 gap-1 py-2.5 sm:grid-cols-3 sm:gap-4">
+                    <dt className="text-xs font-medium text-muted-foreground sm:col-span-1">
+                      {label}
+                    </dt>
+                    <dd className="text-sm text-foreground sm:col-span-2">{value}</dd>
                   </div>
-                  <h2 className="font-display text-lg font-bold">{s.title}</h2>
-                </div>
-                <dl className="mt-5 divide-y divide-border">
-                  {s.fields.map(([label, value]) => (
-                    <div key={label} className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-3 sm:gap-4">
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-1">
-                        {label}
-                      </dt>
-                      <dd className="text-sm font-medium text-foreground sm:col-span-2">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            );
-          })}
+                ))}
+              </dl>
+            </section>
+          ))}
         </div>
       </div>
     </AppShell>
