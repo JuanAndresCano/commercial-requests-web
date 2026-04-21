@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,65 +25,53 @@ export default function Login() {
   };
 
   return (
-    <div className="relative min-h-screen bg-hero">
-      <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.3] [mask-image:radial-gradient(ellipse_at_center,black_10%,transparent_70%)]" />
-
-      <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-        <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          Volver
-        </Link>
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-brand shadow-glow">
-            <Sparkles className="h-4 w-4 text-white" />
-          </div>
+    <div className="min-h-screen bg-secondary/40">
+      <header className="border-b border-border bg-card">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />
+            Volver
+          </Link>
           <span className="font-display text-sm font-bold">Solicitudes</span>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex min-h-[calc(100vh-96px)] max-w-md items-center justify-center px-6 pb-12">
-        <div className="w-full animate-scale-in">
-          <div className="mb-8 text-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              Como {roleLabel}
-            </div>
-            <h1 className="mt-5 font-display text-3xl font-bold tracking-tight">Iniciar sesión</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Accede a tu panel de gestión de solicitudes.</p>
+      <main className="mx-auto flex min-h-[calc(100vh-65px)] max-w-md items-center justify-center px-6 py-12">
+        <div className="w-full">
+          <div className="mb-6">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Acceso · {roleLabel}</p>
+            <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">Iniciar sesión</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Accede a tu panel de gestión.</p>
           </div>
 
           <form
             onSubmit={handleSubmit}
-            className="rounded-2xl border border-border bg-card p-6 shadow-lg sm:p-8"
+            className="rounded-md border border-border bg-card p-6"
           >
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div>
-                <Label htmlFor="email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Label htmlFor="email" className="mb-1.5 block text-sm font-medium">
                   Correo electrónico
                 </Label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="tu@icesi.edu.co" required className="h-11 pl-10" />
-                </div>
+                <Input id="email" type="email" placeholder="tu@icesi.edu.co" required />
               </div>
 
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Label htmlFor="password" className="text-sm font-medium">
                     Contraseña
                   </Label>
-                  <button type="button" className="text-xs font-semibold text-accent hover:underline">
+                  <button type="button" className="text-xs font-medium text-accent hover:underline">
                     ¿Olvidaste tu contraseña?
                   </button>
                 </div>
                 <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="password"
                     type={showPwd ? "text" : "password"}
                     placeholder="••••••••"
                     required
-                    className="h-11 pl-10 pr-10"
+                    className="pr-10"
                   />
                   <button
                     type="button"
@@ -95,13 +83,13 @@ export default function Login() {
                 </div>
               </div>
 
-              <Button type="submit" variant="hero" size="lg" className="w-full">
+              <Button type="submit" className="w-full">
                 Iniciar sesión
               </Button>
             </div>
 
-            <div className="mt-6 border-t border-border pt-5 text-center text-xs text-muted-foreground">
-              ¿No tienes cuenta? <span className="font-semibold text-foreground">Contacta al administrador</span>
+            <div className="mt-5 border-t border-border pt-4 text-center text-xs text-muted-foreground">
+              ¿No tienes cuenta? <span className="font-medium text-foreground">Contacta al administrador</span>
             </div>
           </form>
         </div>

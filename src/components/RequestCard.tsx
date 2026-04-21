@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, User, Tag, ArrowUpRight } from "lucide-react";
+import { Calendar, User, Tag } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { StatusBadge, UrgencyBadge } from "./StatusBadge";
@@ -9,42 +9,38 @@ export function RequestCard({ req }: { req: RequestItem }) {
   return (
     <Link
       to={`/solicitudes/${req.id}`}
-      className="group block rounded-xl border border-border bg-card p-4 shadow-xs transition-all hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-md"
+      className="block rounded-md border border-border bg-card p-3 transition-colors hover:border-accent/50"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground">{req.id}</p>
-          <h3 className="mt-1 line-clamp-2 font-display text-sm font-bold leading-snug text-foreground group-hover:text-accent">
+          <p className="text-[11px] font-mono text-muted-foreground">{req.id}</p>
+          <h3 className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-foreground">
             {req.title}
           </h3>
         </div>
-        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent" />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <StatusBadge status={req.status} />
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <UrgencyBadge urgency={req.urgency} />
+        <span className="rounded border border-border bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+          {req.type}
+        </span>
       </div>
 
-      <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <User className="h-3.5 w-3.5" />
+      <div className="mt-3 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <User className="h-3 w-3" />
           <span className="truncate">{req.applicant}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Tag className="h-3.5 w-3.5" />
-          <span>{req.type}</span>
+        <div className="flex items-center gap-1.5">
+          <Calendar className="h-3 w-3" />
+          <span>Creada {format(new Date(req.createdAt), "d MMM", { locale: es })}</span>
+          {req.deadline && (
+            <span className="ml-auto text-foreground">
+              · Límite {format(new Date(req.deadline), "d MMM", { locale: es })}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <Calendar className="h-3.5 w-3.5" />
-          <span>Creada {format(new Date(req.createdAt), "d MMM yyyy", { locale: es })}</span>
-        </div>
-        {req.deadline && (
-          <div className="flex items-center gap-2 font-semibold text-foreground">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>Límite {format(new Date(req.deadline), "d MMM yyyy", { locale: es })}</span>
-          </div>
-        )}
       </div>
     </Link>
   );
