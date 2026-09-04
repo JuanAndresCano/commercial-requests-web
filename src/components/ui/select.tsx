@@ -24,7 +24,7 @@ const SelectTrigger = React.forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -100,12 +100,14 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & {
+    extra?: React.ReactNode;
+  }
+>(({ className, children, extra, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground",
+      "relative flex w-full cursor-default select-none items-center justify-between rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground",
       className,
     )}
     {...props}
@@ -117,9 +119,12 @@ const SelectItem = React.forwardRef<
     </span>
 
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    {extra && <div className="ml-2 shrink-0">{extra}</div>}
   </SelectPrimitive.Item>
 ));
 SelectItem.displayName = SelectPrimitive.Item.displayName;
+
+const SelectItemText = SelectPrimitive.ItemText;
 
 const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
@@ -137,6 +142,7 @@ export {
   SelectContent,
   SelectLabel,
   SelectItem,
+  SelectItemText,
   SelectSeparator,
   SelectScrollUpButton,
   SelectScrollDownButton,

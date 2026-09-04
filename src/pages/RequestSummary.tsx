@@ -3,7 +3,7 @@ import { ArrowLeft, Edit3, Printer } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { MOCK_REQUESTS } from "@/lib/mock-data";
+import { useAuth } from "@/context/AuthContext";
 
 const SECTIONS = [
   {
@@ -59,7 +59,8 @@ const SECTIONS = [
 
 export default function RequestSummary() {
   const { id } = useParams();
-  const req = MOCK_REQUESTS.find((r) => r.id === id) ?? MOCK_REQUESTS[0];
+  const { requests } = useAuth();
+  const req = requests.find((r) => r.id === id) ?? requests[0];
 
   return (
     <AppShell>

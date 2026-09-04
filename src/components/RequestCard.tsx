@@ -27,10 +27,22 @@ export function RequestCard({ req }: { req: RequestItem }) {
         </span>
       </div>
 
-      <div className="mt-3 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+      <div className="mt-3 space-y-1.5 border-t border-border pt-2 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="truncate text-muted-foreground font-medium">LP: {req.productLeader}</span>
+          {req.professor ? (
+            <span className="truncate max-w-[110px] text-[11px] font-medium text-foreground">
+              {req.professor}
+            </span>
+          ) : (
+            <span className="rounded bg-warning/10 px-1 py-0.5 text-[10px] font-semibold text-warning">
+              Sin docente
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1.5">
           <User className="h-3 w-3" />
-          <span className="truncate">{req.applicant}</span>
+          <span className="truncate">{req.applicant} · {req.company}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <Calendar className="h-3 w-3" />

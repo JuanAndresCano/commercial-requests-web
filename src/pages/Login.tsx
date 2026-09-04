@@ -4,6 +4,7 @@ import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth, UserRole, ROLE_CONFIGS } from "@/context/AuthContext";
 
 const ROLE_LABELS: Record<string, string> = {
   kam: "KAM",
@@ -14,13 +15,21 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function Login() {
   const [params] = useSearchParams();
-  const role = params.get("role") ?? "kam";
+  const rawRole = (params.get("role") ?? "kam") as UserRole;
+  const role: UserRole = ["kam", "lider-nodo", "lider-producto", "profesor"].includes(rawRole)
+    ? rawRole
+    : "kam";
   const roleLabel = ROLE_LABELS[role] ?? "KAM";
   const navigate = useNavigate();
+  const { login } = useAuth();
+
+  const defaultConfig = ROLE_CONFIGS[role];
+  const [email, setEmail] = useState(defaultConfig?.defaultEmail ?? "");
   const [showPwd, setShowPwd] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    login(role, defaultConfig?.defaultName, email);
     navigate("/dashboard");
   };
 
@@ -53,7 +62,14 @@ export default function Login() {
                 <Label htmlFor="email" className="mb-1.5 block text-sm font-medium">
                   Correo electrónico
                 </Label>
-                <Input id="email" type="email" placeholder="tu@icesi.edu.co" required />
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="tu@icesi.edu.co"
+                  required
+                />
               </div>
 
               <div>
