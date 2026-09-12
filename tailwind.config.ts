@@ -13,8 +13,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ["Urbanist", "system-ui", "sans-serif"],
-        sans: ["Epilogue", "system-ui", "sans-serif"],
+        display: ["'Plus Jakarta Sans'", "system-ui", "sans-serif"],
+        sans: ["'Plus Jakarta Sans'", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -22,6 +22,20 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        icesi: {
+          blue: "#5454e9",
+          yellow: "#e4eb60",
+          orange: "#e9683b",
+          purple: "#865cf0",
+          green: "#4cb979",
+          gray1: "#88898c",
+          gray2: "#cecfd4",
+          black: "#000000",
+          white: "#ffffff",
+          dark: "#0e0f15",
+          card: "#161720",
+          border: "#252736",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

@@ -18,6 +18,8 @@ import {
   Check,
   ChevronRight,
   MessageSquare,
+  ArrowLeftRight,
+  UserCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -31,7 +33,17 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   formatCop,
   RequestItem,
@@ -39,6 +51,9 @@ import {
   ProposalDocument,
   ExternalProfessorData,
   calculateCosting,
+  PRODUCT_LEADERS,
+  NODES,
+  NODE_DEFAULT_LEADERS,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
@@ -57,6 +72,7 @@ export default function RequestDetail() {
     addDocument,
     removeDocument,
     updateStatus,
+    updateRequest,
   } = useAuth();
 
   const role = user.role;
@@ -68,6 +84,21 @@ export default function RequestDetail() {
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
+  const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [selectedNewLeader, setSelectedNewLeader] = useState("");
+  const [selectedNewNode, setSelectedNewNode] = useState("");
+  const [reassignReason, setReassignReason] = useState("Temática no afín / Corresponde a otro nodo");
+  const [reassignNotes, setReassignNotes] = useState("");
+
+  const handleConfirmReassign = () => {
+    if (!selectedNewLeader) return;
+    updateRequest(req.id, {
+      productLeader: selectedNewLeader,
+      node: selectedNewNode || req.node,
+    });
+    toast.success(`Solicitud ${req.id} reasignada a ${selectedNewLeader} exitosamente.`);
+    setIsReassignModalOpen(false);
+  };
 
   // Guarantee costing structure exists
   const currentCosting: ProposalCosting =
@@ -116,9 +147,14 @@ export default function RequestDetail() {
     toast.success("Cambios guardados correctamente");
   };
 
-  const handleMarkAsReady = () => {
-    updateStatus(req.id, "lista");
-    toast.success("Propuesta marcada como Lista para KAM");
+  const handleMoveToExperto = () => {
+    updateStatus(req.id, "en-experto");
+    toast.success("Propuesta pasada a: En proceso por experto");
+  };
+
+  const handleMoveToCosteo = () => {
+    updateStatus(req.id, "en-costeo");
+    toast.success("Propuesta pasada a: En proceso de costeo");
   };
 
   const handleSendToClient = () => {
@@ -170,8 +206,8 @@ export default function RequestDetail() {
                 }}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                   role === "kam"
-                    ? "bg-slate-900 text-white shadow-xs dark:bg-primary dark:text-primary-foreground font-semibold"
-                    : "text-slate-500 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-foreground"
+                    ? "bg-[#5454e9] text-white shadow-xs font-bold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 KAM (Comercial)
@@ -183,46 +219,45 @@ export default function RequestDetail() {
         {/* ========================================================================= */}
         {/* 1. CABECERA MINIMALISTA */}
         {/* ========================================================================= */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card">
+        <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-6 shadow-xs">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div className="min-w-0 flex-1 space-y-2">
-              {/* Título de la propuesta en h1 elegante (text-xl o 2xl, font-semibold) */}
-              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-sans">
                 {req.title}
               </h1>
 
               {/* Fila de metadatos inline sutiles: Empresa, Contacto, Código REQ y Badges discretos */}
-              <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-slate-500 dark:text-muted-foreground">
-                <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
+              <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-muted-foreground">
+                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">
                   #{req.id}
                 </span>
 
-                <span className="text-slate-300 dark:text-slate-700">·</span>
+                <span className="text-border dark:text-[#252838]">·</span>
 
-                <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                  <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                  <strong className="font-medium text-slate-900 dark:text-slate-100">{req.company}</strong>
+                <span className="flex items-center gap-1 text-foreground">
+                  <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  <strong className="font-semibold text-foreground">{req.company}</strong>
                 </span>
 
-                <span className="text-slate-300 dark:text-slate-700">·</span>
+                <span className="text-border dark:text-[#252838]">·</span>
 
                 <span>
-                  Contacto: <strong className="font-medium text-slate-700 dark:text-slate-300">{req.applicant}</strong>
+                  Contacto: <strong className="font-medium text-foreground">{req.applicant}</strong>
                 </span>
 
-                <span className="text-slate-300 dark:text-slate-700">·</span>
+                <span className="text-border dark:text-[#252838]">·</span>
 
-                <StatusBadge status={req.status} className="border-slate-200/80" />
+                <StatusBadge status={req.status} />
 
                 <Badge
                   variant="outline"
-                  className="text-xs font-normal border-slate-200 text-slate-600 bg-slate-50/80 dark:border-border dark:bg-secondary/40 dark:text-slate-300"
+                  className="text-xs font-semibold border-border bg-secondary/50 text-foreground"
                 >
                   {req.type}
                 </Badge>
 
                 {req.productLeader === user.name && role === "lider-producto" && (
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 border border-blue-200/60 dark:bg-blue-950/40 dark:text-blue-300">
+                  <span className="rounded-full bg-[#5454e9]/10 px-2 py-0.5 text-[10px] font-bold text-[#5454e9] border border-[#5454e9]/30">
                     Asignada a ti
                   </span>
                 )}
@@ -234,41 +269,63 @@ export default function RequestDetail() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 px-3 text-xs font-medium border-slate-200 hover:bg-slate-50 text-slate-700 dark:border-border dark:text-slate-200"
+                className="h-9 px-3 text-xs font-medium border-border hover:bg-secondary text-foreground"
                 asChild
               >
                 <Link to={`/solicitudes/${req.id}/resumen`}>
-                  <Edit3 className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
+                  <Edit3 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
                   Resumen
                 </Link>
               </Button>
 
               {role === "lider-producto" ? (
                 <>
-                  {/* Botón secundario "Guardar Cambios" */}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleSaveChanges}
-                    className="h-9 px-3 text-xs font-medium border-slate-200 hover:bg-slate-50 text-slate-700 dark:border-border dark:text-slate-200"
+                    className="h-9 px-3 text-xs font-medium border-border hover:bg-secondary text-foreground"
                   >
-                    <Save className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
+                    <Save className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
                     Guardar Cambios
                   </Button>
 
-                  {/* Botón primario destacado "[✔ Marcar lista para KAM]" */}
-                  {req.status !== "lista" && req.status !== "entregada" ? (
+                  {req.status === "nueva" && (
                     <Button
                       size="sm"
-                      onClick={handleMarkAsReady}
-                      className="h-9 px-4 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
+                      onClick={handleMoveToExperto}
+                      className="h-9 px-4 text-xs font-bold bg-[#e9683b] hover:bg-[#d8582d] text-white shadow-xs"
+                    >
+                      <UserCheck className="h-3.5 w-3.5 mr-1.5" />
+                      Avanzar a En Experto
+                    </Button>
+                  )}
+
+                  {req.status === "en-experto" && (
+                    <Button
+                      size="sm"
+                      onClick={handleMoveToCosteo}
+                      className="h-9 px-4 text-xs font-bold bg-[#865cf0] hover:bg-[#7344e8] text-white shadow-xs"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                      Marcar lista para KAM
+                      Avanzar a En Costeo
                     </Button>
-                  ) : (
-                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-                      <Check className="h-3.5 w-3.5" /> Lista para KAM
+                  )}
+
+                  {req.status === "en-costeo" && (
+                    <Button
+                      size="sm"
+                      onClick={handleSendToClient}
+                      className="h-9 px-4 text-xs font-bold bg-[#4cb979] hover:bg-[#3ea569] text-white shadow-xs"
+                    >
+                      <Check className="h-3.5 w-3.5 mr-1.5" />
+                      Marcar Entregada
+                    </Button>
+                  )}
+
+                  {req.status === "entregada" && (
+                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
+                      <Check className="h-3.5 w-3.5" /> Propuesta Entregada
                     </div>
                   )}
                 </>
@@ -277,7 +334,7 @@ export default function RequestDetail() {
                   size="sm"
                   onClick={handleSendToClient}
                   disabled={req.status === "entregada"}
-                  className="h-9 px-4 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                  className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs"
                 >
                   <Send className="h-3.5 w-3.5 mr-1.5" />
                   {req.status === "entregada" ? "Propuesta entregada" : "Enviar a cliente"}
@@ -399,63 +456,63 @@ export default function RequestDetail() {
           {/* ======================================================================= */}
           <div className="lg:col-span-4 space-y-6">
             {/* 1. TARJETA ESPECIFICACIONES DEL SERVICIO */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-border dark:bg-card">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-muted-foreground border-b border-slate-100 pb-3 dark:border-border">
+            <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 shadow-xs">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border dark:border-[#252838] pb-3">
                 Especificaciones del Servicio
               </h3>
 
-              <div className="divide-y divide-slate-100 dark:divide-border text-xs mt-1">
+              <div className="divide-y divide-border dark:divide-[#252838] text-xs mt-1">
                 {/* Dedicación */}
                 <div className="flex items-center justify-between py-2.5">
-                  <span className="text-slate-500 flex items-center gap-2">
-                    <Clock className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     Dedicación estimada
                   </span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                  <span className="font-semibold text-foreground">
                     60 horas
                   </span>
                 </div>
 
                 {/* Modalidad */}
                 <div className="flex items-center justify-between py-2.5">
-                  <span className="text-slate-500 flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                     Modalidad
                   </span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                  <span className="font-semibold text-foreground">
                     Híbrida
                   </span>
                 </div>
 
                 {/* Participantes */}
                 <div className="flex items-center justify-between py-2.5">
-                  <span className="text-slate-500 flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
                     Participantes
                   </span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                  <span className="font-semibold text-foreground">
                     15 - 20 personas
                   </span>
                 </div>
 
                 {/* Tipo de servicio */}
                 <div className="flex items-center justify-between py-2.5">
-                  <span className="text-slate-500 flex items-center gap-2">
-                    <Layers className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Layers className="h-3.5 w-3.5 text-muted-foreground" />
                     Tipo de servicio
                   </span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                  <span className="font-semibold text-foreground">
                     {req.type}
                   </span>
                 </div>
 
                 {/* Fecha límite */}
                 <div className="flex items-center justify-between py-2.5">
-                  <span className="text-slate-500 flex items-center gap-2">
-                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                     Entrega esperada
                   </span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                  <span className="font-semibold text-foreground">
                     {formattedDeadline}
                   </span>
                 </div>
@@ -463,50 +520,67 @@ export default function RequestDetail() {
             </div>
 
             {/* 2. TARJETA EQUIPO ASIGNADO */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-border dark:bg-card space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-muted-foreground border-b border-slate-100 pb-3 dark:border-border">
+            <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 shadow-xs space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border dark:border-[#252838] pb-3">
                 Equipo Asignado
               </h3>
 
               <div className="space-y-3.5 text-xs">
                 {/* Nodo Temático */}
                 <div className="space-y-0.5">
-                  <span className="text-[11px] font-medium text-slate-400">Nodo Temático</span>
-                  <p className="font-medium text-slate-900 dark:text-slate-100 leading-snug">
+                  <span className="text-[11px] font-medium text-muted-foreground">Nodo Temático</span>
+                  <p className="font-semibold text-foreground leading-snug">
                     {req.node}
                   </p>
                 </div>
 
                 {/* Líder de Producto */}
-                <div className="space-y-0.5 pt-2 border-t border-slate-100 dark:border-border">
-                  <span className="text-[11px] font-medium text-slate-400">Líder de Producto</span>
+                <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-slate-900 dark:text-slate-100">
+                    <span className="text-[11px] font-medium text-muted-foreground">Líder de Producto</span>
+                    {role === "lider-producto" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedNewLeader("");
+                          setSelectedNewNode(req.node);
+                          setReassignReason("Temática no afín / Corresponde a otro nodo");
+                          setReassignNotes("");
+                          setIsReassignModalOpen(true);
+                        }}
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <ArrowLeftRight className="h-3 w-3" /> Reasignar
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-foreground">
                       {req.productLeader}
                     </p>
                     {req.productLeader === user.name && (
-                      <span className="text-[10px] text-slate-400">(Tú)</span>
+                      <span className="text-[10px] text-muted-foreground">(Tú)</span>
                     )}
                   </div>
                 </div>
 
                 {/* KAM asignado */}
-                <div className="space-y-0.5 pt-2 border-t border-slate-100 dark:border-border">
-                  <span className="text-[11px] font-medium text-slate-400">KAM Responsable</span>
-                  <p className="font-medium text-slate-900 dark:text-slate-100">
+                <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
+                  <span className="text-[11px] font-medium text-muted-foreground">KAM Responsable</span>
+                  <p className="font-semibold text-foreground">
                     {req.kam}
                   </p>
                 </div>
 
                 {/* Docente / Asesor asignado */}
-                <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-border">
+                <div className="space-y-1.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-slate-400">Docente / Asesor</span>
+                    <span className="text-[11px] font-medium text-muted-foreground">Docente / Asesor</span>
                     {role === "lider-producto" && (
                       <button
                         type="button"
                         onClick={() => setIsAssignModalOpen(true)}
-                        className="text-[11px] font-medium text-primary hover:underline"
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
                       >
                         {req.professor ? "Cambiar" : "Asignar"}
                       </button>
@@ -517,15 +591,15 @@ export default function RequestDetail() {
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                          <span className="font-semibold text-foreground truncate">
                             {req.professor}
                           </span>
                           {req.professorType === "externo" ? (
-                            <span className="rounded px-1.5 py-0.2 text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/70 dark:bg-amber-950/40 dark:text-amber-300">
+                            <span className="rounded px-1.5 py-0.2 text-[10px] font-bold bg-[#e9683b]/10 text-[#e9683b] border border-[#e9683b]/30">
                               Externo
                             </span>
                           ) : (
-                            <span className="rounded px-1.5 py-0.2 text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200 dark:bg-secondary dark:text-slate-300">
+                            <span className="rounded px-1.5 py-0.2 text-[10px] font-bold bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0] border border-[#5454e9]/30">
                               Planta
                             </span>
                           )}
@@ -537,7 +611,7 @@ export default function RequestDetail() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setIsContactAdvisorModalOpen(true)}
-                            className="h-6 px-2 text-[11px] text-slate-600 hover:text-slate-900 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-secondary"
+                            className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                             title="Ver datos de contacto del asesor externo"
                           >
                             Contacto
@@ -547,13 +621,13 @@ export default function RequestDetail() {
 
                       {/* Subtítulo si tiene empresa */}
                       {req.professorType === "externo" && req.externalProfessorData?.empresaConsultora && (
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-muted-foreground">
                           {req.externalProfessorData.empresaConsultora}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs italic text-slate-400">
+                    <p className="text-xs italic text-muted-foreground">
                       Sin docente o asesor asignado
                     </p>
                   )}
@@ -685,6 +759,162 @@ export default function RequestDetail() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Reasignar Líder de Producto */}
+      <Dialog
+        open={isReassignModalOpen}
+        onOpenChange={setIsReassignModalOpen}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold text-foreground">
+                {req.id}
+              </span>
+              <span className="rounded bg-[#5454e9]/10 px-2 py-0.5 text-[10px] font-bold text-[#5454e9] dark:text-[#865cf0]">
+                {req.node}
+              </span>
+            </div>
+            <DialogTitle className="text-base font-bold text-foreground mt-1">
+              Reasignar Líder de Producto
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Transfiere la gestión técnica de esta propuesta a otro líder académico si no corresponde a tu área temática o fue asignada por error.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Propuesta:</span>
+                <span className="font-semibold text-foreground text-right truncate">
+                  {req.title}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Empresa:</span>
+                <span className="font-semibold text-foreground">{req.company}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Líder asignado actualmente:</span>
+                <span className="font-semibold text-[#e9683b]">
+                  {req.productLeader}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="detail-new-leader" className="text-xs font-semibold text-foreground">
+                Nuevo Líder de Producto destinatario *
+              </Label>
+              <Select
+                value={selectedNewLeader}
+                onValueChange={(val) => {
+                  setSelectedNewLeader(val);
+                  const foundNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, leader]) => leader === val);
+                  if (foundNode) {
+                    setSelectedNewNode(foundNode[0]);
+                  }
+                }}
+              >
+                <SelectTrigger id="detail-new-leader" className="text-xs h-9">
+                  <SelectValue placeholder="Seleccionar nuevo líder de producto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRODUCT_LEADERS.map((leader) => {
+                    const isCurrent = leader === req.productLeader;
+                    const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, l]) => l === leader)?.[0];
+                    return (
+                      <SelectItem key={leader} value={leader} disabled={isCurrent}>
+                        {leader} {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="detail-reassign-node" className="text-xs font-semibold text-foreground">
+                Nodo Temático sugerido
+              </Label>
+              <Select value={selectedNewNode} onValueChange={setSelectedNewNode}>
+                <SelectTrigger id="detail-reassign-node" className="text-xs h-9">
+                  <SelectValue placeholder="Seleccionar nodo temático" />
+                </SelectTrigger>
+                <SelectContent>
+                  {NODES.map((n) => (
+                    <SelectItem key={n} value={n}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="detail-reassign-reason" className="text-xs font-semibold text-foreground">
+                Motivo de la reasignación
+              </Label>
+              <Select value={reassignReason} onValueChange={setReassignReason}>
+                <SelectTrigger id="detail-reassign-reason" className="text-xs h-9">
+                  <SelectValue placeholder="Seleccionar motivo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Temática no afín / Corresponde a otro nodo">
+                    Temática no afín / Corresponde a otro nodo
+                  </SelectItem>
+                  <SelectItem value="Asignada por error por el KAM">
+                    Asignada por error por el KAM
+                  </SelectItem>
+                  <SelectItem value="Redistribución por sobrecarga operativa">
+                    Redistribución por sobrecarga operativa
+                  </SelectItem>
+                  <SelectItem value="Especialidad técnica específica">
+                    Especialidad técnica específica
+                  </SelectItem>
+                  <SelectItem value="Otro motivo">Otro motivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="detail-reassign-notes" className="text-xs font-semibold text-muted-foreground">
+                Nota o mensaje para el nuevo líder (opcional)
+              </Label>
+              <Textarea
+                id="detail-reassign-notes"
+                rows={2}
+                placeholder="Ej. Reasignado para ajuste pedagógico según línea de especialidad..."
+                value={reassignNotes}
+                onChange={(e) => setReassignNotes(e.target.value)}
+                className="text-xs resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsReassignModalOpen(false)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!selectedNewLeader || selectedNewLeader === req.productLeader}
+              onClick={handleConfirmReassign}
+              className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white"
+            >
+              Confirmar Reasignación
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppShell>

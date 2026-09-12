@@ -4,95 +4,113 @@
 
 @layer base {
   :root {
-    /* Clean admin neutral palette */
-    --background: 0 0% 100%;
-    --foreground: 222 22% 18%;
+    /* Universidad Icesi Brand Manual Colors (Feb 2026) */
+    /* Light Mode */
+    --background: 220 20% 98%;
+    --foreground: 228 25% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 22% 18%;
+    --card-foreground: 228 25% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 22% 18%;
+    --popover-foreground: 228 25% 15%;
 
-    /* Primary = navy used sparingly */
-    --primary: 215 60% 24%;
+    /* Azul Icesi: Pantone 2131 C (#5454e9) */
+    --primary: 240 78% 62%;
     --primary-foreground: 0 0% 100%;
 
-    /* Accent = calm blue (links, actions) */
-    --accent: 217 85% 50%;
+    /* Accent = Azul Icesi */
+    --accent: 240 78% 62%;
     --accent-foreground: 0 0% 100%;
 
-    --brand-cyan: 217 85% 50%;
+    --brand-cyan: 240 78% 62%;
 
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 22% 18%;
+    /* Brand Complementary */
+    --icesi-yellow: 63 77% 65%;
+    --icesi-orange: 16 80% 57%;
+    --icesi-purple: 257 84% 65%;
+    --icesi-green: 145 44% 51%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --secondary: 220 16% 94%;
+    --secondary-foreground: 228 25% 15%;
 
-    --destructive: 0 72% 50%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 225 10% 48%;
+
+    --destructive: 0 75% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 55% 38%;
-    --warning: 38 92% 48%;
-    --info: 217 85% 50%;
+    --success: 145 44% 45%;
+    --warning: 16 80% 57%;
+    --info: 240 78% 62%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 217 85% 50%;
+    --border: 220 14% 88%;
+    --input: 220 14% 88%;
+    --ring: 240 78% 62%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
-    /* Kept for compatibility but flattened */
-    --gradient-brand: hsl(217 85% 50%);
+    --gradient-brand: linear-gradient(135deg, #5454e9 0%, #3e3ecb 100%);
     --gradient-hero: none;
     --gradient-card: hsl(0 0% 100%);
-    --gradient-navy: hsl(215 60% 24%);
+    --gradient-navy: hsl(240 78% 30%);
 
     --shadow-xs: 0 1px 2px hsl(220 30% 15% / 0.04);
-    --shadow-sm: 0 1px 2px hsl(220 30% 15% / 0.05);
-    --shadow-md: 0 2px 6px hsl(220 30% 15% / 0.06);
-    --shadow-lg: 0 4px 12px hsl(220 30% 15% / 0.08);
-    --shadow-glow: 0 1px 2px hsl(220 30% 15% / 0.05);
+    --shadow-sm: 0 1px 3px hsl(220 30% 15% / 0.06);
+    --shadow-md: 0 4px 12px hsl(220 30% 15% / 0.08);
+    --shadow-lg: 0 10px 24px hsl(220 30% 15% / 0.1);
+    --shadow-glow: 0 0 16px rgba(84, 84, 233, 0.25);
 
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 222 22% 18%;
-    --sidebar-primary: 217 85% 50%;
+    --sidebar-foreground: 228 25% 15%;
+    --sidebar-primary: 240 78% 62%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 14% 96%;
-    --sidebar-accent-foreground: 222 22% 18%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217 85% 50%;
+    --sidebar-accent: 220 14% 94%;
+    --sidebar-accent-foreground: 228 25% 15%;
+    --sidebar-border: 220 14% 88%;
+    --sidebar-ring: 240 78% 62%;
   }
 
+  /* Dark Mode - Universidad Icesi Design System */
   .dark {
-    --background: 222 22% 10%;
-    --foreground: 210 20% 96%;
-    --card: 222 22% 12%;
-    --card-foreground: 210 20% 96%;
-    --popover: 222 22% 12%;
-    --popover-foreground: 210 20% 96%;
-    --primary: 217 85% 55%;
+    --background: 232 20% 7%;      /* #0e0f14 sleek dark background */
+    --foreground: 0 0% 98%;
+
+    --card: 232 18% 11%;           /* #141620 cards */
+    --card-foreground: 0 0% 98%;
+
+    --popover: 232 18% 11%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 240 78% 62%;        /* #5454e9 */
     --primary-foreground: 0 0% 100%;
-    --accent: 217 85% 55%;
+
+    --accent: 240 78% 62%;
     --accent-foreground: 0 0% 100%;
-    --secondary: 222 18% 16%;
-    --secondary-foreground: 210 20% 96%;
-    --muted: 222 18% 16%;
-    --muted-foreground: 220 10% 65%;
-    --destructive: 0 72% 50%;
+
+    --secondary: 232 16% 16%;       /* #1e202d */
+    --secondary-foreground: 0 0% 96%;
+
+    --muted: 232 16% 16%;
+    --muted-foreground: 228 12% 65%;
+
+    --destructive: 0 75% 58%;
     --destructive-foreground: 0 0% 100%;
-    --border: 222 15% 20%;
-    --input: 222 15% 20%;
-    --ring: 217 85% 55%;
-    --sidebar-background: 222 22% 10%;
-    --sidebar-foreground: 210 20% 96%;
-    --sidebar-primary: 217 85% 55%;
+
+    --border: 232 14% 19%;         /* #252838 */
+    --input: 232 14% 20%;
+    --ring: 240 78% 62%;
+
+    --shadow-glow: 0 0 20px rgba(84, 84, 233, 0.35);
+
+    --sidebar-background: 240 18% 5%; /* #090a0e pitch dark sidebar rail */
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 240 78% 62%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 18% 16%;
-    --sidebar-accent-foreground: 210 20% 96%;
-    --sidebar-border: 222 15% 20%;
-    --sidebar-ring: 217 85% 55%;
+    --sidebar-accent: 232 16% 16%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 232 14% 17%;
+    --sidebar-ring: 240 78% 62%;
   }
 }
 
@@ -102,17 +120,37 @@
   }
 
   html {
-    font-family: "Epilogue", system-ui, sans-serif;
+    font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground transition-colors duration-200;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: "Urbanist", system-ui, sans-serif;
-    letter-spacing: -0.01em;
+    font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.015em;
   }
+}
+
+/* Custom scrollbar for dense administrative layouts */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(136, 137, 140, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(84, 84, 233, 0.5);
 }

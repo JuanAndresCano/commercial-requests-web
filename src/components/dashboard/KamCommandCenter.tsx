@@ -14,6 +14,7 @@ import {
   Building2,
   UserCheck,
   TrendingUp,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,13 +26,14 @@ import {
   getRelativeTime,
 } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { IcesiCenefa } from "@/components/IcesiLogo";
 
 interface KamCommandCenterProps {
   requests: RequestItem[];
   userName: string;
 }
 
-type FilterType = "all" | "nueva" | "lista" | "cotizado" | "entregada";
+type FilterType = "all" | "en-proceso" | "listas-para-entregar" | "entregada" | "cotizado";
 
 export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
@@ -39,15 +41,17 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
   const firstName = userName ? userName.split(" ")[0] : "Andrea";
 
-  // KPIs calculations
+  // KPIs calculations según la nomenclatura oficial solicitada por Líder de Producto
   const totalCount = requests.length;
-  const nuevasCount = requests.filter((r) => r.status === "nueva").length;
-  const listasCount = requests.filter((r) => r.status === "lista").length;
+  // "En Proceso": Solicitudes que están siendo gestionadas (nuevas o en formulación con experto)
+  const enProcesoCount = requests.filter((r) => r.status === "nueva" || r.status === "en-experto").length;
+  // "Listas para Entregar": Solicitudes con costeo elaborado y listas para entrega al cliente
+  const listasParaEntregarCount = requests.filter((r) => r.status === "en-costeo").length;
   const entregadasCount = requests.filter((r) => r.status === "entregada").length;
 
-  // Pipeline Cotizado: proposals in "lista" (approved costing, ready for customer)
+  // Pipeline Cotizado: propuestas en "en-costeo" o "entregada" (con valor económico estimado)
   const pipelineTotal = requests
-    .filter((r) => r.status === "lista")
+    .filter((r) => r.status === "en-costeo" || r.status === "entregada")
     .reduce((sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0), 0);
 
   // Filtered requests for table
@@ -68,15 +72,14 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
       }
 
       // Status / KPI filter
-      if (activeFilter === "nueva") {
-        return req.status === "nueva";
+      if (activeFilter === "en-proceso") {
+        return req.status === "nueva" || req.status === "en-experto";
       }
-      if (activeFilter === "lista") {
-        return req.status === "lista";
+      if (activeFilter === "listas-para-entregar") {
+        return req.status === "en-costeo";
       }
       if (activeFilter === "cotizado") {
-        // Active proposals with approved costing ready for delivery
-        return req.status === "lista" || (req.totalCostCop && req.totalCostCop > 0 && req.status !== "nueva");
+        return req.status === "en-costeo" || req.status === "entregada" || (req.totalCostCop && req.totalCostCop > 0 && req.status !== "nueva");
       }
       if (activeFilter === "entregada") {
         return req.status === "entregada";
@@ -93,17 +96,15 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   const getServiceTypeBadge = (type: string) => {
     switch (type) {
       case "Capacitación":
-        return "bg-blue-50 text-blue-700 border-blue-200/80";
+        return "bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0] border-[#5454e9]/30";
       case "Consultoría":
-        return "bg-purple-50 text-purple-700 border-purple-200/80";
+        return "bg-[#865cf0]/10 text-[#865cf0] border-[#865cf0]/30";
       case "Mentoría":
-        return "bg-amber-50 text-amber-700 border-amber-200/80";
+        return "bg-[#e9683b]/10 text-[#e9683b] border-[#e9683b]/30";
       case "Investigación":
-        return "bg-indigo-50 text-indigo-700 border-indigo-200/80";
-      case "Proyectos Especiales (Eventos)":
-        return "bg-teal-50 text-teal-700 border-teal-200/80";
+        return "bg-[#4cb979]/10 text-[#4cb979] border-[#4cb979]/30";
       default:
-        return "bg-slate-50 text-slate-700 border-slate-200/80";
+        return "bg-secondary text-foreground border-border";
     }
   };
 
@@ -123,18 +124,23 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
       {/* 1. CABECERA Y ACCIONES RÁPIDAS */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Hola, {firstName}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Panel de seguimiento y gestión de propuestas corporativas
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Hola, {firstName}
+            </h1>
+            <span className="rounded bg-[#e4eb60]/25 px-2 py-0.5 text-xs font-bold text-[#757a07] dark:text-[#e4eb60]">
+              KAM Icesi
+            </span>
+          </div>
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+            Panel de seguimiento, prospección y gestión de propuestas corporativas
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <Button
             asChild
-            className="h-10 rounded-lg bg-blue-600 px-4 font-medium text-white shadow-xs hover:bg-blue-700 transition-colors"
+            className="h-10 rounded-lg bg-[#5454e9] px-4 font-bold text-white shadow-sm hover:bg-[#4343d3] transition-all"
           >
             <Link to="/solicitudes/nueva" className="inline-flex items-center gap-2">
               <Plus className="h-4 w-4 stroke-[2.5]" />
@@ -144,28 +150,28 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         </div>
       </div>
 
-      {/* Banner contextual si hay propuestas listas para entregar */}
-      {listasCount > 0 && (
-        <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 text-emerald-900 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+      {/* Aviso contextual si hay propuestas listas para entregar */}
+      {listasParaEntregarCount > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-[#4cb979]/30 bg-[#4cb979]/10 dark:bg-[#4cb979]/15 p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3.5 sm:items-center">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#4cb979] text-white">
               <Rocket className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-emerald-950">
-                ¡Tienes {listasCount} {listasCount === 1 ? "propuesta lista" : "propuestas listas"} para entregar!
+              <p className="text-sm font-bold text-foreground">
+                ¡Tienes {listasParaEntregarCount} {listasParaEntregarCount === 1 ? "propuesta lista para entregar" : "propuestas listas para entregar"}!
               </p>
-              <p className="text-xs text-emerald-800">
-                El Líder de Producto ya aprobó el costeo.
+              <p className="text-xs text-muted-foreground">
+                El Líder de Producto ha finalizado el costeo y la propuesta está lista para remitir al cliente.
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={() => setActiveFilter("lista")}
-            className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
+            onClick={() => setActiveFilter("listas-para-entregar")}
+            className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 rounded-lg bg-[#4cb979] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#3ea569]"
           >
-            Ver listas para entrega
+            Ver listas
             <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -178,15 +184,15 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           type="button"
           onClick={() => handleCardClick("all")}
           className={cn(
-            "group relative flex flex-col justify-between rounded-xl border bg-card p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm",
+            "group relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all hover:border-[#5454e9]/50",
             activeFilter === "all"
-              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-50/60"
-              : "border-border"
+              ? "border-[#5454e9] ring-2 ring-[#5454e9]/20 bg-[#5454e9]/5 dark:bg-[#5454e9]/10"
+              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622]"
           )}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Total Solicitudes</span>
-            <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+            <span className="inline-flex items-center rounded-md border border-border bg-secondary px-2 py-0.5 text-[11px] font-bold text-foreground">
               Total
             </span>
           </div>
@@ -195,34 +201,34 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               {totalCount}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              {activeFilter === "all" ? "✓ Filtro activo" : "Todas las solicitudes activas"}
+              {activeFilter === "all" ? "✓ Filtro activo" : "Todas las solicitudes registradas"}
             </p>
           </div>
         </button>
 
-        {/* KPI 2: En Costeo / Nuevas */}
+        {/* KPI 2: En Proceso */}
         <button
           type="button"
-          onClick={() => handleCardClick("nueva")}
+          onClick={() => handleCardClick("en-proceso")}
           className={cn(
-            "group relative flex flex-col justify-between rounded-xl border bg-card p-4 text-left shadow-xs transition-all hover:border-blue-300 hover:shadow-sm",
-            activeFilter === "nueva"
-              ? "border-blue-600 ring-2 ring-blue-600/20 bg-blue-50/40"
-              : "border-border"
+            "group relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all hover:border-[#5454e9]/50",
+            activeFilter === "en-proceso"
+              ? "border-[#5454e9] ring-2 ring-[#5454e9]/20 bg-[#5454e9]/10 dark:bg-[#5454e9]/15"
+              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622]"
           )}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">En Costeo / Nuevas</span>
-            <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-              {nuevasCount} en trámite
+            <span className="text-xs font-medium text-muted-foreground">En Proceso</span>
+            <span className="inline-flex items-center rounded-md border border-[#5454e9]/30 bg-[#5454e9]/10 px-2 py-0.5 text-[11px] font-bold text-[#5454e9]">
+              {enProcesoCount} en proceso
             </span>
           </div>
           <div className="mt-3">
             <p className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              {nuevasCount}
+              {enProcesoCount}
             </p>
-            <p className="mt-1 text-[11px] text-blue-700/80">
-              {activeFilter === "nueva" ? "✓ Filtro activo" : "Pendientes de costeo"}
+            <p className="mt-1 text-[11px] text-[#5454e9] dark:text-[#865cf0]">
+              {activeFilter === "en-proceso" ? "✓ Filtro activo" : "En formulación y asignación"}
             </p>
           </div>
         </button>
@@ -230,26 +236,26 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         {/* KPI 3: Listas para Entregar */}
         <button
           type="button"
-          onClick={() => handleCardClick("lista")}
+          onClick={() => handleCardClick("listas-para-entregar")}
           className={cn(
-            "group relative flex flex-col justify-between rounded-xl border bg-card p-4 text-left shadow-xs transition-all hover:border-emerald-300 hover:shadow-sm",
-            activeFilter === "lista"
-              ? "border-emerald-600 ring-2 ring-emerald-600/20 bg-emerald-50/40"
-              : "border-border"
+            "group relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all hover:border-[#4cb979]/50",
+            activeFilter === "listas-para-entregar"
+              ? "border-[#4cb979] ring-2 ring-[#4cb979]/20 bg-[#4cb979]/10 dark:bg-[#4cb979]/15"
+              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622]"
           )}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Listas para Entregar</span>
-            <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-500/20">
-              Actionable
+            <span className="inline-flex items-center rounded-md border border-[#4cb979]/30 bg-[#4cb979]/10 px-2 py-0.5 text-[11px] font-bold text-[#4cb979]">
+              {listasParaEntregarCount} listas
             </span>
           </div>
           <div className="mt-3">
-            <p className="font-display text-2xl font-bold tracking-tight text-emerald-700 sm:text-3xl">
-              {listasCount}
+            <p className="font-display text-2xl font-bold tracking-tight text-[#4cb979] sm:text-3xl">
+              {listasParaEntregarCount}
             </p>
-            <p className="mt-1 text-[11px] font-medium text-emerald-600">
-              {activeFilter === "lista" ? "✓ Filtro activo" : "Listas para enviar a cliente"}
+            <p className="mt-1 text-[11px] font-medium text-[#4cb979]">
+              {activeFilter === "listas-para-entregar" ? "✓ Filtro activo" : "Costeo listo para enviar al cliente"}
             </p>
           </div>
         </button>
@@ -259,15 +265,15 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           type="button"
           onClick={() => handleCardClick("cotizado")}
           className={cn(
-            "group relative flex flex-col justify-between rounded-xl border bg-card p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm",
+            "group relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all hover:border-[#865cf0]/50",
             activeFilter === "cotizado"
-              ? "border-blue-600 ring-2 ring-blue-600/20 bg-blue-50/30"
-              : "border-border"
+              ? "border-[#865cf0] ring-2 ring-[#865cf0]/20 bg-[#865cf0]/10 dark:bg-[#865cf0]/15"
+              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622]"
           )}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Pipeline Cotizado</span>
-            <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+            <span className="inline-flex items-center rounded-md border border-[#865cf0]/30 bg-[#865cf0]/10 px-2 py-0.5 text-[11px] font-bold text-[#865cf0]">
               COP
             </span>
           </div>
@@ -285,14 +291,17 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
       {/* 3. TABLA DE ACTIVIDAD RECIENTE Y SEGUIMIENTO COMERCIAL */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between px-0.5">
-          <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Actividad reciente
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Actividad reciente & Solicitudes
+            </h2>
+            <IcesiCenefa barsCount={8} height={6} color="#5454e9" className="opacity-40" />
+          </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+        <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
           {/* Barra superior de la tabla */}
-          <div className="flex flex-col gap-3 border-b border-border p-4 pr-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-border dark:border-[#252838] p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-1 items-center gap-3">
               <div className="relative w-full max-w-sm">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -300,8 +309,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar por empresa, solicitud o ID..."
-                  className="h-9 w-full rounded-lg border-border bg-background pl-9 pr-8 text-xs focus-visible:ring-1"
+                  placeholder="Buscar por propuesta, empresa o ID..."
+                  className="h-9 w-full rounded-lg border-border dark:border-[#2b2d3d] bg-background dark:bg-[#0e0f14] pl-9 pr-8 text-xs focus-visible:ring-1 focus-visible:ring-[#5454e9]"
                 />
                 {searchQuery && (
                   <button
@@ -316,17 +325,17 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
               {/* Pill de filtro activo */}
               {activeFilter !== "all" && (
-                <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-2.5 py-1 text-xs font-medium text-[#5454e9] dark:text-[#865cf0]">
                   <span>
-                    {activeFilter === "nueva" && `En Costeo / Nuevas (${nuevasCount})`}
-                    {activeFilter === "lista" && `Listas para Entregar (${listasCount})`}
-                    {activeFilter === "cotizado" && `Pipeline Cotizado (${listasCount})`}
+                    {activeFilter === "en-proceso" && `En proceso (${enProcesoCount})`}
+                    {activeFilter === "listas-para-entregar" && `Listas para entregar (${listasParaEntregarCount})`}
+                    {activeFilter === "cotizado" && `Pipeline Cotizado (${listasParaEntregarCount})`}
                     {activeFilter === "entregada" && `Entregadas (${entregadasCount})`}
                   </span>
                   <button
                     type="button"
                     onClick={() => setActiveFilter("all")}
-                    className="rounded-full p-0.5 hover:bg-blue-200 text-blue-800 transition-colors"
+                    className="rounded-full p-0.5 hover:bg-[#5454e9]/20 transition-colors"
                     title="Quitar filtro"
                   >
                     <X className="h-3 w-3" />
@@ -355,19 +364,19 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           </div>
 
           {/* Tabla comercial */}
-          <div className="overflow-x-auto pr-6">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-sm min-w-[720px]">
-              <thead className="border-b border-border bg-secondary/40 text-xs font-semibold text-muted-foreground">
+              <thead className="border-b border-border dark:border-[#252838] bg-secondary/40 dark:bg-[#12131d] text-xs font-semibold text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">ID y Fecha</th>
-                  <th className="px-4 py-3 font-medium">Empresa y Tipo de Servicio</th>
+                  <th className="px-4 py-3 font-medium">Propuesta y Empresa</th>
                   <th className="px-4 py-3 font-medium hidden md:table-cell">Líder de Producto</th>
                   <th className="px-4 py-3 font-medium">Valor Ofertado</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="pl-4 pr-6 py-3 font-medium text-right min-w-[140px]">Acción</th>
+                  <th className="px-4 py-3 font-medium text-right min-w-[140px]">Acción</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border dark:divide-[#252838]">
                 {filteredRequests.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
@@ -396,8 +405,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   </tr>
                 ) : (
                   filteredRequests.map((r) => {
-                    const isReady = r.status === "lista";
-                    const isNueva = r.status === "nueva";
+                    const isReady = r.status === "en-costeo";
+                    const isEnProceso = r.status === "nueva" || r.status === "en-experto";
                     const isEntregada = r.status === "entregada";
                     const relativeTime = getRelativeTime(r.id);
 
@@ -405,8 +414,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                       <tr
                         key={r.id}
                         className={cn(
-                          "transition-colors hover:bg-secondary/30",
-                          isReady && "bg-emerald-50/20"
+                          "transition-colors hover:bg-secondary/30 dark:hover:bg-[#1a1c2a]",
+                          isReady && "bg-[#4cb979]/5 dark:bg-[#4cb979]/10"
                         )}
                       >
                         {/* 1. ID y Fecha */}
@@ -422,26 +431,28 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                           </div>
                         </td>
 
-                        {/* 2. Empresa y Tipo de Servicio */}
+                        {/* 2. Propuesta y Empresa */}
                         <td className="px-4 py-3.5 align-middle">
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col gap-1 max-w-[320px]">
                             <Link
                               to={`/solicitudes/${r.id}`}
-                              className="font-medium text-foreground hover:text-blue-600 transition-colors"
+                              className="font-semibold text-sm text-foreground hover:text-[#5454e9] dark:hover:text-[#865cf0] transition-colors leading-snug line-clamp-2"
+                              title={r.title}
                             >
-                              {r.company}
+                              {r.title}
                             </Link>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
                               <span
                                 className={cn(
-                                  "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium",
+                                  "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium shrink-0",
                                   getServiceTypeBadge(r.type)
                                 )}
                               >
                                 {r.type}
                               </span>
-                              <span className="text-xs text-muted-foreground line-clamp-1 max-w-[200px]">
-                                {r.title}
+                              <span className="inline-flex items-center gap-1 text-muted-foreground font-medium truncate">
+                                <Building2 className="h-3 w-3 shrink-0 opacity-70" />
+                                {r.company}
                               </span>
                             </div>
                           </div>
@@ -450,7 +461,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                         {/* 3. Líder de Producto Responsable */}
                         <td className="px-4 py-3.5 align-middle hidden md:table-cell">
                           <div className="flex items-center gap-2.5">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold text-foreground border border-border">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary dark:bg-[#1e202d] text-xs font-bold text-foreground border border-border dark:border-[#2b2d3d]">
                               {getProductLeaderInitials(r.productLeader)}
                             </div>
                             <span className="text-xs font-medium text-foreground/90 truncate max-w-[180px]">
@@ -461,7 +472,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
                         {/* 4. Valor Ofertado */}
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          {isNueva ? (
+                          {r.status === "nueva" ? (
                             <span className="inline-block rounded bg-muted/40 px-2 py-0.5 text-xs italic text-muted-foreground border border-border/50">
                               - Pendiente de costeo -
                             </span>
@@ -471,7 +482,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                                 {formatCop(r.totalCostCop || r.costing?.totalOfferedCop || 0)}
                               </span>
                               {isReady && (
-                                <span className="text-[10px] text-emerald-700 font-medium">
+                                <span className="text-[10px] text-[#4cb979] font-medium">
                                   Costeo aprobado
                                 </span>
                               )}
@@ -485,39 +496,39 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
                         {/* 5. Estado */}
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          {isNueva && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                              Nueva / En Costeo
+                          {isEnProceso && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-2.5 py-0.5 text-xs font-medium text-[#5454e9] dark:text-[#865cf0]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9] animate-pulse" />
+                              En proceso
                             </span>
                           )}
                           {isReady && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4cb979]/30 bg-[#4cb979]/10 px-2.5 py-0.5 text-xs font-medium text-[#4cb979]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#4cb979]" />
                               Lista para entregar
                             </span>
                           )}
                           {isEntregada && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                              <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#865cf0]/30 bg-[#865cf0]/10 px-2.5 py-0.5 text-xs font-medium text-[#865cf0]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#865cf0]" />
                               Entregada
                             </span>
                           )}
-                          {!isNueva && !isReady && !isEntregada && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">
-                              <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
-                              Borrador
+                          {!isEnProceso && !isReady && !isEntregada && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-2.5 py-0.5 text-xs font-medium text-[#5454e9]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9]" />
+                              En proceso
                             </span>
                           )}
                         </td>
 
                         {/* 6. Acción */}
-                        <td className="pl-4 pr-6 py-3.5 align-middle text-right whitespace-nowrap min-w-[140px]">
+                        <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap min-w-[140px]">
                           {isReady ? (
                             <Button
                               asChild
                               size="sm"
-                              className="h-8 rounded-full bg-emerald-600 px-3.5 text-xs font-medium text-white shadow-xs hover:bg-emerald-700 transition-colors"
+                              className="h-8 rounded-full bg-[#4cb979] hover:bg-[#3ea569] px-3.5 text-xs font-bold text-white shadow-xs transition-colors"
                             >
                               <Link to={`/solicitudes/${r.id}`}>
                                 <span>Ver propuesta</span>

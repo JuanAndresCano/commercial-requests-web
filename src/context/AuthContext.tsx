@@ -101,8 +101,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge with mock defaults if costing or docs are missing
-          return parsed.map((item: RequestItem) => {
+          // Merge with any new mock requests not yet in local storage
+          const existingIds = new Set(parsed.map((p: RequestItem) => p.id));
+          const missingMocks = MOCK_REQUESTS.filter((m) => !existingIds.has(m.id));
+          const combined = [...parsed, ...missingMocks];
+
+          return combined.map((item: RequestItem) => {
             const mock = MOCK_REQUESTS.find((m) => m.id === item.id);
             const costing = item.costing ?? mock?.costing ?? calculateCosting(item.type, 14000000, 30, item.totalCostCop);
             const clientKamDocuments = item.clientKamDocuments ?? mock?.clientKamDocuments ?? [];

@@ -1,10 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, Save, Send, Check, Building2, User,
   ClipboardList, GraduationCap, MessageSquare, CheckCircle2, X, Bell, Calendar,
   Search, Plus, Trash2, UploadCloud, FileText, CheckCircle, AlertCircle, Info, Sparkles,
-  ChevronDown, ChevronUp, SlidersHorizontal
+  ChevronDown, ChevronUp, SlidersHorizontal, Users, ExternalLink, History, Clock, Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,17 +13,32 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   KAMS,
   NODES,
   PRODUCT_LEADERS,
   NODE_DEFAULT_LEADERS,
   REQUEST_TYPES,
   MOCK_COMPANIES,
+  STATUS_META,
+  URGENCY_META,
+  formatCop,
+  formatCompactCop,
   type RequestType,
+  type Urgency,
+  type RequestItem,
   type CompanyRecord,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { IcesiCenefa, IcesiSymbol } from "@/components/IcesiLogo";
 
 const STEPS = [
   { id: 1, title: "Empresa", icon: Building2 },
@@ -40,6 +55,15 @@ export interface AttachedFile {
   type: string;
 }
 
+export interface ClientContact {
+  id: string;
+  nombre: string;
+  cargo: string;
+  telefono: string;
+  correo: string;
+  area: string;
+}
+
 export interface RequestFormData {
   // Paso 1 - Datos de la Empresa
   kam: string;
@@ -48,7 +72,7 @@ export interface RequestFormData {
   direccion: string;
   telefonoEmpresa: string;
   correoEmpresa: string;
-  ciiuPrincipal: string; // 4 dígitos obligatorios
+  ciiuPrincipal: string; // Opcional
   ciiuPrincipalDesc: string;
   ciiusSecundarios: string[]; // códigos adicionales opcionales
   tipoEmpresa: string;
@@ -56,20 +80,22 @@ export interface RequestFormData {
   web: string;
 
   // Paso 2 - Contacto del Cliente
-  contactoNombre: string;
-  telefono: string;
-  telefonoSecundario: string; // opcional
-  correo: string;
-  correoAlternativo: string; // opcional
-  cargo: string;
-  area: string;
+  contactoNombre: string; // Opcional
+  telefono: string; // Opcional
+  telefonoSecundario: string; // Opcional
+  correo: string; // Opcional
+  correoAlternativo: string; // Opcional
+  cargo: string; // Opcional
+  area: string; // Opcional
+  contactosAdicionales: ClientContact[]; // Múltiples contactos en la empresa
 
   // Paso 3 - Requerimiento del Servicio
-  nodo: string; // Obligatorio, los 5 nodos
+  nodo: string; // Opcional
   ldp: string; // Líder de producto asignado
   nombreReq: string; // Obligatorio
   tipoReq: RequestType;
   tipoReqOtro: string; // Obligatorio condicional si tipoReq === 'Otro'
+  urgencia: Urgency; // Nivel de urgencia (Bajo, Medio, Alto)
   participantes: string;
   horas: string; // Estrictamente opcional
   modalidad: string; // Estrictamente opcional
@@ -81,7 +107,7 @@ export interface RequestFormData {
   areaParticipantes: string; // Opcional diagnóstico
 
   // Paso 4 - Formación Previa
-  formacionPrevia: "Sí" | "No";
+  formacionPrevia: "Sí" | "No" | "No sé";
   descFormacion: string;
   empresaPrevia: string;
   fechaPrevia: string;
@@ -91,13 +117,16 @@ export interface RequestFormData {
   archivos: AttachedFile[]; // 100% opcional
 }
 
+const DRAFT_STORAGE_KEY = "icesi_kam_new_request_draft_v1";
+
 export default function NewRequest() {
   const navigate = useNavigate();
   const { addRequest, user } = useAuth();
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState<null | "draft" | "sent">(null);
+  const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ company: string; timestamp: string } | null>(null);
 
-  const [data, setData] = useState<RequestFormData>({
+  const initialFormData: RequestFormData = {
     kam: user.role === "kam" ? user.name : (KAMS[0] || "Andrea Martínez"),
     nit: "",
     empresaNombre: "",
@@ -118,12 +147,14 @@ export default function NewRequest() {
     correoAlternativo: "",
     cargo: "",
     area: "",
+    contactosAdicionales: [],
 
     nodo: "",
     ldp: "",
     nombreReq: "",
     tipoReq: "Capacitación",
     tipoReqOtro: "",
+    urgencia: "media",
     participantes: "11 - 15",
     horas: "",
     modalidad: "",
@@ -134,42 +165,135 @@ export default function NewRequest() {
     resultados: "",
     areaParticipantes: "",
 
-    formacionPrevia: "No",
+    formacionPrevia: "No sé",
     descFormacion: "",
     empresaPrevia: "",
     fechaPrevia: "",
 
     observaciones: "",
     archivos: [],
-  });
+  };
+
+  const [data, setData] = useState<RequestFormData>(initialFormData);
+
+  // Verificar si existe un borrador guardado en localStorage al montar
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.data?.empresaNombre?.trim() || parsed?.data?.nombreReq?.trim()) {
+          setRestoredDraftInfo({
+            company: parsed.data.empresaNombre || parsed.data.nombreReq || "Empresa en trámite",
+            timestamp: parsed.timestamp || "reciente",
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Autoguardado silencioso cada vez que cambia data
+  useEffect(() => {
+    // Solo guardar si hay información significativa
+    if (data.empresaNombre.trim() || data.nombreReq.trim() || data.necesidad.trim()) {
+      try {
+        localStorage.setItem(
+          DRAFT_STORAGE_KEY,
+          JSON.stringify({
+            data,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          })
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }, [data]);
+
+  const loadSavedDraft = () => {
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.data) {
+          setData(parsed.data);
+          toast.success("Borrador recuperado correctamente");
+        }
+      }
+    } catch {
+      toast.error("No se pudo cargar el borrador");
+    } finally {
+      setRestoredDraftInfo(null);
+    }
+  };
+
+  const discardSavedDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    setRestoredDraftInfo(null);
+    toast.info("Borrador descartado. Comenzando desde cero.");
+  };
 
   const update = <K extends keyof RequestFormData>(key: K, value: RequestFormData[K]) => {
     setData((prev) => ({ ...prev, [key]: value }));
   };
 
-  const next = () => setStep((s) => Math.min(5, s + 1));
+  // Validación suave al avanzar entre pasos
+  const validateCurrentStep = (currentStep: number): boolean => {
+    if (currentStep === 1) {
+      if (!data.empresaNombre.trim()) {
+        toast.error("Por favor ingresa o selecciona la Empresa o Razón Social para continuar.");
+        const el = document.getElementById("empresa-nombre") || document.getElementById("company-search-input");
+        el?.focus();
+        return false;
+      }
+    } else if (currentStep === 2) {
+      // Paso 2 (Contactos) es 100% opcional según directriz de Líder de Producto
+      return true;
+    } else if (currentStep === 3) {
+      if (!data.nombreReq.trim()) {
+        toast.error("Por favor ingresa un Título o nombre de la propuesta para continuar.");
+        const el = document.getElementById("nombre-req");
+        el?.focus();
+        return false;
+      }
+      if (data.tipoReq === "Otro" && !data.tipoReqOtro.trim()) {
+        toast.error("Por favor especifica el tipo de requerimiento.");
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleStepClick = (targetStep: number) => {
+    // Si intenta avanzar más allá del paso actual sin validar lo obligatorio
+    if (targetStep > step) {
+      if (!validateCurrentStep(step)) return;
+    }
+    setStep(targetStep);
+  };
+
+  const next = () => {
+    if (!validateCurrentStep(step)) return;
+    setStep((s) => Math.min(5, s + 1));
+  };
+
   const prev = () => setStep((s) => Math.max(1, s - 1));
 
   const handleFinish = (kind: "draft" | "sent") => {
-    // Validar requerimiento mínimo si es enviado
     if (kind === "sent") {
       if (!data.empresaNombre.trim()) {
         toast.error("Por favor ingresa o busca la Razón Social de la empresa en el Paso 1.");
         setStep(1);
         return;
       }
-      if (!data.ciiuPrincipal.trim() || data.ciiuPrincipal.trim().length !== 4) {
-        toast.error("El Código CIIU principal de 4 dígitos es obligatorio en el Paso 1.");
-        setStep(1);
-        return;
-      }
-      if (!data.contactoNombre.trim()) {
-        toast.error("Por favor completa el nombre del contacto en el Paso 2.");
-        setStep(2);
-        return;
-      }
-      if (!data.nodo) {
-        toast.error("El Nodo Asignado es obligatorio en el Paso 3.");
+      if (!data.nombreReq.trim()) {
+        toast.error("Por favor ingresa el título de la propuesta en el Paso 3.");
         setStep(3);
         return;
       }
@@ -184,18 +308,31 @@ export default function NewRequest() {
       ? data.nombreReq.trim()
       : `${data.tipoReq === "Otro" && data.tipoReqOtro ? data.tipoReqOtro : data.tipoReq} - ${data.empresaNombre || "Empresa Aliada"}`;
 
+    const contactName =
+      data.contactoNombre.trim() ||
+      (data.contactosAdicionales.length > 0 && data.contactosAdicionales[0].nombre.trim()
+        ? data.contactosAdicionales[0].nombre.trim()
+        : "Contacto de la Empresa");
+
     addRequest({
       title: finalTitle,
-      applicant: data.contactoNombre.trim() || "Contacto Principal",
+      applicant: contactName,
       type: data.tipoReq,
-      status: kind === "draft" ? "borrador" : "nueva",
-      urgency: "media",
+      status: "nueva", // Siempre ingresa formalmente en estado nueva para asignación
+      urgency: data.urgencia,
       company: data.empresaNombre.trim() || "Empresa Aliada",
-      node: data.nodo || NODES[1],
+      node: data.nodo || "Por definir",
       productLeader: data.ldp || (data.nodo ? NODE_DEFAULT_LEADERS[data.nodo] : "") || "Por definir",
       kam: user.role === "kam" ? user.name : (data.kam || "Andrea Martínez"),
       totalCostCop: 4500000,
     });
+
+    // Limpiar borrador local tras envío exitoso
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
 
     setSubmitted(kind);
   };
@@ -203,33 +340,75 @@ export default function NewRequest() {
   if (submitted) return <SuccessScreen kind={submitted} onClose={() => navigate("/solicitudes")} />;
 
   return (
-    <div className="min-h-screen bg-secondary/30 pb-12">
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
+    <div className="min-h-screen bg-background dark:bg-[#090a0e] pb-12">
+      {/* Top bar with Icesi Cenefa bar */}
+      <header className="sticky top-0 z-30 border-b border-border dark:border-[#252838] bg-card/95 dark:bg-[#12131d]/95 backdrop-blur">
+        <div className="h-1 w-full bg-linear-to-r from-[#5454e9] via-[#865cf0] to-[#e4eb60]" />
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Volver al inicio
           </Link>
           <div className="flex items-center gap-2">
-            <span className="font-display text-sm font-bold tracking-tight">Registro de Solicitud Comercial</span>
-            <span className="rounded bg-secondary px-2 py-0.5 text-xs text-muted-foreground hidden sm:inline-block">
+            <span className="font-display text-sm font-bold tracking-tight text-foreground font-sans">
+              Registro de Solicitud Comercial
+            </span>
+            <span className="rounded bg-[#5454e9]/10 px-2.5 py-0.5 text-xs font-bold text-[#5454e9] dark:text-[#865cf0] hidden sm:inline-block">
               Paso {step} de 5
             </span>
           </div>
-          <Link to="/dashboard" className="rounded p-1.5 text-muted-foreground hover:bg-secondary">
+          <Link to="/dashboard" className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary dark:hover:bg-[#1a1c28]">
             <X className="h-4 w-4" />
           </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Stepper - All steps clickable */}
+        {/* Banner de recuperación de borrador automático */}
+        {restoredDraftInfo && (
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/10 p-4 text-xs">
+            <div className="flex items-start gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="font-bold text-foreground text-sm">
+                  Solicitud en curso detectada
+                </p>
+                <p className="text-muted-foreground mt-0.5">
+                  Existe una solicitud previa guardada automáticamente para{" "}
+                  <strong className="text-foreground">{restoredDraftInfo.company}</strong> (guardada a las {restoredDraftInfo.timestamp}).
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={discardSavedDraft}
+                className="h-8 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Descartar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={loadSavedDraft}
+                className="h-8 bg-accent text-accent-foreground hover:bg-accent/90 text-xs font-bold"
+              >
+                Recuperar datos
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Stepper - All steps clickable with validation */}
         <nav aria-label="Progreso del formulario" className="mb-6">
-          <ol className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-0 bg-card p-3 rounded-lg border border-border">
+          <ol className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-0 bg-card dark:bg-[#141622] p-3 rounded-xl border border-border dark:border-[#252838] shadow-xs">
             {STEPS.map((s, i) => {
               const Icon = s.icon;
               const done = step > s.id;
@@ -238,26 +417,26 @@ export default function NewRequest() {
                 <li key={s.id} className="flex sm:flex-1 items-center min-w-0">
                   <button
                     type="button"
-                    onClick={() => setStep(s.id)}
+                    onClick={() => handleStepClick(s.id)}
                     aria-current={active ? "step" : undefined}
-                    className="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left focus:outline-none"
                   >
                     <span
                       className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
-                        done && "border-accent bg-accent text-accent-foreground",
-                        active && "border-accent bg-accent/10 text-accent font-bold ring-2 ring-accent/30",
-                        !done && !active && "border-border bg-secondary/50 text-muted-foreground group-hover:border-accent/50 group-hover:text-foreground"
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-all",
+                        done && "border-[#4cb979] bg-[#4cb979] text-white",
+                        active && "border-[#5454e9] bg-[#5454e9] text-white ring-2 ring-[#5454e9]/30",
+                        !done && !active && "border-border dark:border-[#2b2d3d] bg-secondary/50 dark:bg-[#1a1c28] text-muted-foreground group-hover:border-[#5454e9]/50 group-hover:text-foreground"
                       )}
                     >
-                      {done ? <Check className="h-4 w-4" /> : <Icon className="h-3.5 w-3.5" />}
+                      {done ? <Check className="h-4 w-4 stroke-[3]" /> : <Icon className="h-3.5 w-3.5" />}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">Paso {s.id}</span>
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Paso {s.id}</span>
                       <span
                         className={cn(
-                          "block truncate text-xs sm:text-sm transition-colors",
-                          active ? "font-bold text-foreground" : done ? "font-medium text-foreground" : "text-muted-foreground group-hover:text-foreground"
+                          "block truncate text-xs sm:text-sm font-sans transition-colors",
+                          active ? "font-bold text-[#5454e9] dark:text-[#865cf0]" : done ? "font-semibold text-foreground" : "text-muted-foreground group-hover:text-foreground"
                         )}
                       >
                         {s.title}
@@ -265,7 +444,7 @@ export default function NewRequest() {
                     </div>
                   </button>
                   {i < STEPS.length - 1 && (
-                    <span className={cn("mx-2 hidden h-0.5 flex-1 sm:block", done ? "bg-accent" : "bg-border")} />
+                    <span className={cn("mx-2 hidden h-0.5 flex-1 sm:block", done ? "bg-[#4cb979]" : "bg-border dark:bg-[#252838]")} />
                   )}
                 </li>
               );
@@ -274,7 +453,7 @@ export default function NewRequest() {
         </nav>
 
         {/* Step container */}
-        <div className="rounded-lg border border-border bg-card p-5 sm:p-8 shadow-xs">
+        <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-8 shadow-xs">
           {step === 1 && <Step1 data={data} update={update} />}
           {step === 2 && <Step2 data={data} update={update} />}
           {step === 3 && <Step3 data={data} update={update} />}
@@ -284,31 +463,27 @@ export default function NewRequest() {
 
         {/* Action Buttons */}
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={prev} disabled={step === 1}>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={prev} disabled={step === 1} className="h-10 text-xs font-medium">
               <ArrowLeft className="h-4 w-4 mr-1.5" />
               Anterior
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() => handleFinish("draft")}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Save className="h-4 w-4 mr-1.5" />
-              Guardar borrador
-            </Button>
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-muted-foreground pl-1">
+              <CheckCircle className="h-3.5 w-3.5 text-success" />
+              Guardado automático en segundo plano
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
             {step < 5 ? (
-              <Button onClick={next}>
+              <Button onClick={next} className="bg-[#5454e9] hover:bg-[#4343d3] text-white h-10 px-5 text-xs font-bold shadow-xs">
                 Continuar
                 <ArrowRight className="h-4 w-4 ml-1.5" />
               </Button>
             ) : (
-              <Button onClick={() => handleFinish("sent")} className="px-6 font-semibold">
+              <Button onClick={() => handleFinish("sent")} className="bg-[#4cb979] hover:bg-[#3ea569] text-white px-6 h-10 text-xs font-bold shadow-xs">
                 <Send className="h-4 w-4 mr-1.5" />
-                Enviar solicitud
+                Enviar solicitud a Líder de Producto
               </Button>
             )}
           </div>
@@ -421,42 +596,35 @@ function Step1({
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
 }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+
   const [matchedCompany, setMatchedCompany] = useState<CompanyRecord | null>(() => {
-    if (!data.nit) return null;
-    const clean = data.nit.replace(/[^0-9]/g, "");
-    return MOCK_COMPANIES.find((c) => c.nit.replace(/[^0-9]/g, "") === clean) || null;
+    if (!data.nit && !data.empresaNombre) return null;
+    const cleanNit = data.nit ? data.nit.replace(/[^0-9]/g, "") : "";
+    return (
+      MOCK_COMPANIES.find(
+        (c) =>
+          (cleanNit && c.nit.replace(/[^0-9]/g, "") === cleanNit) ||
+          (data.empresaNombre && c.nombre.toLowerCase() === data.empresaNombre.toLowerCase())
+      ) || null
+    );
   });
 
-  const handleNitChange = (val: string) => {
-    update("nit", val);
-    const clean = val.replace(/[^0-9]/g, "");
-    if (clean.length >= 6) {
-      const match = MOCK_COMPANIES.find((c) => c.nit.replace(/[^0-9]/g, "").includes(clean) || clean.includes(c.nit.replace(/[^0-9]/g, "")));
-      if (match) {
-        setMatchedCompany(match);
-        // Autocompletar campos manteniendo 100% editables
-        update("empresaNombre", match.nombre);
-        update("direccion", match.direccion);
-        update("telefonoEmpresa", match.telefono);
-        update("correoEmpresa", match.correo);
-        if (match.ciiuPrincipal) {
-          update("ciiuPrincipal", match.ciiuPrincipal);
-          update("ciiuPrincipalDesc", match.ciiuDescripcion || "");
-        }
-        if (match.web) update("web", match.web);
-        if (match.tipoEmpresa) update("tipoEmpresa", match.tipoEmpresa);
-        toast.success(`Datos de ${match.nombre} autocompletados. Puedes editarlos libremente.`);
-      } else {
-        setMatchedCompany(null);
-      }
-    } else {
-      setMatchedCompany(null);
-    }
-  };
+  const filteredCompanies = useMemo(() => {
+    if (!searchTerm.trim()) return [];
+    const q = searchTerm.toLowerCase().trim();
+    const qNum = q.replace(/[^0-9]/g, "");
+    return MOCK_COMPANIES.filter((c) => {
+      const nameMatch = c.nombre.toLowerCase().includes(q);
+      const nitMatch = qNum.length >= 3 && c.nit.replace(/[^0-9]/g, "").includes(qNum);
+      return nameMatch || nitMatch;
+    });
+  }, [searchTerm]);
 
   const selectPredefinedCompany = (comp: CompanyRecord) => {
-    update("nit", comp.nit);
     update("empresaNombre", comp.nombre);
+    update("nit", comp.nit);
     update("direccion", comp.direccion);
     update("telefonoEmpresa", comp.telefono);
     update("correoEmpresa", comp.correo);
@@ -465,7 +633,9 @@ function Step1({
     if (comp.web) update("web", comp.web);
     if (comp.tipoEmpresa) update("tipoEmpresa", comp.tipoEmpresa);
     setMatchedCompany(comp);
-    toast.success(`Empresa ${comp.nombre} seleccionada. Campos 100% editables.`);
+    setSearchTerm("");
+    setShowDropdown(false);
+    toast.success(`Datos de ${comp.nombre} cargados. Todos los campos continúan 100% editables.`);
   };
 
   const addSecondaryCiiu = () => {
@@ -487,46 +657,91 @@ function Step1({
     <div className="space-y-6">
       <SectionHeader
         title="1. Datos de la Empresa"
-        description="Búsqueda por NIT y datos tributarios corporativos del cliente. Los campos autocompletados pueden sobreescribirse libremente."
+        description="Búsqueda por nombre de empresa o NIT (opcional). Los campos autocompletados pueden sobreescribirse libremente."
       />
 
-      {/* Búsqueda principal por NIT */}
+      {/* Búsqueda principal por Nombre de Empresa o NIT (Opcional) */}
       <div className="rounded-lg border-2 border-accent/20 bg-accent/5 p-4 sm:p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1 space-y-1.5">
-            <Label htmlFor="nit-input" className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="company-search-input" className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Search className="h-4 w-4 text-accent" />
-              Búsqueda de Empresa por NIT <span className="text-destructive">*</span>
+              Búsqueda de Empresa por Nombre / Razón Social
             </Label>
-            <div className="relative">
-              <Input
-                id="nit-input"
-                placeholder="Ej. 890900608-9 o 890300279-4"
-                value={data.nit}
-                onChange={(e) => handleNitChange(e.target.value)}
-                className="bg-card font-mono text-sm tracking-wide"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Ingresa el NIT de la organización para buscar coincidencias automáticas en la base de datos de convenios.
-            </p>
+            <span className="text-xs font-normal text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded-full border border-border">
+              Opcional
+            </span>
           </div>
+
+          <div className="relative">
+            <Input
+              id="company-search-input"
+              placeholder="Ej. Bancolombia, Argos, Manuelita, Carvajal o NIT..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
+              className="bg-card text-sm h-10 pr-8"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setShowDropdown(false);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            {/* Dropdown flotante con coincidencias automáticas */}
+            {showDropdown && filteredCompanies.length > 0 && (
+              <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-popover shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                <div className="p-1.5 text-[11px] font-semibold text-muted-foreground bg-secondary/50 px-3">
+                  Coincidencias encontradas en base de datos:
+                </div>
+                {filteredCompanies.map((c) => (
+                  <button
+                    key={c.nit}
+                    type="button"
+                    onClick={() => selectPredefinedCompany(c)}
+                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-accent/15 flex items-center justify-between border-b border-border/40 last:border-0 transition-colors"
+                  >
+                    <div>
+                      <span className="font-semibold text-foreground block text-sm">{c.nombre}</span>
+                      <span className="text-[11px] text-muted-foreground font-mono">NIT: {c.nit} · {c.direccion}</span>
+                    </div>
+                    <span className="text-[10px] bg-accent/15 text-accent font-semibold px-2 py-0.5 rounded">
+                      Seleccionar
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Escribe el nombre o razón social de la organización para autocompletar automáticamente los datos de convenios. También puedes ingresar el NIT si lo conoces.
+          </p>
         </div>
 
         {/* Suggestions chips */}
         <div className="mt-3 pt-3 border-t border-border/60">
           <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
-            <Sparkles className="h-3 w-3 text-accent" /> Coincidencias rápidas disponibles en base de datos:
+            <Sparkles className="h-3 w-3 text-accent" /> Empresas frecuentes con convenio:
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {MOCK_COMPANIES.slice(0, 5).map((c) => (
+            {MOCK_COMPANIES.slice(0, 6).map((c) => (
               <button
                 key={c.nit}
                 type="button"
                 onClick={() => selectPredefinedCompany(c)}
                 className={cn(
-                  "rounded-md border px-2 py-1 text-xs transition-colors",
-                  data.nit === c.nit
+                  "rounded-md border px-2.5 py-1 text-xs transition-colors",
+                  data.empresaNombre === c.nombre
                     ? "border-accent bg-accent text-accent-foreground font-semibold"
                     : "border-border bg-card text-muted-foreground hover:border-accent/40 hover:text-foreground"
                 )}
@@ -541,11 +756,11 @@ function Step1({
         {matchedCompany && (
           <div className="mt-3 flex items-start gap-2.5 rounded-md border border-success/30 bg-success/10 p-3 text-xs text-foreground">
             <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-success">Empresa encontrada en base de datos</p>
-              <p className="text-muted-foreground">
-                Se autocompletaron Razón Social, Dirección, Teléfono, Correo y Código CIIU ({matchedCompany.ciiuPrincipal} - {matchedCompany.ciiuDescripcion}).
-                Todos los campos continúan <strong className="text-foreground">100% editables</strong> para permitir sobreescritura.
+            <div className="flex-1">
+              <p className="font-semibold text-success">Empresa identificada en base de datos</p>
+              <p className="text-muted-foreground mt-0.5">
+                Razón Social: <strong className="text-foreground">{matchedCompany.nombre}</strong> | NIT: <span className="font-mono">{matchedCompany.nit}</span>.
+                Todos los datos continúan <strong className="text-foreground">100% editables</strong> para sobreescritura.
               </p>
             </div>
           </div>
@@ -565,14 +780,36 @@ function Step1({
         <Field
           label="Razón Social / Nombre de la empresa"
           required
-          hint="Nombre legal completo registrado ante Cámara de Comercio"
+          hint="Nombre comercial o legal completo de la organización"
           id="empresa-nombre"
         >
           <Input
             id="empresa-nombre"
             placeholder="Ej. Bancolombia S.A."
             value={data.empresaNombre}
-            onChange={(e) => update("empresaNombre", e.target.value)}
+            onChange={(e) => {
+              update("empresaNombre", e.target.value);
+              // Verificar coincidencia por nombre si escribe directamente
+              const m = MOCK_COMPANIES.find(
+                (c) => c.nombre.toLowerCase() === e.target.value.toLowerCase().trim()
+              );
+              if (m) setMatchedCompany(m);
+            }}
+          />
+        </Field>
+
+        <Field
+          label="NIT de la Empresa"
+          showOptionalBadge
+          hint="Número de Identificación Tributaria (opcional si aún no se tiene)"
+          id="empresa-nit"
+        >
+          <Input
+            id="empresa-nit"
+            placeholder="Ej. 890900608-9 (opcional)"
+            value={data.nit}
+            onChange={(e) => update("nit", e.target.value)}
+            className="font-mono text-sm"
           />
         </Field>
 
@@ -613,19 +850,19 @@ function Step1({
           />
         </Field>
 
-        {/* CIIU Principal Obligatorio */}
+        {/* CIIU Principal Opcional */}
         <div className="md:col-span-2 rounded-md border border-border bg-secondary/30 p-4 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Actividad Económica Principal (Código CIIU)"
-              required
-              hint="Código numérico de exactamente 4 dígitos (CIIU Rev. 4 A.C.)"
+              showOptionalBadge
+              hint="Código numérico opcional (CIIU Rev. 4 A.C.)"
               id="ciiu-principal"
             >
               <div className="relative">
                 <Input
                   id="ciiu-principal"
-                  placeholder="Ej. 8544"
+                  placeholder="Ej. 8544 (opcional)"
                   maxLength={4}
                   value={data.ciiuPrincipal}
                   onChange={(e) => {
@@ -727,80 +964,224 @@ function Step2({
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
 }) {
+  const addAdditionalContact = () => {
+    const newContact: ClientContact = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      nombre: "",
+      cargo: "",
+      telefono: "",
+      correo: "",
+      area: "",
+    };
+    update("contactosAdicionales", [...(data.contactosAdicionales || []), newContact]);
+    toast.success("Nuevo contacto añadido para la empresa.");
+  };
+
+  const removeAdditionalContact = (id: string) => {
+    update(
+      "contactosAdicionales",
+      (data.contactosAdicionales || []).filter((c) => c.id !== id)
+    );
+  };
+
+  const updateAdditionalContact = (id: string, field: keyof ClientContact, val: string) => {
+    update(
+      "contactosAdicionales",
+      (data.contactosAdicionales || []).map((c) => (c.id === id ? { ...c, [field]: val } : c))
+    );
+  };
+
   return (
     <div className="space-y-6">
       <SectionHeader
         title="2. Contacto del Cliente"
-        description="Datos del interlocutor comercial y canales de comunicación alternativos."
+        description="Datos del interlocutor comercial y equipo de la empresa. Los campos no son obligatorios al inicio y puedes registrar múltiples contactos según las áreas involucradas."
       />
 
-      <div className="grid gap-5 md:grid-cols-2">
-        <Field label="Nombre completo del contacto" required id="contacto-nombre">
-          <Input
-            id="contacto-nombre"
-            placeholder="Ej. Carlos Arturo Ramírez"
-            value={data.contactoNombre}
-            onChange={(e) => update("contactoNombre", e.target.value)}
-          />
-        </Field>
+      {/* Tarjeta de Contacto Principal */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
+        <div className="flex items-center justify-between pb-2 border-b border-border/60">
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/15 text-accent text-xs font-bold">
+              1
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Contacto Principal / Interlocutor</h3>
+          </div>
+          <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full border border-border">
+            Opcional
+          </span>
+        </div>
 
-        <Field label="Cargo del contacto" hint="Posición dentro de la empresa" id="contacto-cargo">
-          <Input
-            id="contacto-cargo"
-            placeholder="Ej. Gerente de Talento Humano"
-            value={data.cargo}
-            onChange={(e) => update("cargo", e.target.value)}
-          />
-        </Field>
-
-        <Field label="Teléfono de contacto principal" required hint="Celular o teléfono directo" id="contacto-tel">
-          <Input
-            id="contacto-tel"
-            placeholder="Ej. +57 315 889 4433"
-            value={data.telefono}
-            onChange={(e) => update("telefono", e.target.value)}
-          />
-        </Field>
-
-        <Field label="Teléfono de contacto secundario" hint="Línea alternativa o de oficina (opcional)" id="contacto-tel2">
-          <Input
-            id="contacto-tel2"
-            placeholder="Ej. +57 (602) 667 5000 ext. 124"
-            value={data.telefonoSecundario}
-            onChange={(e) => update("telefonoSecundario", e.target.value)}
-          />
-        </Field>
-
-        <Field label="Correo electrónico institucional" required hint="Email principal para cotizaciones" id="contacto-email">
-          <Input
-            id="contacto-email"
-            type="email"
-            placeholder="carlos.ramirez@empresa.com"
-            value={data.correo}
-            onChange={(e) => update("correo", e.target.value)}
-          />
-        </Field>
-
-        <Field label="Correo electrónico alternativo" hint="Email secundario o asistente (opcional)" id="contacto-email2">
-          <Input
-            id="contacto-email2"
-            type="email"
-            placeholder="asistente.rrhh@empresa.com"
-            value={data.correoAlternativo}
-            onChange={(e) => update("correoAlternativo", e.target.value)}
-          />
-        </Field>
-
-        <div className="md:col-span-2">
-          <Field label="Área o dependencia" hint="Dirección, gerencia o departamento solicitante" id="contacto-area">
+        <div className="grid gap-5 md:grid-cols-2">
+          <Field label="Nombre completo del contacto" showOptionalBadge id="contacto-nombre">
             <Input
-              id="contacto-area"
-              placeholder="Ej. Dirección de Desarrollo Organizacional y Cultura"
-              value={data.area}
-              onChange={(e) => update("area", e.target.value)}
+              id="contacto-nombre"
+              placeholder="Ej. Carlos Arturo Ramírez (opcional)"
+              value={data.contactoNombre}
+              onChange={(e) => update("contactoNombre", e.target.value)}
             />
           </Field>
+
+          <Field label="Cargo del contacto" showOptionalBadge hint="Posición dentro de la empresa" id="contacto-cargo">
+            <Input
+              id="contacto-cargo"
+              placeholder="Ej. Gerente de Talento Humano"
+              value={data.cargo}
+              onChange={(e) => update("cargo", e.target.value)}
+            />
+          </Field>
+
+          <Field label="Teléfono de contacto principal" showOptionalBadge hint="Celular o teléfono directo" id="contacto-tel">
+            <Input
+              id="contacto-tel"
+              placeholder="Ej. +57 315 889 4433"
+              value={data.telefono}
+              onChange={(e) => update("telefono", e.target.value)}
+            />
+          </Field>
+
+          <Field label="Teléfono de contacto secundario" showOptionalBadge hint="Línea alternativa o de oficina" id="contacto-tel2">
+            <Input
+              id="contacto-tel2"
+              placeholder="Ej. +57 (602) 667 5000 ext. 124"
+              value={data.telefonoSecundario}
+              onChange={(e) => update("telefonoSecundario", e.target.value)}
+            />
+          </Field>
+
+          <Field label="Correo electrónico institucional" showOptionalBadge hint="Email para cotizaciones o seguimiento" id="contacto-email">
+            <Input
+              id="contacto-email"
+              type="email"
+              placeholder="carlos.ramirez@empresa.com"
+              value={data.correo}
+              onChange={(e) => update("correo", e.target.value)}
+            />
+          </Field>
+
+          <Field label="Correo electrónico alternativo" showOptionalBadge hint="Email secundario o asistente" id="contacto-email2">
+            <Input
+              id="contacto-email2"
+              type="email"
+              placeholder="asistente.rrhh@empresa.com"
+              value={data.correoAlternativo}
+              onChange={(e) => update("correoAlternativo", e.target.value)}
+            />
+          </Field>
+
+          <div className="md:col-span-2">
+            <Field label="Área o dependencia" showOptionalBadge hint="Dirección, gerencia o departamento solicitante" id="contacto-area">
+              <Input
+                id="contacto-area"
+                placeholder="Ej. Dirección de Desarrollo Organizacional y Cultura"
+                value={data.area}
+                onChange={(e) => update("area", e.target.value)}
+              />
+            </Field>
+          </div>
         </div>
+      </div>
+
+      {/* Sección de Múltiples Contactos */}
+      <div className="rounded-xl border border-dashed border-border bg-secondary/20 p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Users className="h-4 w-4 text-accent" />
+              Contactos adicionales de la empresa {data.contactosAdicionales && data.contactosAdicionales.length > 0 ? `(${data.contactosAdicionales.length})` : ""}
+            </h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              En una misma empresa puedes gestionar solicitudes con diferentes contactos, áreas o tomadores de decisión.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addAdditionalContact}
+            className="text-xs flex items-center gap-1.5 shrink-0 self-start sm:self-auto bg-card"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Agregar otro contacto
+          </Button>
+        </div>
+
+        {data.contactosAdicionales && data.contactosAdicionales.length > 0 ? (
+          <div className="space-y-3 pt-2">
+            {data.contactosAdicionales.map((c, idx) => (
+              <div
+                key={c.id}
+                className="rounded-lg border border-border bg-card p-4 space-y-3 relative shadow-xs"
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-foreground text-[11px] font-bold border border-border">
+                      {idx + 2}
+                    </span>
+                    Contacto adicional {c.nombre ? `· ${c.nombre}` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeAdditionalContact(c.id)}
+                    className="text-xs text-destructive hover:underline inline-flex items-center gap-1"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Quitar
+                  </button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Nombre completo</Label>
+                    <Input
+                      placeholder="Ej. Ana María Gómez"
+                      value={c.nombre}
+                      onChange={(e) => updateAdditionalContact(c.id, "nombre", e.target.value)}
+                      className="text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Cargo</Label>
+                    <Input
+                      placeholder="Ej. Líder de Formación"
+                      value={c.cargo}
+                      onChange={(e) => updateAdditionalContact(c.id, "cargo", e.target.value)}
+                      className="text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Área / Dependencia</Label>
+                    <Input
+                      placeholder="Ej. Gestión Humana"
+                      value={c.area}
+                      onChange={(e) => updateAdditionalContact(c.id, "area", e.target.value)}
+                      className="text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Teléfono / Celular</Label>
+                    <Input
+                      placeholder="Ej. +57 310 555 1234"
+                      value={c.telefono}
+                      onChange={(e) => updateAdditionalContact(c.id, "telefono", e.target.value)}
+                      className="text-xs mt-1"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label className="text-xs text-muted-foreground">Correo electrónico</Label>
+                    <Input
+                      type="email"
+                      placeholder="ana.gomez@empresa.com"
+                      value={c.correo}
+                      onChange={(e) => updateAdditionalContact(c.id, "correo", e.target.value)}
+                      className="text-xs mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -859,24 +1240,30 @@ function Step3({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Nodo Asignado"
-              required
-              hint="Nodo temático de la Universidad Icesi"
+              showOptionalBadge
+              hint="Nodo temático de la Universidad Icesi (opcional / por definir)"
               id="nodo-select"
             >
               <Select
                 value={data.nodo}
                 onValueChange={(v) => {
-                  update("nodo", v);
+                  const val = v === "none" ? "" : v;
+                  update("nodo", val);
                   // Asociación inteligente por Nodo: preselecciona automáticamente el líder sugerido para este nodo
-                  if (NODE_DEFAULT_LEADERS[v]) {
-                    update("ldp", NODE_DEFAULT_LEADERS[v]);
+                  if (val && NODE_DEFAULT_LEADERS[val]) {
+                    update("ldp", NODE_DEFAULT_LEADERS[val]);
                   }
                 }}
               >
                 <SelectTrigger id="nodo-select" className="bg-card">
-                  <SelectValue placeholder="Selecciona un nodo de la universidad" />
+                  <SelectValue placeholder="Selecciona un nodo (opcional / por definir)" />
                 </SelectTrigger>
                 <SelectContent>
+                  {data.nodo && (
+                    <SelectItem value="none" className="text-muted-foreground italic">
+                      -- Por definir / Sin asignar --
+                    </SelectItem>
+                  )}
                   {NODES.map((n) => (
                     <SelectItem key={n} value={n}>
                       {n}
@@ -1007,7 +1394,7 @@ function Step3({
             value={data.tipoReq}
             onValueChange={(v) => update("tipoReq", v as RequestType)}
           >
-            <SelectTrigger id="tipo-req">
+            <SelectTrigger id="tipo-req" className="bg-card">
               <SelectValue placeholder="Seleccione el tipo de requerimiento" />
             </SelectTrigger>
             <SelectContent>
@@ -1145,47 +1532,92 @@ function Step3({
                   </Select>
                 </Field>
 
-                <Field
-                  label="Servicio de alimentación y logística"
-                  hint="Refrigerios, comidas de trabajo o kits"
-                  id="alimentacion-select"
-                >
-                  <Select value={data.alimentacion} onValueChange={(v) => update("alimentacion", v)}>
-                    <SelectTrigger id="alimentacion-select" className="bg-card">
-                      <SelectValue placeholder="Seleccionar requerimiento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="No requiere">No requiere</SelectItem>
-                      <SelectItem value="Requiere refrigerios / almuerzos">Requiere refrigerios / almuerzos</SelectItem>
-                      <SelectItem value="Requiere kit de materiales">Requiere kit de materiales</SelectItem>
-                      <SelectItem value="Por definir en formulación">Por definir en formulación</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
+                <div className="sm:col-span-2">
+                  <Field
+                    label="Servicio de alimentación y logística"
+                    showOptionalBadge
+                    hint="Campo abierto: detalle requerimientos de refrigerios, almuerzos, estación de café permanente, transporte o kits especiales"
+                    id="alimentacion-input"
+                  >
+                    <Textarea
+                      id="alimentacion-input"
+                      rows={2}
+                      placeholder="Ej. Refrigerio am y pm para 25 participantes, estación de café y agua permanente durante los 3 días, y kit de bienvenida institucional..."
+                      value={data.alimentacion}
+                      onChange={(e) => update("alimentacion", e.target.value)}
+                      className="bg-card text-sm resize-y"
+                    />
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="text-[11px] font-medium text-muted-foreground">Sugerencias rápidas:</span>
+                      {[
+                        "Refrigerios AM/PM",
+                        "Almuerzos de trabajo",
+                        "Estación de café y agua",
+                        "Kit de materiales / bienvenida",
+                        "Salón con proyector y audio",
+                        "No requiere logística",
+                      ].map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            const cur = data.alimentacion.trim();
+                            if (!cur) {
+                              update("alimentacion", item);
+                            } else if (!cur.toLowerCase().includes(item.toLowerCase())) {
+                              update("alimentacion", `${cur}, ${item}`);
+                            }
+                          }}
+                          className="rounded-md border border-border bg-card px-2 py-0.5 text-[11px] text-muted-foreground hover:border-accent/40 hover:text-foreground transition-colors"
+                        >
+                          + {item}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                </div>
               </div>
             </div>
 
             {/* Diagnóstico y Objetivos */}
             <div className="space-y-4 pt-4 border-t border-border/60">
-              <div className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Diagnóstico y objetivos del proceso
-                </h4>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Diagnóstico y objetivos del proceso
+                  </h4>
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  Sin límite de caracteres
+                </span>
               </div>
 
               <div className="space-y-4">
                 <Field
                   label="Necesidad u oportunidad identificada"
-                  hint="Reto u oportunidad que la empresa busca abordar"
+                  showOptionalBadge
+                  hint="Situación, motivación o reto estratégico que la empresa busca abordar (puedes pegar textos o diagnósticos extensos sin restricción)"
                 >
-                  <Textarea
-                    rows={2}
-                    placeholder="Describa brevemente la situación o motivación principal de la organización..."
-                    value={data.necesidad}
-                    onChange={(e) => update("necesidad", e.target.value)}
-                    className="bg-card"
-                  />
+                  <div className="space-y-1.5">
+                    <Textarea
+                      rows={4}
+                      placeholder="Describa la situación o motivación principal de la organización (diagnóstico, expectativas, contexto del reto comercial, requerimientos del cliente)..."
+                      value={data.necesidad}
+                      onChange={(e) => update("necesidad", e.target.value)}
+                      className="bg-card resize-y min-h-[100px] text-sm"
+                    />
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">
+                        Campo libre y expansible para especificaciones completas
+                      </span>
+                      {data.necesidad.length > 0 && (
+                        <span className="font-mono text-muted-foreground">
+                          {data.necesidad.length} caracteres redactados
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </Field>
 
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -1259,6 +1691,45 @@ function Step4({
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
 }) {
+  const { requests } = useAuth();
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
+  const [proposalTab, setProposalTab] = useState<"todas" | "entregadas" | "en_proceso">("todas");
+  const [selectedProposalModal, setSelectedProposalModal] = useState<RequestItem | null>(null);
+
+  // Coincidencias de propuestas de la empresa activa o buscada
+  const activeCompanyQuery = (
+    historySearchTerm.trim() ||
+    data.empresaNombre.trim()
+  ).toLowerCase();
+
+  const companyProposals = useMemo(() => {
+    if (!activeCompanyQuery || activeCompanyQuery.length < 2) return [];
+    const tokens = activeCompanyQuery.split(/\s+/).filter((w) => w.length >= 2);
+
+    return requests.filter((r) => {
+      const comp = (r.company || "").toLowerCase();
+      if (comp.includes(activeCompanyQuery) || activeCompanyQuery.includes(comp)) return true;
+      if (tokens.length > 1 && tokens.every((term) => comp.includes(term))) return true;
+      if (tokens.some((term) => term.length >= 4 && comp.includes(term))) return true;
+      return false;
+    });
+  }, [requests, activeCompanyQuery]);
+
+  const deliveredProposals = useMemo(
+    () => companyProposals.filter((p) => p.status === "entregada"),
+    [companyProposals]
+  );
+  const inProgressProposals = useMemo(
+    () => companyProposals.filter((p) => p.status === "lista" || p.status === "nueva" || p.status === "borrador"),
+    [companyProposals]
+  );
+
+  const displayedProposals = useMemo(() => {
+    if (proposalTab === "entregadas") return deliveredProposals;
+    if (proposalTab === "en_proceso") return inProgressProposals;
+    return companyProposals;
+  }, [proposalTab, deliveredProposals, inProgressProposals, companyProposals]);
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -1266,58 +1737,444 @@ function Step4({
         description="Antecedentes y capacitaciones recibidas con anterioridad por el equipo o la empresa."
       />
 
-      <div className="space-y-5">
-        <Field label="¿La empresa o equipo ha tenido formación previa sobre esta temática?" required>
-          <RadioGroup
-            options={["Sí", "No"]}
-            value={data.formacionPrevia}
-            onChange={(v) => update("formacionPrevia", v as "Sí" | "No")}
-            columns={2}
-          />
-        </Field>
+      <div className="space-y-6">
+        {/* 1. Opción Sí / No / No sé */}
+        <div className="space-y-4">
+          <Field label="¿La empresa o equipo ha tenido formación previa sobre esta temática?" required>
+            <RadioGroup
+              options={["Sí", "No", "No sé"]}
+              value={data.formacionPrevia}
+              onChange={(v) => update("formacionPrevia", v as "Sí" | "No" | "No sé")}
+              columns={3}
+            />
+          </Field>
 
-        {data.formacionPrevia === "Sí" ? (
-          <div className="rounded-md border border-border bg-secondary/30 p-4 space-y-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              <GraduationCap className="h-4 w-4 text-accent" />
-              Detalle de los antecedentes de formación
-            </div>
+          {data.formacionPrevia === "Sí" ? (
+            <div className="rounded-md border border-border bg-secondary/30 p-4 space-y-4">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <GraduationCap className="h-4 w-4 text-accent" />
+                Detalle de los antecedentes de formación
+              </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Field label="Descripción del programa anterior" hint="Nombre o temática del curso/consultoría previa">
-                  <Textarea
-                    rows={2}
-                    placeholder="Ej. Taller introductorio a metodologías ágiles y Scrum"
-                    value={data.descFormacion}
-                    onChange={(e) => update("descFormacion", e.target.value)}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Field label="Descripción del programa anterior" hint="Nombre o temática del curso/consultoría previa">
+                    <Textarea
+                      rows={2}
+                      placeholder="Ej. Taller introductorio a metodologías ágiles y Scrum"
+                      value={data.descFormacion}
+                      onChange={(e) => update("descFormacion", e.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Empresa o institución proveedora previa" hint="Entidad que impartió la formación">
+                  <Input
+                    placeholder="Ej. Centro de Consultoría / Universidad..."
+                    value={data.empresaPrevia}
+                    onChange={(e) => update("empresaPrevia", e.target.value)}
+                  />
+                </Field>
+
+                <Field label="Fecha aproximada o período" hint="Año o fecha estimada de realización">
+                  <Input
+                    type="date"
+                    value={data.fechaPrevia}
+                    onChange={(e) => update("fechaPrevia", e.target.value)}
                   />
                 </Field>
               </div>
+            </div>
+          ) : data.formacionPrevia === "No sé" ? (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-foreground flex items-start gap-3">
+              <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-amber-800 dark:text-amber-300">
+                  Información previa no disponible o por verificar
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  El KAM no tiene certeza sobre antecedentes previos de capacitación en la empresa. Este aspecto se verificará durante la etapa de diagnóstico o en la sesión de alineación técnica con el cliente.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border border-border/80 bg-secondary/20 p-4 text-xs text-muted-foreground flex items-center gap-2">
+              <Check className="h-4 w-4 text-muted-foreground" />
+              No se registran antecedentes previos. Se formulará la propuesta desde nivel inicial/diagnóstico.
+            </div>
+          )}
+        </div>
 
-              <Field label="Empresa o institución proveedora previa" hint="Entidad que impartió la formación">
-                <Input
-                  placeholder="Ej. Centro de Consultoría / Universidad..."
-                  value={data.empresaPrevia}
-                  onChange={(e) => update("empresaPrevia", e.target.value)}
-                />
-              </Field>
+        {/* 2. Nivel de urgencia en que requieren la solicitud */}
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3 shadow-xs">
+          <Field
+            label="Nivel de urgencia en que requieren la solicitud"
+            required
+            hint="Identifica la prioridad y tiempos de respuesta esperados para la formulación y entrega de la propuesta"
+            id="urgencia-select"
+          >
+            <div className="grid grid-cols-3 gap-3 pt-1">
+              {[
+                {
+                  id: "baja" as const,
+                  label: "Bajo",
+                  desc: "Tiempos estándar de formulación",
+                  activeClasses: "border-muted-foreground/50 bg-secondary text-foreground font-bold ring-2 ring-muted-foreground/30",
+                  dot: "bg-muted-foreground",
+                },
+                {
+                  id: "media" as const,
+                  label: "Medio",
+                  desc: "Prioridad habitual / 5-7 días hábiles",
+                  activeClasses: "border-amber-500/80 bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold ring-2 ring-amber-500/30",
+                  dot: "bg-amber-500",
+                },
+                {
+                  id: "alta" as const,
+                  label: "Alto",
+                  desc: "Urgente / Licitación / Fecha fija inmediata",
+                  activeClasses: "border-[#e9683b] bg-[#e9683b]/15 text-[#e9683b] font-bold ring-2 ring-[#e9683b]/30",
+                  dot: "bg-[#e9683b]",
+                },
+              ].map((opt) => {
+                const isSelected = data.urgencia === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => update("urgencia", opt.id)}
+                    className={cn(
+                      "flex flex-col items-center justify-center rounded-lg border p-3 text-center transition-all text-xs cursor-pointer",
+                      isSelected
+                        ? opt.activeClasses
+                        : "border-border bg-card text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("h-2.5 w-2.5 rounded-full", opt.dot)} />
+                      <span className="text-sm font-semibold">{opt.label}</span>
+                    </div>
+                    <span className="text-[11px] opacity-75 mt-1">{opt.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+        </div>
 
-              <Field label="Fecha aproximada o período" hint="Año o fecha estimada de realización">
-                <Input
-                  type="date"
-                  value={data.fechaPrevia}
-                  onChange={(e) => update("fechaPrevia", e.target.value)}
-                />
-              </Field>
+        {/* 3. Buscador de propuestas entregadas y en proceso de la empresa */}
+        <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0]">
+                <History className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  Buscador de Propuestas Entregadas y en Proceso
+                  {companyProposals.length > 0 && (
+                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
+                      {companyProposals.length} encontrada{companyProposals.length !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Identifica las propuestas que Icesi ya entregó o tiene en proceso para esta empresa (ej. antecedentes o evitar duplicidades).
+                </p>
+              </div>
+            </div>
+
+            {/* Buscador directo por nombre de empresa */}
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar empresa (ej. Gases de Occidente)..."
+                value={historySearchTerm}
+                onChange={(e) => setHistorySearchTerm(e.target.value)}
+                className="h-8.5 pl-8 pr-7 text-xs bg-secondary/30"
+              />
+              {historySearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setHistorySearchTerm("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
-        ) : (
-          <div className="rounded-md border border-border/80 bg-secondary/20 p-4 text-xs text-muted-foreground flex items-center gap-2">
-            <Check className="h-4 w-4 text-muted-foreground" />
-            No se registran antecedentes previos. Se formulará la propuesta desde nivel inicial/diagnóstico.
-          </div>
-        )}
+
+          {/* Resultados del buscador */}
+          {activeCompanyQuery ? (
+            companyProposals.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-muted-foreground font-medium">Filtrar estado:</span>
+                    <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/30">
+                      <button
+                        type="button"
+                        onClick={() => setProposalTab("todas")}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-xs transition-colors",
+                          proposalTab === "todas"
+                            ? "bg-card text-foreground shadow-2xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Todas ({companyProposals.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProposalTab("entregadas")}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-xs transition-colors",
+                          proposalTab === "entregadas"
+                            ? "bg-[#865cf0]/15 text-[#7344e8] dark:text-[#865cf0] shadow-2xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Entregadas ({deliveredProposals.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProposalTab("en_proceso")}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-xs transition-colors",
+                          proposalTab === "en_proceso"
+                            ? "bg-[#4cb979]/15 text-[#2d8f55] dark:text-[#4cb979] shadow-2xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        En Proceso ({inProgressProposals.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    Empresa consultada: <strong className="text-foreground">{data.empresaNombre || historySearchTerm}</strong>
+                  </div>
+                </div>
+
+                {/* Lista de propuestas encontradas */}
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                  {displayedProposals.map((item) => {
+                    const statusInfo = STATUS_META[item.status];
+                    const urgencyInfo = URGENCY_META[item.urgency];
+                    const hasClientDocs = item.clientKamDocuments && item.clientKamDocuments.length > 0;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="group rounded-lg border border-border bg-card p-3.5 transition-all hover:border-accent/40 hover:shadow-2xs"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-foreground">
+                                {item.id}
+                              </span>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border",
+                                  statusInfo.tone
+                                )}
+                              >
+                                <span className={cn("h-1.5 w-1.5 rounded-full", statusInfo.dot)} />
+                                {statusInfo.label}
+                              </span>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full px-1.5 py-0.2 text-[10px] font-medium border",
+                                  urgencyInfo.tone
+                                )}
+                              >
+                                Urgencia: {urgencyInfo.label}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground font-medium bg-secondary px-2 py-0.5 rounded">
+                                {item.type}
+                              </span>
+                            </div>
+
+                            <h4 className="text-sm font-semibold text-foreground truncate">
+                              {item.title}
+                            </h4>
+
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                              <span>Empresa: <strong className="text-foreground">{item.company}</strong></span>
+                              <span>Nodo: <strong className="text-foreground">{item.node}</strong></span>
+                              <span>Líder: <strong className="text-foreground">{item.productLeader}</strong></span>
+                              <span>Valor: <strong className="text-foreground font-mono">{formatCop(item.totalCostCop)}</strong></span>
+                              {item.deadline && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" /> Entrega: {item.deadline}
+                                </span>
+                              )}
+                              {hasClientDocs && (
+                                <span className="text-accent font-medium flex items-center gap-1">
+                                  <FileText className="h-3 w-3" /> {item.clientKamDocuments!.length} doc(s)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center pt-1 sm:pt-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedProposalModal(item)}
+                              className="h-8 text-xs font-semibold gap-1.5"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              Ver detalle
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-4 text-center">
+                <p className="text-xs font-medium text-foreground">
+                  No se encontraron propuestas registradas para &ldquo;{data.empresaNombre || historySearchTerm}&rdquo;
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  No constan propuestas previas entregadas ni solicitudes en curso para esta entidad.
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="rounded-lg border border-dashed border-border/80 bg-secondary/15 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span>
+                  Escribe en el buscador el nombre de la empresa para consultar sus propuestas entregadas y en proceso.
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[11px] text-muted-foreground mr-1">Ejemplos:</span>
+                {["Gases de Occidente", "Bancolombia", "Grupo Argos"].map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setHistorySearchTerm(name)}
+                    className="rounded border border-border bg-card px-2 py-0.5 text-[11px] hover:border-accent hover:text-foreground transition-colors cursor-pointer"
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal de Detalle de Propuesta */}
+        <Dialog
+          open={!!selectedProposalModal}
+          onOpenChange={(open) => {
+            if (!open) setSelectedProposalModal(null);
+          }}
+        >
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold text-muted-foreground">
+                  {selectedProposalModal?.id}
+                </span>
+                {selectedProposalModal && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border",
+                      STATUS_META[selectedProposalModal.status].tone
+                    )}
+                  >
+                    <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[selectedProposalModal.status].dot)} />
+                    {STATUS_META[selectedProposalModal.status].label}
+                  </span>
+                )}
+              </div>
+              <DialogTitle className="text-base font-bold text-foreground mt-1">
+                {selectedProposalModal?.title}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Empresa: <strong className="text-foreground">{selectedProposalModal?.company}</strong>
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedProposalModal && (
+              <div className="space-y-4 py-2 text-xs">
+                <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-secondary/30 p-3">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Tipo de Requerimiento</span>
+                    <span className="font-semibold text-foreground">{selectedProposalModal.type}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Nivel de Urgencia</span>
+                    <span className="font-semibold text-foreground capitalize">{selectedProposalModal.urgency}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Nodo Asignado</span>
+                    <span className="font-semibold text-foreground">{selectedProposalModal.node}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Líder de Producto</span>
+                    <span className="font-semibold text-foreground">{selectedProposalModal.productLeader}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">KAM a cargo</span>
+                    <span className="font-semibold text-foreground">{selectedProposalModal.kam}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Valor de la Oferta</span>
+                    <span className="font-bold text-foreground font-mono text-sm">
+                      {formatCop(selectedProposalModal.totalCostCop)}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedProposalModal.clientKamDocuments &&
+                  selectedProposalModal.clientKamDocuments.length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 text-accent" /> Documentos de la propuesta
+                      </span>
+                      <div className="space-y-1">
+                        {selectedProposalModal.clientKamDocuments.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between p-2 rounded-md border border-border bg-card text-xs"
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-foreground truncate">{doc.name}</span>
+                              <span className="text-muted-foreground text-[10px]">({doc.size})</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground font-mono">{doc.date}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedProposalModal(null)}
+                className="text-xs"
+              >
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -1468,7 +2325,10 @@ function Step5({
           </div>
           <div>
             <dt className="text-muted-foreground">Contacto:</dt>
-            <dd className="font-medium text-foreground truncate">{data.contactoNombre || "Sin especificar"}</dd>
+            <dd className="font-medium text-foreground truncate">
+              {data.contactoNombre || (data.contactosAdicionales.length > 0 ? data.contactosAdicionales[0].nombre : "Por definir")}
+              {data.contactosAdicionales.length > 0 ? ` (+${data.contactosAdicionales.length} adicional${data.contactosAdicionales.length > 1 ? "es" : ""})` : ""}
+            </dd>
             <dt className="text-muted-foreground mt-1">Nodo Asignado:</dt>
             <dd className="font-medium text-accent truncate">{data.nodo || "Sin asignar"}</dd>
           </div>
