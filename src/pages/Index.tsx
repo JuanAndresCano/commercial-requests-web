@@ -1,47 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Briefcase, Network, Layers, GraduationCap, ArrowRight, Sparkles, Building2, Shield, PlusCircle } from "lucide-react";
+import { ArrowRight, Sparkles } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { IcesiLogo, IcesiSymbol, IcesiCenefa } from "@/components/IcesiLogo";
+import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-
-const ROLES = [
-  {
-    key: "kam",
-    title: "KAM",
-    subtitle: "Key Account Manager",
-    description: "Crea y gestiona requerimientos con clientes empresariales.",
-    icon: Briefcase,
-    accent: "border-t-[#5454e9] group-hover:border-[#5454e9]",
-    badgeColor: "bg-[#5454e9]/10 text-[#5454e9]",
-  },
-  {
-    key: "lider-producto",
-    title: "Líder de Producto",
-    subtitle: "Gestión técnica & costeo",
-    description: "Estructura propuestas técnico-económicas y asigna docentes.",
-    icon: Layers,
-    accent: "border-t-[#865cf0] group-hover:border-[#865cf0]",
-    badgeColor: "bg-[#865cf0]/10 text-[#865cf0]",
-  },
-  {
-    key: "lider-nodo",
-    title: "Líder de Nodo",
-    subtitle: "Coordinación académica",
-    description: "Supervisa propuestas en los 5 nodos temáticos de la Universidad.",
-    icon: Network,
-    accent: "border-t-[#4cb979] group-hover:border-[#4cb979]",
-    badgeColor: "bg-[#4cb979]/10 text-[#4cb979]",
-  },
-  {
-    key: "profesor",
-    title: "Profesor / Asesor",
-    subtitle: "Diseño curricular",
-    description: "Formula contenidos pedagógicos y valida metodologías de entrega.",
-    icon: GraduationCap,
-    accent: "border-t-[#e9683b] group-hover:border-[#e9683b]",
-    badgeColor: "bg-[#e9683b]/10 text-[#e9683b]",
-  },
-];
 
 const Index = () => {
   const navigate = useNavigate();
@@ -94,16 +55,8 @@ const Index = () => {
                 onClick={() => navigate("/login")}
                 className="bg-[#5454e9] hover:bg-[#4343d3] text-white text-xs font-bold px-5 h-10 shadow-sm"
               >
-                Ingresar al sistema
+                Iniciar sesión
                 <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => navigate("/solicitudes/nueva")}
-                className="border-border dark:border-[#2b2d3d] text-xs font-semibold h-10 gap-1.5"
-              >
-                <PlusCircle className="h-4 w-4 text-[#5454e9]" />
-                Crear solicitud directa
               </Button>
             </div>
           </div>
@@ -115,77 +68,6 @@ const Index = () => {
               Llega más lejos · icesi.edu.co
             </span>
           </div>
-        </div>
-
-        {/* Roles Section */}
-        <div className="mt-12">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold font-sans text-foreground">
-                Selecciona tu perfil de acceso
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Accede rápidamente según tu responsabilidad en el flujo comercial.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {ROLES.map((role) => {
-              const Icon = role.icon;
-              return (
-                <Link
-                  key={role.key}
-                  to={`/login?role=${role.key}`}
-                  className={`group flex flex-col rounded-xl border border-border dark:border-[#252838] border-t-4 ${role.accent} bg-card dark:bg-[#141622] p-5 transition-all hover:shadow-md hover:-translate-y-0.5`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary dark:bg-[#1f212e] text-foreground group-hover:text-[#5454e9] transition-colors">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${role.badgeColor}`}>
-                      {role.title}
-                    </span>
-                  </div>
-                  <h3 className="mt-4 font-bold text-base text-foreground font-sans">
-                    {role.title}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">{role.subtitle}</p>
-                  <p className="mt-2 flex-1 text-xs text-muted-foreground leading-relaxed">
-                    {role.description}
-                  </p>
-                  <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[#5454e9] dark:text-[#865cf0] group-hover:gap-2 transition-all">
-                    <span>Acceder</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Fast Action Card */}
-        <div className="mt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-border dark:border-[#252838] bg-secondary/40 dark:bg-[#141622] p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#5454e9] text-white shrink-0">
-              <Building2 className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-foreground font-sans">
-                ¿Necesitas radicar una solicitud empresarial?
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Diligencia el formulario estructurado en 5 pasos para empresas, entidades aliadas o proyectos de extensión.
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={() => navigate("/solicitudes/nueva")}
-            className="bg-[#5454e9] hover:bg-[#4343d3] text-white text-xs font-bold shrink-0"
-          >
-            Crear solicitud comercial
-            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-          </Button>
         </div>
       </main>
 

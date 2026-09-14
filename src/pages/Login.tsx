@@ -1,47 +1,38 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, Check, ShieldCheck, Sparkles, Building2, HelpCircle } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, Eye, EyeOff, ShieldCheck, Sparkles, FlaskConical } from "@/components/icons";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth, UserRole, ROLE_CONFIGS } from "@/context/AuthContext";
-import { IcesiLogo, IcesiSymbol, IcesiCenefa } from "@/components/IcesiLogo";
+import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-const ROLES: { key: UserRole; title: string; subtitle: string; email: string }[] = [
-  { key: "kam", title: "KAM", subtitle: "Key Account Manager", email: "andrea.martinez@icesi.edu.co" },
-  { key: "lider-producto", title: "Líder de Producto", subtitle: "Gestión técnica & costeo", email: "juanpablo.corrales@icesi.edu.co" },
-  { key: "lider-nodo", title: "Líder de Nodo", subtitle: "Coordinación de nodo", email: "carlos.riveros@icesi.edu.co" },
-  { key: "profesor", title: "Profesor", subtitle: "Diseño curricular", email: "ricardo.mejia@icesi.edu.co" },
-];
+const DEMO_ACCOUNTS = (Object.entries(ROLE_CONFIGS) as [UserRole, (typeof ROLE_CONFIGS)[UserRole]][]).map(
+  ([key, cfg]) => ({ key, label: cfg.label, email: cfg.defaultEmail })
+);
 
 export default function Login() {
-  const [params] = useSearchParams();
-  const rawRole = (params.get("role") ?? "kam") as UserRole;
-  const initialRole: UserRole = ["kam", "lider-nodo", "lider-producto", "profesor"].includes(rawRole)
-    ? rawRole
-    : "kam";
-
-  const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
   const [showPwd, setShowPwd] = useState(false);
   const [password, setPassword] = useState("••••••••••••");
+  const [email, setEmail] = useState("");
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const currentConfig = ROLE_CONFIGS[selectedRole];
-  const [email, setEmail] = useState(currentConfig?.defaultEmail ?? "");
-
-  const handleRoleSelect = (roleKey: UserRole) => {
-    setSelectedRole(roleKey);
-    const cfg = ROLE_CONFIGS[roleKey];
-    if (cfg) {
-      setEmail(cfg.defaultEmail);
-    }
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    login(selectedRole, currentConfig?.defaultName, email);
+    const match = DEMO_ACCOUNTS.find(
+      (a) => a.email.toLowerCase() === email.trim().toLowerCase()
+    );
+    if (!match) {
+      toast.error("Correo no reconocido en el directorio institucional.", {
+        description: "Verifica tu usuario o contacta a TI si crees que esto es un error.",
+      });
+      return;
+    }
+    const cfg = ROLE_CONFIGS[match.key];
+    login(match.key, cfg.defaultName, match.email);
     navigate("/dashboard");
   };
 
@@ -140,37 +131,9 @@ export default function Login() {
               Inicia sesión
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ingresa con tus credenciales institucionales de la Universidad Icesi.
+              Ingresa con tus credenciales institucionales de la Universidad Icesi. Tu rol se
+              asigna automáticamente según tu cuenta.
             </p>
-          </div>
-
-          {/* Quick Role Selection Tabs */}
-          <div className="mb-6">
-            <Label className="text-xs font-semibold text-muted-foreground mb-2 block uppercase tracking-wider">
-              Seleccionar perfil de acceso rápido
-            </Label>
-            <div className="grid grid-cols-2 gap-2">
-              {ROLES.map((r) => (
-                <button
-                  key={r.key}
-                  type="button"
-                  onClick={() => handleRoleSelect(r.key)}
-                  className={`flex flex-col text-left p-2.5 rounded-lg border transition-all text-xs ${
-                    selectedRole === r.key
-                      ? "border-[#5454e9] bg-[#5454e9]/10 text-foreground font-semibold shadow-xs ring-1 ring-[#5454e9]"
-                      : "border-border dark:border-[#252838] bg-card dark:bg-[#161722] text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  <span className="font-bold text-foreground flex items-center justify-between">
-                    {r.title}
-                    {selectedRole === r.key && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9]" />
-                    )}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground truncate">{r.subtitle}</span>
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Login Form */}
@@ -184,7 +147,7 @@ export default function Login() {
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="1007541970 o correo@icesi.edu.co"
+                placeholder="correo@icesi.edu.co"
                 required
                 className="h-11 rounded-lg border-border dark:border-[#2b2d3d] bg-secondary/30 dark:bg-[#151620] text-sm focus-visible:ring-[#5454e9]"
               />
@@ -228,7 +191,7 @@ export default function Login() {
               type="submit"
               className="w-full h-11 text-sm font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white rounded-lg shadow-md transition-all active:scale-[0.99] mt-2"
             >
-              Ingresar como {currentConfig.label}
+              Iniciar sesión
             </Button>
           </form>
 
@@ -236,6 +199,28 @@ export default function Login() {
           <div className="mt-6 rounded-lg border border-border dark:border-[#252838] bg-secondary/20 dark:bg-[#141520] p-3 text-xs text-muted-foreground flex items-center gap-2.5">
             <ShieldCheck className="h-4 w-4 text-[#4cb979] shrink-0" />
             <span>Acceso seguro con autenticación institucional y Directorio Activo Icesi.</span>
+          </div>
+
+          {/* Demo accounts helper — clearly secondary, prototype-only */}
+          <div className="mt-4 rounded-lg border border-dashed border-border dark:border-[#2b2d3d] p-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+              <FlaskConical className="h-3.5 w-3.5" />
+              <span>Cuentas de prueba (solo en este entorno de prototipo)</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {DEMO_ACCOUNTS.map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  onClick={() => setEmail(a.email)}
+                  className="rounded-md border border-border/60 dark:border-[#252838] bg-secondary/10 dark:bg-[#141520] px-2 py-1.5 text-left text-[10px] leading-tight text-muted-foreground hover:border-[#5454e9]/40 hover:text-foreground transition-colors"
+                  title={a.email}
+                >
+                  <span className="block font-semibold">{a.label}</span>
+                  <span className="block truncate opacity-80">{a.email}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

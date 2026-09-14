@@ -17,7 +17,7 @@ import {
   ArrowLeftRight,
   Building2,
   Check,
-} from "lucide-react";
+} from "@/components/icons";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -176,7 +176,7 @@ export default function Dashboard() {
                 to="/solicitudes?filter=sin-profesor"
                 className="group flex items-start gap-4 rounded-xl border border-border dark:border-[#252838] border-t-4 border-t-[#e9683b] bg-card dark:bg-[#141622] p-5 transition-all hover:shadow-md hover:border-border"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#e9683b]/10 text-[#e9683b] group-hover:scale-105 transition-transform">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e9683b]/10 text-[#e9683b] group-hover:scale-105 transition-transform">
                   <UserCheck className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -194,7 +194,7 @@ export default function Dashboard() {
                 to="/solicitudes?filter=propuestas"
                 className="group flex items-start gap-4 rounded-xl border border-border dark:border-[#252838] border-t-4 border-t-[#5454e9] bg-card dark:bg-[#141622] p-5 transition-all hover:shadow-md hover:border-border"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#5454e9]/10 text-[#5454e9] group-hover:scale-105 transition-transform">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#5454e9]/10 text-[#5454e9] group-hover:scale-105 transition-transform">
                   <Layers className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -212,7 +212,7 @@ export default function Dashboard() {
                 to="/solicitudes"
                 className="group flex items-start gap-4 rounded-xl border border-border dark:border-[#252838] border-t-4 border-t-[#4cb979] bg-card dark:bg-[#141622] p-5 transition-all hover:shadow-md hover:border-border md:col-span-2 lg:col-span-1"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#4cb979]/10 text-[#4cb979] group-hover:scale-105 transition-transform">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4cb979]/10 text-[#4cb979] group-hover:scale-105 transition-transform">
                   <ListChecks className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -232,7 +232,7 @@ export default function Dashboard() {
                 to="/solicitudes/nueva"
                 className="group flex items-start gap-4 rounded-xl border border-border dark:border-[#252838] border-t-4 border-t-[#5454e9] bg-card dark:bg-[#141622] p-5 transition-all hover:shadow-md"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#5454e9]/10 text-[#5454e9]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#5454e9]/10 text-[#5454e9]">
                   <PlusCircle className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -250,7 +250,7 @@ export default function Dashboard() {
                 to="/solicitudes"
                 className="group flex items-start gap-4 rounded-xl border border-border dark:border-[#252838] border-t-4 border-t-[#4cb979] bg-card dark:bg-[#141622] p-5 transition-all hover:shadow-md"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#4cb979]/10 text-[#4cb979]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4cb979]/10 text-[#4cb979]">
                   <ListChecks className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">

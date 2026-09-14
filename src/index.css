@@ -37,7 +37,10 @@
     --muted: 220 14% 94%;
     --muted-foreground: 225 10% 48%;
 
-    --destructive: 0 75% 52%;
+    /* Rojo-teja atenuado (#c0392b) — excepción semántica deliberada para error/peligro.
+       No es rojo puro (rompería con la marca) ni Naranja Icesi (ya significa "urgencia
+       alta" / "atención", y reutilizarlo aquí generaría doble significado). */
+    --destructive: 6 63% 46%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 145 44% 45%;
@@ -94,7 +97,8 @@
     --muted: 232 16% 16%;
     --muted-foreground: 228 12% 65%;
 
-    --destructive: 0 75% 58%;
+    /* Rojo-teja atenuado, un poco más claro para contraste sobre fondo oscuro */
+    --destructive: 6 63% 52%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 232 14% 19%;         /* #252838 */

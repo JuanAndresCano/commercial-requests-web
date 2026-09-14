@@ -9,10 +9,9 @@ import {
   Network,
   GraduationCap,
   ChevronDown,
-  Globe,
   Menu,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { useAuth, UserRole, ROLE_CONFIGS } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -27,8 +26,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-
 interface AppShellProps {
   children: React.ReactNode;
   role?: string;
@@ -81,10 +78,11 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
   // Role-specific navigation items
   const navItems = (() => {
     if (activeRole === "lider-producto") {
+      // Una sola vista de solicitudes (tablero unificado con los 4 estados +
+      // filtro rápido "Sin docente" integrado) — ya no hay "Inicio" separado
+      // del tablero ni un tablero genérico aparte para asignar docentes.
       return [
-        { to: "/dashboard", label: "Inicio", icon: Home },
-        { to: "/solicitudes", label: "Solicitudes", icon: FileText },
-        { to: "/solicitudes?filter=sin-profesor", label: "Asignar docentes", icon: UserCheck },
+        { to: "/dashboard", label: "Solicitudes", icon: FileText },
       ];
     }
     if (activeRole === "lider-nodo") {
@@ -99,10 +97,10 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
         { to: "/solicitudes", label: "Mis propuestas", icon: GraduationCap },
       ];
     }
-    // Default: KAM
+    // Default: KAM — una sola vista de solicitudes (KPIs + tabla, ya no hay
+    // un "Inicio" separado del tablero: es la misma pantalla) + creación directa.
     return [
-      { to: "/dashboard", label: "Inicio", icon: Home },
-      { to: "/solicitudes", label: "Solicitudes", icon: FileText },
+      { to: "/dashboard", label: "Solicitudes", icon: FileText },
       { to: "/solicitudes/nueva", label: "Nueva solicitud", icon: PlusCircle },
     ];
   })();
@@ -165,28 +163,6 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[11px] text-muted-foreground uppercase tracking-wider">
-                  Cambiar de Rol
-                </DropdownMenuLabel>
-                {(Object.keys(ROLE_CONFIGS) as UserRole[]).map((rKey) => {
-                  const cfg = ROLE_CONFIGS[rKey];
-                  return (
-                    <DropdownMenuItem
-                      key={rKey}
-                      onClick={() => switchRole(rKey)}
-                      className={cn(
-                        "cursor-pointer flex items-center justify-between text-xs",
-                        activeRole === rKey && "bg-accent/15 font-bold text-[#5454e9]"
-                      )}
-                    >
-                      <span>{cfg.label}</span>
-                      {activeRole === rKey && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9]" />
-                      )}
-                    </DropdownMenuItem>
-                  );
-                })}
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive text-xs cursor-pointer">
                   <LogOut className="mr-2 h-3.5 w-3.5" />
                   Cerrar sesión
@@ -227,17 +203,6 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
           <div className="flex flex-col items-center gap-2.5 w-full px-2">
             {/* Theme Toggle Button (Sol / Luna) */}
             <ThemeToggle className="hover:bg-white/10 text-zinc-400 hover:text-white" />
-
-            {/* Language indicator */}
-            <button
-              type="button"
-              onClick={() => alert("Idioma actual: Español (Universidad Icesi - Colombia)")}
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white transition-all text-xs font-semibold"
-              title="Idioma: Español"
-              aria-label="Idioma"
-            >
-              <Globe className="h-4 w-4" />
-            </button>
 
             {/* Logout */}
             <button
@@ -316,21 +281,6 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                     })}
                   </DropdownMenuContent>
                 </DropdownMenu>
-
-                {/* Theme toggle pill */}
-                <ThemeToggle variant="pill" className="hidden sm:inline-flex" />
-
-                {/* New Request quick button */}
-                <Button
-                  size="sm"
-                  asChild
-                  className="bg-[#5454e9] hover:bg-[#4343d3] text-white text-xs font-semibold shadow-sm"
-                >
-                  <Link to="/solicitudes/nueva" className="flex items-center gap-1.5">
-                    <PlusCircle className="h-3.5 w-3.5" />
-                    <span className="hidden xs:inline">Nueva</span>
-                  </Link>
-                </Button>
               </div>
             </div>
 

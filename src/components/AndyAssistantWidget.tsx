@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MessageSquare, X, Sparkles, HelpCircle, ChevronRight, FileText, Calculator, ExternalLink } from "lucide-react";
+import { MessageSquare, X, Sparkles, HelpCircle, ChevronRight, FileText, Calculator, ExternalLink } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { IcesiSymbol } from "@/components/IcesiLogo";
 

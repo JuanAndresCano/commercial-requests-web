@@ -20,7 +20,7 @@ import {
   MessageSquare,
   ArrowLeftRight,
   UserCheck,
-} from "lucide-react";
+} from "@/components/icons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { AppShell } from "@/components/AppShell";
@@ -164,7 +164,7 @@ export default function RequestDetail() {
 
   const formattedDeadline = req?.deadline
     ? format(new Date(req.deadline), "d 'de' MMMM, yyyy", { locale: es })
-    : "15 de noviembre, 2024";
+    : "Sin fecha definida";
 
   return (
     <AppShell>
@@ -174,7 +174,7 @@ export default function RequestDetail() {
         {/* ========================================================================= */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <Link
-            to="/solicitudes"
+            to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
@@ -469,7 +469,7 @@ export default function RequestDetail() {
                     Dedicación estimada
                   </span>
                   <span className="font-semibold text-foreground">
-                    60 horas
+                    {req.horas ? `${req.horas} horas` : "Sin especificar"}
                   </span>
                 </div>
 
@@ -480,7 +480,7 @@ export default function RequestDetail() {
                     Modalidad
                   </span>
                   <span className="font-semibold text-foreground">
-                    Híbrida
+                    {req.modalidad || "Sin especificar"}
                   </span>
                 </div>
 
@@ -491,7 +491,7 @@ export default function RequestDetail() {
                     Participantes
                   </span>
                   <span className="font-semibold text-foreground">
-                    15 - 20 personas
+                    {req.participantes ? `${req.participantes} personas` : "Sin especificar"}
                   </span>
                 </div>
 

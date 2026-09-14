@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROFESSORS, RequestItem, ExternalProfessorData } from "@/lib/mock-data";
-import { GraduationCap, Briefcase, UserCheck, Check, Mail, Phone, Building, User } from "lucide-react";
+import { GraduationCap, Briefcase, UserCheck, Check, Mail, Phone, Building, User } from "@/components/icons";
 import { toast } from "sonner";
 
 // Additional faculty members from Universidad Icesi for realistic selection

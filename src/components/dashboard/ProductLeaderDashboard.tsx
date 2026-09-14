@@ -19,7 +19,7 @@ import {
   ExternalLink,
   ChevronRight,
   TrendingUp,
-} from "lucide-react";
+} from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge, UrgencyBadge } from "@/components/StatusBadge";
@@ -30,6 +30,7 @@ import {
   NODE_DEFAULT_LEADERS,
   STATUS_META,
   formatCop,
+  formatCompactCop,
   type RequestItem,
   type RequestStatus,
 } from "@/lib/mock-data";
@@ -75,7 +76,7 @@ const KANBAN_STAGES: {
 }[] = [
   {
     id: "nueva",
-    title: "Nuevas",
+    title: "Nueva",
     badgeLabel: "Fase 1: Asignar Docente",
     colorHex: "#5454e9",
     tone: "text-[#5454e9]",
@@ -86,7 +87,7 @@ const KANBAN_STAGES: {
   },
   {
     id: "en-experto",
-    title: "En Experto",
+    title: "En proceso por experto",
     badgeLabel: "Fase 2: Diseño Académico",
     colorHex: "#e9683b",
     tone: "text-[#e9683b]",
@@ -97,7 +98,7 @@ const KANBAN_STAGES: {
   },
   {
     id: "en-costeo",
-    title: "En Costeo",
+    title: "En proceso de costeo",
     badgeLabel: "Fase 3: Estructuración Financiera",
     colorHex: "#865cf0",
     tone: "text-[#865cf0]",
@@ -108,7 +109,7 @@ const KANBAN_STAGES: {
   },
   {
     id: "entregada",
-    title: "Entregadas",
+    title: "Entregada",
     badgeLabel: "Fase 4: Concretada a KAM / Cliente",
     colorHex: "#4cb979",
     tone: "text-[#4cb979]",
@@ -129,6 +130,7 @@ export function ProductLeaderDashboard({
   const [scopeFilter, setScopeFilter] = useState<"mis" | "todas">("mis");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStageFilter, setActiveStageFilter] = useState<RequestStatus | "todas">("todas");
+  const [onlyMissingProfessor, setOnlyMissingProfessor] = useState(false);
 
   // Reassignment Modal State
   const [reassigningRequest, setReassigningRequest] = useState<RequestItem | null>(null);
@@ -184,12 +186,20 @@ export function ProductLeaderDashboard({
   const countNuevas = activeDataset.filter((r) => r.status === "nueva").length;
   const countEnExperto = activeDataset.filter((r) => r.status === "en-experto").length;
   const countEnCosteo = activeDataset.filter((r) => r.status === "en-costeo").length;
-  const countEntregadas = activeDataset.filter((r) => r.status === "entregada").length;
+  const entregadasList = activeDataset.filter((r) => r.status === "entregada");
+  const countEntregadas = entregadasList.length;
+  const entregadasValue = entregadasList.reduce(
+    (sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0),
+    0
+  );
+
+  const sinDocenteCount = activeDataset.filter((r) => !r.professor && r.status !== "entregada").length;
 
   // Filter requests
   const filteredRequests = useMemo(() => {
     return activeDataset.filter((r) => {
       if (activeStageFilter !== "todas" && r.status !== activeStageFilter) return false;
+      if (onlyMissingProfessor && (r.professor || r.status === "entregada")) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -203,7 +213,7 @@ export function ProductLeaderDashboard({
       }
       return true;
     });
-  }, [activeDataset, activeStageFilter, searchQuery]);
+  }, [activeDataset, activeStageFilter, onlyMissingProfessor, searchQuery]);
 
   // Group by status for the single unified Kanban
   const groupedRequests = useMemo(() => {
@@ -379,8 +389,8 @@ export function ProductLeaderDashboard({
             <p className="font-display text-2xl font-bold tracking-tight text-[#4cb979] sm:text-3xl">
               {countEntregadas}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {activeStageFilter === "entregada" ? "✓ Filtrando esta columna" : "Culminadas exitosamente"}
+            <p className="mt-1 text-[11px] font-semibold text-[#4cb979]">
+              {formatCompactCop(entregadasValue)} en valor real aprobado
             </p>
           </div>
           <div className="mt-2.5 h-1 w-full rounded-full bg-[#4cb979]" />
@@ -400,6 +410,20 @@ export function ProductLeaderDashboard({
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setOnlyMissingProfessor((prev) => !prev)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors",
+              onlyMissingProfessor
+                ? "border-[#e9683b] bg-[#e9683b] text-white"
+                : "border-border bg-secondary/50 text-foreground hover:bg-secondary"
+            )}
+            title="Mostrar solo solicitudes sin docente asignado"
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            Sin docente ({sinDocenteCount})
+          </button>
           {activeStageFilter !== "todas" && (
             <button
               type="button"

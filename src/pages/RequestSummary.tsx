@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Edit3, Printer } from "lucide-react";
+import { ArrowLeft, Edit3, Printer } from "@/components/icons";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";

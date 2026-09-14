@@ -5,7 +5,7 @@ import {
   ClipboardList, GraduationCap, MessageSquare, CheckCircle2, X, Bell, Calendar,
   Search, Plus, Trash2, UploadCloud, FileText, CheckCircle, AlertCircle, Info, Sparkles,
   ChevronDown, ChevronUp, SlidersHorizontal, Users, ExternalLink, History, Clock, Eye
-} from "lucide-react";
+} from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +21,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  KAMS,
   NODES,
   PRODUCT_LEADERS,
   NODE_DEFAULT_LEADERS,
@@ -93,9 +92,9 @@ export interface RequestFormData {
   nodo: string; // Opcional
   ldp: string; // Líder de producto asignado
   nombreReq: string; // Obligatorio
-  tipoReq: RequestType;
+  tipoReq: RequestType | ""; // Obligatorio — arranca vacío, sin preselección
   tipoReqOtro: string; // Obligatorio condicional si tipoReq === 'Otro'
-  urgencia: Urgency; // Nivel de urgencia (Bajo, Medio, Alto)
+  urgencia: Urgency | ""; // Obligatorio — arranca vacío, sin preselección
   participantes: string;
   horas: string; // Estrictamente opcional
   modalidad: string; // Estrictamente opcional
@@ -107,7 +106,7 @@ export interface RequestFormData {
   areaParticipantes: string; // Opcional diagnóstico
 
   // Paso 4 - Formación Previa
-  formacionPrevia: "Sí" | "No" | "No sé";
+  formacionPrevia: "Sí" | "No" | "No sé" | ""; // Obligatorio — arranca vacío, sin preselección
   descFormacion: string;
   empresaPrevia: string;
   fechaPrevia: string;
@@ -127,7 +126,7 @@ export default function NewRequest() {
   const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ company: string; timestamp: string } | null>(null);
 
   const initialFormData: RequestFormData = {
-    kam: user.role === "kam" ? user.name : (KAMS[0] || "Andrea Martínez"),
+    kam: user.name, // El KAM asignado siempre es quien envía la solicitud — no es seleccionable
     nit: "",
     empresaNombre: "",
     direccion: "",
@@ -136,7 +135,7 @@ export default function NewRequest() {
     ciiuPrincipal: "",
     ciiuPrincipalDesc: "",
     ciiusSecundarios: [],
-    tipoEmpresa: "Privada",
+    tipoEmpresa: "",
     descripcion: "",
     web: "",
 
@@ -152,10 +151,10 @@ export default function NewRequest() {
     nodo: "",
     ldp: "",
     nombreReq: "",
-    tipoReq: "Capacitación",
+    tipoReq: "",
     tipoReqOtro: "",
-    urgencia: "media",
-    participantes: "11 - 15",
+    urgencia: "",
+    participantes: "",
     horas: "",
     modalidad: "",
     alimentacion: "",
@@ -165,7 +164,7 @@ export default function NewRequest() {
     resultados: "",
     areaParticipantes: "",
 
-    formacionPrevia: "No sé",
+    formacionPrevia: "",
     descFormacion: "",
     empresaPrevia: "",
     fechaPrevia: "",
@@ -175,6 +174,7 @@ export default function NewRequest() {
   };
 
   const [data, setData] = useState<RequestFormData>(initialFormData);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Verificar si existe un borrador guardado en localStorage al montar
   useEffect(() => {
@@ -241,32 +241,77 @@ export default function NewRequest() {
 
   const update = <K extends keyof RequestFormData>(key: K, value: RequestFormData[K]) => {
     setData((prev) => ({ ...prev, [key]: value }));
+    // Cualquier interacción con un campo limpia su error visual de inmediato
+    setFieldErrors((prev) => {
+      if (!prev[key as string]) return prev;
+      const { [key as string]: _removed, ...rest } = prev;
+      return rest;
+    });
   };
 
-  // Validación suave al avanzar entre pasos
+  // Lleva la vista suavemente al campo indicado y lo enfoca si es posible
+  const scrollToField = (id: string) => {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (typeof (el as HTMLElement & { focus?: () => void }).focus === "function") {
+        (el as HTMLElement).focus({ preventScroll: true });
+      }
+    });
+  };
+
+  // Mapa campo -> id del elemento en pantalla, para el auto-scroll de validación
+  const FIELD_SCROLL_TARGETS: Record<string, string> = {
+    empresaNombre: "empresa-nombre",
+    tipoEmpresa: "tipo-empresa-group",
+    nombreReq: "nombre-req",
+    tipoReq: "tipo-req",
+    tipoReqOtro: "tipo-otro-input",
+    formacionPrevia: "formacion-previa-group",
+    urgencia: "urgencia-group",
+  };
+
+  // Validación estricta al avanzar entre pasos: nunca deja pasar un campo obligatorio sin marcar
   const validateCurrentStep = (currentStep: number): boolean => {
+    const newErrors: Record<string, string> = {};
+
     if (currentStep === 1) {
       if (!data.empresaNombre.trim()) {
-        toast.error("Por favor ingresa o selecciona la Empresa o Razón Social para continuar.");
-        const el = document.getElementById("empresa-nombre") || document.getElementById("company-search-input");
-        el?.focus();
-        return false;
+        newErrors.empresaNombre = "Ingresa o selecciona la Razón Social de la empresa para continuar.";
+      }
+      if (!data.tipoEmpresa) {
+        newErrors.tipoEmpresa = "Selecciona la naturaleza jurídica de la empresa para continuar.";
       }
     } else if (currentStep === 2) {
       // Paso 2 (Contactos) es 100% opcional según directriz de Líder de Producto
       return true;
     } else if (currentStep === 3) {
       if (!data.nombreReq.trim()) {
-        toast.error("Por favor ingresa un Título o nombre de la propuesta para continuar.");
-        const el = document.getElementById("nombre-req");
-        el?.focus();
-        return false;
+        newErrors.nombreReq = "Ingresa un título o nombre de la propuesta para continuar.";
       }
-      if (data.tipoReq === "Otro" && !data.tipoReqOtro.trim()) {
-        toast.error("Por favor especifica el tipo de requerimiento.");
-        return false;
+      if (!data.tipoReq) {
+        newErrors.tipoReq = "Selecciona el tipo de requerimiento para continuar.";
+      } else if (data.tipoReq === "Otro" && !data.tipoReqOtro.trim()) {
+        newErrors.tipoReqOtro = "Especifica el tipo de requerimiento.";
+      }
+    } else if (currentStep === 4) {
+      if (!data.formacionPrevia) {
+        newErrors.formacionPrevia = "Indica si ha habido formación previa sobre esta temática.";
+      }
+      if (!data.urgencia) {
+        newErrors.urgencia = "Selecciona el nivel de urgencia de la solicitud.";
       }
     }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...newErrors }));
+      const firstKey = Object.keys(newErrors)[0];
+      toast.error(newErrors[firstKey]);
+      scrollToField(FIELD_SCROLL_TARGETS[firstKey] || firstKey);
+      return false;
+    }
+
     return true;
   };
 
@@ -285,28 +330,67 @@ export default function NewRequest() {
 
   const prev = () => setStep((s) => Math.max(1, s - 1));
 
+  // Desplazamiento suave al inicio de la pantalla en cada cambio de paso
+  // (Continuar, Anterior o clic directo en el Stepper), para que el KAM
+  // no tenga que subir manualmente hasta el botón que quedó abajo.
+  const isFirstStepRender = useRef(true);
+  useEffect(() => {
+    if (isFirstStepRender.current) {
+      isFirstStepRender.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step]);
+
   const handleFinish = (kind: "draft" | "sent") => {
     if (kind === "sent") {
       if (!data.empresaNombre.trim()) {
         toast.error("Por favor ingresa o busca la Razón Social de la empresa en el Paso 1.");
+        setFieldErrors((prev) => ({ ...prev, empresaNombre: "Ingresa o selecciona la Razón Social de la empresa para continuar." }));
+        setStep(1);
+        return;
+      }
+      if (!data.tipoEmpresa) {
+        toast.error("Por favor selecciona la Naturaleza Jurídica de la empresa en el Paso 1.");
+        setFieldErrors((prev) => ({ ...prev, tipoEmpresa: "Selecciona la naturaleza jurídica de la empresa para continuar." }));
         setStep(1);
         return;
       }
       if (!data.nombreReq.trim()) {
         toast.error("Por favor ingresa el título de la propuesta en el Paso 3.");
+        setFieldErrors((prev) => ({ ...prev, nombreReq: "Ingresa un título o nombre de la propuesta para continuar." }));
+        setStep(3);
+        return;
+      }
+      if (!data.tipoReq) {
+        toast.error("Por favor selecciona el tipo de requerimiento en el Paso 3.");
+        setFieldErrors((prev) => ({ ...prev, tipoReq: "Selecciona el tipo de requerimiento para continuar." }));
         setStep(3);
         return;
       }
       if (data.tipoReq === "Otro" && !data.tipoReqOtro.trim()) {
         toast.error("Por favor especifica el tipo de requerimiento en el Paso 3.");
+        setFieldErrors((prev) => ({ ...prev, tipoReqOtro: "Especifica el tipo de requerimiento." }));
         setStep(3);
+        return;
+      }
+      if (!data.formacionPrevia) {
+        toast.error("Por favor indica si ha habido formación previa en el Paso 4.");
+        setFieldErrors((prev) => ({ ...prev, formacionPrevia: "Indica si ha habido formación previa sobre esta temática." }));
+        setStep(4);
+        return;
+      }
+      if (!data.urgencia) {
+        toast.error("Por favor selecciona el nivel de urgencia en el Paso 4.");
+        setFieldErrors((prev) => ({ ...prev, urgencia: "Selecciona el nivel de urgencia de la solicitud." }));
+        setStep(4);
         return;
       }
     }
 
     const finalTitle = data.nombreReq.trim()
       ? data.nombreReq.trim()
-      : `${data.tipoReq === "Otro" && data.tipoReqOtro ? data.tipoReqOtro : data.tipoReq} - ${data.empresaNombre || "Empresa Aliada"}`;
+      : `${data.tipoReq === "Otro" && data.tipoReqOtro ? data.tipoReqOtro : data.tipoReq || "Solicitud"} - ${data.empresaNombre || "Empresa Aliada"}`;
 
     const contactName =
       data.contactoNombre.trim() ||
@@ -317,13 +401,16 @@ export default function NewRequest() {
     addRequest({
       title: finalTitle,
       applicant: contactName,
-      type: data.tipoReq,
+      type: (data.tipoReq || "Otro") as RequestType,
       status: "nueva", // Siempre ingresa formalmente en estado nueva para asignación
-      urgency: data.urgencia,
+      urgency: (data.urgencia || "media") as Urgency,
       company: data.empresaNombre.trim() || "Empresa Aliada",
       node: data.nodo || "Por definir",
       productLeader: data.ldp || (data.nodo ? NODE_DEFAULT_LEADERS[data.nodo] : "") || "Por definir",
-      kam: user.role === "kam" ? user.name : (data.kam || "Andrea Martínez"),
+      kam: user.name, // Siempre el remitente real de la solicitud, nunca un KAM distinto
+      participantes: data.participantes || undefined,
+      modalidad: data.modalidad || undefined,
+      horas: data.horas || undefined,
       totalCostCop: 4500000,
     });
 
@@ -337,7 +424,13 @@ export default function NewRequest() {
     setSubmitted(kind);
   };
 
-  if (submitted) return <SuccessScreen kind={submitted} onClose={() => navigate("/solicitudes")} />;
+  if (submitted)
+    return (
+      <SuccessScreen
+        kind={submitted}
+        onClose={() => navigate(user.role === "kam" || user.role === "lider-producto" ? "/dashboard" : "/solicitudes")}
+      />
+    );
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#090a0e] pb-12">
@@ -371,7 +464,7 @@ export default function NewRequest() {
         {restoredDraftInfo && (
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/10 p-4 text-xs">
             <div className="flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-white">
                 <Sparkles className="h-4 w-4" />
               </div>
               <div>
@@ -454,10 +547,10 @@ export default function NewRequest() {
 
         {/* Step container */}
         <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-8 shadow-xs">
-          {step === 1 && <Step1 data={data} update={update} />}
+          {step === 1 && <Step1 data={data} update={update} errors={fieldErrors} />}
           {step === 2 && <Step2 data={data} update={update} />}
-          {step === 3 && <Step3 data={data} update={update} />}
-          {step === 4 && <Step4 data={data} update={update} />}
+          {step === 3 && <Step3 data={data} update={update} errors={fieldErrors} />}
+          {step === 4 && <Step4 data={data} update={update} errors={fieldErrors} />}
           {step === 5 && <Step5 data={data} update={update} />}
         </div>
 
@@ -539,19 +632,47 @@ function Field({
   );
 }
 
+// Marco de resaltado en rojo para campos obligatorios sin diligenciar.
+// Se usa alrededor del control (no de todo el Field) para que solo el
+// control quede enmarcado, sin desplazar el resto del layout cuando no hay error.
+function FieldErrorFrame({ show, children }: { show: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border-2 border-transparent transition-colors",
+        show && "border-destructive bg-destructive/5 ring-2 ring-destructive/20 p-2.5 -m-0.5"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FieldErrorText({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
+      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+      {children}
+    </p>
+  );
+}
+
 function RadioGroup({
   options,
   value,
   onChange,
   columns = 2,
+  id,
 }: {
   options: string[];
   value?: string;
   onChange: (v: string) => void;
   columns?: number;
+  id?: string;
 }) {
   return (
     <div
+      id={id}
       className={cn(
         "grid gap-2",
         columns === 2 ? "grid-cols-2" : columns === 3 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-4"
@@ -592,9 +713,11 @@ function RadioGroup({
 function Step1({
   data,
   update,
+  errors,
 }: {
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
+  errors: Record<string, string>;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -768,34 +891,35 @@ function Step1({
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="Nombre del KAM Asignado" required id="kam-select">
-          <Select value={data.kam} onValueChange={(v) => update("kam", v)}>
-            <SelectTrigger id="kam-select"><SelectValue placeholder="Seleccionar KAM" /></SelectTrigger>
-            <SelectContent>
-              {KAMS.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <Field label="KAM Asignado" hint="La solicitud siempre queda a tu nombre como remitente — no es editable.">
+          <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-muted/40 px-3 text-sm text-foreground">
+            <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="font-medium truncate">{data.kam}</span>
+          </div>
         </Field>
 
         <Field
           label="Razón Social / Nombre de la empresa"
           required
-          hint="Nombre comercial o legal completo de la organización"
+          hint={!errors.empresaNombre ? "Nombre comercial o legal completo de la organización" : undefined}
           id="empresa-nombre"
         >
-          <Input
-            id="empresa-nombre"
-            placeholder="Ej. Bancolombia S.A."
-            value={data.empresaNombre}
-            onChange={(e) => {
-              update("empresaNombre", e.target.value);
-              // Verificar coincidencia por nombre si escribe directamente
-              const m = MOCK_COMPANIES.find(
-                (c) => c.nombre.toLowerCase() === e.target.value.toLowerCase().trim()
-              );
-              if (m) setMatchedCompany(m);
-            }}
-          />
+          <FieldErrorFrame show={!!errors.empresaNombre}>
+            <Input
+              id="empresa-nombre"
+              placeholder="Ej. Bancolombia S.A."
+              value={data.empresaNombre}
+              onChange={(e) => {
+                update("empresaNombre", e.target.value);
+                // Verificar coincidencia por nombre si escribe directamente
+                const m = MOCK_COMPANIES.find(
+                  (c) => c.nombre.toLowerCase() === e.target.value.toLowerCase().trim()
+                );
+                if (m) setMatchedCompany(m);
+              }}
+            />
+          </FieldErrorFrame>
+          {errors.empresaNombre && <FieldErrorText>{errors.empresaNombre}</FieldErrorText>}
         </Field>
 
         <Field
@@ -930,13 +1054,21 @@ function Step1({
         </div>
 
         <div className="md:col-span-2">
-          <Field label="Naturaleza jurídica de la empresa" required>
-            <RadioGroup
-              options={["Pública", "Privada", "Mixta", "Sin ánimo de lucro"]}
-              value={data.tipoEmpresa}
-              onChange={(v) => update("tipoEmpresa", v)}
-              columns={4}
-            />
+          <Field
+            label="Naturaleza jurídica de la empresa"
+            required
+            hint={!errors.tipoEmpresa ? "Selección consciente: para empresas nuevas no se asume un valor por defecto" : undefined}
+          >
+            <FieldErrorFrame show={!!errors.tipoEmpresa}>
+              <RadioGroup
+                id="tipo-empresa-group"
+                options={["Pública", "Privada", "Mixta", "Sin ánimo de lucro"]}
+                value={data.tipoEmpresa}
+                onChange={(v) => update("tipoEmpresa", v)}
+                columns={4}
+              />
+            </FieldErrorFrame>
+            {errors.tipoEmpresa && <FieldErrorText>{errors.tipoEmpresa}</FieldErrorText>}
           </Field>
         </div>
 
@@ -1192,10 +1324,21 @@ function Step2({
 function Step3({
   data,
   update,
+  errors,
 }: {
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
+  errors: Record<string, string>;
 }) {
+  // Autofoco + scroll suave al campo de texto al elegir "Otro", sin clics extra
+  const otroInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (data.tipoReq === "Otro") {
+      otroInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      otroInputRef.current?.focus({ preventScroll: true });
+    }
+  }, [data.tipoReq]);
+
   const [showAdvanced, setShowAdvanced] = useState(() => {
     return Boolean(
       data.horas ||
@@ -1372,39 +1515,45 @@ function Step3({
         <Field
           label="Título o nombre de la propuesta"
           required
-          hint="Nombre de referencia comercial (ej. Programa Ejecutivo en Liderazgo y Toma de Decisiones)"
+          hint={!errors.nombreReq ? "Nombre de referencia comercial (ej. Programa Ejecutivo en Liderazgo y Toma de Decisiones)" : undefined}
           id="nombre-req"
         >
-          <Input
-            id="nombre-req"
-            placeholder="Ej. Diplomado en Inteligencia Artificial y Eficiencia Operacional"
-            value={data.nombreReq}
-            onChange={(e) => update("nombreReq", e.target.value)}
-          />
+          <FieldErrorFrame show={!!errors.nombreReq}>
+            <Input
+              id="nombre-req"
+              placeholder="Ej. Diplomado en Inteligencia Artificial y Eficiencia Operacional"
+              value={data.nombreReq}
+              onChange={(e) => update("nombreReq", e.target.value)}
+            />
+          </FieldErrorFrame>
+          {errors.nombreReq && <FieldErrorText>{errors.nombreReq}</FieldErrorText>}
         </Field>
 
         {/* Tipo de Requerimiento */}
         <Field
           label="Tipo de Requerimiento"
           required
-          hint="Modalidad formal de relacionamiento y oferta de valor"
+          hint={!errors.tipoReq ? "Modalidad formal de relacionamiento y oferta de valor" : undefined}
           id="tipo-req"
         >
-          <Select
-            value={data.tipoReq}
-            onValueChange={(v) => update("tipoReq", v as RequestType)}
-          >
-            <SelectTrigger id="tipo-req" className="bg-card">
-              <SelectValue placeholder="Seleccione el tipo de requerimiento" />
-            </SelectTrigger>
-            <SelectContent>
-              {REQUEST_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FieldErrorFrame show={!!errors.tipoReq}>
+            <Select
+              value={data.tipoReq}
+              onValueChange={(v) => update("tipoReq", v as RequestType)}
+            >
+              <SelectTrigger id="tipo-req" className="bg-card">
+                <SelectValue placeholder="Seleccione el tipo de requerimiento..." />
+              </SelectTrigger>
+              <SelectContent>
+                {REQUEST_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FieldErrorFrame>
+          {errors.tipoReq && <FieldErrorText>{errors.tipoReq}</FieldErrorText>}
         </Field>
 
         {/* Condicional 'Otro' */}
@@ -1413,16 +1562,20 @@ function Step3({
             <Field
               label="Especifique el tipo de requerimiento"
               required
-              hint="Indique con claridad el formato del servicio que no encaja en las categorías estándar"
+              hint={!errors.tipoReqOtro ? "Indique con claridad el formato del servicio que no encaja en las categorías estándar" : undefined}
               id="tipo-otro-input"
             >
-              <Input
-                id="tipo-otro-input"
-                placeholder="Ej. Hackathon empresarial, Rueda de negocios, Pasantía tecnológica..."
-                value={data.tipoReqOtro}
-                onChange={(e) => update("tipoReqOtro", e.target.value)}
-                className="bg-card"
-              />
+              <FieldErrorFrame show={!!errors.tipoReqOtro}>
+                <Input
+                  id="tipo-otro-input"
+                  ref={otroInputRef}
+                  placeholder="Ej. Hackathon empresarial, Rueda de negocios, Pasantía tecnológica..."
+                  value={data.tipoReqOtro}
+                  onChange={(e) => update("tipoReqOtro", e.target.value)}
+                  className="bg-card"
+                />
+              </FieldErrorFrame>
+              {errors.tipoReqOtro && <FieldErrorText>{errors.tipoReqOtro}</FieldErrorText>}
             </Field>
           </div>
         )}
@@ -1687,9 +1840,11 @@ function Step3({
 function Step4({
   data,
   update,
+  errors,
 }: {
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
+  errors: Record<string, string>;
 }) {
   const { requests } = useAuth();
   const [historySearchTerm, setHistorySearchTerm] = useState("");
@@ -1720,7 +1875,7 @@ function Step4({
     [companyProposals]
   );
   const inProgressProposals = useMemo(
-    () => companyProposals.filter((p) => p.status === "lista" || p.status === "nueva" || p.status === "borrador"),
+    () => companyProposals.filter((p) => p.status !== "entregada"),
     [companyProposals]
   );
 
@@ -1740,13 +1895,20 @@ function Step4({
       <div className="space-y-6">
         {/* 1. Opción Sí / No / No sé */}
         <div className="space-y-4">
-          <Field label="¿La empresa o equipo ha tenido formación previa sobre esta temática?" required>
-            <RadioGroup
-              options={["Sí", "No", "No sé"]}
-              value={data.formacionPrevia}
-              onChange={(v) => update("formacionPrevia", v as "Sí" | "No" | "No sé")}
-              columns={3}
-            />
+          <Field
+            label="¿La empresa o equipo ha tenido formación previa sobre esta temática?"
+            required
+          >
+            <FieldErrorFrame show={!!errors.formacionPrevia}>
+              <RadioGroup
+                id="formacion-previa-group"
+                options={["Sí", "No", "No sé"]}
+                value={data.formacionPrevia}
+                onChange={(v) => update("formacionPrevia", v as "Sí" | "No" | "No sé")}
+                columns={3}
+              />
+            </FieldErrorFrame>
+            {errors.formacionPrevia && <FieldErrorText>{errors.formacionPrevia}</FieldErrorText>}
           </Field>
 
           {data.formacionPrevia === "Sí" ? (
@@ -1797,12 +1959,12 @@ function Step4({
                 </p>
               </div>
             </div>
-          ) : (
+          ) : data.formacionPrevia === "No" ? (
             <div className="rounded-md border border-border/80 bg-secondary/20 p-4 text-xs text-muted-foreground flex items-center gap-2">
               <Check className="h-4 w-4 text-muted-foreground" />
               No se registran antecedentes previos. Se formulará la propuesta desde nivel inicial/diagnóstico.
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* 2. Nivel de urgencia en que requieren la solicitud */}
@@ -1810,55 +1972,58 @@ function Step4({
           <Field
             label="Nivel de urgencia en que requieren la solicitud"
             required
-            hint="Identifica la prioridad y tiempos de respuesta esperados para la formulación y entrega de la propuesta"
+            hint={!errors.urgencia ? "Identifica la prioridad y tiempos de respuesta esperados para la formulación y entrega de la propuesta" : undefined}
             id="urgencia-select"
           >
-            <div className="grid grid-cols-3 gap-3 pt-1">
-              {[
-                {
-                  id: "baja" as const,
-                  label: "Bajo",
-                  desc: "Tiempos estándar de formulación",
-                  activeClasses: "border-muted-foreground/50 bg-secondary text-foreground font-bold ring-2 ring-muted-foreground/30",
-                  dot: "bg-muted-foreground",
-                },
-                {
-                  id: "media" as const,
-                  label: "Medio",
-                  desc: "Prioridad habitual / 5-7 días hábiles",
-                  activeClasses: "border-amber-500/80 bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold ring-2 ring-amber-500/30",
-                  dot: "bg-amber-500",
-                },
-                {
-                  id: "alta" as const,
-                  label: "Alto",
-                  desc: "Urgente / Licitación / Fecha fija inmediata",
-                  activeClasses: "border-[#e9683b] bg-[#e9683b]/15 text-[#e9683b] font-bold ring-2 ring-[#e9683b]/30",
-                  dot: "bg-[#e9683b]",
-                },
-              ].map((opt) => {
-                const isSelected = data.urgencia === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => update("urgencia", opt.id)}
-                    className={cn(
-                      "flex flex-col items-center justify-center rounded-lg border p-3 text-center transition-all text-xs cursor-pointer",
-                      isSelected
-                        ? opt.activeClasses
-                        : "border-border bg-card text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-                    )}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className={cn("h-2.5 w-2.5 rounded-full", opt.dot)} />
-                      <span className="text-sm font-semibold">{opt.label}</span>
-                    </div>
-                    <span className="text-[11px] opacity-75 mt-1">{opt.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <FieldErrorFrame show={!!errors.urgencia}>
+              <div id="urgencia-group" className="grid grid-cols-3 gap-3 pt-1">
+                {[
+                  {
+                    id: "baja" as const,
+                    label: "Bajo",
+                    desc: "Tiempos estándar de formulación",
+                    activeClasses: "border-muted-foreground/50 bg-secondary text-foreground font-bold ring-2 ring-muted-foreground/30",
+                    dot: "bg-muted-foreground",
+                  },
+                  {
+                    id: "media" as const,
+                    label: "Medio",
+                    desc: "Prioridad habitual / 5-7 días hábiles",
+                    activeClasses: "border-[#e4eb60] bg-[#e4eb60]/25 text-foreground dark:text-[#e4eb60] font-bold ring-2 ring-[#e4eb60]/40",
+                    dot: "bg-[#e4eb60]",
+                  },
+                  {
+                    id: "alta" as const,
+                    label: "Alto",
+                    desc: "Urgente / Licitación / Fecha fija inmediata",
+                    activeClasses: "border-[#e9683b] bg-[#e9683b]/15 text-[#e9683b] font-bold ring-2 ring-[#e9683b]/30",
+                    dot: "bg-[#e9683b]",
+                  },
+                ].map((opt) => {
+                  const isSelected = data.urgencia === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => update("urgencia", opt.id)}
+                      className={cn(
+                        "flex flex-col items-center justify-center rounded-lg border p-3 text-center transition-all text-xs cursor-pointer",
+                        isSelected
+                          ? opt.activeClasses
+                          : "border-border bg-card text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("h-2.5 w-2.5 rounded-full", opt.dot)} />
+                        <span className="text-sm font-semibold">{opt.label}</span>
+                      </div>
+                      <span className="text-[11px] opacity-75 mt-1">{opt.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </FieldErrorFrame>
+            {errors.urgencia && <FieldErrorText>{errors.urgencia}</FieldErrorText>}
           </Field>
         </div>
 
@@ -1866,7 +2031,7 @@ function Step4({
         <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0]">
                 <History className="h-4 w-4" />
               </div>
               <div>
@@ -2335,7 +2500,7 @@ function Step5({
           <div>
             <dt className="text-muted-foreground">Tipo de Requerimiento:</dt>
             <dd className="font-medium text-foreground">
-              {data.tipoReq === "Otro" && data.tipoReqOtro ? `Otro (${data.tipoReqOtro})` : data.tipoReq}
+              {data.tipoReq === "Otro" && data.tipoReqOtro ? `Otro (${data.tipoReqOtro})` : data.tipoReq || "Sin especificar"}
             </dd>
             <dt className="text-muted-foreground mt-1">CIIU Principal:</dt>
             <dd className="font-mono font-semibold text-foreground">{data.ciiuPrincipal || "Sin código"}</dd>

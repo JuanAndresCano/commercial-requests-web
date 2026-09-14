@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Search, SlidersHorizontal, LayoutGrid, List, PlusCircle, UserCheck, Layers, Filter, Sparkles } from "lucide-react";
+import { Search, SlidersHorizontal, LayoutGrid, List, PlusCircle, UserCheck, Layers, Filter, Sparkles } from "@/components/icons";
 import { Link, useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { Input } from "@/components/ui/input";

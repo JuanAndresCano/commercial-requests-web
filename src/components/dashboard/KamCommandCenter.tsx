@@ -13,20 +13,28 @@ import {
   DollarSign,
   Building2,
   UserCheck,
+  Layers,
   TrendingUp,
   Sparkles,
-} from "lucide-react";
+  LayoutGrid,
+  List,
+} from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   RequestItem,
   RequestStatus,
+  STATUS_META,
   formatCop,
   formatCompactCop,
   getRelativeTime,
 } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { IcesiCenefa } from "@/components/IcesiLogo";
+import { UrgencyBadge } from "@/components/StatusBadge";
+import { RequestCard } from "@/components/RequestCard";
+
+const BOARD_COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "entregada"];
 
 interface KamCommandCenterProps {
   requests: RequestItem[];
@@ -36,27 +44,38 @@ interface KamCommandCenterProps {
 type FilterType = "all" | "en-proceso" | "listas-para-entregar" | "entregada" | "cotizado";
 
 export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
+  const [scopeFilter, setScopeFilter] = useState<"mis" | "todas">("mis");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"tabla" | "kanban">("tabla");
 
   const firstName = userName ? userName.split(" ")[0] : "Andrea";
 
+  // Solicitudes propias vs. las de todo el equipo comercial
+  const myRequests = requests.filter((r) => r.kam === userName);
+  const activeDataset = scopeFilter === "mis" ? myRequests : requests;
+
   // KPIs calculations según la nomenclatura oficial solicitada por Líder de Producto
-  const totalCount = requests.length;
+  // (siempre respetan el alcance activo: mías o todo el equipo)
+  const totalCount = activeDataset.length;
   // "En Proceso": Solicitudes que están siendo gestionadas (nuevas o en formulación con experto)
-  const enProcesoCount = requests.filter((r) => r.status === "nueva" || r.status === "en-experto").length;
+  const enProcesoCount = activeDataset.filter((r) => r.status === "nueva" || r.status === "en-experto").length;
   // "Listas para Entregar": Solicitudes con costeo elaborado y listas para entrega al cliente
-  const listasParaEntregarCount = requests.filter((r) => r.status === "en-costeo").length;
-  const entregadasCount = requests.filter((r) => r.status === "entregada").length;
+  const listasParaEntregarCount = activeDataset.filter((r) => r.status === "en-costeo").length;
+  const entregadasCount = activeDataset.filter((r) => r.status === "entregada").length;
 
   // Pipeline Cotizado: propuestas en "en-costeo" o "entregada" (con valor económico estimado)
-  const pipelineTotal = requests
+  const pipelineTotal = activeDataset
     .filter((r) => r.status === "en-costeo" || r.status === "entregada")
     .reduce((sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0), 0);
 
+  // El aviso de "listas para entregar" es un recordatorio personal: siempre cuenta
+  // lo propio del KAM, sin importar si está viendo el alcance "Todas" en ese momento.
+  const misListasParaEntregarCount = myRequests.filter((r) => r.status === "en-costeo").length;
+
   // Filtered requests for table
   const filteredRequests = useMemo(() => {
-    return requests.filter((req) => {
+    return activeDataset.filter((req) => {
       // Search matching: company, title, ID, applicant, productLeader
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -87,7 +106,21 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
       return true;
     });
-  }, [requests, searchQuery, activeFilter]);
+  }, [activeDataset, searchQuery, activeFilter]);
+
+  // Agrupación por estado real (para la vista Kanban) — respeta el mismo dataset filtrado que la tabla
+  const groupedByStatus = useMemo(() => {
+    const g: Record<RequestStatus, RequestItem[]> = {
+      nueva: [],
+      "en-experto": [],
+      "en-costeo": [],
+      entregada: [],
+    };
+    filteredRequests.forEach((r) => {
+      if (g[r.status]) g[r.status].push(r);
+    });
+    return g;
+  }, [filteredRequests]);
 
   const handleCardClick = (filter: FilterType) => {
     setActiveFilter((prev) => (prev === filter ? "all" : filter));
@@ -138,6 +171,34 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         </div>
 
         <div className="flex items-center gap-3">
+          <div className="inline-flex rounded-lg border border-border dark:border-[#252838] p-0.5 bg-secondary/30">
+            <button
+              type="button"
+              onClick={() => setScopeFilter("mis")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                scopeFilter === "mis"
+                  ? "bg-[#5454e9] text-white shadow-xs font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              <span>Mis Solicitudes ({myRequests.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScopeFilter("todas")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                scopeFilter === "todas"
+                  ? "bg-[#5454e9] text-white shadow-xs font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>Todas ({requests.length})</span>
+            </button>
+          </div>
           <Button
             asChild
             className="h-10 rounded-lg bg-[#5454e9] px-4 font-bold text-white shadow-sm hover:bg-[#4343d3] transition-all"
@@ -150,16 +211,17 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         </div>
       </div>
 
-      {/* Aviso contextual si hay propuestas listas para entregar */}
-      {listasParaEntregarCount > 0 && (
+      {/* Aviso contextual si el KAM tiene propuestas propias listas para entregar
+          (siempre personal, sin importar el alcance "Mis/Todas" seleccionado) */}
+      {misListasParaEntregarCount > 0 && (
         <div className="flex flex-col gap-3 rounded-xl border border-[#4cb979]/30 bg-[#4cb979]/10 dark:bg-[#4cb979]/15 p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3.5 sm:items-center">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#4cb979] text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#4cb979] text-white">
               <Rocket className="h-5 w-5" />
             </div>
             <div>
               <p className="text-sm font-bold text-foreground">
-                ¡Tienes {listasParaEntregarCount} {listasParaEntregarCount === 1 ? "propuesta lista para entregar" : "propuestas listas para entregar"}!
+                ¡Tienes {misListasParaEntregarCount} {misListasParaEntregarCount === 1 ? "propuesta lista para entregar" : "propuestas listas para entregar"}!
               </p>
               <p className="text-xs text-muted-foreground">
                 El Líder de Producto ha finalizado el costeo y la propuesta está lista para remitir al cliente.
@@ -168,7 +230,10 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           </div>
           <button
             type="button"
-            onClick={() => setActiveFilter("listas-para-entregar")}
+            onClick={() => {
+              setScopeFilter("mis");
+              setActiveFilter("listas-para-entregar");
+            }}
             className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 rounded-lg bg-[#4cb979] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#3ea569]"
           >
             Ver listas
@@ -297,6 +362,33 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
             </h2>
             <IcesiCenefa barsCount={8} height={6} color="#5454e9" className="opacity-40" />
           </div>
+
+          <div className="flex items-center gap-0.5 rounded-lg border border-border dark:border-[#2b2d3d] p-0.5 bg-card dark:bg-[#141622]">
+            <button
+              type="button"
+              onClick={() => setViewMode("tabla")}
+              className={cn(
+                "rounded-md p-1.5 transition-colors",
+                viewMode === "tabla" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground"
+              )}
+              aria-label="Vista tabla"
+              title="Vista tabla"
+            >
+              <List className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("kanban")}
+              className={cn(
+                "rounded-md p-1.5 transition-colors",
+                viewMode === "kanban" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground"
+              )}
+              aria-label="Vista kanban"
+              title="Vista kanban por estado"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
@@ -344,26 +436,19 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               )}
             </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-3">
-              {activeFilter !== "all" && (
-                <button
-                  type="button"
-                  onClick={() => setActiveFilter("all")}
-                  className="text-xs text-muted-foreground hover:text-foreground sm:hidden"
-                >
-                  Limpiar filtro
-                </button>
-              )}
-              <Button variant="ghost" size="sm" asChild className="text-xs font-medium text-muted-foreground hover:text-foreground">
-                <Link to="/solicitudes" className="inline-flex items-center gap-1.5">
-                  <span>Ver todas las solicitudes</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </div>
+            {activeFilter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setActiveFilter("all")}
+                className="text-xs text-muted-foreground hover:text-foreground self-start sm:self-auto sm:hidden"
+              >
+                Limpiar filtro
+              </button>
+            )}
           </div>
 
           {/* Tabla comercial */}
+          {viewMode === "tabla" && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm min-w-[720px]">
               <thead className="border-b border-border dark:border-[#252838] bg-secondary/40 dark:bg-[#12131d] text-xs font-semibold text-muted-foreground">
@@ -381,24 +466,43 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       <div className="mx-auto max-w-sm">
-                        <p className="font-medium text-foreground">No se encontraron solicitudes</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {searchQuery || activeFilter !== "all"
-                            ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
-                            : "No hay registros disponibles en este momento."}
-                        </p>
-                        {(searchQuery || activeFilter !== "all") && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSearchQuery("");
-                              setActiveFilter("all");
-                            }}
-                            className="mt-3 text-xs"
-                          >
-                            Restablecer filtros
-                          </Button>
+                        {scopeFilter === "mis" && !searchQuery && activeFilter === "all" && myRequests.length === 0 ? (
+                          <>
+                            <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Las solicitudes que registres quedarán aquí automáticamente.
+                            </p>
+                            <div className="mt-3 flex items-center justify-center gap-2">
+                              <Button asChild size="sm" className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white">
+                                <Link to="/solicitudes/nueva">Crear mi primera solicitud</Link>
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => setScopeFilter("todas")} className="text-xs">
+                                Ver las del equipo
+                              </Button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-medium text-foreground">No se encontraron solicitudes</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {searchQuery || activeFilter !== "all"
+                                ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
+                                : "No hay registros disponibles en este momento."}
+                            </p>
+                            {(searchQuery || activeFilter !== "all") && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSearchQuery("");
+                                  setActiveFilter("all");
+                                }}
+                                className="mt-3 text-xs"
+                              >
+                                Restablecer filtros
+                              </Button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
@@ -450,6 +554,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                               >
                                 {r.type}
                               </span>
+                              <UrgencyBadge urgency={r.urgency} className="shrink-0" />
                               <span className="inline-flex items-center gap-1 text-muted-foreground font-medium truncate">
                                 <Building2 className="h-3 w-3 shrink-0 opacity-70" />
                                 {r.company}
@@ -552,6 +657,89 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               </tbody>
             </table>
           </div>
+          )}
+
+          {/* Vista Kanban por estado */}
+          {viewMode === "kanban" && (
+            filteredRequests.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <div className="mx-auto max-w-sm">
+                  {scopeFilter === "mis" && !searchQuery && activeFilter === "all" && myRequests.length === 0 ? (
+                    <>
+                      <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Las solicitudes que registres quedarán aquí automáticamente.
+                      </p>
+                      <div className="mt-3 flex items-center justify-center gap-2">
+                        <Button asChild size="sm" className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white">
+                          <Link to="/solicitudes/nueva">Crear mi primera solicitud</Link>
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setScopeFilter("todas")} className="text-xs">
+                          Ver las del equipo
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-medium text-foreground">No se encontraron solicitudes</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {searchQuery || activeFilter !== "all"
+                          ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
+                          : "No hay registros disponibles en este momento."}
+                      </p>
+                      {(searchQuery || activeFilter !== "all") && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSearchQuery("");
+                            setActiveFilter("all");
+                          }}
+                          className="mt-3 text-xs"
+                        >
+                          Restablecer filtros
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                {BOARD_COLUMNS.map((col) => {
+                  const meta = STATUS_META[col];
+                  const items = groupedByStatus[col] || [];
+                  return (
+                    <div
+                      key={col}
+                      className="flex flex-col rounded-xl border border-border dark:border-[#222434] bg-secondary/30 dark:bg-[#0f1017] p-2.5"
+                    >
+                      <div className="mb-2.5 flex items-center justify-between px-2 py-1">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("h-2 w-2 rounded-full", meta.dot)} />
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                            {meta.label}
+                          </h3>
+                        </div>
+                        <span className="rounded-full bg-card dark:bg-[#1a1c28] border border-border dark:border-[#252838] px-2 py-0.5 text-[11px] font-bold text-foreground">
+                          {items.length}
+                        </span>
+                      </div>
+                      <div className="flex flex-1 flex-col gap-2.5">
+                        {items.length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-border dark:border-[#252838] p-6 text-center text-xs text-muted-foreground">
+                            Sin solicitudes en esta fase
+                          </div>
+                        ) : (
+                          items.map((r) => <RequestCard key={r.id} req={r} />)
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
         </div>
       </div>
     </div>

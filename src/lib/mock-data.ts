@@ -172,6 +172,9 @@ export interface RequestItem {
   deadline?: string; // ISO
   status: RequestStatus;
   urgency: Urgency;
+  participantes?: string; // Cupo proyectado, diligenciado por el KAM (ej. "15 - 20")
+  modalidad?: string; // Presencial / Virtual / Híbrida, diligenciado por el KAM
+  horas?: string; // Intensidad horaria estimada, diligenciada por el KAM
   company: string;
   node: string;
   productLeader: string;
@@ -645,7 +648,7 @@ export const STATUS_META: Record<RequestStatus, { label: string; tone: string; d
 
 export const URGENCY_META: Record<Urgency, { label: string; tone: string }> = {
   alta: { label: "Alta", tone: "text-[#e9683b] bg-[#e9683b]/10 border-[#e9683b]/30" },
-  media: { label: "Media", tone: "text-amber-600 dark:text-[#e4eb60] bg-amber-500/10 border-amber-500/30" },
+  media: { label: "Media", tone: "text-[#757a07] dark:text-[#e4eb60] bg-[#e4eb60]/25 border-[#e4eb60]/40" },
   baja: { label: "Baja", tone: "text-muted-foreground bg-muted border-border" },
 };
 
