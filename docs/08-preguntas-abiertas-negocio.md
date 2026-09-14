@@ -130,26 +130,20 @@ Líder de Producto.
 
 ## 5. ¿El Líder de Producto puede editar las Especificaciones del Servicio una vez tenga la info real?
 
-**Estado:** 🔴 Abierta
+**Estado:** 🟢 Resuelta — la Líder confirmó que sí, ya implementado
 
 **Contexto:** La tarjeta "Especificaciones del Servicio" (dedicación estimada,
 modalidad, participantes, tipo de servicio, entrega esperada) se llena con lo
 que el KAM diligencia en el wizard de creación — son estimados iniciales del
-KAM, no datos confirmados con el cliente. *(Nota técnica: había un bug donde
-esos 3 primeros campos ni siquiera se guardaban — ya corregido; ahora si el KAM
-no diligenció alguno, el detalle muestra "Sin especificar" en vez de un dato
-inventado.)*
+KAM, no datos confirmados con el cliente.
 
-**Pregunta para la Líder de Producto:** una vez el Líder de Producto tenga la
-información real/definitiva (ej. el cliente confirma 30 participantes en vez
-de los "15-20" estimados por el KAM), ¿necesita poder editar esos campos
-directamente en el detalle? Hoy esa tarjeta es de solo lectura para todos los
-roles.
+**Respuesta de la Líder:** sí, necesita poder corregir esos campos cuando el
+KAM diligenció el formulario de forma incorrecta.
 
-**Por qué importa:** si la respuesta es sí, hay que decidir si edita el mismo
-valor (sobrescribiendo el estimado del KAM) o si se guardan ambos por separado
-("estimado del KAM" vs. "confirmado por Líder de Producto") para no perder
-trazabilidad de qué tan preciso fue el estimado original.
+**Implementado:** ahora hay un botón "Editar" en esa tarjeta, visible solo
+para el Líder de Producto, que permite corregir los 5 campos (sobrescribe el
+valor del KAM directamente — no se guarda un historial de "antes/después" por
+ahora, ya que no se pidió esa trazabilidad).
 
 ---
 
@@ -235,6 +229,21 @@ una pregunta abierta.)_
   de contacto, empresa, horas, todo fijo en el código). Ahora solo existen 2
   pantallas por solicitud: el tablero y el detalle — que ya muestra la
   información real.
+- **"Mis Solicitudes" ya no es un toggle, es lo único que existe:** se quitó
+  la opción "Todas" del tablero del Líder de Producto — solo ve sus propias
+  solicitudes, sin excepción.
+- **Saludo personalizado:** el tablero del Líder de Producto ahora saluda
+  "Hola, [Nombre]" igual que el del KAM (antes decía "Tablero de Solicitudes
+  · Líder de Producto").
+- **Se quitaron las etiquetas "Azul Icesi / Naranja Icesi / Morado Icesi /
+  Verde Icesi"** de las tarjetas KPI — eran nombres de color de desarrollo
+  que no debían quedar visibles al usuario.
+- **Se eliminó el selector "Vista: Líder de Producto | KAM"** del detalle de
+  la solicitud — no era un preview visual: literalmente cambiaba el rol de la
+  sesión activa al hacer clic. Quedó fuera de lugar en la pantalla de detalle.
+- **Docente obligatorio para avanzar a "En proceso por experto":** el botón
+  "Pasar a Experto" ahora está deshabilitado si la solicitud no tiene un
+  docente asignado.
 
 ## Preguntas nuevas (sin desarrollar todavía)
 

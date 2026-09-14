@@ -6,7 +6,6 @@ import {
   Clock,
   CheckCircle2,
   UserCheck,
-  Layers,
   Sparkles,
   ArrowLeftRight,
   Building2,
@@ -129,7 +128,6 @@ export function ProductLeaderDashboard({
   updateStatus,
 }: ProductLeaderDashboardProps) {
   // Filter states
-  const [scopeFilter, setScopeFilter] = useState<"mis" | "todas">("mis");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStageFilter, setActiveStageFilter] = useState<RequestStatus | "todas">("todas");
   const [onlyMissingProfessor, setOnlyMissingProfessor] = useState(false);
@@ -182,9 +180,8 @@ export function ProductLeaderDashboard({
     }
   };
 
-  // Compute counts
-  const myRequests = requests.filter((r) => r.productLeader === user.name);
-  const activeDataset = scopeFilter === "mis" ? myRequests : requests;
+  // El Líder de Producto solo trabaja sus propias solicitudes — sin toggle a "Todas".
+  const activeDataset = requests.filter((r) => r.productLeader === user.name);
 
   const countNuevas = activeDataset.filter((r) => r.status === "nueva").length;
   const countEnExperto = activeDataset.filter((r) => r.status === "en-experto").length;
@@ -234,54 +231,24 @@ export function ProductLeaderDashboard({
     return grouped;
   }, [filteredRequests]);
 
+  const firstName = user.name ? user.name.split(" ")[0] : "";
+
   return (
     <div className="space-y-6">
       {/* 1. Header with clear context and zero noise */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl font-sans">
-              Tablero de Solicitudes · Líder de Producto
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Hola, {firstName}
             </h1>
             <span className="rounded bg-[#5454e9]/10 dark:bg-[#5454e9]/20 px-2.5 py-0.5 text-xs font-bold text-[#5454e9]">
-              {user.name.split(" ")[0]}
+              Líder de Producto
             </span>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            Gestión directa del flujo operativo: asignación de docentes, avance técnico y costeo en un único lugar.
+            Gestión directa de tus solicitudes: asignación de docentes, avance técnico y costeo en un único lugar.
           </p>
-        </div>
-
-        {/* Action button & scope toggle */}
-        <div className="flex items-center gap-3">
-          <div className="inline-flex rounded-lg border border-border dark:border-[#252838] p-0.5 bg-secondary/30">
-            <button
-              type="button"
-              onClick={() => setScopeFilter("mis")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5",
-                scopeFilter === "mis"
-                  ? "bg-[#5454e9] text-white shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <UserCheck className="h-3.5 w-3.5" />
-              <span>Mis Solicitudes ({myRequests.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setScopeFilter("todas")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5",
-                scopeFilter === "todas"
-                  ? "bg-[#5454e9] text-white shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Layers className="h-3.5 w-3.5" />
-              <span>Todas ({requests.length})</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -300,9 +267,6 @@ export function ProductLeaderDashboard({
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-muted-foreground">1. Nuevas</span>
-            <span className="inline-flex items-center rounded-md border border-[#5454e9]/30 bg-[#5454e9]/10 px-2 py-0.5 text-[11px] font-bold text-[#5454e9]">
-              Azul Icesi
-            </span>
           </div>
           <div className="mt-2.5">
             <p className="font-display text-2xl font-bold tracking-tight text-[#5454e9] sm:text-3xl">
@@ -328,9 +292,6 @@ export function ProductLeaderDashboard({
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-muted-foreground">2. En Experto</span>
-            <span className="inline-flex items-center rounded-md border border-[#e9683b]/30 bg-[#e9683b]/10 px-2 py-0.5 text-[11px] font-bold text-[#e9683b]">
-              Naranja Icesi
-            </span>
           </div>
           <div className="mt-2.5">
             <p className="font-display text-2xl font-bold tracking-tight text-[#e9683b] sm:text-3xl">
@@ -356,9 +317,6 @@ export function ProductLeaderDashboard({
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-muted-foreground">3. En Costeo</span>
-            <span className="inline-flex items-center rounded-md border border-[#865cf0]/30 bg-[#865cf0]/10 px-2 py-0.5 text-[11px] font-bold text-[#865cf0]">
-              Morado Icesi
-            </span>
           </div>
           <div className="mt-2.5">
             <p className="font-display text-2xl font-bold tracking-tight text-[#865cf0] sm:text-3xl">
@@ -384,9 +342,6 @@ export function ProductLeaderDashboard({
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-muted-foreground">4. Entregadas</span>
-            <span className="inline-flex items-center rounded-md border border-[#4cb979]/30 bg-[#4cb979]/10 px-2 py-0.5 text-[11px] font-bold text-[#4cb979]">
-              Verde Icesi
-            </span>
           </div>
           <div className="mt-2.5">
             <p className="font-display text-2xl font-bold tracking-tight text-[#4cb979] sm:text-3xl">
@@ -594,13 +549,14 @@ export function ProductLeaderDashboard({
                               </button>
                             )}
 
-                            {/* Status Advancement Button */}
+                            {/* Status Advancement Button — requiere docente asignado */}
                             {stage.id === "nueva" && (
                               <Button
                                 size="sm"
+                                disabled={!req.professor}
                                 onClick={() => handleAdvanceStatus(req.id, "nueva")}
-                                className="h-7 px-2 text-[10px] font-bold bg-[#e9683b] hover:bg-[#d8582d] text-white shadow-2xs"
-                                title="Avanzar a En Experto tras asignar docente"
+                                className="h-7 px-2 text-[10px] font-bold bg-[#e9683b] hover:bg-[#d8582d] text-white shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+                                title={req.professor ? "Avanzar a En Experto" : "Asigna un docente antes de avanzar"}
                               >
                                 Pasar a Experto
                                 <ChevronRight className="h-3 w-3 ml-0.5" />

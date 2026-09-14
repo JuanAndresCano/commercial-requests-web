@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   formatCop,
   RequestItem,
@@ -53,6 +54,8 @@ import {
   PRODUCT_LEADERS,
   NODES,
   NODE_DEFAULT_LEADERS,
+  REQUEST_TYPES,
+  type RequestType,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
@@ -65,7 +68,6 @@ export default function RequestDetail() {
   const {
     requests,
     user,
-    switchRole,
     assignProfessorDetailed,
     updateCosting,
     addDocument,
@@ -88,6 +90,40 @@ export default function RequestDetail() {
   const [selectedNewNode, setSelectedNewNode] = useState("");
   const [reassignReason, setReassignReason] = useState("Temática no afín / Corresponde a otro nodo");
   const [reassignNotes, setReassignNotes] = useState("");
+
+  // Edición de "Especificaciones del Servicio" por el Líder de Producto,
+  // para corregir datos que el KAM haya diligenciado de forma incorrecta.
+  const [isEditingSpecs, setIsEditingSpecs] = useState(false);
+  const [specsDraft, setSpecsDraft] = useState({
+    horas: "",
+    modalidad: "",
+    participantes: "",
+    type: "" as RequestType | "",
+    deadline: "",
+  });
+
+  const handleStartEditSpecs = () => {
+    setSpecsDraft({
+      horas: req.horas ?? "",
+      modalidad: req.modalidad ?? "",
+      participantes: req.participantes ?? "",
+      type: req.type,
+      deadline: req.deadline ?? "",
+    });
+    setIsEditingSpecs(true);
+  };
+
+  const handleSaveSpecs = () => {
+    updateRequest(req.id, {
+      horas: specsDraft.horas || undefined,
+      modalidad: specsDraft.modalidad || undefined,
+      participantes: specsDraft.participantes || undefined,
+      type: (specsDraft.type || req.type) as RequestType,
+      deadline: specsDraft.deadline || undefined,
+    });
+    setIsEditingSpecs(false);
+    toast.success("Especificaciones del servicio actualizadas");
+  };
 
   const handleConfirmReassign = () => {
     if (!selectedNewLeader) return;
@@ -173,41 +209,6 @@ export default function RequestDetail() {
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
           </Link>
-
-          {/* Quick simulator switch */}
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <span className="text-xs text-slate-400">Vista:</span>
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs dark:border-border dark:bg-card">
-              <button
-                type="button"
-                onClick={() => {
-                  switchRole("lider-producto");
-                  toast.info("Vista Líder de Producto");
-                }}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  role === "lider-producto"
-                    ? "bg-slate-900 text-white shadow-xs dark:bg-primary dark:text-primary-foreground font-semibold"
-                    : "text-slate-500 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-foreground"
-                }`}
-              >
-                Líder de Producto
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  switchRole("kam");
-                  toast.info("Vista KAM (Comercial)");
-                }}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  role === "kam"
-                    ? "bg-[#5454e9] text-white shadow-xs font-bold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                KAM (Comercial)
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* ========================================================================= */}
@@ -451,66 +452,158 @@ export default function RequestDetail() {
           <div className="lg:col-span-4 space-y-6">
             {/* 1. TARJETA ESPECIFICACIONES DEL SERVICIO */}
             <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 shadow-xs">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border dark:border-[#252838] pb-3">
-                Especificaciones del Servicio
-              </h3>
-
-              <div className="divide-y divide-border dark:divide-[#252838] text-xs mt-1">
-                {/* Dedicación */}
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-muted-foreground flex items-center gap-2">
-                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    Dedicación estimada
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    {req.horas ? `${req.horas} horas` : "Sin especificar"}
-                  </span>
-                </div>
-
-                {/* Modalidad */}
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-muted-foreground flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                    Modalidad
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    {req.modalidad || "Sin especificar"}
-                  </span>
-                </div>
-
-                {/* Participantes */}
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-muted-foreground flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                    Participantes
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    {req.participantes ? `${req.participantes} personas` : "Sin especificar"}
-                  </span>
-                </div>
-
-                {/* Tipo de servicio */}
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-muted-foreground flex items-center gap-2">
-                    <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                    Tipo de servicio
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    {req.type}
-                  </span>
-                </div>
-
-                {/* Fecha límite */}
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-muted-foreground flex items-center gap-2">
-                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    Entrega esperada
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    {formattedDeadline}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between border-b border-border dark:border-[#252838] pb-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Especificaciones del Servicio
+                </h3>
+                {role === "lider-producto" && !isEditingSpecs && (
+                  <button
+                    type="button"
+                    onClick={handleStartEditSpecs}
+                    className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+                  >
+                    Editar
+                  </button>
+                )}
               </div>
+
+              {!isEditingSpecs ? (
+                <div className="divide-y divide-border dark:divide-[#252838] text-xs mt-1">
+                  {/* Dedicación */}
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                      Dedicación estimada
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {req.horas ? `${req.horas} horas` : "Sin especificar"}
+                    </span>
+                  </div>
+
+                  {/* Modalidad */}
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                      Modalidad
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {req.modalidad || "Sin especificar"}
+                    </span>
+                  </div>
+
+                  {/* Participantes */}
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      Participantes
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {req.participantes ? `${req.participantes} personas` : "Sin especificar"}
+                    </span>
+                  </div>
+
+                  {/* Tipo de servicio */}
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                      Tipo de servicio
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {req.type}
+                    </span>
+                  </div>
+
+                  {/* Fecha límite */}
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                      Entrega esperada
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formattedDeadline}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 text-xs mt-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="specs-horas" className="text-[11px] text-muted-foreground">Dedicación estimada (horas)</Label>
+                    <Input
+                      id="specs-horas"
+                      value={specsDraft.horas}
+                      onChange={(e) => setSpecsDraft((d) => ({ ...d, horas: e.target.value }))}
+                      placeholder="Ej. 40"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="specs-modalidad" className="text-[11px] text-muted-foreground">Modalidad</Label>
+                    <Select value={specsDraft.modalidad} onValueChange={(v) => setSpecsDraft((d) => ({ ...d, modalidad: v }))}>
+                      <SelectTrigger id="specs-modalidad" className="h-8 text-xs">
+                        <SelectValue placeholder="Seleccionar modalidad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Presencial en campus Icesi">Presencial en campus Icesi</SelectItem>
+                        <SelectItem value="Presencial en sede cliente">Presencial en sede cliente</SelectItem>
+                        <SelectItem value="Virtual sincrónica">Virtual sincrónica</SelectItem>
+                        <SelectItem value="Híbrida">Híbrida</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="specs-participantes" className="text-[11px] text-muted-foreground">Participantes</Label>
+                    <Select value={specsDraft.participantes} onValueChange={(v) => setSpecsDraft((d) => ({ ...d, participantes: v }))}>
+                      <SelectTrigger id="specs-participantes" className="h-8 text-xs">
+                        <SelectValue placeholder="Seleccionar rango" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1 - 5">1 a 5 participantes</SelectItem>
+                        <SelectItem value="6 - 10">6 a 10 participantes</SelectItem>
+                        <SelectItem value="11 - 15">11 a 15 participantes</SelectItem>
+                        <SelectItem value="15 - 20">15 a 20 participantes</SelectItem>
+                        <SelectItem value="20 - 25">20 a 25 participantes</SelectItem>
+                        <SelectItem value="Más de 25">Más de 25 participantes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="specs-tipo" className="text-[11px] text-muted-foreground">Tipo de servicio</Label>
+                    <Select value={specsDraft.type} onValueChange={(v) => setSpecsDraft((d) => ({ ...d, type: v as RequestType }))}>
+                      <SelectTrigger id="specs-tipo" className="h-8 text-xs">
+                        <SelectValue placeholder="Seleccionar tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REQUEST_TYPES.map((t) => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="specs-deadline" className="text-[11px] text-muted-foreground">Entrega esperada</Label>
+                    <Input
+                      id="specs-deadline"
+                      type="date"
+                      value={specsDraft.deadline}
+                      onChange={(e) => setSpecsDraft((d) => ({ ...d, deadline: e.target.value }))}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setIsEditingSpecs(false)}>
+                      Cancelar
+                    </Button>
+                    <Button size="sm" className="h-7 text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white" onClick={handleSaveSpecs}>
+                      Guardar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 2. TARJETA EQUIPO ASIGNADO */}
