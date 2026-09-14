@@ -199,6 +199,158 @@ exacto debería aparecer el primer número, aunque el principio de fondo
 
 ---
 
+## 8. ¿Qué más, además de "Especificaciones del Servicio", debería poder editar el Líder?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** Ya se implementó (pregunta 5) que el Líder puede editar dedicación,
+modalidad, participantes, tipo y fecha de entrega. Pero ahora el detalle también
+muestra una sección nueva "Información completa de la solicitud" con todo lo
+demás que diligenció el KAM: datos de la empresa (NIT, dirección, CIIU...),
+datos del contacto, diagnóstico del requerimiento (necesidad, competencias,
+resultados esperados), formación previa. **Todo eso hoy es de solo lectura.**
+
+**Pregunta para la Líder:** si el KAM se equivoca en alguno de esos campos
+(ej. el NIT, el correo del contacto), ¿quién lo corrige — el Líder, o debe
+volver al KAM? Y en general: **¿el KAM puede editar su propia solicitud**
+después de enviarla, mientras nadie la haya empezado a trabajar (estado
+"Nueva")? Hoy no puede — una vez la envía, ni el KAM ni nadie más puede
+tocar esos campos salvo el Líder en los 5 que ya mencionamos.
+
+**Por qué importa:** esto define permisos de escritura por campo y por rol en
+el modelo de datos real — no es lo mismo "todo el mundo puede editar todo
+siempre" que "cada campo tiene un dueño y una ventana de tiempo para corregirlo".
+
+---
+
+## 9. ¿Se puede corregir el precio después de marcar "Entregada"?
+
+**Estado:** 🔴 Abierta — se encontró que hoy sí se puede, sin ninguna restricción
+
+**Contexto:** Se revisó el código y **hoy nada impide seguir editando el
+costeo (costo base, margen, valor ofertado) después de que la propuesta ya
+se marcó como "Entregada"** — es decir, después de que (se asume) ya se le
+cotizó algo al cliente.
+
+**Pregunta para la Líder:** ¿debería bloquearse el costeo una vez entregada
+(para no perder de vista qué fue exactamente lo que se le ofreció al
+cliente), o es intencional poder corregirlo después (ej. si hubo un error y
+se le debe reenviar una cotización corregida)?
+
+**Por qué importa:** si se bloquea, el modelo de datos real necesita un
+concepto de "versión final" del costeo protegida contra ediciones; si no se
+bloquea, en algún momento se necesitará un historial de cambios para saber
+qué se le mandó realmente al cliente en cada momento.
+
+---
+
+## 10. ¿El costeo necesita aprobación de alguien más antes de entregarse?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** Hoy el mismo Líder de Producto que arma el precio es quien lo
+aprueba y lo marca como "Entregada" — no hay ningún segundo visto bueno
+(ej. de un jefe de nodo, dirección comercial, etc.) en el flujo.
+
+**Pregunta para la Líder:** ¿así es como funciona en la realidad (autonomía
+total del Líder sobre el precio), o falta un paso de aprobación antes de que
+algo se considere oficialmente "Entregada"?
+
+**Por qué importa:** si falta una aprobación, es un actor adicional y un
+estado adicional ("Pendiente de aprobación") que el modelo de datos real
+necesita contemplar desde el diseño, no agregar después.
+
+---
+
+## 11. Honorarios del asesor externo: ¿dónde entran en el costeo?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** Cuando se asigna un docente externo, hoy solo se guarda su
+nombre y la empresa consultora (texto libre) — **no hay ningún campo
+numérico para cuánto se le paga**. El "Costo Base Directo" del costeo es un
+único número que el Líder digita a mano.
+
+**Pregunta para la Líder:** ¿los honorarios del asesor externo se incluyen
+manualmente dentro de ese "Costo Base Directo", o deberían ser un campo
+separado y explícito en el costeo (para poder diferenciar costo interno vs.
+pago a terceros)?
+
+**Por qué importa:** afecta directamente la estructura de la tabla de
+costeo en el modelo de datos real — un solo número vs. un desglose.
+
+---
+
+## 12. Estampilla Pro-Cultura y otros posibles cargos
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** Hoy el costeo solo contempla un cargo adicional: la Estampilla
+Pro-Cultura (1.5%), y únicamente para el tipo "Capacitación". Ningún otro
+tipo de servicio (Consultoría, Mentoría, Investigación, Proyectos Especiales)
+tiene cargos adicionales en el modelo actual.
+
+**Pregunta para la Líder:** ¿esto es exactamente correcto, o en una
+cotización real faltan otros cargos (IVA, retención en la fuente, otras
+estampillas) que el prototipo no está contemplando?
+
+**Por qué importa:** este es uno de los puntos más sensibles de cara al
+modelo de datos financiero real — mejor confirmarlo ahora que después de
+construido.
+
+---
+
+## 13. ¿Qué pasa si el cliente rechaza la propuesta o pide cambios?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** El pipeline actual es de una sola vía: Nueva → En proceso por
+experto → En proceso de costeo → Entregada. No existe un estado de
+"Rechazada", ni una forma de devolver una solicitud a una fase anterior una
+vez avanzó.
+
+**Pregunta para la Líder:** en la práctica, ¿nunca pasa que el cliente pida
+ajustes después de recibir la propuesta? Si pasa, ¿ese caso se maneja
+reabriendo la misma solicitud, o se crea una nueva?
+
+**Por qué importa:** si es un caso real y frecuente, el modelo de datos
+necesita soportarlo desde el inicio (estados adicionales, o una relación
+entre la solicitud original y su renegociación).
+
+---
+
+## 14. ¿Se puede cancelar o anular una solicitud?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** Hoy no existe ninguna opción de "cancelar" o "eliminar" una
+solicitud en ningún rol. Si un KAM se equivoca al crear una (ej. empresa
+duplicada, datos incorrectos), la solicitud queda ahí para siempre.
+
+**Pregunta para la Líder:** ¿se necesita esa opción, y si sí, quién debería
+poder usarla — el KAM que la creó, el Líder, ambos?
+
+---
+
+## 15. El rol Líder de Nodo: ¿cuál es su función real?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** El prototipo ya tiene un rol "Líder de Nodo" con su propio
+tablero, aunque el alcance actual del proyecto es explícitamente KAM + Líder
+de Producto. No se ha tocado ni se va a tocar ese rol todavía, pero vale la
+pena entender qué hace en la realidad.
+
+**Pregunta para la Líder:** ¿el Líder de Nodo supervisa a varios Líderes de
+Producto dentro de su nodo temático? ¿Tiene alguna función más allá de
+"ver todo lo que pasa en su nodo"?
+
+**Por qué importa:** no se va a construir nada de esto ahora, pero ayuda a
+que el modelo de datos real ya deje espacio para esa jerarquía (nodo → varios
+Líderes de Producto → sus solicitudes) en vez de tener que rediseñarlo después.
+
+---
+
 ## Confirmado e implementado en este ciclo
 
 _(Feedback de la Líder de Producto que ya se validó contra el código y quedó
