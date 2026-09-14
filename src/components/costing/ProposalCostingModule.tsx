@@ -37,15 +37,12 @@ export function ProposalCostingModule({
   const reqType = request.type;
   const isCapacitacion = reqType === "Capacitación";
 
-  // Initial cost values from request or defaults
-  const initialCosting = request.costing ?? calculateCosting(
-    request.type,
-    14_000_000,
-    30,
-    request.totalCostCop
-  );
+  // Valores iniciales: si el Líder ya guardó un costeo real se usa ese; si
+  // no, arranca en blanco (0) para que el Líder escriba el costo real — no
+  // se sugiere un monto que pueda confundirse con un valor ya definido.
+  const initialCosting = request.costing ?? calculateCosting(request.type, 0, 30);
 
-  const [baseCostCop, setBaseCostCop] = useState<number>(initialCosting.baseCostCop || 14_000_000);
+  const [baseCostCop, setBaseCostCop] = useState<number>(initialCosting.baseCostCop);
   const [marginPercent, setMarginPercent] = useState<number>(initialCosting.expectedMarginPercent ?? 30);
   const [requiresExternalAdvisor, setRequiresExternalAdvisor] = useState<boolean>(
     initialCosting.requiresExternalAdvisor ?? (request.professorType === "externo")
@@ -53,9 +50,7 @@ export function ProposalCostingModule({
   const [externalAdvisorDetails, setExternalAdvisorDetails] = useState<string>(
     initialCosting.externalAdvisorDetails ?? ""
   );
-  const [totalOfferedCop, setTotalOfferedCop] = useState<number>(
-    initialCosting.totalOfferedCop || request.totalCostCop || 18_410_000
-  );
+  const [totalOfferedCop, setTotalOfferedCop] = useState<number>(initialCosting.totalOfferedCop);
   const [negotiationNotes, setNegotiationNotes] = useState<string>(
     initialCosting.negotiationNotes ?? ""
   );

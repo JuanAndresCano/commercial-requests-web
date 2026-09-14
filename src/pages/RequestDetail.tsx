@@ -14,7 +14,6 @@ import {
   Phone,
   Mail,
   User,
-  Edit3,
   Check,
   ChevronRight,
   MessageSquare,
@@ -100,15 +99,10 @@ export default function RequestDetail() {
     setIsReassignModalOpen(false);
   };
 
-  // Guarantee costing structure exists
+  // Borrador vacío solo para alimentar el formulario de costeo del Líder de
+  // Producto — nunca se muestra como si fuera un valor ya definido.
   const currentCosting: ProposalCosting =
-    req.costing ??
-    calculateCosting(
-      req.type,
-      14_000_000,
-      30,
-      req.totalCostCop
-    );
+    req.costing ?? calculateCosting(req.type, 0, 30);
 
   const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
   const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
@@ -266,18 +260,6 @@ export default function RequestDetail() {
 
             {/* BOTONES DE ACCIÓN ARRIBA A LA DERECHA */}
             <div className="flex flex-wrap items-center gap-2.5 pt-1 lg:pt-0 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-3 text-xs font-medium border-border hover:bg-secondary text-foreground"
-                asChild
-              >
-                <Link to={`/solicitudes/${req.id}/resumen`}>
-                  <Edit3 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                  Resumen
-                </Link>
-              </Button>
-
               {role === "lider-producto" ? (
                 <>
                   <Button
@@ -359,8 +341,8 @@ export default function RequestDetail() {
                 onUpdateCosting={handleUpdateCosting}
                 onOpenAdvisorModal={() => setIsAssignModalOpen(true)}
               />
-            ) : (
-              /* Vista comercial para KAM */
+            ) : req.costing && req.costing.totalOfferedCop > 0 ? (
+              /* Vista comercial para KAM — solo cuando el Líder ya guardó un costeo real */
               <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-border">
                   <div>
@@ -382,7 +364,7 @@ export default function RequestDetail() {
                   </span>
                   <div className="flex items-baseline gap-2 mt-1">
                     <p className="font-mono text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-                      {formatCop(currentCosting.totalOfferedCop || currentCosting.suggestedTotalCop || req.totalCostCop || 18_410_000)}
+                      {formatCop(req.costing.totalOfferedCop)}
                     </p>
                     <span className="text-xs font-medium text-slate-400">COP</span>
                   </div>
@@ -398,16 +380,16 @@ export default function RequestDetail() {
                       Costo Base Directo
                     </span>
                     <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
-                      {formatCop(currentCosting.baseCostCop || 14_000_000)}
+                      {formatCop(req.costing.baseCostCop)}
                     </span>
                   </div>
 
                   <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 dark:border-border dark:bg-secondary/20">
                     <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Margen de Contribución ({currentCosting.expectedMarginPercent ?? 30}%)
+                      Margen de Contribución ({req.costing.expectedMarginPercent}%)
                     </span>
                     <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                      +{formatCop(Math.round((currentCosting.baseCostCop || 14_000_000) * ((currentCosting.expectedMarginPercent ?? 30) / 100)))}
+                      +{formatCop(Math.round(req.costing.baseCostCop * (req.costing.expectedMarginPercent / 100)))}
                     </span>
                   </div>
 
@@ -417,14 +399,14 @@ export default function RequestDetail() {
                         Estampilla Pro-Cultura (1.5%)
                       </span>
                       <span className="font-mono font-semibold text-amber-700 dark:text-amber-300">
-                        +{formatCop(currentCosting.proCulturaTaxAmount || Math.round((currentCosting.baseCostCop || 14_000_000) * 0.015))}
+                        +{formatCop(req.costing.proCulturaTaxAmount)}
                       </span>
                     </div>
                   )}
                 </div>
 
                 {/* Nota de alcance o acuerdo comercial en tiempo real */}
-                {currentCosting.negotiationNotes && currentCosting.negotiationNotes.trim() && (
+                {req.costing.negotiationNotes && req.costing.negotiationNotes.trim() && (
                   <div className="rounded-lg border border-slate-200/80 bg-slate-50/90 p-3.5 text-xs text-slate-700 dark:border-border dark:bg-secondary/20 dark:text-slate-300 flex items-start gap-2.5">
                     <MessageSquare className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                     <div className="space-y-0.5 min-w-0">
@@ -432,11 +414,23 @@ export default function RequestDetail() {
                         Nota de alcance comercial agregada por el Líder:
                       </span>
                       <p className="text-slate-600 dark:text-slate-300 leading-relaxed break-words">
-                        {currentCosting.negotiationNotes}
+                        {req.costing.negotiationNotes}
                       </p>
                     </div>
                   </div>
                 )}
+              </div>
+            ) : (
+              /* Vista comercial para KAM — el Líder de Producto aún no ha costeado */
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 p-8 text-center">
+                <Clock className="h-6 w-6 text-slate-400" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Costeo en proceso
+                </p>
+                <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
+                  El Líder de Producto todavía no ha estructurado el valor de esta propuesta.
+                  Aquí verás el valor oficial en cuanto quede definido.
+                </p>
               </div>
             )}
 
@@ -538,7 +532,7 @@ export default function RequestDetail() {
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Líder de Producto</span>
-                    {role === "lider-producto" && (
+                    {role === "lider-producto" && req.status === "nueva" && (
                       <button
                         type="button"
                         onClick={() => {

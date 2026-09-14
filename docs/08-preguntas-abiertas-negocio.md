@@ -153,6 +153,58 @@ trazabilidad de qué tan preciso fue el estimado original.
 
 ---
 
+## 6. Reasignar a otro Líder: ¿solo mientras la solicitud sigue "Nueva"?
+
+**Estado:** 🟡 Implementado bajo este supuesto — falta que la Líder lo confirme
+
+**Contexto:** Antes, cualquier solicitud se podía reasignar a otro Líder de
+Producto sin importar en qué estado estuviera — lo cual no tenía mucho sentido:
+si un Líder ya avanzó el trabajo (asignó docente, costeó, etc.), reasignarla
+después le quita a otro compañero un trabajo que no le correspondía y descarta
+el avance ya hecho.
+
+**Cambio ya implementado:** el botón "Reasignar" (en el tablero y en el
+detalle) ahora solo aparece mientras la solicitud está en estado **Nueva** —
+es decir, apenas llega, antes de que cualquier Líder haya empezado a
+trabajarla. Una vez pasa a "En proceso por experto" o más adelante, ya no se
+puede reasignar desde la interfaz.
+
+**Para confirmar con la Líder:** ¿es correcto este límite, o hay un caso real
+donde necesite reasignar una solicitud que ya está más avanzada en el proceso
+(ej. se fue de vacaciones, cambió de nodo)? Si existe ese caso, habría que
+pensar en un flujo distinto (quizás con aprobación) en vez de simplemente
+ocultar el botón.
+
+---
+
+## 7. El costeo debe empezar vacío — el KAM nunca debe fijar un precio
+
+**Estado:** 🟡 Implementado — falta que la Líder confirme que el flujo resultante es el correcto
+
+**Contexto:** Se encontró un bug de fondo: **toda solicitud nueva recibía
+automáticamente un costeo completo** (costo base $14.000.000 + margen 30%)
+desde el instante en que el KAM la creaba — antes de que el Líder de Producto
+tocara nada. Esto generaba la sensación de que "la propuesta ya viene con
+precio desde el KAM", cuando se supone que **poner el precio es exactamente
+el trabajo del Líder de Producto durante el costeo**.
+
+**Cambio ya implementado:**
+- Una solicitud recién creada por el KAM ya no trae ningún costeo ni precio.
+- El KAM ve "Costeo en proceso" en la propuesta económica hasta que el Líder
+  guarde un valor real.
+- El formulario de costeo del Líder ahora arranca en blanco (no sugiere
+  $14.000.000 como si fuera un punto de partida real).
+- Se limpiaron los 3 registros de ejemplo en estado "Nueva" que tenían un
+  precio ya puesto, para que el prototipo sea consistente con esta regla.
+
+**Para confirmar con la Líder:** ¿el costeo se hace todo de una vez en la
+fase "En proceso de costeo", o hay valores parciales que se van definiendo
+antes (ej. desde que se asigna el docente)? Eso afectaría en qué momento
+exacto debería aparecer el primer número, aunque el principio de fondo
+("el KAM no fija precio") ya queda resuelto de cualquier forma.
+
+---
+
 ## Confirmado e implementado en este ciclo
 
 _(Feedback de la Líder de Producto que ya se validó contra el código y quedó
@@ -175,6 +227,14 @@ una pregunta abierta.)_
   docentes" del menú del Líder de Producto (llevaban al tablero genérico
   viejo, duplicado). Queda un único ítem "Solicitudes" con un filtro rápido
   "Sin docente" integrado en el mismo tablero, para no perder ese acceso directo.
+- **Vista Kanban + Tabla:** el tablero del Líder de Producto ahora tiene el
+  mismo toggle que el del KAM — Kanban (agrupado por estado) y Tabla (todo el
+  listado, más rápido de escanear), sobre el mismo dataset filtrado.
+- **Se eliminó la pantalla "Resumen"** (`/solicitudes/:id/resumen`): mostraba
+  siempre los mismos datos de ejemplo sin importar la solicitud real (nombre
+  de contacto, empresa, horas, todo fijo en el código). Ahora solo existen 2
+  pantallas por solicitud: el tablero y el detalle — que ya muestra la
+  información real.
 
 ## Preguntas nuevas (sin desarrollar todavía)
 

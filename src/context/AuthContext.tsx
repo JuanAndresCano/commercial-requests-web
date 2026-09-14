@@ -10,7 +10,6 @@ import {
   ProposalCosting,
   ProposalDocument,
   ExternalProfessorData,
-  calculateCosting,
 } from "@/lib/mock-data";
 
 export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor";
@@ -108,7 +107,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           return combined.map((item: RequestItem) => {
             const mock = MOCK_REQUESTS.find((m) => m.id === item.id);
-            const costing = item.costing ?? mock?.costing ?? calculateCosting(item.type, 14000000, 30, item.totalCostCop);
+            // No se fabrica un costeo por defecto: si ni el registro guardado
+            // ni el mock traen uno, la solicitud sigue sin costear.
+            const costing = item.costing ?? mock?.costing;
             const clientKamDocuments = item.clientKamDocuments ?? mock?.clientKamDocuments ?? [];
             const internalCostingDocuments = item.internalCostingDocuments ?? mock?.internalCostingDocuments ?? [];
             return {
@@ -118,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               internalCostingDocuments,
               professorType: item.professorType ?? mock?.professorType ?? "planta",
               externalProfessorData: item.externalProfessorData ?? mock?.externalProfessorData,
-              totalCostCop: item.costing?.totalOfferedCop ?? item.totalCostCop ?? costing.totalOfferedCop,
+              totalCostCop: item.totalCostCop ?? costing?.totalOfferedCop,
             };
           });
         }
@@ -175,15 +176,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addRequest = (item: Omit<RequestItem, "id" | "createdAt">): RequestItem => {
     const newId = `REQ-2026-${String(requests.length + 145).padStart(4, "0")}`;
-    const costing = item.costing ?? calculateCosting(item.type, 14000000, 30);
     const newReq: RequestItem = {
       ...item,
       id: newId,
       createdAt: new Date().toISOString().split("T")[0],
-      costing,
+      // El costeo es responsabilidad exclusiva del Líder de Producto — una
+      // solicitud recién creada por el KAM nunca debe llegar con un precio
+      // ya calculado. Se queda sin definir hasta que el Líder lo guarde.
+      costing: item.costing,
       clientKamDocuments: item.clientKamDocuments ?? [],
       internalCostingDocuments: item.internalCostingDocuments ?? [],
-      totalCostCop: costing.totalOfferedCop,
+      totalCostCop: item.totalCostCop,
     };
     setRequests((prev) => [newReq, ...prev]);
     return newReq;

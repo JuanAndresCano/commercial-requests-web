@@ -19,6 +19,8 @@ import {
   ExternalLink,
   ChevronRight,
   TrendingUp,
+  List,
+  LayoutGrid,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,6 +133,7 @@ export function ProductLeaderDashboard({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStageFilter, setActiveStageFilter] = useState<RequestStatus | "todas">("todas");
   const [onlyMissingProfessor, setOnlyMissingProfessor] = useState(false);
+  const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
 
   // Reassignment Modal State
   const [reassigningRequest, setReassigningRequest] = useState<RequestItem | null>(null);
@@ -436,10 +439,38 @@ export function ProductLeaderDashboard({
           <span className="text-xs text-muted-foreground">
             {filteredRequests.length} solicitudes visibles
           </span>
+
+          <div className="flex items-center gap-0.5 rounded-lg border border-border dark:border-[#2b2d3d] p-0.5 bg-card dark:bg-[#141622]">
+            <button
+              type="button"
+              onClick={() => setViewMode("kanban")}
+              className={cn(
+                "rounded-md p-1.5 transition-colors",
+                viewMode === "kanban" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground"
+              )}
+              aria-label="Vista kanban"
+              title="Vista kanban por estado"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("tabla")}
+              className={cn(
+                "rounded-md p-1.5 transition-colors",
+                viewMode === "tabla" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground"
+              )}
+              aria-label="Vista tabla"
+              title="Vista tabla"
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* 4. Unified Board: The 4 Columns for the Product Leader */}
+      {viewMode === "kanban" && (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4 items-start">
         {KANBAN_STAGES.map((stage) => {
           const stageItems = groupedRequests[stage.id];
@@ -551,15 +582,17 @@ export function ProductLeaderDashboard({
                           </div>
 
                           <div className="flex items-center gap-1">
-                            {/* Reassign quick button */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenReassign(req)}
-                              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                              title="Reasignar a otro líder de producto"
-                            >
-                              <ArrowLeftRight className="h-3.5 w-3.5" />
-                            </button>
+                            {/* Reasignar solo mientras nadie ha empezado a trabajar la solicitud */}
+                            {req.status === "nueva" && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReassign(req)}
+                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                                title="Reasignar a otro líder de producto"
+                              >
+                                <ArrowLeftRight className="h-3.5 w-3.5" />
+                              </button>
+                            )}
 
                             {/* Status Advancement Button */}
                             {stage.id === "nueva" && (
@@ -621,6 +654,112 @@ export function ProductLeaderDashboard({
           );
         })}
       </div>
+      )}
+
+      {/* 4b. Vista de tabla: escaneo rápido de todas las solicitudes visibles */}
+      {viewMode === "tabla" && (
+        <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm min-w-[760px]">
+              <thead className="border-b border-border dark:border-[#252838] bg-secondary/40 dark:bg-[#12131d] text-xs font-semibold text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">ID y Fecha</th>
+                  <th className="px-4 py-3 font-medium">Propuesta y Empresa</th>
+                  <th className="px-4 py-3 font-medium hidden md:table-cell">Docente</th>
+                  <th className="px-4 py-3 font-medium">Valor Ofertado</th>
+                  <th className="px-4 py-3 font-medium">Estado</th>
+                  <th className="px-4 py-3 font-medium text-right min-w-[100px]">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border dark:divide-[#252838]">
+                {filteredRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      No se encontraron solicitudes con estos filtros.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRequests.map((r) => {
+                    const isAssignedToMe = r.productLeader === user.name;
+                    const hasRealCosting = r.costing && r.costing.totalOfferedCop > 0;
+                    return (
+                      <tr key={r.id} className="transition-colors hover:bg-secondary/30 dark:hover:bg-[#1a1c2a]">
+                        <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-xs font-semibold text-foreground">{r.id}</span>
+                            <span className="text-muted-foreground/60 text-xs">·</span>
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(r.createdAt), "d MMM", { locale: es })}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 align-middle">
+                          <div className="flex flex-col gap-1 max-w-[320px]">
+                            <Link
+                              to={`/solicitudes/${r.id}`}
+                              className="font-semibold text-sm text-foreground hover:text-[#5454e9] transition-colors leading-snug line-clamp-2"
+                              title={r.title}
+                            >
+                              {r.title}
+                            </Link>
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              <span className="rounded-md border border-border bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                {r.type}
+                              </span>
+                              <UrgencyBadge urgency={r.urgency} className="shrink-0" />
+                              <span className="inline-flex items-center gap-1 text-muted-foreground font-medium truncate">
+                                <Building2 className="h-3 w-3 shrink-0 opacity-70" />
+                                {r.company}
+                              </span>
+                              {isAssignedToMe && (
+                                <span className="rounded bg-[#5454e9]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#5454e9]">
+                                  Mi producto
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 align-middle hidden md:table-cell">
+                          {r.professor ? (
+                            <span className="text-xs font-semibold text-foreground">{r.professor}</span>
+                          ) : (
+                            <span className="inline-flex items-center rounded border border-[#e9683b]/30 bg-[#e9683b]/10 px-2 py-0.5 text-xs font-medium text-[#e9683b]">
+                              Sin docente
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                          {hasRealCosting ? (
+                            <span className="font-semibold text-foreground text-xs sm:text-sm tracking-tight">
+                              {formatCop(r.costing!.totalOfferedCop)}
+                            </span>
+                          ) : (
+                            <span className="inline-block rounded bg-muted/40 px-2 py-0.5 text-xs italic text-muted-foreground border border-border/50">
+                              - Pendiente de costeo -
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                          <StatusBadge status={r.status} />
+                        </td>
+                        <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
+                          <Link
+                            to={`/solicitudes/${r.id}`}
+                            className="inline-flex items-center text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
+                          >
+                            <span>Ver detalle</span>
+                            <ArrowRight className="ml-1 h-3 w-3 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* 5. Modal de Reasignación de Líder de Producto */}
       <Dialog

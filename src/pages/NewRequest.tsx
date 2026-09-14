@@ -411,7 +411,8 @@ export default function NewRequest() {
       participantes: data.participantes || undefined,
       modalidad: data.modalidad || undefined,
       horas: data.horas || undefined,
-      totalCostCop: 4500000,
+      // Sin costing/totalCostCop: el precio lo define el Líder de Producto,
+      // nunca llega ya definido desde el KAM.
     });
 
     // Limpiar borrador local tras envío exitoso

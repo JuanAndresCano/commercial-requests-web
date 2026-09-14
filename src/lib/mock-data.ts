@@ -258,8 +258,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     node: NODES[1],
     productLeader: "Juan Pablo Corrales Arenas",
     kam: "Andrea Martínez",
-    totalCostCop: 18_410_000,
-    costing: calculateCosting("Capacitación", 14_000_000, 30, 18_410_000, false),
+    // Aún "nueva": el Líder de Producto todavía no ha costeado esta solicitud.
     clientKamDocuments: [
       {
         id: "doc-ck-1",
@@ -374,8 +373,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     node: NODES[2],
     productLeader: "Diana Carolina Romero Valencia",
     kam: "Diana Salcedo",
-    totalCostCop: 15_600_000,
-    costing: calculateCosting("Mentoría", 12_000_000, 30, 15_600_000, false),
+    // Aún "nueva": el Líder de Producto todavía no ha costeado esta solicitud.
     clientKamDocuments: [
       {
         id: "doc-ck-3",
@@ -608,8 +606,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     node: NODES[1],
     productLeader: "Juan Pablo Corrales Arenas",
     kam: "Andrea Martínez",
-    totalCostCop: 28_000_000,
-    costing: calculateCosting("Capacitación", 21_000_000, 30, 28_000_000, false),
+    // Aún "nueva": el Líder de Producto todavía no ha costeado esta solicitud.
     clientKamDocuments: [],
     internalCostingDocuments: [],
   },

@@ -11,7 +11,6 @@ import Dashboard from "./pages/Dashboard.tsx";
 import NewRequest from "./pages/NewRequest.tsx";
 import RequestsBoard from "./pages/RequestsBoard.tsx";
 import RequestDetail from "./pages/RequestDetail.tsx";
-import RequestSummary from "./pages/RequestSummary.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -36,7 +35,6 @@ const App = () => (
               <Route path="/solicitudes" element={<RequestsBoard />} />
               <Route path="/solicitudes/nueva" element={<NewRequest />} />
               <Route path="/solicitudes/:id" element={<RequestDetail />} />
-              <Route path="/solicitudes/:id/resumen" element={<RequestSummary />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
