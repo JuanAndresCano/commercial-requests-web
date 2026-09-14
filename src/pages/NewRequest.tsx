@@ -34,6 +34,8 @@ import {
   type Urgency,
   type RequestItem,
   type CompanyRecord,
+  type ClientContact,
+  type ProposalDocument,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -52,15 +54,6 @@ export interface AttachedFile {
   name: string;
   size: string;
   type: string;
-}
-
-export interface ClientContact {
-  id: string;
-  nombre: string;
-  cargo: string;
-  telefono: string;
-  correo: string;
-  area: string;
 }
 
 export interface RequestFormData {
@@ -117,6 +110,16 @@ export interface RequestFormData {
 }
 
 const DRAFT_STORAGE_KEY = "icesi_kam_new_request_draft_v1";
+
+function mapAttachedFileToDocumentType(fileName: string): ProposalDocument["type"] {
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (["doc", "docx"].includes(ext)) return "doc";
+  if (["xls", "xlsx"].includes(ext)) return "excel";
+  if (["csv"].includes(ext)) return "sheet";
+  if (["zip", "rar", "7z"].includes(ext)) return "archive";
+  return "doc";
+}
 
 export default function NewRequest() {
   const navigate = useNavigate();
@@ -398,6 +401,16 @@ export default function NewRequest() {
         ? data.contactosAdicionales[0].nombre.trim()
         : "Contacto de la Empresa");
 
+    const clientKamDocuments: ProposalDocument[] = data.archivos.map((f) => ({
+      id: f.id,
+      name: f.name,
+      size: f.size,
+      date: new Date().toISOString().split("T")[0],
+      type: mapAttachedFileToDocumentType(f.name),
+      category: "client_kam",
+      uploadedBy: user.name,
+    }));
+
     addRequest({
       title: finalTitle,
       applicant: contactName,
@@ -414,6 +427,45 @@ export default function NewRequest() {
       tipoOtro: data.tipoReq === "Otro" ? data.tipoReqOtro.trim() || undefined : undefined,
       // Sin costing/totalCostCop: el precio lo define el Líder de Producto,
       // nunca llega ya definido desde el KAM.
+
+      // Empresa (paso 1)
+      companyNit: data.nit || undefined,
+      companyDireccion: data.direccion || undefined,
+      companyTelefono: data.telefonoEmpresa || undefined,
+      companyCorreo: data.correoEmpresa || undefined,
+      companyCiiuPrincipal: data.ciiuPrincipal || undefined,
+      companyCiiuPrincipalDesc: data.ciiuPrincipalDesc || undefined,
+      companyCiiusSecundarios: data.ciiusSecundarios.length > 0 ? data.ciiusSecundarios : undefined,
+      companyTipo: data.tipoEmpresa || undefined,
+      companyDescripcion: data.descripcion || undefined,
+      companyWeb: data.web || undefined,
+
+      // Contacto (paso 2)
+      contactTelefono: data.telefono || undefined,
+      contactTelefonoSecundario: data.telefonoSecundario || undefined,
+      contactCorreo: data.correo || undefined,
+      contactCorreoAlternativo: data.correoAlternativo || undefined,
+      contactCargo: data.cargo || undefined,
+      contactArea: data.area || undefined,
+      additionalContacts: data.contactosAdicionales.length > 0 ? data.contactosAdicionales : undefined,
+
+      // Diagnóstico del requerimiento (paso 3)
+      alimentacion: data.alimentacion || undefined,
+      necesidad: data.necesidad || undefined,
+      competencias: data.competencias || undefined,
+      exito: data.exito || undefined,
+      resultados: data.resultados || undefined,
+      areaParticipantes: data.areaParticipantes || undefined,
+
+      // Formación previa (paso 4)
+      formacionPrevia: data.formacionPrevia || undefined,
+      descFormacion: data.descFormacion || undefined,
+      empresaPrevia: data.empresaPrevia || undefined,
+      fechaPrevia: data.fechaPrevia || undefined,
+
+      // Observaciones y documentos (paso 5)
+      observaciones: data.observaciones || undefined,
+      clientKamDocuments: clientKamDocuments.length > 0 ? clientKamDocuments : undefined,
     });
 
     // Limpiar borrador local tras envío exitoso

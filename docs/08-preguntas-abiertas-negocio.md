@@ -244,6 +244,20 @@ una pregunta abierta.)_
 - **Docente obligatorio para avanzar a "En proceso por experto":** el botón
   "Pasar a Experto" ahora está deshabilitado si la solicitud no tiene un
   docente asignado.
+- **Confirmación antes de avanzar de estado:** los botones de avance
+  (incluyendo "Marcar Entregada"/"Enviar a cliente") ya no actúan al primer
+  clic — abren un diálogo de confirmación. Se encontró que el botón del KAM
+  "Enviar a cliente" ni siquiera revisaba el estado: se podía marcar como
+  entregada una solicitud recién creada, sin costeo ni trabajo previo. Ahora
+  solo aparece cuando la solicitud está "En proceso de costeo".
+- **Toda la información que diligencia el KAM ahora es visible:** se agregó
+  una sección "Información completa de la solicitud" (colapsable) en el
+  detalle, con la empresa completa (NIT, dirección, CIIU, etc.), el contacto
+  completo y contactos adicionales, el diagnóstico del requerimiento
+  (necesidad, competencias, resultados esperados...), formación previa y
+  observaciones — antes esos ~24 campos se perdían después de enviar la
+  solicitud. También se corrigió que los archivos que el KAM adjunta en el
+  wizard ahora sí llegan a la solicitud (antes desaparecían).
 
 ## Preguntas nuevas (sin desarrollar todavía)
 

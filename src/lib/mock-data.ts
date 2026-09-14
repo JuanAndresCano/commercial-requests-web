@@ -151,6 +151,15 @@ export interface ProposalDocument {
   tag?: string;
 }
 
+export interface ClientContact {
+  id: string;
+  nombre: string;
+  cargo: string;
+  telefono: string;
+  correo: string;
+  area: string;
+}
+
 export interface ProposalCosting {
   requiresExternalAdvisor: boolean;
   externalAdvisorDetails?: string;
@@ -176,6 +185,48 @@ export interface RequestItem {
   modalidad?: string; // Presencial / Virtual / Híbrida, diligenciado por el KAM
   horas?: string; // Intensidad horaria estimada, diligenciada por el KAM
   tipoOtro?: string; // Descripción libre cuando type === "Otro"
+
+  // Datos completos de la empresa, diligenciados por el KAM en el wizard
+  // (paso 1) — "company" arriba sigue siendo solo el nombre, por compatibilidad
+  // con el resto de la app.
+  companyNit?: string;
+  companyDireccion?: string;
+  companyTelefono?: string;
+  companyCorreo?: string;
+  companyCiiuPrincipal?: string;
+  companyCiiuPrincipalDesc?: string;
+  companyCiiusSecundarios?: string[];
+  companyTipo?: string;
+  companyDescripcion?: string;
+  companyWeb?: string;
+
+  // Contacto del cliente (paso 2). "applicant" arriba sigue siendo solo el
+  // nombre del contacto principal, por compatibilidad.
+  contactTelefono?: string;
+  contactTelefonoSecundario?: string;
+  contactCorreo?: string;
+  contactCorreoAlternativo?: string;
+  contactCargo?: string;
+  contactArea?: string;
+  additionalContacts?: ClientContact[];
+
+  // Diagnóstico del requerimiento (paso 3)
+  alimentacion?: string;
+  necesidad?: string;
+  competencias?: string;
+  exito?: string;
+  resultados?: string;
+  areaParticipantes?: string;
+
+  // Formación previa (paso 4)
+  formacionPrevia?: "Sí" | "No" | "No sé";
+  descFormacion?: string;
+  empresaPrevia?: string;
+  fechaPrevia?: string;
+
+  // Observaciones finales (paso 5)
+  observaciones?: string;
+
   company: string;
   node: string;
   productLeader: string;

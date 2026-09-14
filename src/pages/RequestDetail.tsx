@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -19,9 +19,11 @@ import {
   MessageSquare,
   ArrowLeftRight,
   UserCheck,
+  ChevronDown,
 } from "@/components/icons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -86,6 +88,7 @@ export default function RequestDetail() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [showFullInfo, setShowFullInfo] = useState(false);
   const [selectedNewLeader, setSelectedNewLeader] = useState("");
   const [selectedNewNode, setSelectedNewNode] = useState("");
   const [reassignReason, setReassignReason] = useState("Temática no afín / Corresponde a otro nodo");
@@ -777,6 +780,104 @@ export default function RequestDetail() {
       </div>
 
       {/* ========================================================================= */}
+      {/* INFORMACIÓN COMPLETA DE LA SOLICITUD (todo lo que diligenció el KAM) */}
+      {/* ========================================================================= */}
+      <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowFullInfo((v) => !v)}
+          className="flex w-full items-center justify-between p-5 text-left"
+        >
+          <div>
+            <h3 className="text-sm font-bold text-foreground">
+              Información completa de la solicitud
+            </h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Todo lo que el KAM diligenció en el formulario: empresa, contacto, diagnóstico y formación previa.
+            </p>
+          </div>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", showFullInfo && "rotate-180")} />
+        </button>
+
+        {showFullInfo && (
+          <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
+            {/* Empresa */}
+            <InfoSection title="Empresa">
+              <InfoRow label="NIT" value={req.companyNit} />
+              <InfoRow label="Dirección" value={req.companyDireccion} />
+              <InfoRow label="Teléfono" value={req.companyTelefono} />
+              <InfoRow label="Correo" value={req.companyCorreo} />
+              <InfoRow
+                label="CIIU principal"
+                value={req.companyCiiuPrincipal ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}` : undefined}
+              />
+              <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
+              <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
+              <InfoRow label="Sitio web" value={req.companyWeb} />
+              <InfoRow label="Descripción" value={req.companyDescripcion} block />
+            </InfoSection>
+
+            {/* Contacto */}
+            <InfoSection title="Contacto del cliente">
+              <InfoRow label="Nombre" value={req.applicant} />
+              <InfoRow label="Cargo" value={req.contactCargo} />
+              <InfoRow label="Área o dependencia" value={req.contactArea} />
+              <InfoRow label="Teléfono" value={req.contactTelefono} />
+              <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
+              <InfoRow label="Correo" value={req.contactCorreo} />
+              <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
+
+              {req.additionalContacts && req.additionalContacts.length > 0 && (
+                <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Contactos adicionales
+                  </span>
+                  {req.additionalContacts.map((c) => (
+                    <div key={c.id} className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5">
+                      <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
+                      {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
+                      {(c.telefono || c.correo) && (
+                        <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </InfoSection>
+
+            {/* Diagnóstico del requerimiento */}
+            <InfoSection title="Diagnóstico del requerimiento">
+              <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
+              <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
+              <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
+              <InfoRow label="Resultados esperados" value={req.resultados} block />
+              <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
+              <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
+            </InfoSection>
+
+            {/* Formación previa */}
+            <InfoSection title="Formación previa">
+              <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
+              {req.formacionPrevia === "Sí" && (
+                <>
+                  <InfoRow label="Descripción" value={req.descFormacion} block />
+                  <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
+                  <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
+                </>
+              )}
+            </InfoSection>
+
+            {/* Observaciones */}
+            <div className="lg:col-span-2">
+              <InfoSection title="Observaciones del KAM">
+                <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
+              </InfoSection>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
       {/* MODAL: ASIGNACIÓN DE DOCENTE / ASESOR */}
       {/* ========================================================================= */}
       <AdvisorAssignmentModal
@@ -1088,5 +1189,51 @@ export default function RequestDetail() {
         </DialogContent>
       </Dialog>
     </AppShell>
+  );
+}
+
+function InfoSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border dark:border-[#252838] p-4 space-y-2.5">
+      <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </h4>
+      <div className="space-y-2 text-xs">{children}</div>
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  block = false,
+  hideLabelWhenEmpty = false,
+}: {
+  label: string;
+  value?: string;
+  block?: boolean;
+  hideLabelWhenEmpty?: boolean;
+}) {
+  if (!value || !value.trim()) {
+    if (hideLabelWhenEmpty) {
+      return <p className="italic text-muted-foreground">Sin observaciones diligenciadas.</p>;
+    }
+    return null;
+  }
+
+  if (block) {
+    return (
+      <div className="space-y-0.5">
+        {label && <span className="block text-muted-foreground">{label}</span>}
+        <p className="text-foreground leading-relaxed whitespace-pre-wrap">{value}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="font-medium text-foreground text-right">{value}</span>
+    </div>
   );
 }
