@@ -175,6 +175,7 @@ export interface RequestItem {
   participantes?: string; // Cupo proyectado, diligenciado por el KAM (ej. "15 - 20")
   modalidad?: string; // Presencial / Virtual / Híbrida, diligenciado por el KAM
   horas?: string; // Intensidad horaria estimada, diligenciada por el KAM
+  tipoOtro?: string; // Descripción libre cuando type === "Otro"
   company: string;
   node: string;
   productLeader: string;

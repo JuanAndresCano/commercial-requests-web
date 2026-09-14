@@ -99,6 +99,7 @@ export default function RequestDetail() {
     modalidad: "",
     participantes: "",
     type: "" as RequestType | "",
+    tipoOtro: "",
     deadline: "",
   });
 
@@ -108,6 +109,7 @@ export default function RequestDetail() {
       modalidad: req.modalidad ?? "",
       participantes: req.participantes ?? "",
       type: req.type,
+      tipoOtro: req.tipoOtro ?? "",
       deadline: req.deadline ?? "",
     });
     setIsEditingSpecs(true);
@@ -119,6 +121,7 @@ export default function RequestDetail() {
       modalidad: specsDraft.modalidad || undefined,
       participantes: specsDraft.participantes || undefined,
       type: (specsDraft.type || req.type) as RequestType,
+      tipoOtro: specsDraft.type === "Otro" ? specsDraft.tipoOtro.trim() || undefined : undefined,
       deadline: specsDraft.deadline || undefined,
     });
     setIsEditingSpecs(false);
@@ -177,20 +180,50 @@ export default function RequestDetail() {
     toast.success("Cambios guardados correctamente");
   };
 
+  // Avanzar de estado (y sobre todo "marcar entregada") es una acción con
+  // consecuencias reales — se confirma explícitamente en vez de ejecutarse
+  // directo desde el botón, para que un clic accidental o varios clics
+  // seguidos no manden la propuesta al cliente sin querer.
+  const [confirmingAction, setConfirmingAction] = useState<"experto" | "costeo" | "entregada" | null>(null);
+
   const handleMoveToExperto = () => {
     updateStatus(req.id, "en-experto");
     toast.success("Propuesta pasada a: En proceso por experto");
+    setConfirmingAction(null);
   };
 
   const handleMoveToCosteo = () => {
     updateStatus(req.id, "en-costeo");
     toast.success("Propuesta pasada a: En proceso de costeo");
+    setConfirmingAction(null);
   };
 
   const handleSendToClient = () => {
     updateStatus(req.id, "entregada");
     toast.success("Propuesta enviada al cliente y marcada como Entregada");
+    setConfirmingAction(null);
   };
+
+  const CONFIRM_ACTION_META = {
+    experto: {
+      title: "¿Avanzar a \"En proceso por experto\"?",
+      description: "El docente asignado queda como responsable de formular la temática y el cronograma antes del costeo.",
+      confirmLabel: "Sí, avanzar",
+      onConfirm: handleMoveToExperto,
+    },
+    costeo: {
+      title: "¿Avanzar a \"En proceso de costeo\"?",
+      description: "A partir de aquí se estructura el valor final de la propuesta.",
+      confirmLabel: "Sí, avanzar",
+      onConfirm: handleMoveToCosteo,
+    },
+    entregada: {
+      title: "¿Marcar como Entregada?",
+      description: "Confirma que la propuesta ya fue remitida al cliente con el costeo definido. Esta acción cierra el flujo de la solicitud.",
+      confirmLabel: "Sí, marcar entregada",
+      onConfirm: handleSendToClient,
+    },
+  } as const;
 
   const formattedDeadline = req?.deadline
     ? format(new Date(req.deadline), "d 'de' MMMM, yyyy", { locale: es })
@@ -276,8 +309,10 @@ export default function RequestDetail() {
                   {req.status === "nueva" && (
                     <Button
                       size="sm"
-                      onClick={handleMoveToExperto}
-                      className="h-9 px-4 text-xs font-bold bg-[#e9683b] hover:bg-[#d8582d] text-white shadow-xs"
+                      disabled={!req.professor}
+                      onClick={() => setConfirmingAction("experto")}
+                      className="h-9 px-4 text-xs font-bold bg-[#e9683b] hover:bg-[#d8582d] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={req.professor ? undefined : "Asigna un docente antes de avanzar"}
                     >
                       <UserCheck className="h-3.5 w-3.5 mr-1.5" />
                       Avanzar a En Experto
@@ -287,7 +322,7 @@ export default function RequestDetail() {
                   {req.status === "en-experto" && (
                     <Button
                       size="sm"
-                      onClick={handleMoveToCosteo}
+                      onClick={() => setConfirmingAction("costeo")}
                       className="h-9 px-4 text-xs font-bold bg-[#865cf0] hover:bg-[#7344e8] text-white shadow-xs"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
@@ -298,7 +333,7 @@ export default function RequestDetail() {
                   {req.status === "en-costeo" && (
                     <Button
                       size="sm"
-                      onClick={handleSendToClient}
+                      onClick={() => setConfirmingAction("entregada")}
                       className="h-9 px-4 text-xs font-bold bg-[#4cb979] hover:bg-[#3ea569] text-white shadow-xs"
                     >
                       <Check className="h-3.5 w-3.5 mr-1.5" />
@@ -312,16 +347,19 @@ export default function RequestDetail() {
                     </div>
                   )}
                 </>
-              ) : isKam ? (
+              ) : isKam && req.status === "en-costeo" ? (
                 <Button
                   size="sm"
-                  onClick={handleSendToClient}
-                  disabled={req.status === "entregada"}
+                  onClick={() => setConfirmingAction("entregada")}
                   className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs"
                 >
                   <Send className="h-3.5 w-3.5 mr-1.5" />
-                  {req.status === "entregada" ? "Propuesta entregada" : "Enviar a cliente"}
+                  Enviar a cliente
                 </Button>
+              ) : isKam && req.status === "entregada" ? (
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
+                  <Check className="h-3.5 w-3.5" /> Propuesta Entregada
+                </div>
               ) : null}
             </div>
           </div>
@@ -509,7 +547,7 @@ export default function RequestDetail() {
                       Tipo de servicio
                     </span>
                     <span className="font-semibold text-foreground">
-                      {req.type}
+                      {req.type === "Otro" && req.tipoOtro ? `Otro (${req.tipoOtro})` : req.type}
                     </span>
                   </div>
 
@@ -582,6 +620,19 @@ export default function RequestDetail() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {specsDraft.type === "Otro" && (
+                    <div className="space-y-1">
+                      <Label htmlFor="specs-tipo-otro" className="text-[11px] text-muted-foreground">Especifica el tipo</Label>
+                      <Input
+                        id="specs-tipo-otro"
+                        value={specsDraft.tipoOtro}
+                        onChange={(e) => setSpecsDraft((d) => ({ ...d, tipoOtro: e.target.value }))}
+                        placeholder="Ej. Diseño de assessment center"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  )}
 
                   <div className="space-y-1">
                     <Label htmlFor="specs-deadline" className="text-[11px] text-muted-foreground">Entrega esperada</Label>
@@ -1002,6 +1053,38 @@ export default function RequestDetail() {
               Confirmar Reasignación
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación de avance de estado — evita que un clic accidental
+          (o varios seguidos) cambie el estado o mande la propuesta al cliente. */}
+      <Dialog open={!!confirmingAction} onOpenChange={(open) => !open && setConfirmingAction(null)}>
+        <DialogContent className="max-w-sm">
+          {confirmingAction && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  {CONFIRM_ACTION_META[confirmingAction].title}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  {CONFIRM_ACTION_META[confirmingAction].description}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" size="sm" onClick={() => setConfirmingAction(null)} className="text-xs">
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={CONFIRM_ACTION_META[confirmingAction].onConfirm}
+                  className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white"
+                >
+                  {CONFIRM_ACTION_META[confirmingAction].confirmLabel}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </AppShell>

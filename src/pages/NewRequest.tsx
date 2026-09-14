@@ -411,6 +411,7 @@ export default function NewRequest() {
       participantes: data.participantes || undefined,
       modalidad: data.modalidad || undefined,
       horas: data.horas || undefined,
+      tipoOtro: data.tipoReq === "Otro" ? data.tipoReqOtro.trim() || undefined : undefined,
       // Sin costing/totalCostCop: el precio lo define el Líder de Producto,
       // nunca llega ya definido desde el KAM.
     });
