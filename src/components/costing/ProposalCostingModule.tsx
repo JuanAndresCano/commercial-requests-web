@@ -119,7 +119,11 @@ export function ProposalCostingModule({
     onUpdateCosting(updatedCosting);
   };
 
-  const handleBaseCostChange = (val: number) => {
+  // `min`/`max` en el <Input> solo afectan las flechitas del navegador — si
+  // se escribe o pega un valor directamente, no bloquean nada. Sin este
+  // clamp se podía guardar un costo base o margen negativo sin ningún aviso.
+  const handleBaseCostChange = (rawVal: number) => {
+    const val = Math.max(0, rawVal);
     setBaseCostCop(val);
     const newTax = isCapacitacion ? Math.round(val * 0.015) : 0;
     const newSuggested = Math.round(val + (val * (marginPercent / 100)) + newTax);
@@ -128,7 +132,8 @@ export function ProposalCostingModule({
     triggerSave(val, marginPercent, newOffered, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
   };
 
-  const handleMarginChange = (val: number) => {
+  const handleMarginChange = (rawVal: number) => {
+    const val = Math.min(100, Math.max(0, rawVal));
     setMarginPercent(val);
     const newTax = isCapacitacion ? Math.round(baseCostCop * 0.015) : 0;
     const newSuggested = Math.round(baseCostCop + (baseCostCop * (val / 100)) + newTax);
@@ -137,7 +142,8 @@ export function ProposalCostingModule({
     triggerSave(baseCostCop, val, newOffered, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
   };
 
-  const handleOfferedChange = (val: number) => {
+  const handleOfferedChange = (rawVal: number) => {
+    const val = Math.max(0, rawVal);
     setTotalOfferedCop(val);
     triggerSave(baseCostCop, marginPercent, val, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
   };
