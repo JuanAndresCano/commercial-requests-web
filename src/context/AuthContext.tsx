@@ -58,6 +58,7 @@ interface AuthContextType {
   requests: RequestItem[];
   addRequest: (item: Omit<RequestItem, "id" | "createdAt">) => RequestItem;
   updateRequest: (id: string, updates: Partial<RequestItem>) => void;
+  deleteRequest: (id: string) => void;
   assignProfessor: (id: string, professorName: string) => void;
   assignProfessorDetailed: (
     id: string,
@@ -180,6 +181,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...item,
       id: newId,
       createdAt: new Date().toISOString().split("T")[0],
+      // Arranca el reloj de "tiempo en esta fase" desde el instante en que
+      // se crea (siempre en "nueva").
+      statusUpdatedAt: new Date().toISOString(),
       // El costeo es responsabilidad exclusiva del Líder de Producto — una
       // solicitud recién creada por el KAM nunca debe llegar con un precio
       // ya calculado. Se queda sin definir hasta que el Líder lo guarde.
@@ -200,9 +204,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (updates.costing) {
           updated.totalCostCop = updates.costing.totalOfferedCop;
         }
+        // Se marca automáticamente aquí (no en cada pantalla que cambia el
+        // estado) para que "tiempo en esta fase" sea correcto sin importar
+        // si el cambio vino de updateStatus, de "Entregar" o de "Devolver
+        // con observaciones".
+        if (updates.status && updates.status !== r.status) {
+          updated.statusUpdatedAt = new Date().toISOString();
+        }
         return updated;
       })
     );
+  };
+
+  const deleteRequest = (id: string) => {
+    setRequests((prev) => prev.filter((r) => r.id !== id));
   };
 
   const assignProfessor = (id: string, professorName: string) => {
@@ -274,6 +289,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resetData = () => {
     setRequests(MOCK_REQUESTS);
     localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(MOCK_REQUESTS));
+
+    // También limpia los filtros/vistas persistidas de los tableros
+    // (usePersistentState) — si no, un filtro que quedó activo (ej. "Sin
+    // docente") sigue ocultando todo después del reset, sin ninguna pista de
+    // por qué, aunque los datos ya se hayan restablecido correctamente.
+    const uiStatePrefixes = ["icesi_kam_dashboard_", "icesi_lp_dashboard_"];
+    Object.keys(localStorage)
+      .filter((key) => uiStatePrefixes.some((prefix) => key.startsWith(prefix)))
+      .forEach((key) => localStorage.removeItem(key));
   };
 
   return (
@@ -286,6 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         requests,
         addRequest,
         updateRequest,
+        deleteRequest,
         assignProfessor,
         assignProfessorDetailed,
         updateCosting,
