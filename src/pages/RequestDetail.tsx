@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -20,8 +20,13 @@ import {
   ArrowLeftRight,
   UserCheck,
   ChevronDown,
+  Trash2,
+  RotateCcw,
+  AlertCircle,
+  Edit3,
+  ClipboardList,
 } from "@/components/icons";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { AppShell } from "@/components/AppShell";
@@ -46,6 +51,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   formatCop,
   RequestItem,
@@ -57,7 +63,9 @@ import {
   NODES,
   NODE_DEFAULT_LEADERS,
   REQUEST_TYPES,
+  URGENCY_META,
   type RequestType,
+  type Urgency,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
@@ -67,6 +75,7 @@ import { toast } from "sonner";
 
 export default function RequestDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const {
     requests,
     user,
@@ -76,6 +85,7 @@ export default function RequestDetail() {
     removeDocument,
     updateStatus,
     updateRequest,
+    deleteRequest,
   } = useAuth();
 
   const role = user.role;
@@ -84,10 +94,19 @@ export default function RequestDetail() {
 
   const req: RequestItem = requests.find((r) => r.id === id) ?? requests[0];
 
+  // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
+  // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
+  // "Enviar a cliente" validaban que hubiera un valor real antes de cerrar
+  // el ciclo comercial. Este es el único punto de verdad para esa regla.
+  const hasValidCosting = !!req.costing && req.costing.totalOfferedCop > 0;
+
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [returnObservations, setReturnObservations] = useState("");
   const [showFullInfo, setShowFullInfo] = useState(false);
   const [selectedNewLeader, setSelectedNewLeader] = useState("");
   const [selectedNewNode, setSelectedNewNode] = useState("");
@@ -129,6 +148,142 @@ export default function RequestDetail() {
     });
     setIsEditingSpecs(false);
     toast.success("Especificaciones del servicio actualizadas");
+  };
+
+  // El KAM es dueño de la información de su solicitud (empresa, contacto,
+  // diagnóstico, formación previa) y puede corregirla mientras nadie la haya
+  // empezado a trabajar — Dianis confirmó esto en docs/08, preguntas 4 y 8.
+  const canEditFullInfo = isKam && req.kam === user.name && req.status === "nueva";
+  const fullInfoCompleteness = getFullInfoCompleteness(req);
+  const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
+  const emptyFullInfoDraft = {
+    title: "",
+    urgency: "media" as Urgency,
+    companyNit: "",
+    companyDireccion: "",
+    companyTelefono: "",
+    companyCorreo: "",
+    companyCiiuPrincipal: "",
+    companyCiiuPrincipalDesc: "",
+    companyTipo: "",
+    companyWeb: "",
+    companyDescripcion: "",
+    applicant: "",
+    contactCargo: "",
+    contactArea: "",
+    contactTelefono: "",
+    contactTelefonoSecundario: "",
+    contactCorreo: "",
+    contactCorreoAlternativo: "",
+    necesidad: "",
+    competencias: "",
+    exito: "",
+    resultados: "",
+    areaParticipantes: "",
+    alimentacion: "",
+    formacionPrevia: "" as "Sí" | "No" | "No sé" | "",
+    descFormacion: "",
+    empresaPrevia: "",
+    fechaPrevia: "",
+    observaciones: "",
+  };
+  const [fullInfoDraft, setFullInfoDraft] = useState(emptyFullInfoDraft);
+  // Copia de referencia tomada al abrir el modal — permite detectar cambios
+  // sin guardar y advertir antes de cerrar (mejora de UX pedida en el ciclo
+  // de retroalimentación).
+  const [fullInfoSnapshot, setFullInfoSnapshot] = useState(emptyFullInfoDraft);
+  const isFullInfoDirty = JSON.stringify(fullInfoDraft) !== JSON.stringify(fullInfoSnapshot);
+
+  const handleStartEditFullInfo = () => {
+    const initial: typeof emptyFullInfoDraft = {
+      title: req.title,
+      urgency: req.urgency,
+      companyNit: req.companyNit ?? "",
+      companyDireccion: req.companyDireccion ?? "",
+      companyTelefono: req.companyTelefono ?? "",
+      companyCorreo: req.companyCorreo ?? "",
+      companyCiiuPrincipal: req.companyCiiuPrincipal ?? "",
+      companyCiiuPrincipalDesc: req.companyCiiuPrincipalDesc ?? "",
+      companyTipo: req.companyTipo ?? "",
+      companyWeb: req.companyWeb ?? "",
+      companyDescripcion: req.companyDescripcion ?? "",
+      applicant: req.applicant ?? "",
+      contactCargo: req.contactCargo ?? "",
+      contactArea: req.contactArea ?? "",
+      contactTelefono: req.contactTelefono ?? "",
+      contactTelefonoSecundario: req.contactTelefonoSecundario ?? "",
+      contactCorreo: req.contactCorreo ?? "",
+      contactCorreoAlternativo: req.contactCorreoAlternativo ?? "",
+      necesidad: req.necesidad ?? "",
+      competencias: req.competencias ?? "",
+      exito: req.exito ?? "",
+      resultados: req.resultados ?? "",
+      areaParticipantes: req.areaParticipantes ?? "",
+      alimentacion: req.alimentacion ?? "",
+      formacionPrevia: req.formacionPrevia ?? "",
+      descFormacion: req.descFormacion ?? "",
+      empresaPrevia: req.empresaPrevia ?? "",
+      fechaPrevia: req.fechaPrevia ?? "",
+      observaciones: req.observaciones ?? "",
+    };
+    setFullInfoDraft(initial);
+    setFullInfoSnapshot(initial);
+    setShowFullInfo(true);
+    setIsEditingFullInfo(true);
+  };
+
+  // Validación de formato para correos y teléfonos — son campos opcionales,
+  // así que solo se marcan como error si traen algo y ese algo no cumple el
+  // formato mínimo esperado.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const PHONE_RE = /^[0-9+()\-\s]{7,}$/;
+  const fullInfoErrors: Partial<Record<keyof typeof fullInfoDraft, string>> = {};
+  if (fullInfoDraft.companyCorreo.trim() && !EMAIL_RE.test(fullInfoDraft.companyCorreo.trim())) {
+    fullInfoErrors.companyCorreo = "Correo con formato inválido";
+  }
+  if (fullInfoDraft.contactCorreo.trim() && !EMAIL_RE.test(fullInfoDraft.contactCorreo.trim())) {
+    fullInfoErrors.contactCorreo = "Correo con formato inválido";
+  }
+  if (fullInfoDraft.contactCorreoAlternativo.trim() && !EMAIL_RE.test(fullInfoDraft.contactCorreoAlternativo.trim())) {
+    fullInfoErrors.contactCorreoAlternativo = "Correo con formato inválido";
+  }
+  if (fullInfoDraft.companyTelefono.trim() && !PHONE_RE.test(fullInfoDraft.companyTelefono.trim())) {
+    fullInfoErrors.companyTelefono = "Teléfono con formato inválido";
+  }
+  if (fullInfoDraft.contactTelefono.trim() && !PHONE_RE.test(fullInfoDraft.contactTelefono.trim())) {
+    fullInfoErrors.contactTelefono = "Teléfono con formato inválido";
+  }
+  if (fullInfoDraft.contactTelefonoSecundario.trim() && !PHONE_RE.test(fullInfoDraft.contactTelefonoSecundario.trim())) {
+    fullInfoErrors.contactTelefonoSecundario = "Teléfono con formato inválido";
+  }
+  const hasFullInfoErrors = Object.keys(fullInfoErrors).length > 0;
+
+  const handleSaveFullInfo = () => {
+    if (!fullInfoDraft.title.trim()) {
+      toast.error("El título de la propuesta no puede quedar vacío");
+      return;
+    }
+    if (hasFullInfoErrors) {
+      toast.error("Corrige los campos marcados antes de guardar");
+      return;
+    }
+    updateRequest(req.id, {
+      ...fullInfoDraft,
+      title: fullInfoDraft.title.trim(),
+      formacionPrevia: fullInfoDraft.formacionPrevia || undefined,
+      fullInfoUpdatedAt: new Date().toISOString(),
+    });
+    setIsEditingFullInfo(false);
+    toast.success("Información de la solicitud actualizada");
+  };
+
+  // Si hay cambios sin guardar, confirma antes de cerrar el modal (clic
+  // afuera, Esc, o botón Cancelar) para no perderlos por accidente.
+  const handleCloseFullInfoModal = () => {
+    if (isFullInfoDirty && !window.confirm("Tienes cambios sin guardar en esta solicitud. ¿Descartarlos?")) {
+      return;
+    }
+    setIsEditingFullInfo(false);
   };
 
   const handleConfirmReassign = () => {
@@ -202,9 +357,39 @@ export default function RequestDetail() {
   };
 
   const handleSendToClient = () => {
-    updateStatus(req.id, "entregada");
+    // Defensa adicional además del `disabled` del botón — por si el estado
+    // cambia entre que se abre el diálogo de confirmación y se confirma.
+    if (!hasValidCosting) {
+      toast.error("No se puede entregar sin un valor ofertado mayor a $0");
+      setConfirmingAction(null);
+      return;
+    }
+    // Al reentregar (por ejemplo tras una devolución con observaciones) se
+    // limpia la nota anterior — ya quedó resuelta en la nueva versión.
+    updateRequest(req.id, { status: "entregada", clientObservations: undefined });
     toast.success("Propuesta enviada al cliente y marcada como Entregada");
     setConfirmingAction(null);
+  };
+
+  // El KAM puede cancelar su propia solicitud mientras nadie la haya
+  // empezado a trabajar (docs/08, pregunta 14).
+  const handleCancelRequest = () => {
+    deleteRequest(req.id);
+    toast.success(`Solicitud ${req.id} cancelada`);
+    setIsCancelModalOpen(false);
+    navigate("/dashboard");
+  };
+
+  // Si el cliente pide ajustes tras la entrega, el KAM la devuelve a costeo
+  // con una nota de observaciones para el Líder de Producto (docs/08, pregunta 13).
+  const handleReturnWithObservations = () => {
+    updateRequest(req.id, {
+      status: "en-costeo",
+      clientObservations: returnObservations.trim() || undefined,
+    });
+    toast.success("Propuesta devuelta a costeo con las observaciones del cliente");
+    setIsReturnModalOpen(false);
+    setReturnObservations("");
   };
 
   const CONFIRM_ACTION_META = {
@@ -314,7 +499,7 @@ export default function RequestDetail() {
                       size="sm"
                       disabled={!req.professor}
                       onClick={() => setConfirmingAction("experto")}
-                      className="h-9 px-4 text-xs font-bold bg-[#e9683b] hover:bg-[#d8582d] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="h-9 px-4 text-xs font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
                       title={req.professor ? undefined : "Asigna un docente antes de avanzar"}
                     >
                       <UserCheck className="h-3.5 w-3.5 mr-1.5" />
@@ -326,22 +511,21 @@ export default function RequestDetail() {
                     <Button
                       size="sm"
                       onClick={() => setConfirmingAction("costeo")}
-                      className="h-9 px-4 text-xs font-bold bg-[#865cf0] hover:bg-[#7344e8] text-white shadow-xs"
+                      className="h-9 px-4 text-xs font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-xs"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
                       Avanzar a En Costeo
                     </Button>
                   )}
 
-                  {req.status === "en-costeo" && (
-                    <Button
-                      size="sm"
-                      onClick={() => setConfirmingAction("entregada")}
-                      className="h-9 px-4 text-xs font-bold bg-[#4cb979] hover:bg-[#3ea569] text-white shadow-xs"
-                    >
-                      <Check className="h-3.5 w-3.5 mr-1.5" />
-                      Marcar Entregada
-                    </Button>
+                  {/* El Líder de Producto ya no puede marcar "Entregada" directamente:
+                      esa es la acción del KAM (envía al cliente). El trabajo del Líder
+                      termina en dejar el costeo listo — eso ya deja la solicitud visible
+                      para el KAM como "Lista para Entregar" (docs/08, pregunta 13). */}
+                  {req.status === "en-costeo" && hasValidCosting && (
+                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
+                      <Check className="h-3.5 w-3.5" /> Costeo listo — a la espera del KAM
+                    </div>
                   )}
 
                   {req.status === "entregada" && (
@@ -353,16 +537,39 @@ export default function RequestDetail() {
               ) : isKam && req.status === "en-costeo" ? (
                 <Button
                   size="sm"
+                  disabled={!hasValidCosting}
                   onClick={() => setConfirmingAction("entregada")}
-                  className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs"
+                  className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={hasValidCosting ? undefined : "El Líder de Producto aún no ha definido un valor real para esta propuesta"}
                 >
                   <Send className="h-3.5 w-3.5 mr-1.5" />
                   Enviar a cliente
                 </Button>
               ) : isKam && req.status === "entregada" ? (
-                <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                  <Check className="h-3.5 w-3.5" /> Propuesta Entregada
-                </div>
+                <>
+                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
+                    <Check className="h-3.5 w-3.5" /> Propuesta Entregada
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsReturnModalOpen(true)}
+                    className="h-9 px-3 text-xs font-medium border-border hover:bg-secondary text-foreground"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                    Devolver con observaciones
+                  </Button>
+                </>
+              ) : isKam && req.status === "nueva" && req.kam === user.name ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCancelModalOpen(true)}
+                  className="h-9 px-3 text-xs font-medium border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/20"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Cancelar solicitud
+                </Button>
               ) : null}
             </div>
           </div>
@@ -376,6 +583,22 @@ export default function RequestDetail() {
           {/* 🅰️ COLUMNA PRINCIPAL (Izquierda ~65% - Flujo de Trabajo) */}
           {/* ======================================================================= */}
           <div className="lg:col-span-8 space-y-6">
+            {/* Observaciones del cliente tras una devolución — visibles para
+                ambos roles hasta que el Líder reentregue una versión corregida. */}
+            {req.clientObservations && req.clientObservations.trim() && (
+              <div className="rounded-xl border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-4 flex items-start gap-3">
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
+                    El cliente pidió ajustes — propuesta devuelta a costeo
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed whitespace-pre-wrap">
+                    {req.clientObservations}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
               <ProposalCostingModule
@@ -415,37 +638,22 @@ export default function RequestDetail() {
                   </p>
                 </div>
 
-                {/* Resumen de estructura financiera de respaldo para el KAM */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
-                  <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 dark:border-border dark:bg-secondary/20">
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Costo Base Directo
-                    </span>
-                    <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
-                      {formatCop(req.costing.baseCostCop)}
-                    </span>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 dark:border-border dark:bg-secondary/20">
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Margen de Contribución ({req.costing.expectedMarginPercent}%)
-                    </span>
-                    <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                      +{formatCop(Math.round(req.costing.baseCostCop * (req.costing.expectedMarginPercent / 100)))}
-                    </span>
-                  </div>
-
-                  {req.type === "Capacitación" && (
+                {/* El KAM solo ve el valor total y el desglose que efectivamente se le
+                    presenta al cliente (valor + estampilla). El costo base y el margen
+                    de contribución son información interna del costeo, exclusiva del
+                    Líder de Producto — ver docs/08, pregunta 3. */}
+                {req.type === "Capacitación" && (
+                  <div className="grid grid-cols-1 gap-2.5 pt-1 text-xs sm:max-w-[220px]">
                     <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 dark:border-border dark:bg-secondary/20">
                       <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                        Estampilla Pro-Cultura (1.5%)
+                        Estampilla Pro-Cultura ({req.costing.proCulturaTaxPercent}%)
                       </span>
                       <span className="font-mono font-semibold text-amber-700 dark:text-amber-300">
                         +{formatCop(req.costing.proCulturaTaxAmount)}
                       </span>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Nota de alcance o acuerdo comercial en tiempo real */}
                 {req.costing.negotiationNotes && req.costing.negotiationNotes.trim() && (
@@ -782,24 +990,63 @@ export default function RequestDetail() {
       {/* ========================================================================= */}
       {/* INFORMACIÓN COMPLETA DE LA SOLICITUD (todo lo que diligenció el KAM) */}
       {/* ========================================================================= */}
-      <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowFullInfo((v) => !v)}
-          className="flex w-full items-center justify-between p-5 text-left"
-        >
-          <div>
-            <h3 className="text-sm font-bold text-foreground">
-              Información completa de la solicitud
-            </h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Todo lo que el KAM diligenció en el formulario: empresa, contacto, diagnóstico y formación previa.
-            </p>
-          </div>
-          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", showFullInfo && "rotate-180")} />
-        </button>
+      <div className="pt-1">
+        <h2 className="mb-2.5 px-0.5 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Detalle completo de la solicitud
+        </h2>
 
-        {showFullInfo && (
+        <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
+          <div
+            className={cn(
+              "flex items-center justify-between gap-3 p-5",
+              showFullInfo && "border-b border-border dark:border-[#252838]"
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => setShowFullInfo((v) => !v)}
+              className="flex flex-1 min-w-0 items-center gap-3 text-left"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/70 dark:bg-secondary/20">
+                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-foreground">
+                  Información completa de la solicitud
+                </h3>
+                <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                  {fullInfoCompleteness.filled} de {fullInfoCompleteness.total} campos diligenciados
+                  {req.fullInfoUpdatedAt &&
+                    ` · Editado ${formatDistanceToNow(new Date(req.fullInfoUpdatedAt), { addSuffix: true, locale: es })}`}
+                </p>
+              </div>
+            </button>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {canEditFullInfo && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStartEditFullInfo}
+                  className="h-8 px-3 text-xs font-semibold border-[#5454e9]/30 text-[#5454e9] dark:text-[#865cf0] hover:bg-[#5454e9]/10"
+                >
+                  <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                  Editar información
+                </Button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowFullInfo((v) => !v)}
+                aria-label={showFullInfo ? "Contraer sección" : "Expandir sección"}
+                className="rounded-lg p-2 text-muted-foreground hover:bg-secondary/70 dark:hover:bg-secondary/20 transition-colors"
+              >
+                <ChevronDown className={cn("h-4 w-4 transition-transform", showFullInfo && "rotate-180")} />
+              </button>
+            </div>
+          </div>
+
+          {showFullInfo && (
           <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
             {/* Empresa */}
             <InfoSection title="Empresa">
@@ -875,7 +1122,136 @@ export default function RequestDetail() {
             </div>
           </div>
         )}
+        </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDITAR INFORMACIÓN COMPLETA (KAM, solo mientras "Nueva") */}
+      {/* ========================================================================= */}
+      <Dialog open={isEditingFullInfo} onOpenChange={(open) => !open && handleCloseFullInfoModal()}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">
+              Editar información de la solicitud
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs defaultValue="general" className="mt-2">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto">
+              <TabsTrigger value="general" className="text-[11px] py-1.5">General</TabsTrigger>
+              <TabsTrigger value="empresa" className="text-[11px] py-1.5">Empresa</TabsTrigger>
+              <TabsTrigger value="contacto" className="text-[11px] py-1.5">Contacto</TabsTrigger>
+              <TabsTrigger value="diagnostico" className="text-[11px] py-1.5">Diagnóstico</TabsTrigger>
+              <TabsTrigger value="formacion" className="text-[11px] py-1.5">Formación</TabsTrigger>
+              <TabsTrigger value="observaciones" className="text-[11px] py-1.5">Otros</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="general" className="space-y-2.5 pt-4">
+              <EditableField label="Título de la propuesta" value={fullInfoDraft.title} onChange={(v) => setFullInfoDraft((d) => ({ ...d, title: v }))} />
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Urgencia</Label>
+                <Select
+                  value={fullInfoDraft.urgency}
+                  onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, urgency: v as Urgency }))}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Seleccionar urgencia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(URGENCY_META) as Urgency[]).map((u) => (
+                      <SelectItem key={u} value={u}>{URGENCY_META[u].label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="empresa" className="space-y-2.5 pt-4">
+              <EditableField label="NIT" value={fullInfoDraft.companyNit} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyNit: v }))} />
+              <EditableField label="Dirección" value={fullInfoDraft.companyDireccion} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyDireccion: v }))} />
+              <EditableField label="Teléfono" value={fullInfoDraft.companyTelefono} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyTelefono: v }))} error={fullInfoErrors.companyTelefono} />
+              <EditableField label="Correo" value={fullInfoDraft.companyCorreo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCorreo: v }))} error={fullInfoErrors.companyCorreo} />
+              <EditableField label="CIIU principal" value={fullInfoDraft.companyCiiuPrincipal} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCiiuPrincipal: v }))} />
+              <EditableField label="Descripción CIIU" value={fullInfoDraft.companyCiiuPrincipalDesc} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCiiuPrincipalDesc: v }))} />
+              <EditableField label="Naturaleza jurídica" value={fullInfoDraft.companyTipo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyTipo: v }))} />
+              <EditableField label="Sitio web" value={fullInfoDraft.companyWeb} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyWeb: v }))} />
+              <EditableField label="Descripción" value={fullInfoDraft.companyDescripcion} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyDescripcion: v }))} block />
+            </TabsContent>
+
+            <TabsContent value="contacto" className="space-y-2.5 pt-4">
+              <EditableField label="Nombre" value={fullInfoDraft.applicant} onChange={(v) => setFullInfoDraft((d) => ({ ...d, applicant: v }))} />
+              <EditableField label="Cargo" value={fullInfoDraft.contactCargo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCargo: v }))} />
+              <EditableField label="Área o dependencia" value={fullInfoDraft.contactArea} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactArea: v }))} />
+              <EditableField label="Teléfono" value={fullInfoDraft.contactTelefono} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactTelefono: v }))} error={fullInfoErrors.contactTelefono} />
+              <EditableField label="Teléfono secundario" value={fullInfoDraft.contactTelefonoSecundario} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactTelefonoSecundario: v }))} error={fullInfoErrors.contactTelefonoSecundario} />
+              <EditableField label="Correo" value={fullInfoDraft.contactCorreo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCorreo: v }))} error={fullInfoErrors.contactCorreo} />
+              <EditableField label="Correo alternativo" value={fullInfoDraft.contactCorreoAlternativo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCorreoAlternativo: v }))} error={fullInfoErrors.contactCorreoAlternativo} />
+              {req.additionalContacts && req.additionalContacts.length > 0 && (
+                <p className="text-[11px] italic text-muted-foreground pt-1">
+                  Los contactos adicionales no son editables aquí todavía — vuelve al wizard si necesitas corregirlos.
+                </p>
+              )}
+            </TabsContent>
+
+            <TabsContent value="diagnostico" className="space-y-2.5 pt-4">
+              <EditableField label="Necesidad o problema a resolver" value={fullInfoDraft.necesidad} onChange={(v) => setFullInfoDraft((d) => ({ ...d, necesidad: v }))} block />
+              <EditableField label="Competencias a fortalecer" value={fullInfoDraft.competencias} onChange={(v) => setFullInfoDraft((d) => ({ ...d, competencias: v }))} block />
+              <EditableField label="Cómo se medirá el éxito" value={fullInfoDraft.exito} onChange={(v) => setFullInfoDraft((d) => ({ ...d, exito: v }))} block />
+              <EditableField label="Resultados esperados" value={fullInfoDraft.resultados} onChange={(v) => setFullInfoDraft((d) => ({ ...d, resultados: v }))} block />
+              <EditableField label="Perfil o área de los participantes" value={fullInfoDraft.areaParticipantes} onChange={(v) => setFullInfoDraft((d) => ({ ...d, areaParticipantes: v }))} />
+              <EditableField label="Servicio de alimentación y logística" value={fullInfoDraft.alimentacion} onChange={(v) => setFullInfoDraft((d) => ({ ...d, alimentacion: v }))} block />
+            </TabsContent>
+
+            <TabsContent value="formacion" className="space-y-2.5 pt-4">
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">¿Han tenido formación previa con Icesi?</Label>
+                <Select
+                  value={fullInfoDraft.formacionPrevia || undefined}
+                  onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, formacionPrevia: v as "Sí" | "No" | "No sé" }))}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Sí">Sí</SelectItem>
+                    <SelectItem value="No">No</SelectItem>
+                    <SelectItem value="No sé">No sé</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {fullInfoDraft.formacionPrevia === "Sí" && (
+                <>
+                  <EditableField label="Descripción" value={fullInfoDraft.descFormacion} onChange={(v) => setFullInfoDraft((d) => ({ ...d, descFormacion: v }))} block />
+                  <EditableField label="Empresa que la dictó" value={fullInfoDraft.empresaPrevia} onChange={(v) => setFullInfoDraft((d) => ({ ...d, empresaPrevia: v }))} />
+                  <EditableField label="Fecha aproximada" value={fullInfoDraft.fechaPrevia} onChange={(v) => setFullInfoDraft((d) => ({ ...d, fechaPrevia: v }))} />
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="observaciones" className="space-y-2.5 pt-4">
+              <EditableField label="Observaciones del KAM" value={fullInfoDraft.observaciones} onChange={(v) => setFullInfoDraft((d) => ({ ...d, observaciones: v }))} block />
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={handleCloseFullInfoModal} className="text-xs">
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSaveFullInfo}
+              disabled={hasFullInfoErrors}
+              className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white disabled:opacity-50"
+            >
+              Guardar información
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ========================================================================= */}
       {/* MODAL: ASIGNACIÓN DE DOCENTE / ASESOR */}
@@ -1157,6 +1533,74 @@ export default function RequestDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal: Cancelar solicitud (KAM, solo mientras está "Nueva") */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">
+              ¿Cancelar esta solicitud?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Se eliminará permanentemente la solicitud {req.id} ({req.company}). Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsCancelModalOpen(false)} className="text-xs">
+              Volver
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleCancelRequest}
+              className="text-xs bg-red-600 hover:bg-red-700 text-white"
+            >
+              Sí, cancelar solicitud
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Devolver con observaciones (KAM, desde "Entregada") */}
+      <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">
+              Devolver propuesta con observaciones
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              La solicitud vuelve a "En proceso de costeo" para que el Líder de Producto ajuste la propuesta según lo que pidió el cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label htmlFor="return-observations" className="text-xs font-semibold text-foreground">
+              Observaciones del cliente
+            </Label>
+            <Textarea
+              id="return-observations"
+              rows={4}
+              placeholder="Ej. El cliente pidió reducir el alcance a 40 horas y ajustar el valor..."
+              value={returnObservations}
+              onChange={(e) => setReturnObservations(e.target.value)}
+              className="text-xs resize-none"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsReturnModalOpen(false)} className="text-xs">
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!returnObservations.trim()}
+              onClick={handleReturnWithObservations}
+              className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white"
+            >
+              Devolver a costeo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Confirmación de avance de estado — evita que un clic accidental
           (o varios seguidos) cambie el estado o mande la propuesta al cliente. */}
       <Dialog open={!!confirmingAction} onOpenChange={(open) => !open && setConfirmingAction(null)}>
@@ -1189,6 +1633,70 @@ export default function RequestDetail() {
         </DialogContent>
       </Dialog>
     </AppShell>
+  );
+}
+
+// Campos que cuentan para el indicador de completitud de "Información
+// completa de la solicitud" — le da al KAM una idea rápida de qué tan
+// diligenciada está la solicitud, sin tener que expandir la sección.
+const FULL_INFO_BASE_FIELDS: (keyof RequestItem)[] = [
+  "companyNit", "companyDireccion", "companyTelefono", "companyCorreo",
+  "companyCiiuPrincipal", "companyCiiuPrincipalDesc", "companyTipo", "companyWeb", "companyDescripcion",
+  "applicant", "contactCargo", "contactArea", "contactTelefono", "contactTelefonoSecundario", "contactCorreo", "contactCorreoAlternativo",
+  "necesidad", "competencias", "exito", "resultados", "areaParticipantes", "alimentacion",
+  "formacionPrevia", "observaciones",
+];
+
+function isFilledString(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function getFullInfoCompleteness(req: RequestItem): { filled: number; total: number } {
+  let total = FULL_INFO_BASE_FIELDS.length;
+  let filled = FULL_INFO_BASE_FIELDS.filter((k) => isFilledString(req[k])).length;
+
+  // La formación previa detallada solo cuenta si aplica (el KAM respondió "Sí").
+  if (req.formacionPrevia === "Sí") {
+    const extraFields: (keyof RequestItem)[] = ["descFormacion", "empresaPrevia", "fechaPrevia"];
+    total += extraFields.length;
+    filled += extraFields.filter((k) => isFilledString(req[k])).length;
+  }
+
+  return { filled, total };
+}
+
+function EditableField({
+  label,
+  value,
+  onChange,
+  block = false,
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  block?: boolean;
+  error?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      {label && <Label className="text-[11px] text-muted-foreground">{label}</Label>}
+      {block ? (
+        <Textarea
+          rows={2}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn("text-xs resize-none", error && "border-red-400 focus-visible:ring-red-400")}
+        />
+      ) : (
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn("h-8 text-xs", error && "border-red-400 focus-visible:ring-red-400")}
+        />
+      )}
+      {error && <p className="text-[11px] text-red-500">{error}</p>}
+    </div>
   );
 }
 
