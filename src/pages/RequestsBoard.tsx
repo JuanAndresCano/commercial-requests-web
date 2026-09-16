@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { RequestCard } from "@/components/RequestCard";
+import { KanbanColumn } from "@/components/kanban/KanbanColumn";
+import { RoleBadge } from "@/components/RoleBadge";
 import { STATUS_META, REQUEST_TYPES, type RequestStatus } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -81,9 +83,7 @@ export default function RequestsBoard() {
               <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl font-sans">
                 Tablero de Solicitudes
               </h1>
-              <span className="rounded bg-[#5454e9]/10 px-2.5 py-0.5 text-xs font-bold text-[#5454e9] dark:text-[#865cf0]">
-                {user.roleLabel}
-              </span>
+              <RoleBadge label={user.roleLabel} />
             </div>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
               {filtered.length} {filtered.length === 1 ? "solicitud encontrada" : "solicitudes encontradas"} en el flujo comercial
@@ -236,38 +236,17 @@ export default function RequestsBoard() {
 
         {/* Board View */}
         {view === "board" && (
-          <div className="grid gap-3.5 lg:grid-cols-4">
-            {COLUMNS.map((col) => {
-              const meta = STATUS_META[col];
-              const items = grouped[col] || [];
-              return (
-                <div
-                  key={col}
-                  className="flex flex-col rounded-xl border border-border dark:border-[#222434] bg-secondary/30 dark:bg-[#0f1017] p-2.5"
-                >
-                  <div className="mb-2.5 flex items-center justify-between px-2 py-1">
-                    <div className="flex items-center gap-2">
-                      <span className={cn("h-2 w-2 rounded-full", meta.dot)} />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                        {meta.label}
-                      </h3>
-                    </div>
-                    <span className="rounded-full bg-card dark:bg-[#1a1c28] border border-border dark:border-[#252838] px-2 py-0.5 text-[11px] font-bold text-foreground">
-                      {items.length}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col gap-2.5">
-                    {items.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-border dark:border-[#252838] p-6 text-center text-xs text-muted-foreground">
-                        Sin solicitudes en esta fase
-                      </div>
-                    ) : (
-                      items.map((r) => <RequestCard key={r.id} req={r} />)
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="grid gap-4 lg:grid-cols-4 items-start">
+            {COLUMNS.map((col) => (
+              <KanbanColumn
+                key={col}
+                stage={col}
+                title={STATUS_META[col].label}
+                items={grouped[col] || []}
+                getKey={(r) => r.id}
+                renderItem={(r) => <RequestCard req={r} />}
+              />
+            ))}
           </div>
         )}
 
