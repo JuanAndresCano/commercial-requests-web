@@ -26,7 +26,7 @@ Toda solicitud (`RequestItem`) vive en una de estas 4 etapas, siempre en este or
 | `en-costeo` | En proceso de costeo | Morado `#865cf0` | Se está estructurando el valor económico de la propuesta | Líder de Producto hace el costeo |
 | `entregada` | Entregada | Verde `#4cb979` | La propuesta ya tiene valor aprobado y fue remitida al cliente | KAM confirma el envío al cliente |
 
-**Regla de negocio clave (aunque hoy no está forzada por la UI — ver gaps conocidos):** el valor económico oficial de una solicitud solo debería considerarse válido una vez alcanza `en-costeo` o `entregada`. Antes de eso, la solicitud se muestra como "Pendiente de costeo".
+**Regla de negocio clave (ya forzada por la UI):** el valor económico oficial de una solicitud solo se considera válido una vez alcanza `en-costeo` con un Valor Total Ofertado mayor a $0. Antes de eso, la solicitud se muestra como "Pendiente de costeo" — y no se puede marcar "Entregada" (por el Líder o por el KAM) sin ese valor real, tras corregirse un hueco donde el sistema lo permitía con costeo en $0.
 
 ## Nodos temáticos
 

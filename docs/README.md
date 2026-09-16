@@ -31,6 +31,8 @@ La aplicación se pondrá en producción en pocos días. El objetivo central de 
 | [`05-inventario-pantallas-componentes.md`](./05-inventario-pantallas-componentes.md) | Mapa ruta → pantalla → componentes → rol(es) que la usan, con ubicación de archivos en el código. |
 | [`06-patrones-ui-y-marca.md`](./06-patrones-ui-y-marca.md) | Sistema visual: paleta de marca Icesi, tipografía, patrones de tarjetas/kanban/stepper/badges, tema claro/oscuro. |
 | [`07-gaps-conocidos-y-deuda-tecnica.md`](./07-gaps-conocidos-y-deuda-tecnica.md) | Inventario de huecos funcionales, placeholders sin conectar y atajos de prototipo que **no deben replicarse en producción**. |
+| [`08-preguntas-abiertas-negocio.md`](./08-preguntas-abiertas-negocio.md) | Bitácora de preguntas de negocio que necesitaban decisión de la Líder de Producto (Dianis) — la mayoría ya respondidas e implementadas; quedan unas pocas pendientes de una siguiente ronda. |
+| [`09-guion-de-prueba-dianis.md`](./09-guion-de-prueba-dianis.md) | Guion corto, click a click, para que la Líder de Producto pruebe el prototipo de punta a punta y dé el aval para construir la versión real. |
 
 ## Cómo correr el prototipo localmente
 
@@ -40,4 +42,4 @@ npm install
 npm run dev
 ```
 
-Al entrar, la pantalla de login (`/login`) permite elegir cualquiera de los 4 roles con un clic (no hay autenticación real) — ver [`02-roles-y-permisos.md`](./02-roles-y-permisos.md). También existe un selector de rol dentro de `AppShell` (barra lateral) y dentro de `RequestDetail` para simular cambios de rol sin cerrar sesión; es una ayuda de prototipo, no una función de producto (ver gaps conocidos).
+Al entrar, la pantalla de login (`/login`) permite elegir cualquiera de los 4 roles con un clic (no hay autenticación real, solo valida que el correo coincida con una cuenta de prueba) — ver [`02-roles-y-permisos.md`](./02-roles-y-permisos.md). También existe un selector de rol dentro de `AppShell` (dropdown de rol en la topbar) para cambiar de rol sin cerrar sesión; es una ayuda de prototipo, no una función de producto (ver gaps conocidos). El dropdown del avatar en la barra lateral es distinto: solo tiene "Restablecer datos de ejemplo" y "Cerrar sesión".

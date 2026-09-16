@@ -4,33 +4,33 @@ Inventario de huecos funcionales, placeholders sin conectar y atajos propios de 
 
 ## 🔴 Funcionales (afectan lógica de negocio, no solo estética)
 
-### 1. `RequestSummary.tsx` — vista "Resumen" con contenido 100% fijo
-La ruta `/solicitudes/:id/resumen` (accesible desde el botón "Resumen" en `RequestDetail.tsx`) **no lee los datos reales de la solicitud**. Todo el contenido (nombre de empresa, contacto, requerimiento, formación previa) está hardcodeado en un array `SECTIONS` dentro del propio archivo — muestra siempre "Razón social S.A.", "Juan Pérez", "Nombre del programa", etc., sin importar qué solicitud se abra. Solo el header superior (ID, título, badges de estado/tipo) y la fila de "Nodo / Líder de Producto / KAM / Profesor" sí leen `req` real.
-**Implicación:** esta pantalla no es funcional hoy más allá de mostrar el layout. Si se retoma, debe reconstruirse para leer todos los campos capturados en el wizard de `NewRequest.tsx`.
+### 1. ✅ RESUELTO — `RequestSummary.tsx` — vista "Resumen" con contenido 100% fijo
+La ruta `/solicitudes/:id/resumen` mostraba siempre datos de ejemplo fijos, sin importar qué solicitud se abriera. **Se eliminó la pantalla completa** (commit `6814a9f`) — quedan solo 2 pantallas por solicitud: el tablero y el detalle, que sí muestra la información real.
 
-### 2. El botón "Enviar a cliente" (KAM) no está condicionado a que exista costeo real
-En `RequestDetail.tsx`, el botón que el KAM usa para marcar `entregada` solo se deshabilita si `req.status === "entregada"`. No verifica que el estado sea `en-costeo` primero. Un KAM podría, en teoría, marcar como entregada una solicitud que sigue en `nueva` o `en-experto`, sin que el Líder de Producto haya hecho costeo.
-**Implicación de negocio:** el flujo esperado es lineal y con handoff — este botón debería estar deshabilitado (o con confirmación explícita de excepción) hasta que `status === "en-costeo"`.
+### 2. ✅ RESUELTO — El botón "Enviar a cliente" (KAM) no estaba condicionado a que exista costeo real
+El botón ya solo aparece cuando `req.status === "en-costeo"`, y su clic pasa por un diálogo de confirmación (commit `6269cde`) — un KAM ya no puede marcar como entregada una solicitud sin costeo.
 
-### 3. Avance de etapa sin validar que el trabajo previo esté completo
-En `ProductLeaderDashboard.tsx`, los botones "Pasar a Experto" / "Pasar a Costeo" / "Entregar" en cada tarjeta Kanban ejecutan `updateStatus` directamente, sin comprobar precondiciones:
-- Se puede pasar de `nueva` a `en-experto` **sin haber asignado docente**.
-- Se puede pasar a `en-costeo` sin haber completado ningún dato de costeo.
-- Se puede "Entregar" con `totalOfferedCop` en su valor por defecto sin revisión.
-**Implicación:** si se quiere reforzar la integridad del proceso, estas transiciones deberían validar las precondiciones de la etapa anterior (esto es una decisión de producto a confirmar, no algo que deba "arreglarse" sin validar con el equipo primero).
+### 3. ✅ RESUELTO — Avance de etapa sin validar que el trabajo previo esté completo
+En `ProductLeaderDashboard.tsx` y `RequestDetail.tsx`, los botones de avance de etapa:
+- ✅ No se puede pasar de `nueva` a `en-experto` sin haber asignado docente.
+- ✅ No se puede marcar `entregada` sin que `costing.totalOfferedCop` sea mayor a `0` — se encontró (reporte directo) que se podía entregar con costeo en $0. El botón "Enviar a cliente" del KAM (única acción que hoy marca `entregada`, ver el bullet siguiente) queda deshabilitado hasta que exista un valor real, con una validación adicional dentro del handler por si el botón queda desincronizado.
+- ✅ "Pasar a Experto" y "Pasar a Costeo" ahora piden confirmación explícita (con empresa + título de la solicitud a la vista) antes de ejecutar — antes cambiaban de estado al primer clic, riesgoso en una tarjeta de Kanban densa con varios botones pegados.
+- ✅ **El Líder de Producto podía marcar "Entregada" (enviar al cliente) directamente, saltándose al KAM por completo.** Se encontró (reporte directo) que en `RequestDetail.tsx`, cuando `req.status === "en-costeo"`, el Líder tenía su propio botón "Marcar Entregada" que llamaba exactamente al mismo handler que el "Enviar a cliente" del KAM — es decir, **cualquiera de los dos roles podía cerrar el ciclo comercial**, cuando la regla de negocio (`08`, pregunta 13: "después de que le llegue al KAM, ellos puedan volver a enviarla con observaciones") asume que el paso final al cliente es exclusivo del KAM. Se quitó el botón del Líder por completo: ahora, al dejar el costeo listo (`en-costeo` con valor > $0), la tarjeta del Líder (Kanban y detalle) solo muestra una etiqueta pasiva "Listo para el KAM" / "Costeo listo — a la espera del KAM" — sin ninguna acción que mueva el estado. Solo el KAM, desde su "Enviar a cliente", puede pasar la solicitud a `entregada`.
 
 ### 4. Dashboard genérico roto para `lider-nodo` y `profesor`
 En `src/pages/Dashboard.tsx`, cuando el rol no es `kam` ni `lider-producto`, el componente cae en una rama de código que **usa variables nunca declaradas** (`displayedTableRequests`, `reassigningRequest`, `selectedNewLeader`, `selectedNewNode`, `reassignReason`, `reassignNotes`, `handleOpenReassign`, `handleConfirmReassign`, `listas`). Esto provocaría un `ReferenceError` en tiempo de ejecución si un usuario con rol Líder de Nodo o Profesor visita `/dashboard`.
 **No afecta** a KAM ni Líder de Producto (tienen componentes propios con `return` anticipado antes de llegar a ese código). Se documenta porque el flujo de reasignación menciona explícitamente "Líder de Nodo" conceptualmente, y porque cualquier trabajo futuro sobre esos dos roles debe empezar arreglando esto antes que nada.
 
-### 5. Tarjeta "Especificaciones del Servicio" con valores fijos
-En `RequestDetail.tsx` (columna lateral, visible para todos los roles), los campos "Dedicación estimada" (`60 horas`), "Modalidad" (`Híbrida`) y "Participantes" (`15 - 20 personas`) están escritos literalmente en el JSX, no leídos de `req` ni del formulario (`horas`, `modalidad`, `participantes` sí se capturan en el Paso 3 del wizard, pero nunca se guardan en `RequestItem` ni se muestran aquí).
-**Implicación:** información capturada por el KAM se pierde/no se refleja en el detalle.
+### 5. ✅ RESUELTO — Tarjeta "Especificaciones del Servicio" con valores fijos
+`horas`, `modalidad` y `participantes` ya se guardan en `RequestItem` y se leen en el detalle (con fallback "Sin especificar"). Además, el Líder de Producto puede corregirlos si el KAM los diligenció mal (commit `722c85a`, confirmado con Dianis en `08`, pregunta 5).
+
+### 11. "Requiere asesor externo" no está enlazado a una asignación real
+En `ProposalCostingModule.tsx`, el switch "¿Requiere asesor externo?" es independiente del docente realmente asignado (`req.professorType`/`req.professor`) — se puede activar el switch sin que exista ningún consultor externo vinculado, o dejarlo apagado con un consultor externo sí asignado. **Detectado pero no cerrado a propósito**: no hay una regla de negocio de Dianis que respalde una u otra solución (ej. deshabilitar el switch hasta que se asigne un externo, o sincronizarlo automáticamente). Ver `04-modelo-de-datos-logico.md`.
 
 ## 🟡 De prototipo (esperables mientras no hay backend, pero a tener en cuenta)
 
 ### 6. Sin autenticación ni backend real
-Todo vive en `localStorage` del navegador (`AuthContext.tsx`). No hay sesiones multiusuario, no hay control de acceso real, cualquiera puede cambiar de rol con un clic desde dos sitios distintos en la UI (dropdown del avatar en el rail lateral, dropdown en la topbar, **y además** un selector adicional dentro de `RequestDetail.tsx` — "Vista: Líder de Producto / KAM"). Es intencional para poder probar todos los roles rápido durante el diseño, pero **no debe existir en producción** tal cual.
+Todo vive en `localStorage` del navegador (`AuthContext.tsx`). No hay sesiones multiusuario ni control de acceso real — cualquiera puede cambiar de rol con un clic desde el dropdown de rol en la topbar. Es intencional para poder probar todos los roles rápido durante el diseño, pero **no debe existir en producción** tal cual. (El selector adicional que existía dentro de `RequestDetail.tsx` y el que estaba duplicado en el dropdown del avatar ya se eliminaron — solo queda un sitio para cambiar de rol.)
 
 ### 7. `id` de solicitud generado de forma ingenua
 `REQ-2026-${requests.length + 145}` en `AuthContext.addRequest` — no es un identificador robusto (se rompe con borrados, concurrencia, o cambio de año). Solo válido como placeholder visual.
