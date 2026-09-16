@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Plus,
@@ -12,8 +12,6 @@ import {
   CheckCircle2,
   DollarSign,
   Building2,
-  UserCheck,
-  Layers,
   TrendingUp,
   Sparkles,
   LayoutGrid,
@@ -24,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import {
   RequestItem,
   RequestStatus,
-  STATUS_META,
   formatCop,
   formatCompactCop,
   getRelativeTime,
@@ -32,83 +29,109 @@ import {
 import { cn } from "@/lib/utils";
 import { IcesiCenefa } from "@/components/IcesiLogo";
 import { UrgencyBadge } from "@/components/StatusBadge";
+import { RoleBadge } from "@/components/RoleBadge";
 import { RequestCard } from "@/components/RequestCard";
+import { StageKpiCard } from "@/components/kanban/StageKpiCard";
+import { KanbanColumn } from "@/components/kanban/KanbanColumn";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 
 const BOARD_COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "entregada"];
+
+// Etiquetas comerciales para el KAM: mismo estado real del pipeline, pero sin
+// vocabulario interno de coordinación académica ("en proceso por experto").
+// Se usan igual en el Kanban, la tabla y las tarjetas KPI para que las 3
+// vistas siempre coincidan — confirmado con Dianis (docs/08, pregunta 2).
+const KAM_STAGE_LABELS: Record<RequestStatus, string> = {
+  nueva: "Nueva",
+  "en-experto": "En Proceso",
+  "en-costeo": "Lista para Entregar",
+  entregada: "Entregada",
+};
 
 interface KamCommandCenterProps {
   requests: RequestItem[];
   userName: string;
 }
 
-type FilterType = "all" | "en-proceso" | "listas-para-entregar" | "entregada" | "cotizado";
+type FilterType = RequestStatus | "all";
 
 export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
-  const [scopeFilter, setScopeFilter] = useState<"mis" | "todas">("mis");
-  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<"tabla" | "kanban">("tabla");
+  // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
+  // el KAM al volver del detalle de una propuesta — antes se reiniciaba porque
+  // el dashboard se desmonta y remonta en cada navegación.
+  const [activeFilter, setActiveFilter] = usePersistentState<FilterType>(
+    "icesi_kam_dashboard_filter_v1",
+    "all"
+  );
+  const [searchQuery, setSearchQuery] = usePersistentState(
+    "icesi_kam_dashboard_search_v1",
+    ""
+  );
+  const [viewMode, setViewMode] = usePersistentState<"tabla" | "kanban">(
+    "icesi_kam_dashboard_view_v1",
+    "tabla"
+  );
 
   const firstName = userName ? userName.split(" ")[0] : "Andrea";
 
-  // Solicitudes propias vs. las de todo el equipo comercial
+  // El KAM es dueño de su propia cartera de clientes — solo ve sus propias
+  // solicitudes, sin acceso al pipeline comercial de sus compañeros.
   const myRequests = requests.filter((r) => r.kam === userName);
-  const activeDataset = scopeFilter === "mis" ? myRequests : requests;
+  const activeDataset = myRequests;
 
-  // KPIs calculations según la nomenclatura oficial solicitada por Líder de Producto
-  // (siempre respetan el alcance activo: mías o todo el equipo)
-  const totalCount = activeDataset.length;
-  // "En Proceso": Solicitudes que están siendo gestionadas (nuevas o en formulación con experto)
-  const enProcesoCount = activeDataset.filter((r) => r.status === "nueva" || r.status === "en-experto").length;
-  // "Listas para Entregar": Solicitudes con costeo elaborado y listas para entrega al cliente
+  // Conteos por estado real — cada uno mapea 1:1 a una columna del Kanban y
+  // a una tarjeta KPI, para que nunca se desalineen entre vistas.
+  const nuevaCount = activeDataset.filter((r) => r.status === "nueva").length;
+  const enProcesoCount = activeDataset.filter((r) => r.status === "en-experto").length;
   const listasParaEntregarCount = activeDataset.filter((r) => r.status === "en-costeo").length;
   const entregadasCount = activeDataset.filter((r) => r.status === "entregada").length;
+  const stageCounts: Record<RequestStatus, number> = {
+    nueva: nuevaCount,
+    "en-experto": enProcesoCount,
+    "en-costeo": listasParaEntregarCount,
+    entregada: entregadasCount,
+  };
 
-  // Pipeline Cotizado: propuestas en "en-costeo" o "entregada" (con valor económico estimado)
+  // Métricas agregadas (no son una etapa del pipeline) — se muestran como
+  // dato secundario, no como tarjeta-filtro principal.
+  const totalCount = activeDataset.length;
   const pipelineTotal = activeDataset
     .filter((r) => r.status === "en-costeo" || r.status === "entregada")
     .reduce((sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0), 0);
 
-  // El aviso de "listas para entregar" es un recordatorio personal: siempre cuenta
-  // lo propio del KAM, sin importar si está viendo el alcance "Todas" en ese momento.
-  const misListasParaEntregarCount = myRequests.filter((r) => r.status === "en-costeo").length;
+  const misListasParaEntregarCount = listasParaEntregarCount;
 
-  // Filtered requests for table
+  const matchesSearch = (req: RequestItem, q: string) =>
+    req.id.toLowerCase().includes(q) ||
+    req.company.toLowerCase().includes(q) ||
+    req.title.toLowerCase().includes(q) ||
+    req.type.toLowerCase().includes(q) ||
+    req.productLeader.toLowerCase().includes(q) ||
+    (req.applicant ? req.applicant.toLowerCase().includes(q) : false);
+
+  // Vista Tabla: el estado sí oculta filas — ahí aporta valor real (reduce una lista larga).
   const filteredRequests = useMemo(() => {
     return activeDataset.filter((req) => {
-      // Search matching: company, title, ID, applicant, productLeader
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchesQuery =
-          req.id.toLowerCase().includes(q) ||
-          req.company.toLowerCase().includes(q) ||
-          req.title.toLowerCase().includes(q) ||
-          req.type.toLowerCase().includes(q) ||
-          req.productLeader.toLowerCase().includes(q) ||
-          (req.applicant && req.applicant.toLowerCase().includes(q));
-
-        if (!matchesQuery) return false;
+      if (searchQuery.trim() && !matchesSearch(req, searchQuery.toLowerCase().trim())) return false;
+      if (activeFilter !== "all") {
+        return req.status === activeFilter;
       }
-
-      // Status / KPI filter
-      if (activeFilter === "en-proceso") {
-        return req.status === "nueva" || req.status === "en-experto";
-      }
-      if (activeFilter === "listas-para-entregar") {
-        return req.status === "en-costeo";
-      }
-      if (activeFilter === "cotizado") {
-        return req.status === "en-costeo" || req.status === "entregada" || (req.totalCostCop && req.totalCostCop > 0 && req.status !== "nueva");
-      }
-      if (activeFilter === "entregada") {
-        return req.status === "entregada";
-      }
-
       return true;
     });
   }, [activeDataset, searchQuery, activeFilter]);
 
-  // Agrupación por estado real (para la vista Kanban) — respeta el mismo dataset filtrado que la tabla
+  // Vista Kanban: la columna ya ES el estado, así que el filtro de estado no debe vaciar el
+  // contenido (no aporta nada nuevo) — solo el buscador, que sí cruza información que el
+  // tablero no muestra por sí solo. El filtro activo solo dispara el "spotlight" (resaltar +
+  // scroll a la columna), no oculta nada.
+  const kanbanRequests = useMemo(() => {
+    return activeDataset.filter((req) => {
+      if (searchQuery.trim() && !matchesSearch(req, searchQuery.toLowerCase().trim())) return false;
+      return true;
+    });
+  }, [activeDataset, searchQuery]);
+
+  // Agrupación por estado real (para la vista Kanban)
   const groupedByStatus = useMemo(() => {
     const g: Record<RequestStatus, RequestItem[]> = {
       nueva: [],
@@ -116,14 +139,27 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
       "en-costeo": [],
       entregada: [],
     };
-    filteredRequests.forEach((r) => {
+    kanbanRequests.forEach((r) => {
       if (g[r.status]) g[r.status].push(r);
     });
     return g;
-  }, [filteredRequests]);
+  }, [kanbanRequests]);
 
-  const handleCardClick = (filter: FilterType) => {
-    setActiveFilter((prev) => (prev === filter ? "all" : filter));
+  // En Kanban, las columnas ya son el filtro — la tarjeta KPI en esa vista no
+  // oculta nada (no aportaba valor, ver docs), sino que "aísla" esa columna a
+  // pantalla completa para revisar más tarjetas cómodamente sin salir del
+  // Kanban. Es un estado de enfoque, no un filtro de datos.
+  const [isolatedStage, setIsolatedStage] = usePersistentState<RequestStatus | null>(
+    "icesi_kam_dashboard_isolated_v1",
+    null
+  );
+
+  const handleCardClick = (stage: RequestStatus) => {
+    if (viewMode === "tabla") {
+      setActiveFilter((prev) => (prev === stage ? "all" : stage));
+    } else {
+      setIsolatedStage((prev) => (prev === stage ? null : stage));
+    }
   };
 
   const getServiceTypeBadge = (type: string) => {
@@ -161,9 +197,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
             <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
               Hola, {firstName}
             </h1>
-            <span className="rounded bg-[#e4eb60]/25 px-2 py-0.5 text-xs font-bold text-[#757a07] dark:text-[#e4eb60]">
-              KAM Icesi
-            </span>
+            <RoleBadge label="KAM Icesi" />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Panel de seguimiento, prospección y gestión de propuestas corporativas
@@ -171,34 +205,6 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="inline-flex rounded-lg border border-border dark:border-[#252838] p-0.5 bg-secondary/30">
-            <button
-              type="button"
-              onClick={() => setScopeFilter("mis")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5",
-                scopeFilter === "mis"
-                  ? "bg-[#5454e9] text-white shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <UserCheck className="h-3.5 w-3.5" />
-              <span>Mis Solicitudes ({myRequests.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setScopeFilter("todas")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5",
-                scopeFilter === "todas"
-                  ? "bg-[#5454e9] text-white shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Layers className="h-3.5 w-3.5" />
-              <span>Todas ({requests.length})</span>
-            </button>
-          </div>
           <Button
             asChild
             className="h-10 rounded-lg bg-[#5454e9] px-4 font-bold text-white shadow-sm hover:bg-[#4343d3] transition-all"
@@ -230,11 +236,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           </div>
           <button
             type="button"
-            onClick={() => {
-              setScopeFilter("mis");
-              setActiveFilter("listas-para-entregar");
-            }}
-            className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 rounded-lg bg-[#4cb979] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#3ea569]"
+            onClick={() => handleCardClick("en-costeo")}
+            className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 rounded-lg bg-icesi-blue px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#4343d0]"
           >
             Ver listas
             <ArrowRight className="h-3.5 w-3.5" />
@@ -242,115 +245,59 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         </div>
       )}
 
-      {/* 2. TARJETAS DE MÉTRICAS INTERACTIVAS (KPIs con Filtro) */}
+      {/* Dato agregado secundario — no es una etapa del pipeline, así que ya
+          no ocupa una tarjeta-filtro completa (evita que se confunda con un
+          estado del Kanban). */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-0.5 text-xs text-muted-foreground">
+        <span>
+          <strong className="font-bold text-foreground">{totalCount}</strong> solicitudes en total
+        </span>
+        <span className="text-border dark:text-[#252838]">·</span>
+        <span>
+          <strong className="font-bold text-foreground">{formatCompactCop(pipelineTotal)}</strong> en pipeline cotizado
+        </span>
+      </div>
+
+      {/* 2. TARJETAS DE MÉTRICAS INTERACTIVAS — cada una mapea 1:1 a una etapa
+          real del pipeline, igual que el Kanban. En Tabla filtran (ocultan
+          filas); en Kanban aíslan esa columna a pantalla completa. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {/* KPI 1: Total Solicitudes */}
-        <button
-          type="button"
-          onClick={() => handleCardClick("all")}
-          className={cn(
-            "group relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all hover:border-[#5454e9]/50",
-            activeFilter === "all"
-              ? "border-[#5454e9] ring-2 ring-[#5454e9]/20 bg-[#5454e9]/5 dark:bg-[#5454e9]/10"
-              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622]"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Total Solicitudes</span>
-            <span className="inline-flex items-center rounded-md border border-border bg-secondary px-2 py-0.5 text-[11px] font-bold text-foreground">
-              Total
-            </span>
-          </div>
-          <div className="mt-3">
-            <p className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              {totalCount}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {activeFilter === "all" ? "✓ Filtro activo" : "Todas las solicitudes registradas"}
-            </p>
-          </div>
-        </button>
-
-        {/* KPI 2: En Proceso */}
-        <button
-          type="button"
-          onClick={() => handleCardClick("en-proceso")}
-          className={cn(
-            "group relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all hover:border-[#5454e9]/50",
-            activeFilter === "en-proceso"
-              ? "border-[#5454e9] ring-2 ring-[#5454e9]/20 bg-[#5454e9]/10 dark:bg-[#5454e9]/15"
-              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622]"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">En Proceso</span>
-            <span className="inline-flex items-center rounded-md border border-[#5454e9]/30 bg-[#5454e9]/10 px-2 py-0.5 text-[11px] font-bold text-[#5454e9]">
-              {enProcesoCount} en proceso
-            </span>
-          </div>
-          <div className="mt-3">
-            <p className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              {enProcesoCount}
-            </p>
-            <p className="mt-1 text-[11px] text-[#5454e9] dark:text-[#865cf0]">
-              {activeFilter === "en-proceso" ? "✓ Filtro activo" : "En formulación y asignación"}
-            </p>
-          </div>
-        </button>
-
-        {/* KPI 3: Listas para Entregar */}
-        <button
-          type="button"
-          onClick={() => handleCardClick("listas-para-entregar")}
-          className={cn(
-            "group relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all hover:border-[#4cb979]/50",
-            activeFilter === "listas-para-entregar"
-              ? "border-[#4cb979] ring-2 ring-[#4cb979]/20 bg-[#4cb979]/10 dark:bg-[#4cb979]/15"
-              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622]"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Listas para Entregar</span>
-            <span className="inline-flex items-center rounded-md border border-[#4cb979]/30 bg-[#4cb979]/10 px-2 py-0.5 text-[11px] font-bold text-[#4cb979]">
-              {listasParaEntregarCount} listas
-            </span>
-          </div>
-          <div className="mt-3">
-            <p className="font-display text-2xl font-bold tracking-tight text-[#4cb979] sm:text-3xl">
-              {listasParaEntregarCount}
-            </p>
-            <p className="mt-1 text-[11px] font-medium text-[#4cb979]">
-              {activeFilter === "listas-para-entregar" ? "✓ Filtro activo" : "Costeo listo para enviar al cliente"}
-            </p>
-          </div>
-        </button>
-
-        {/* KPI 4: Pipeline Cotizado */}
-        <button
-          type="button"
-          onClick={() => handleCardClick("cotizado")}
-          className={cn(
-            "group relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all hover:border-[#865cf0]/50",
-            activeFilter === "cotizado"
-              ? "border-[#865cf0] ring-2 ring-[#865cf0]/20 bg-[#865cf0]/10 dark:bg-[#865cf0]/15"
-              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622]"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Pipeline Cotizado</span>
-            <span className="inline-flex items-center rounded-md border border-[#865cf0]/30 bg-[#865cf0]/10 px-2 py-0.5 text-[11px] font-bold text-[#865cf0]">
-              COP
-            </span>
-          </div>
-          <div className="mt-3">
-            <p className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              {formatCompactCop(pipelineTotal)}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {activeFilter === "cotizado" ? "✓ Filtro activo" : "Propuestas aprobadas"}
-            </p>
-          </div>
-        </button>
+        <StageKpiCard
+          stage="nueva"
+          label="Nueva"
+          count={nuevaCount}
+          hint="Recién enviadas, sin asignar"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeFilter === "nueva" : isolatedStage === "nueva"}
+          onClick={() => handleCardClick("nueva")}
+        />
+        <StageKpiCard
+          stage="en-experto"
+          label="En Proceso"
+          count={enProcesoCount}
+          hint="El Líder de Producto la está formulando"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeFilter === "en-experto" : isolatedStage === "en-experto"}
+          onClick={() => handleCardClick("en-experto")}
+        />
+        <StageKpiCard
+          stage="en-costeo"
+          label="Lista para Entregar"
+          count={listasParaEntregarCount}
+          hint="Costeo listo para enviar al cliente"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeFilter === "en-costeo" : isolatedStage === "en-costeo"}
+          onClick={() => handleCardClick("en-costeo")}
+        />
+        <StageKpiCard
+          stage="entregada"
+          label="Entregada"
+          count={entregadasCount}
+          hint="Cerradas con el cliente"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeFilter === "entregada" : isolatedStage === "entregada"}
+          onClick={() => handleCardClick("entregada")}
+        />
       </div>
 
       {/* 3. TABLA DE ACTIVIDAD RECIENTE Y SEGUIMIENTO COMERCIAL */}
@@ -415,14 +362,11 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                 )}
               </div>
 
-              {/* Pill de filtro activo */}
-              {activeFilter !== "all" && (
+              {/* Pill de filtro activo — solo aplica en Tabla, donde el filtro sí oculta filas */}
+              {viewMode === "tabla" && activeFilter !== "all" && (
                 <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-2.5 py-1 text-xs font-medium text-[#5454e9] dark:text-[#865cf0]">
                   <span>
-                    {activeFilter === "en-proceso" && `En proceso (${enProcesoCount})`}
-                    {activeFilter === "listas-para-entregar" && `Listas para entregar (${listasParaEntregarCount})`}
-                    {activeFilter === "cotizado" && `Pipeline Cotizado (${listasParaEntregarCount})`}
-                    {activeFilter === "entregada" && `Entregadas (${entregadasCount})`}
+                    {KAM_STAGE_LABELS[activeFilter]} ({stageCounts[activeFilter]})
                   </span>
                   <button
                     type="button"
@@ -436,7 +380,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               )}
             </div>
 
-            {activeFilter !== "all" && (
+            {viewMode === "tabla" && activeFilter !== "all" && (
               <button
                 type="button"
                 onClick={() => setActiveFilter("all")}
@@ -466,7 +410,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       <div className="mx-auto max-w-sm">
-                        {scopeFilter === "mis" && !searchQuery && activeFilter === "all" && myRequests.length === 0 ? (
+                        {!searchQuery && activeFilter === "all" && myRequests.length === 0 ? (
                           <>
                             <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
                             <p className="mt-1 text-xs text-muted-foreground">
@@ -475,9 +419,6 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                             <div className="mt-3 flex items-center justify-center gap-2">
                               <Button asChild size="sm" className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white">
                                 <Link to="/solicitudes/nueva">Crear mi primera solicitud</Link>
-                              </Button>
-                              <Button variant="outline" size="sm" onClick={() => setScopeFilter("todas")} className="text-xs">
-                                Ver las del equipo
                               </Button>
                             </div>
                           </>
@@ -510,8 +451,6 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                 ) : (
                   filteredRequests.map((r) => {
                     const isReady = r.status === "en-costeo";
-                    const isEnProceso = r.status === "nueva" || r.status === "en-experto";
-                    const isEntregada = r.status === "entregada";
                     const relativeTime = getRelativeTime(r.id);
 
                     return (
@@ -599,30 +538,30 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                           )}
                         </td>
 
-                        {/* 5. Estado */}
+                        {/* 5. Estado — mismas 4 etiquetas y colores que el Kanban */}
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          {isEnProceso && (
+                          {r.status === "nueva" && (
                             <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-2.5 py-0.5 text-xs font-medium text-[#5454e9] dark:text-[#865cf0]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9] animate-pulse" />
-                              En proceso
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9]" />
+                              Nueva
+                            </span>
+                          )}
+                          {r.status === "en-experto" && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e9683b]/30 bg-[#e9683b]/10 px-2.5 py-0.5 text-xs font-medium text-[#e9683b]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#e9683b] animate-pulse" />
+                              En Proceso
                             </span>
                           )}
                           {isReady && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4cb979]/30 bg-[#4cb979]/10 px-2.5 py-0.5 text-xs font-medium text-[#4cb979]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#4cb979]" />
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#865cf0]/30 bg-[#865cf0]/10 px-2.5 py-0.5 text-xs font-medium text-[#865cf0]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#865cf0]" />
                               Lista para entregar
                             </span>
                           )}
-                          {isEntregada && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#865cf0]/30 bg-[#865cf0]/10 px-2.5 py-0.5 text-xs font-medium text-[#865cf0]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#865cf0]" />
+                          {r.status === "entregada" && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4cb979]/30 bg-[#4cb979]/10 px-2.5 py-0.5 text-xs font-medium text-[#4cb979]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#4cb979]" />
                               Entregada
-                            </span>
-                          )}
-                          {!isEnProceso && !isReady && !isEntregada && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-2.5 py-0.5 text-xs font-medium text-[#5454e9]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9]" />
-                              En proceso
                             </span>
                           )}
                         </td>
@@ -633,7 +572,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                             <Button
                               asChild
                               size="sm"
-                              className="h-8 rounded-full bg-[#4cb979] hover:bg-[#3ea569] px-3.5 text-xs font-bold text-white shadow-xs transition-colors"
+                              className="h-8 rounded-full bg-icesi-blue hover:bg-[#4343d0] px-3.5 text-xs font-bold text-white shadow-xs transition-colors"
                             >
                               <Link to={`/solicitudes/${r.id}`}>
                                 <span>Ver propuesta</span>
@@ -661,10 +600,10 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
           {/* Vista Kanban por estado */}
           {viewMode === "kanban" && (
-            filteredRequests.length === 0 ? (
+            kanbanRequests.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                 <div className="mx-auto max-w-sm">
-                  {scopeFilter === "mis" && !searchQuery && activeFilter === "all" && myRequests.length === 0 ? (
+                  {!searchQuery && myRequests.length === 0 ? (
                     <>
                       <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -674,30 +613,24 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                         <Button asChild size="sm" className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white">
                           <Link to="/solicitudes/nueva">Crear mi primera solicitud</Link>
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => setScopeFilter("todas")} className="text-xs">
-                          Ver las del equipo
-                        </Button>
                       </div>
                     </>
                   ) : (
                     <>
                       <p className="font-medium text-foreground">No se encontraron solicitudes</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {searchQuery || activeFilter !== "all"
-                          ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
+                        {searchQuery
+                          ? "Intenta modificar los términos de búsqueda."
                           : "No hay registros disponibles en este momento."}
                       </p>
-                      {(searchQuery || activeFilter !== "all") && (
+                      {searchQuery && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
-                            setSearchQuery("");
-                            setActiveFilter("all");
-                          }}
+                          onClick={() => setSearchQuery("")}
                           className="mt-3 text-xs"
                         >
-                          Restablecer filtros
+                          Limpiar búsqueda
                         </Button>
                       )}
                     </>
@@ -705,38 +638,24 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                 </div>
               </div>
             ) : (
-              <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-                {BOARD_COLUMNS.map((col) => {
-                  const meta = STATUS_META[col];
-                  const items = groupedByStatus[col] || [];
-                  return (
-                    <div
-                      key={col}
-                      className="flex flex-col rounded-xl border border-border dark:border-[#222434] bg-secondary/30 dark:bg-[#0f1017] p-2.5"
-                    >
-                      <div className="mb-2.5 flex items-center justify-between px-2 py-1">
-                        <div className="flex items-center gap-2">
-                          <span className={cn("h-2 w-2 rounded-full", meta.dot)} />
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                            {meta.label}
-                          </h3>
-                        </div>
-                        <span className="rounded-full bg-card dark:bg-[#1a1c28] border border-border dark:border-[#252838] px-2 py-0.5 text-[11px] font-bold text-foreground">
-                          {items.length}
-                        </span>
-                      </div>
-                      <div className="flex flex-1 flex-col gap-2.5">
-                        {items.length === 0 ? (
-                          <div className="rounded-xl border border-dashed border-border dark:border-[#252838] p-6 text-center text-xs text-muted-foreground">
-                            Sin solicitudes en esta fase
-                          </div>
-                        ) : (
-                          items.map((r) => <RequestCard key={r.id} req={r} />)
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div
+                className={cn(
+                  "grid gap-4 p-4 items-start",
+                  isolatedStage ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-4"
+                )}
+              >
+                {(isolatedStage ? [isolatedStage] : BOARD_COLUMNS).map((col) => (
+                  <KanbanColumn
+                    key={col}
+                    stage={col}
+                    title={KAM_STAGE_LABELS[col]}
+                    items={groupedByStatus[col] || []}
+                    getKey={(r) => r.id}
+                    isolated={!!isolatedStage}
+                    onExitIsolation={() => setIsolatedStage(null)}
+                    renderItem={(r) => <RequestCard req={r} />}
+                  />
+                ))}
               </div>
             )
           )}
