@@ -63,12 +63,12 @@ export function ThemeToggle({
       aria-label={isDark ? "Activar modo claro" : "Activar modo oscuro"}
     >
       {isDark ? (
-        <Sun className="h-5 w-5 text-zinc-300 hover:text-[#e4eb60] transition-colors" />
+        <Sun className="h-5 w-5 shrink-0 text-zinc-300 hover:text-[#e4eb60] transition-colors" />
       ) : (
-        <Moon className="h-5 w-5 text-slate-700 hover:text-[#5454e9] transition-colors" />
+        <Moon className="h-5 w-5 shrink-0 text-slate-700 hover:text-[#5454e9] transition-colors" />
       )}
       {showLabel && (
-        <span className="ml-2 text-xs font-medium">
+        <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:max-w-[160px] group-hover:opacity-100 group-hover:delay-75">
           {isDark ? "Modo claro" : "Modo oscuro"}
         </span>
       )}

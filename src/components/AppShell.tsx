@@ -11,13 +11,14 @@ import {
   ChevronDown,
   Menu,
   X,
+  RotateCcw,
 } from "@/components/icons";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth, UserRole, ROLE_CONFIGS } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IcesiLogo, IcesiSymbol, IcesiCenefa } from "@/components/IcesiLogo";
-import { AndyAssistantWidget } from "@/components/AndyAssistantWidget";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +36,20 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
   const location = useLocation();
   const { pathname, search } = location;
   const navigate = useNavigate();
-  const { user, logout, switchRole } = useAuth();
+  const { user, logout, switchRole, resetData } = useAuth();
+
+  const handleResetData = () => {
+    if (window.confirm("¿Restablecer todas las solicitudes a los datos de ejemplo? Se perderá cualquier cambio hecho en esta sesión de prueba.")) {
+      resetData();
+      // Los tableros guardan filtros/vista en su propio estado de React
+      // (usePersistentState) que solo se relee de localStorage al montar el
+      // componente — sin recargar, un filtro que ya estaba activo (ej. "Sin
+      // docente") seguiría aplicado en memoria aunque los datos ya se hayan
+      // restablecido. Recargar garantiza que todo arranque limpio.
+      toast.success("Datos de ejemplo restablecidos");
+      window.setTimeout(() => window.location.reload(), 400);
+    }
+  };
   const { theme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -128,30 +142,39 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
         {/* Left Navigation Rail */}
         <aside
           id="icesi-sidebar-rail"
-          className="fixed inset-y-0 left-0 z-30 hidden w-16 flex-col items-center justify-between border-r border-border dark:border-[#1e202d] bg-[#090a0e] text-white py-4 lg:flex select-none"
+          className="group fixed inset-y-0 left-0 z-30 hidden w-16 hover:w-64 flex-col justify-between overflow-hidden border-r border-border dark:border-[#1e202d] bg-[#090a0e] text-white py-4 lg:flex select-none transition-[width,box-shadow] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:shadow-2xl"
         >
           {/* Top Section: Icesi Sun Wheel Symbol & User Avatar */}
-          <div className="flex flex-col items-center gap-4 w-full px-2">
+          <div className="flex flex-col gap-4 w-full px-2">
             <Link
               to="/dashboard"
-              className="flex h-11 w-11 items-center justify-center rounded-xl transition-transform hover:scale-105"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform hover:scale-105"
               title="Universidad Icesi - Solicitudes Comerciales"
               aria-label="Ir al inicio"
             >
               <IcesiSymbol size={32} color="#ffffff" />
             </Link>
 
-            {/* User Avatar with status */}
+            {/* User Avatar with status — el nombre se revela cuando el rail
+                se expande al pasar el cursor (igual al portal de estudiantes
+                de Icesi: rail angosto con iconos, que se ensancha en hover
+                mostrando las etiquetas completas). */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#1e202d] border border-white/20 text-xs font-bold text-white hover:ring-2 hover:ring-[#5454e9] transition-all"
+                  className="flex h-10 w-full items-center gap-3 rounded-lg px-0.5 whitespace-nowrap hover:bg-white/5 transition-colors"
                   title={`${user.name} (${activeRoleLabel})`}
                   aria-label="Menú de usuario y rol"
                 >
-                  {initials}
-                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-[#4cb979] ring-2 ring-[#090a0e]" />
+                  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1e202d] border border-white/20 text-xs font-bold text-white">
+                    {initials}
+                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-[#4cb979] ring-2 ring-[#090a0e]" />
+                  </span>
+                  <span className="flex max-w-0 flex-col items-start justify-center gap-0.5 overflow-hidden opacity-0 leading-tight transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:max-w-[140px] group-hover:opacity-100 group-hover:delay-75">
+                    <span className="text-xs font-bold text-white truncate max-w-[140px]">{user.name}</span>
+                    <span className="text-[10px] text-zinc-400">{activeRoleLabel}</span>
+                  </span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="right" className="w-60 ml-2">
@@ -163,6 +186,10 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleResetData} className="text-xs cursor-pointer">
+                  <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                  Restablecer datos de ejemplo
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive text-xs cursor-pointer">
                   <LogOut className="mr-2 h-3.5 w-3.5" />
                   Cerrar sesión
@@ -171,10 +198,12 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
             </DropdownMenu>
 
             {/* Separator */}
-            <div className="w-8 h-px bg-white/10 my-1" />
+            <div className="w-full h-px bg-white/10 my-1" />
 
-            {/* Primary Nav Icons */}
-            <nav className="flex flex-col items-center gap-2 w-full">
+            {/* Primary Nav Icons — misma fila fija (icono + etiqueta); la
+                etiqueta queda recortada por el `overflow-hidden` del rail
+                mientras esté colapsado, y aparece al expandirse. */}
+            <nav className="flex flex-col gap-2 w-full">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const active = isItemActive(item.to);
@@ -184,7 +213,7 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                     key={item.to}
                     to={item.to}
                     className={cn(
-                      "relative flex h-11 w-11 items-center justify-center rounded-lg transition-all",
+                      "relative flex h-11 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap transition-colors",
                       active
                         ? "bg-[#e4eb60] text-black shadow-md font-bold"
                         : "text-zinc-400 hover:bg-white/10 hover:text-white"
@@ -192,27 +221,36 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                     title={item.label}
                     aria-label={item.label}
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:max-w-[160px] group-hover:opacity-100 group-hover:delay-75">
+                      {item.label}
+                    </span>
                   </Link>
                 );
               })}
             </nav>
           </div>
 
-          {/* Bottom Controls of Rail (Theme Toggle, Lang, Logout) */}
-          <div className="flex flex-col items-center gap-2.5 w-full px-2">
+          {/* Bottom Controls of Rail (Theme Toggle, Logout) */}
+          <div className="flex flex-col gap-2.5 w-full px-2">
             {/* Theme Toggle Button (Sol / Luna) */}
-            <ThemeToggle className="hover:bg-white/10 text-zinc-400 hover:text-white" />
+            <ThemeToggle
+              showLabel
+              className="w-full h-11 justify-start gap-3 px-2.5 whitespace-nowrap hover:bg-white/10 text-zinc-400 hover:text-white"
+            />
 
             {/* Logout */}
             <button
               type="button"
               onClick={handleLogout}
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-500/20 hover:text-red-400 transition-all"
+              className="flex h-10 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap text-zinc-400 hover:bg-red-500/20 hover:text-red-400 transition-all"
               title="Cerrar sesión"
               aria-label="Cerrar sesión"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-4 w-4 shrink-0" />
+              <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:max-w-[160px] group-hover:opacity-100 group-hover:delay-75">
+                Cerrar sesión
+              </span>
             </button>
           </div>
         </aside>
@@ -363,9 +401,6 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
           </footer>
         </div>
       </div>
-
-      {/* Floating Andy Assistant Mascot */}
-      <AndyAssistantWidget />
     </div>
   );
 }
