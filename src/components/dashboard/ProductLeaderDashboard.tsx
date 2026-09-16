@@ -9,7 +9,6 @@ import {
   Sparkles,
   ArrowLeftRight,
   Building2,
-  Check,
   Search,
   Filter,
   User,
@@ -20,11 +19,16 @@ import {
   TrendingUp,
   List,
   LayoutGrid,
+  Check,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge, UrgencyBadge } from "@/components/StatusBadge";
 import { IcesiCenefa } from "@/components/IcesiLogo";
+import { RoleBadge } from "@/components/RoleBadge";
+import { StageKpiCard } from "@/components/kanban/StageKpiCard";
+import { KanbanColumn } from "@/components/kanban/KanbanColumn";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 import {
   PRODUCT_LEADERS,
   NODES,
@@ -54,7 +58,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns";
 import { es } from "date-fns/locale";
 
 interface ProductLeaderDashboardProps {
@@ -64,60 +68,49 @@ interface ProductLeaderDashboardProps {
   updateStatus: (id: string, status: RequestStatus) => void;
 }
 
+// Fecha límite en la tarjeta del Kanban: además de la fecha, el color avisa
+// si ya venció o está por vencer, para que el Líder priorice sin abrir el
+// detalle. No aplica a "Entregada" (el compromiso de fecha ya se cumplió).
+function getDeadlineDisplay(
+  deadline: string | undefined,
+  status: RequestStatus
+): { text: string; className: string } | null {
+  if (!deadline || status === "entregada") return null;
+  const days = differenceInCalendarDays(new Date(deadline), new Date());
+  const formatted = format(new Date(deadline), "d MMM", { locale: es });
+  if (days < 0) {
+    return { text: `Venció: ${formatted}`, className: "font-bold text-red-600 dark:text-red-400" };
+  }
+  if (days <= 3) {
+    return { text: `Vence: ${formatted}`, className: "font-bold text-[#e9683b]" };
+  }
+  return { text: `Vence: ${formatted}`, className: "text-muted-foreground" };
+}
+
 const KANBAN_STAGES: {
   id: RequestStatus;
   title: string;
-  badgeLabel: string;
-  colorHex: string;
-  tone: string;
-  bgLight: string;
-  borderClass: string;
   description: string;
-  actionText: string;
 }[] = [
   {
     id: "nueva",
     title: "Nueva",
-    badgeLabel: "Fase 1: Asignar Docente",
-    colorHex: "#5454e9",
-    tone: "text-[#5454e9]",
-    bgLight: "bg-[#5454e9]/10",
-    borderClass: "border-t-4 border-t-[#5454e9]",
     description: "Pendientes por revisar alcance y asignar docente de planta o externo",
-    actionText: "Asignar docente",
   },
   {
     id: "en-experto",
     title: "En proceso por experto",
-    badgeLabel: "Fase 2: Diseño Académico",
-    colorHex: "#e9683b",
-    tone: "text-[#e9683b]",
-    bgLight: "bg-[#e9683b]/10",
-    borderClass: "border-t-4 border-t-[#e9683b]",
     description: "Docente formulando temática, cronograma y propuesta técnica",
-    actionText: "Revisar avance",
   },
   {
     id: "en-costeo",
     title: "En proceso de costeo",
-    badgeLabel: "Fase 3: Estructuración Financiera",
-    colorHex: "#865cf0",
-    tone: "text-[#865cf0]",
-    bgLight: "bg-[#865cf0]/10",
-    borderClass: "border-t-4 border-t-[#865cf0]",
     description: "Simulación financiera, tarifas y cálculo de margen antes de entrega",
-    actionText: "Validar costeo",
   },
   {
     id: "entregada",
     title: "Entregada",
-    badgeLabel: "Fase 4: Concretada a KAM / Cliente",
-    colorHex: "#4cb979",
-    tone: "text-[#4cb979]",
-    bgLight: "bg-[#4cb979]/10",
-    borderClass: "border-t-4 border-t-[#4cb979]",
     description: "Propuestas culminadas y entregadas a la empresa o KAM comercial",
-    actionText: "Ver detalle",
   },
 ];
 
@@ -128,10 +121,41 @@ export function ProductLeaderDashboard({
   updateStatus,
 }: ProductLeaderDashboardProps) {
   // Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeStageFilter, setActiveStageFilter] = useState<RequestStatus | "todas">("todas");
-  const [onlyMissingProfessor, setOnlyMissingProfessor] = useState(false);
-  const [viewMode, setViewMode] = useState<"kanban" | "tabla">("kanban");
+  // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
+  // el Líder de Producto al volver del detalle de una propuesta — antes se
+  // reiniciaba porque el dashboard se desmonta y remonta en cada navegación.
+  const [searchQuery, setSearchQuery] = usePersistentState(
+    "icesi_lp_dashboard_search_v1",
+    ""
+  );
+  const [activeStageFilter, setActiveStageFilter] = usePersistentState<RequestStatus | "todas">(
+    "icesi_lp_dashboard_filter_v1",
+    "todas"
+  );
+  const [onlyMissingProfessor, setOnlyMissingProfessor] = usePersistentState(
+    "icesi_lp_dashboard_sin_docente_v1",
+    false
+  );
+  const [viewMode, setViewMode] = usePersistentState<"kanban" | "tabla">(
+    "icesi_lp_dashboard_view_v1",
+    "kanban"
+  );
+
+  // En Kanban, las columnas ya son el filtro — la tarjeta KPI en esa vista no
+  // oculta nada, sino que "aísla" esa columna a pantalla completa para revisar
+  // más tarjetas cómodamente sin salir del Kanban.
+  const [isolatedStage, setIsolatedStage] = usePersistentState<RequestStatus | null>(
+    "icesi_lp_dashboard_isolated_v1",
+    null
+  );
+
+  const handleStageKpiClick = (stage: RequestStatus) => {
+    if (viewMode === "tabla") {
+      setActiveStageFilter((prev) => (prev === stage ? "todas" : stage));
+    } else {
+      setIsolatedStage((prev) => (prev === stage ? null : stage));
+    }
+  };
 
   // Reassignment Modal State
   const [reassigningRequest, setReassigningRequest] = useState<RequestItem | null>(null);
@@ -166,18 +190,37 @@ export function ProductLeaderDashboard({
     setReassigningRequest(null);
   };
 
-  // Status transitions
-  const handleAdvanceStatus = (reqId: string, currentStatus: RequestStatus) => {
-    if (currentStatus === "nueva") {
-      updateStatus(reqId, "en-experto");
-      toast.success("Solicitud avanzada a: En proceso por experto");
-    } else if (currentStatus === "en-experto") {
-      updateStatus(reqId, "en-costeo");
-      toast.success("Solicitud avanzada a: En proceso de costeo");
-    } else if (currentStatus === "en-costeo") {
-      updateStatus(reqId, "entregada");
-      toast.success("Solicitud completada y marcada como Entregada");
-    }
+  // Avanzar de etapa es irreversible desde la UI (no hay botón para "devolver"
+  // una solicitud a la fase anterior) y las tarjetas del Kanban van densas,
+  // con varios botones pegados — un clic de más ahí mueve la solicitud sin
+  // querer. Por eso se confirma explícitamente antes de ejecutar, con los
+  // datos concretos de la solicitud a la vista (no solo un texto genérico).
+  const [confirmingAdvance, setConfirmingAdvance] = useState<{
+    reqId: string;
+    company: string;
+    title: string;
+    from: "nueva" | "en-experto";
+  } | null>(null);
+
+  const ADVANCE_META: Record<"nueva" | "en-experto", { nextLabel: string; nextStatus: RequestStatus; successMsg: string }> = {
+    nueva: {
+      nextLabel: "En proceso por experto",
+      nextStatus: "en-experto",
+      successMsg: "Solicitud avanzada a: En proceso por experto",
+    },
+    "en-experto": {
+      nextLabel: "En proceso de costeo",
+      nextStatus: "en-costeo",
+      successMsg: "Solicitud avanzada a: En proceso de costeo",
+    },
+  };
+
+  const handleConfirmAdvance = () => {
+    if (!confirmingAdvance) return;
+    const meta = ADVANCE_META[confirmingAdvance.from];
+    updateStatus(confirmingAdvance.reqId, meta.nextStatus);
+    toast.success(meta.successMsg);
+    setConfirmingAdvance(null);
   };
 
   // El Líder de Producto solo trabaja sus propias solicitudes — sin toggle a "Todas".
@@ -195,7 +238,14 @@ export function ProductLeaderDashboard({
 
   const sinDocenteCount = activeDataset.filter((r) => !r.professor && r.status !== "entregada").length;
 
-  // Filter requests
+  // Métricas agregadas (no son una etapa del pipeline) — mismo cálculo que ya
+  // usa el KAM, para que ambos tableros hablen del pipeline en los mismos términos.
+  const totalCount = activeDataset.length;
+  const pipelineTotal = activeDataset
+    .filter((r) => r.status === "en-costeo" || r.status === "entregada")
+    .reduce((sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0), 0);
+
+  // Vista Tabla: el estado sí oculta filas — ahí aporta valor real (reduce una lista larga).
   const filteredRequests = useMemo(() => {
     return activeDataset.filter((r) => {
       if (activeStageFilter !== "todas" && r.status !== activeStageFilter) return false;
@@ -215,6 +265,28 @@ export function ProductLeaderDashboard({
     });
   }, [activeDataset, activeStageFilter, onlyMissingProfessor, searchQuery]);
 
+  // Vista Kanban: la columna ya ES el estado, así que el filtro de estado no debe vaciar el
+  // contenido (no aporta nada nuevo) — solo aplican los filtros que sí cruzan información
+  // que el tablero no muestra por sí solo (buscador, "sin docente"). El estado activo solo
+  // se usa para el "spotlight" (resaltar + hacer scroll a la columna), no para ocultar nada.
+  const kanbanRequests = useMemo(() => {
+    return activeDataset.filter((r) => {
+      if (onlyMissingProfessor && (r.professor || r.status === "entregada")) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matches =
+          r.id.toLowerCase().includes(q) ||
+          r.company.toLowerCase().includes(q) ||
+          r.title.toLowerCase().includes(q) ||
+          r.type.toLowerCase().includes(q) ||
+          (r.professor && r.professor.toLowerCase().includes(q)) ||
+          r.productLeader.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [activeDataset, onlyMissingProfessor, searchQuery]);
+
   // Group by status for the single unified Kanban
   const groupedRequests = useMemo(() => {
     const grouped: Record<RequestStatus, RequestItem[]> = {
@@ -223,13 +295,13 @@ export function ProductLeaderDashboard({
       "en-costeo": [],
       entregada: [],
     };
-    filteredRequests.forEach((req) => {
+    kanbanRequests.forEach((req) => {
       if (grouped[req.status]) {
         grouped[req.status].push(req);
       }
     });
     return grouped;
-  }, [filteredRequests]);
+  }, [kanbanRequests]);
 
   const firstName = user.name ? user.name.split(" ")[0] : "";
 
@@ -242,9 +314,7 @@ export function ProductLeaderDashboard({
             <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
               Hola, {firstName}
             </h1>
-            <span className="rounded bg-[#5454e9]/10 dark:bg-[#5454e9]/20 px-2.5 py-0.5 text-xs font-bold text-[#5454e9]">
-              Líder de Producto
-            </span>
+            <RoleBadge label="Líder de Producto" />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Gestión directa de tus solicitudes: asignación de docentes, avance técnico y costeo en un único lugar.
@@ -252,107 +322,87 @@ export function ProductLeaderDashboard({
         </div>
       </div>
 
+      {/* Aviso contextual si hay solicitudes nuevas enviadas por los KAM,
+          esperando revisión de alcance y asignación de docente. */}
+      {countNuevas > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-[#5454e9]/30 bg-[#5454e9]/10 dark:bg-[#5454e9]/15 p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3.5 sm:items-center">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5454e9] text-white">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">
+                ¡Tienes {countNuevas} {countNuevas === 1 ? "solicitud nueva por revisar" : "solicitudes nuevas por revisar"}!
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Los KAM enviaron nuevas propuestas — revisa el alcance y asigna un docente de planta o externo.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleStageKpiClick("nueva")}
+            className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 rounded-lg bg-[#5454e9] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#4343d3]"
+          >
+            Ver nuevas
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Dato agregado secundario — mismo formato que ya usa el KAM. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-0.5 text-xs text-muted-foreground">
+        <span>
+          <strong className="font-bold text-foreground">{totalCount}</strong> solicitudes en total
+        </span>
+        <span className="text-border dark:text-[#252838]">·</span>
+        <span>
+          <strong className="font-bold text-foreground">{formatCompactCop(pipelineTotal)}</strong> en pipeline cotizado
+        </span>
+      </div>
+
       {/* 2. Interactive Stages / KPIs Bar with Official Icesi Colors */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {/* Nueva: Azul Icesi #5454e9 */}
-        <button
-          type="button"
-          onClick={() => setActiveStageFilter((prev) => (prev === "nueva" ? "todas" : "nueva"))}
-          className={cn(
-            "relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all cursor-pointer",
-            activeStageFilter === "nueva"
-              ? "border-[#5454e9] ring-2 ring-[#5454e9]/30 bg-[#5454e9]/5 dark:bg-[#5454e9]/10"
-              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#5454e9]/50"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">1. Nuevas</span>
-          </div>
-          <div className="mt-2.5">
-            <p className="font-display text-2xl font-bold tracking-tight text-[#5454e9] sm:text-3xl">
-              {countNuevas}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {activeStageFilter === "nueva" ? "✓ Filtrando esta columna" : "Por asignar docente"}
-            </p>
-          </div>
-          <div className="mt-2.5 h-1 w-full rounded-full bg-[#5454e9]" />
-        </button>
-
-        {/* En Experto: Naranja Icesi #e9683b */}
-        <button
-          type="button"
-          onClick={() => setActiveStageFilter((prev) => (prev === "en-experto" ? "todas" : "en-experto"))}
-          className={cn(
-            "relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all cursor-pointer",
-            activeStageFilter === "en-experto"
-              ? "border-[#e9683b] ring-2 ring-[#e9683b]/30 bg-[#e9683b]/5 dark:bg-[#e9683b]/10"
-              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#e9683b]/50"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">2. En Experto</span>
-          </div>
-          <div className="mt-2.5">
-            <p className="font-display text-2xl font-bold tracking-tight text-[#e9683b] sm:text-3xl">
-              {countEnExperto}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {activeStageFilter === "en-experto" ? "✓ Filtrando esta columna" : "En diseño académico"}
-            </p>
-          </div>
-          <div className="mt-2.5 h-1 w-full rounded-full bg-[#e9683b]" />
-        </button>
-
-        {/* En Costeo: Morado Icesi #865cf0 */}
-        <button
-          type="button"
-          onClick={() => setActiveStageFilter((prev) => (prev === "en-costeo" ? "todas" : "en-costeo"))}
-          className={cn(
-            "relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all cursor-pointer",
-            activeStageFilter === "en-costeo"
-              ? "border-[#865cf0] ring-2 ring-[#865cf0]/30 bg-[#865cf0]/5 dark:bg-[#865cf0]/10"
-              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#865cf0]/50"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">3. En Costeo</span>
-          </div>
-          <div className="mt-2.5">
-            <p className="font-display text-2xl font-bold tracking-tight text-[#865cf0] sm:text-3xl">
-              {countEnCosteo}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {activeStageFilter === "en-costeo" ? "✓ Filtrando esta columna" : "Simulación y márgenes"}
-            </p>
-          </div>
-          <div className="mt-2.5 h-1 w-full rounded-full bg-[#865cf0]" />
-        </button>
-
-        {/* Entregada: Verde Icesi #4cb979 */}
-        <button
-          type="button"
-          onClick={() => setActiveStageFilter((prev) => (prev === "entregada" ? "todas" : "entregada"))}
-          className={cn(
-            "relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all cursor-pointer",
-            activeStageFilter === "entregada"
-              ? "border-[#4cb979] ring-2 ring-[#4cb979]/30 bg-[#4cb979]/5 dark:bg-[#4cb979]/10"
-              : "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#4cb979]/50"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">4. Entregadas</span>
-          </div>
-          <div className="mt-2.5">
-            <p className="font-display text-2xl font-bold tracking-tight text-[#4cb979] sm:text-3xl">
-              {countEntregadas}
-            </p>
-            <p className="mt-1 text-[11px] font-semibold text-[#4cb979]">
+        <StageKpiCard
+          stage="nueva"
+          label="1. Nuevas"
+          count={countNuevas}
+          hint="Por asignar docente"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeStageFilter === "nueva" : isolatedStage === "nueva"}
+          onClick={() => handleStageKpiClick("nueva")}
+        />
+        <StageKpiCard
+          stage="en-experto"
+          label="2. En Experto"
+          count={countEnExperto}
+          hint="En diseño académico"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeStageFilter === "en-experto" : isolatedStage === "en-experto"}
+          onClick={() => handleStageKpiClick("en-experto")}
+        />
+        <StageKpiCard
+          stage="en-costeo"
+          label="3. En Costeo"
+          count={countEnCosteo}
+          hint="Simulación y márgenes"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeStageFilter === "en-costeo" : isolatedStage === "en-costeo"}
+          onClick={() => handleStageKpiClick("en-costeo")}
+        />
+        <StageKpiCard
+          stage="entregada"
+          label="4. Entregadas"
+          count={countEntregadas}
+          hint="Sin propuestas entregadas aún"
+          secondaryLine={
+            <span className="font-semibold text-[#4cb979]">
               {formatCompactCop(entregadasValue)} en valor real aprobado
-            </p>
-          </div>
-          <div className="mt-2.5 h-1 w-full rounded-full bg-[#4cb979]" />
-        </button>
+            </span>
+          }
+          active={viewMode === "tabla" ? activeStageFilter === "entregada" : isolatedStage === "entregada"}
+          onClick={() => handleStageKpiClick("entregada")}
+        />
       </div>
 
       {/* 3. Search Bar and Filter reset */}
@@ -382,7 +432,7 @@ export function ProductLeaderDashboard({
             <UserCheck className="h-3.5 w-3.5" />
             Sin docente ({sinDocenteCount})
           </button>
-          {activeStageFilter !== "todas" && (
+          {viewMode === "tabla" && activeStageFilter !== "todas" && (
             <button
               type="button"
               onClick={() => setActiveStageFilter("todas")}
@@ -391,8 +441,17 @@ export function ProductLeaderDashboard({
               Mostrar todas las fases
             </button>
           )}
+          {viewMode === "kanban" && isolatedStage && (
+            <button
+              type="button"
+              onClick={() => setIsolatedStage(null)}
+              className="rounded-lg border border-border bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary cursor-pointer"
+            >
+              Ver las 4 fases
+            </button>
+          )}
           <span className="text-xs text-muted-foreground">
-            {filteredRequests.length} solicitudes visibles
+            {viewMode === "kanban" ? kanbanRequests.length : filteredRequests.length} solicitudes visibles
           </span>
 
           <div className="flex items-center gap-0.5 rounded-lg border border-border dark:border-[#2b2d3d] p-0.5 bg-card dark:bg-[#141622]">
@@ -426,190 +485,222 @@ export function ProductLeaderDashboard({
 
       {/* 4. Unified Board: The 4 Columns for the Product Leader */}
       {viewMode === "kanban" && (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4 items-start">
-        {KANBAN_STAGES.map((stage) => {
+      <>
+      {/* Si "Sin docente" o el buscador dejan las 4 columnas vacías, decirlo
+          explícitamente — antes las 4 columnas se veían vacías sin ninguna
+          pista de que había un filtro activo escondiéndolo todo. */}
+      {kanbanRequests.length === 0 && activeDataset.length > 0 && (
+        <div className="rounded-xl border border-dashed border-border bg-secondary/20 p-6 text-center text-sm">
+          <p className="font-medium text-foreground">
+            {onlyMissingProfessor
+              ? "Ninguna de tus solicitudes activas está sin docente en este momento."
+              : "No se encontraron solicitudes con esta búsqueda."}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {onlyMissingProfessor
+              ? "El filtro \"Sin docente\" excluye además las que ya están Entregadas."
+              : "Intenta con otro término de búsqueda."}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setOnlyMissingProfessor(false);
+              setSearchQuery("");
+            }}
+            className="mt-3 text-xs"
+          >
+            Quitar filtros
+          </Button>
+        </div>
+      )}
+      <div className={cn("grid gap-4 items-start", isolatedStage ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-4")}>
+        {(isolatedStage ? KANBAN_STAGES.filter((s) => s.id === isolatedStage) : KANBAN_STAGES).map((stage) => {
           const stageItems = groupedRequests[stage.id];
-          const isHighlighted = activeStageFilter === "todas" || activeStageFilter === stage.id;
-
-          if (!isHighlighted) {
-            return null;
-          }
 
           return (
-            <div
+            <KanbanColumn
               key={stage.id}
-              className={cn(
-                "flex flex-col rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#121420] shadow-xs overflow-hidden",
-                stage.borderClass
-              )}
-            >
-              {/* Column Header */}
-              <div className="p-3.5 border-b border-border dark:border-[#202230] bg-secondary/30 dark:bg-[#161826]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: stage.colorHex }}
-                    />
-                    <h3 className="font-bold text-sm text-foreground font-sans">
-                      {stage.title}
-                    </h3>
-                  </div>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-xs font-bold text-white"
-                    style={{ backgroundColor: stage.colorHex }}
-                  >
-                    {stageItems.length}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">
-                  {stage.description}
-                </p>
-              </div>
+              stage={stage.id}
+              title={stage.title}
+              description={stage.description}
+              items={stageItems}
+              getKey={(req) => req.id}
+              isolated={!!isolatedStage}
+              onExitIsolation={() => setIsolatedStage(null)}
+              renderItem={(req) => {
+                const hasRealCosting = req.costing && req.costing.totalOfferedCop > 0;
+                const deadlineInfo = getDeadlineDisplay(req.deadline, req.status);
+                const stageAge = formatDistanceToNow(new Date(req.statusUpdatedAt ?? req.createdAt), {
+                  addSuffix: true,
+                  locale: es,
+                });
 
-              {/* Column Body / Cards */}
-              <div className="p-3 space-y-3 min-h-[300px]">
-                {stageItems.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border dark:border-[#252838] p-6 text-center text-muted-foreground">
-                    <p className="text-xs font-medium">Sin solicitudes en esta fase</p>
-                  </div>
-                ) : (
-                  stageItems.map((req) => {
-                    const isAssignedToMe = req.productLeader === user.name;
-                    return (
-                      <div
-                        key={req.id}
-                        className="group relative rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] p-3.5 shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40"
-                      >
-                        {/* Top: ID, Company & Urgency */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-[11px] font-bold text-foreground">
-                                {req.id}
-                              </span>
-                              <span className="text-muted-foreground/60 text-[10px]">•</span>
-                              <span className="text-[11px] font-medium text-foreground truncate max-w-[120px]">
-                                {req.company}
-                              </span>
-                            </div>
-                            <Link
-                              to={`/solicitudes/${req.id}`}
-                              className="mt-1 block font-sans font-bold text-xs leading-snug text-foreground hover:text-[#5454e9] transition-colors line-clamp-2"
-                            >
-                              {req.title}
-                            </Link>
-                          </div>
-                          <UrgencyBadge urgency={req.urgency} />
-                        </div>
+                return (
+                <div className="group relative rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
+                  {/* Alerta prioritaria: el cliente pidió ajustes — es la señal
+                      más urgente que puede tener una tarjeta, va antes que
+                      cualquier otra cosa (docs/08, pregunta 13). */}
+                  {req.clientObservations && (
+                    <div className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300/60 dark:border-amber-900/50 px-3 py-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                      <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                        Cliente pidió ajustes
+                      </span>
+                    </div>
+                  )}
 
-                        {/* Middle: Type, Leader badge & Docente */}
-                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                          <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                            {req.type}
+                  {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
+                  <Link to={`/solicitudes/${req.id}`} className="block p-3.5">
+                    {/* Top: ID, Company & Urgency */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-[11px] font-bold text-foreground">
+                            {req.id}
                           </span>
-                          {isAssignedToMe && (
-                            <span className="rounded bg-[#5454e9]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#5454e9]">
-                              Mi producto
-                            </span>
-                          )}
+                          <span className="text-muted-foreground/60 text-[10px]">•</span>
+                          <span className="text-[11px] font-medium text-foreground truncate max-w-[120px]">
+                            {req.company}
+                          </span>
                         </div>
-
-                        {/* Docente / Profesor status */}
-                        <div className="mt-2.5 border-t border-border dark:border-[#222434] pt-2 flex items-center justify-between text-[11px]">
-                          <span className="text-muted-foreground font-medium">Docente:</span>
-                          {req.professor ? (
-                            <span className="font-semibold text-foreground truncate max-w-[130px]">
-                              {req.professor}
-                            </span>
-                          ) : (
-                            <span className="rounded bg-[#e9683b]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#e9683b]">
-                              Sin docente
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Footer: Date & Direct Actions */}
-                        <div className="mt-3 pt-2 border-t border-border dark:border-[#222434] flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                            <Calendar className="h-3 w-3 shrink-0" />
-                            <span>{format(new Date(req.createdAt), "d MMM", { locale: es })}</span>
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            {/* Reasignar solo mientras nadie ha empezado a trabajar la solicitud */}
-                            {req.status === "nueva" && (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenReassign(req)}
-                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                                title="Reasignar a otro líder de producto"
-                              >
-                                <ArrowLeftRight className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-
-                            {/* Status Advancement Button — requiere docente asignado */}
-                            {stage.id === "nueva" && (
-                              <Button
-                                size="sm"
-                                disabled={!req.professor}
-                                onClick={() => handleAdvanceStatus(req.id, "nueva")}
-                                className="h-7 px-2 text-[10px] font-bold bg-[#e9683b] hover:bg-[#d8582d] text-white shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
-                                title={req.professor ? "Avanzar a En Experto" : "Asigna un docente antes de avanzar"}
-                              >
-                                Pasar a Experto
-                                <ChevronRight className="h-3 w-3 ml-0.5" />
-                              </Button>
-                            )}
-
-                            {stage.id === "en-experto" && (
-                              <Button
-                                size="sm"
-                                onClick={() => handleAdvanceStatus(req.id, "en-experto")}
-                                className="h-7 px-2 text-[10px] font-bold bg-[#865cf0] hover:bg-[#7344e8] text-white shadow-2xs"
-                                title="Avanzar a En Costeo"
-                              >
-                                Pasar a Costeo
-                                <ChevronRight className="h-3 w-3 ml-0.5" />
-                              </Button>
-                            )}
-
-                            {stage.id === "en-costeo" && (
-                              <Button
-                                size="sm"
-                                onClick={() => handleAdvanceStatus(req.id, "en-costeo")}
-                                className="h-7 px-2 text-[10px] font-bold bg-[#4cb979] hover:bg-[#3ea569] text-white shadow-2xs"
-                                title="Finalizar propuesta y marcar como Entregada"
-                              >
-                                Entregar
-                                <Check className="h-3 w-3 ml-0.5" />
-                              </Button>
-                            )}
-
-                            {stage.id === "entregada" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                asChild
-                                className="h-7 px-2 text-[10px] font-semibold border-border hover:bg-secondary"
-                              >
-                                <Link to={`/solicitudes/${req.id}`}>
-                                  Detalle
-                                </Link>
-                              </Button>
-                            )}
-                          </div>
-                        </div>
+                        <p className="mt-1 font-sans font-bold text-xs leading-snug text-foreground group-hover:text-[#5454e9] transition-colors line-clamp-2">
+                          {req.title}
+                        </p>
                       </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
+                      <UrgencyBadge urgency={req.urgency} />
+                    </div>
+
+                    {/* Middle: Type + Valor cotizado (si ya hay costeo real) */}
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {req.type}
+                      </span>
+                      {hasRealCosting && (
+                        <span className="font-mono text-[11px] font-bold text-[#4cb979]">
+                          {formatCop(req.costing!.totalOfferedCop)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Docente / Profesor status */}
+                    <div className="mt-2.5 border-t border-border dark:border-[#222434] pt-2 flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground font-medium">Docente:</span>
+                      {req.professor ? (
+                        <span className="font-semibold text-foreground truncate max-w-[130px]">
+                          {req.professor}
+                        </span>
+                      ) : (
+                        <span className="rounded bg-[#e9683b]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#e9683b]">
+                          Sin docente
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Antigüedad en la fase actual — ayuda a detectar cuellos de botella */}
+                    <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Clock className="h-3 w-3 shrink-0" />
+                      <span>En esta fase {stageAge}</span>
+                    </div>
+                  </Link>
+
+                  {/* Footer: Date & Direct Actions — fuera del área de navegación */}
+                  <div className="px-3.5 pb-3.5">
+                    <div className="mt-3 pt-2 border-t border-border dark:border-[#222434] flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground min-w-0">
+                        <span className="flex items-center gap-1 shrink-0">
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          {format(new Date(req.createdAt), "d MMM", { locale: es })}
+                        </span>
+                        {deadlineInfo && (
+                          <span className={cn("truncate", deadlineInfo.className)}>{deadlineInfo.text}</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {/* Reasignar solo mientras nadie ha empezado a trabajar la solicitud */}
+                        {req.status === "nueva" && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReassign(req)}
+                            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                            title="Reasignar a otro líder de producto"
+                          >
+                            <ArrowLeftRight className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+
+                        {/* Status Advancement Button — requiere docente asignado y confirmación */}
+                        {stage.id === "nueva" && (
+                          <Button
+                            size="sm"
+                            disabled={!req.professor}
+                            onClick={() =>
+                              setConfirmingAdvance({ reqId: req.id, company: req.company, title: req.title, from: "nueva" })
+                            }
+                            className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={req.professor ? "Avanzar a En Experto" : "Asigna un docente antes de avanzar"}
+                          >
+                            Pasar a Experto
+                            <ChevronRight className="h-3 w-3 ml-0.5" />
+                          </Button>
+                        )}
+
+                        {stage.id === "en-experto" && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              setConfirmingAdvance({ reqId: req.id, company: req.company, title: req.title, from: "en-experto" })
+                            }
+                            className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
+                            title="Avanzar a En Costeo"
+                          >
+                            Pasar a Costeo
+                            <ChevronRight className="h-3 w-3 ml-0.5" />
+                          </Button>
+                        )}
+
+                        {/* "Entregar" (enviar al cliente) es una acción exclusiva del KAM,
+                            no del Líder de Producto — el trabajo del Líder termina en dejar
+                            el costeo listo (docs/08, pregunta 13). Por eso aquí solo se
+                            invita a completar el costeo, o se confirma que ya quedó listo. */}
+                        {stage.id === "en-costeo" && !hasRealCosting && (
+                          <Button
+                            asChild
+                            size="sm"
+                            className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
+                          >
+                            <Link to={`/solicitudes/${req.id}`} title="Completar el costeo de esta propuesta">
+                              Completar costeo
+                              <ArrowRight className="h-3 w-3 ml-0.5" />
+                            </Link>
+                          </Button>
+                        )}
+                        {stage.id === "en-costeo" && hasRealCosting && (
+                          <span className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]">
+                            <Check className="h-3 w-3" /> Listo para el KAM
+                          </span>
+                        )}
+
+                        {/* Llegar a "Entregada" solo ocurre cuando el KAM la envía al
+                            cliente (acción exclusiva suya, ver comentario arriba) — así
+                            que toda tarjeta en esta columna ya cerró ese paso. */}
+                        {stage.id === "entregada" && (
+                          <span className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]">
+                            <Check className="h-3 w-3" /> Enviado al cliente
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                );
+              }}
+            />
           );
         })}
       </div>
+      </>
       )}
 
       {/* 4b. Vista de tabla: escaneo rápido de todas las solicitudes visibles */}
@@ -631,12 +722,25 @@ export function ProductLeaderDashboard({
                 {filteredRequests.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                      No se encontraron solicitudes con estos filtros.
+                      <p>No se encontraron solicitudes con estos filtros.</p>
+                      {(onlyMissingProfessor || searchQuery || activeStageFilter !== "todas") && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setOnlyMissingProfessor(false);
+                            setSearchQuery("");
+                            setActiveStageFilter("todas");
+                          }}
+                          className="mt-3 text-xs"
+                        >
+                          Quitar filtros
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ) : (
                   filteredRequests.map((r) => {
-                    const isAssignedToMe = r.productLeader === user.name;
                     const hasRealCosting = r.costing && r.costing.totalOfferedCop > 0;
                     return (
                       <tr key={r.id} className="transition-colors hover:bg-secondary/30 dark:hover:bg-[#1a1c2a]">
@@ -667,11 +771,6 @@ export function ProductLeaderDashboard({
                                 <Building2 className="h-3 w-3 shrink-0 opacity-70" />
                                 {r.company}
                               </span>
-                              {isAssignedToMe && (
-                                <span className="rounded bg-[#5454e9]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#5454e9]">
-                                  Mi producto
-                                </span>
-                              )}
                             </div>
                           </div>
                         </td>
@@ -874,6 +973,36 @@ export function ProductLeaderDashboard({
               Confirmar Reasignación
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 6. Confirmación antes de avanzar de etapa desde el tablero — con los
+          datos concretos de la solicitud, no un texto genérico, para que un
+          vistazo rápido baste para confirmar que es la correcta. */}
+      <Dialog open={!!confirmingAdvance} onOpenChange={(open) => !open && setConfirmingAdvance(null)}>
+        <DialogContent className="max-w-sm">
+          {confirmingAdvance && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  ¿Avanzar esta solicitud?
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{confirmingAdvance.company}</span> — {confirmingAdvance.title}
+                  <br />
+                  Pasará a <span className="font-semibold text-foreground">{ADVANCE_META[confirmingAdvance.from].nextLabel}</span>.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" size="sm" onClick={() => setConfirmingAdvance(null)} className="text-xs">
+                  Cancelar
+                </Button>
+                <Button type="button" size="sm" onClick={handleConfirmAdvance} className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white">
+                  Sí, avanzar
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
