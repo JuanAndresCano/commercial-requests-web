@@ -1,17 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  DollarSign,
-  Percent,
-  Calculator,
-  RotateCcw,
-  ShieldCheck,
-  UserPlus,
-  MessageSquare,
-  Sparkles,
-  ExternalLink,
-  ChevronDown,
-  ChevronUp,
-} from "@/components/icons";
+import { RotateCcw, ShieldCheck, MessageSquare, Sparkles, ExternalLink, ChevronUp } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -45,26 +33,24 @@ export function ProposalCostingModule({
   const [baseCostCop, setBaseCostCop] = useState<number>(initialCosting.baseCostCop);
   const [marginPercent, setMarginPercent] = useState<number>(initialCosting.expectedMarginPercent ?? 30);
   const [requiresExternalAdvisor, setRequiresExternalAdvisor] = useState<boolean>(
-    initialCosting.requiresExternalAdvisor ?? (request.professorType === "externo")
+    initialCosting.requiresExternalAdvisor ?? request.professorType === "externo",
   );
   const [externalAdvisorDetails, setExternalAdvisorDetails] = useState<string>(
-    initialCosting.externalAdvisorDetails ?? ""
+    initialCosting.externalAdvisorDetails ?? "",
   );
   const [totalOfferedCop, setTotalOfferedCop] = useState<number>(initialCosting.totalOfferedCop);
-  const [negotiationNotes, setNegotiationNotes] = useState<string>(
-    initialCosting.negotiationNotes ?? ""
-  );
+  const [negotiationNotes, setNegotiationNotes] = useState<string>(initialCosting.negotiationNotes ?? "");
 
   // Collapsible sections for custom adjustment and note
   const [showNegotiationAdjustment, setShowNegotiationAdjustment] = useState<boolean>(
     Boolean(
       initialCosting.totalOfferedCop &&
       initialCosting.suggestedTotalCop &&
-      initialCosting.totalOfferedCop !== initialCosting.suggestedTotalCop
-    )
+      initialCosting.totalOfferedCop !== initialCosting.suggestedTotalCop,
+    ),
   );
   const [showNoteField, setShowNoteField] = useState<boolean>(
-    Boolean(initialCosting.negotiationNotes && initialCosting.negotiationNotes.trim().length > 0)
+    Boolean(initialCosting.negotiationNotes && initialCosting.negotiationNotes.trim().length > 0),
   );
 
   // Sync state when request prop changes
@@ -99,10 +85,10 @@ export function ProposalCostingModule({
     newOffered: number,
     newExternal: boolean,
     newExtDetails: string,
-    newNotes: string
+    newNotes: string,
   ) => {
     const updatedTaxAmount = isCapacitacion ? Math.round(newBase * 0.015) : 0;
-    const updatedSuggested = Math.round(newBase + (newBase * (newMargin / 100)) + updatedTaxAmount);
+    const updatedSuggested = Math.round(newBase + newBase * (newMargin / 100) + updatedTaxAmount);
 
     const updatedCosting: ProposalCosting = {
       requiresExternalAdvisor: newExternal,
@@ -126,7 +112,7 @@ export function ProposalCostingModule({
     const val = Math.max(0, rawVal);
     setBaseCostCop(val);
     const newTax = isCapacitacion ? Math.round(val * 0.015) : 0;
-    const newSuggested = Math.round(val + (val * (marginPercent / 100)) + newTax);
+    const newSuggested = Math.round(val + val * (marginPercent / 100) + newTax);
     const newOffered = totalOfferedCop === calculatedTotalCop ? newSuggested : totalOfferedCop;
     setTotalOfferedCop(newOffered);
     triggerSave(val, marginPercent, newOffered, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
@@ -136,7 +122,7 @@ export function ProposalCostingModule({
     const val = Math.min(100, Math.max(0, rawVal));
     setMarginPercent(val);
     const newTax = isCapacitacion ? Math.round(baseCostCop * 0.015) : 0;
-    const newSuggested = Math.round(baseCostCop + (baseCostCop * (val / 100)) + newTax);
+    const newSuggested = Math.round(baseCostCop + baseCostCop * (val / 100) + newTax);
     const newOffered = totalOfferedCop === calculatedTotalCop ? newSuggested : totalOfferedCop;
     setTotalOfferedCop(newOffered);
     triggerSave(baseCostCop, val, newOffered, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
@@ -163,7 +149,14 @@ export function ProposalCostingModule({
 
   const handleSyncOfferedWithCalculated = () => {
     setTotalOfferedCop(calculatedTotalCop);
-    triggerSave(baseCostCop, marginPercent, calculatedTotalCop, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
+    triggerSave(
+      baseCostCop,
+      marginPercent,
+      calculatedTotalCop,
+      requiresExternalAdvisor,
+      externalAdvisorDetails,
+      negotiationNotes,
+    );
     toast.success("Valor Total sincronizado con el cálculo estándar");
   };
 
@@ -215,9 +208,7 @@ export function ProposalCostingModule({
                 disabled={isReadOnly}
               />
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">
-              Equivale a {formatCop(baseCostCop)} COP
-            </p>
+            <p className="text-[11px] text-slate-400 font-mono">Equivale a {formatCop(baseCostCop)} COP</p>
           </div>
 
           {/* Switch inline Asesor Externo (5 cols) */}
@@ -246,9 +237,7 @@ export function ProposalCostingModule({
             {requiresExternalAdvisor && (
               <div className="space-y-1 pt-1">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-medium text-slate-600 dark:text-slate-300">
-                    Nombre o empresa consultora:
-                  </span>
+                  <span className="font-medium text-slate-600 dark:text-slate-300">Nombre o empresa consultora:</span>
                   <button
                     type="button"
                     onClick={onOpenAdvisorModal}
@@ -267,7 +256,7 @@ export function ProposalCostingModule({
                       totalOfferedCop,
                       requiresExternalAdvisor,
                       e.target.value,
-                      negotiationNotes
+                      negotiationNotes,
                     );
                   }}
                   placeholder="Ej: Ing. Jorge Mendoza (Consultoría TIC)"
@@ -345,9 +334,7 @@ export function ProposalCostingModule({
             {/* 1. Costo Base Directo */}
             <div className="flex items-center justify-between py-2">
               <span className="text-slate-600 dark:text-slate-400">Costo Base Directo</span>
-              <span className="font-mono font-medium text-slate-900 dark:text-slate-100">
-                {formatCop(baseCostCop)}
-              </span>
+              <span className="font-mono font-medium text-slate-900 dark:text-slate-100">{formatCop(baseCostCop)}</span>
             </div>
 
             {/* 2. Margen de Contribución */}
@@ -364,9 +351,7 @@ export function ProposalCostingModule({
             {/* 3. Subtotal */}
             <div className="flex items-center justify-between py-2 font-medium">
               <span className="text-slate-700 dark:text-slate-300">Subtotal con Margen</span>
-              <span className="font-mono text-slate-900 dark:text-slate-100">
-                {formatCop(subtotalWithMargin)}
-              </span>
+              <span className="font-mono text-slate-900 dark:text-slate-100">{formatCop(subtotalWithMargin)}</span>
             </div>
 
             {/* 4. Estampilla Pro-Cultura (1.5%) - Solo visible si es Capacitación con badge sutil */}
@@ -404,7 +389,8 @@ export function ProposalCostingModule({
                 </span>
                 {differenceWithCalculated !== 0 ? (
                   <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                    Ajuste: {differenceWithCalculated > 0 ? "+" : ""}{formatCop(differenceWithCalculated)}
+                    Ajuste: {differenceWithCalculated > 0 ? "+" : ""}
+                    {formatCop(differenceWithCalculated)}
                   </span>
                 ) : (
                   <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
@@ -475,10 +461,7 @@ export function ProposalCostingModule({
         {/* Custom total offered field when expanded */}
         {showNegotiationAdjustment && (
           <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3 text-xs space-y-1.5 dark:border-border dark:bg-secondary/20">
-            <Label
-              htmlFor="custom-offered-input"
-              className="text-xs font-medium text-slate-700 dark:text-slate-300"
-            >
+            <Label htmlFor="custom-offered-input" className="text-xs font-medium text-slate-700 dark:text-slate-300">
               Valor ofertado acordado (ajuste manual):
             </Label>
             <div className="relative">
@@ -503,10 +486,7 @@ export function ProposalCostingModule({
         {/* Custom note field when expanded */}
         {showNoteField && (
           <div className="space-y-1 text-xs">
-            <Label
-              htmlFor="negotiation-note-input"
-              className="text-xs font-medium text-slate-700 dark:text-slate-300"
-            >
+            <Label htmlFor="negotiation-note-input" className="text-xs font-medium text-slate-700 dark:text-slate-300">
               Nota de alcance comercial o justificación de costo:
             </Label>
             <Textarea
@@ -521,7 +501,7 @@ export function ProposalCostingModule({
                   totalOfferedCop,
                   requiresExternalAdvisor,
                   externalAdvisorDetails,
-                  e.target.value
+                  e.target.value,
                 );
               }}
               placeholder="Ej: Se incluye ajuste de alcance en 2 módulos presenciales acordado con el cliente..."

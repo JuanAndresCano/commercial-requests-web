@@ -36,27 +36,19 @@ export function StageKpiCard({
       className={cn(
         "relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all cursor-pointer",
         active ? theme.activeCardClass : theme.inactiveHoverClass,
-        className
+        className,
       )}
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-muted-foreground">{label}</span>
       </div>
       <div className="mt-2.5">
-        <p
-          className="font-display text-2xl font-bold tracking-tight sm:text-3xl"
-          style={{ color: theme.colorHex }}
-        >
+        <p className="font-display text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: theme.colorHex }}>
           {count}
         </p>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {secondaryLine ?? (active ? activeHint : hint)}
-        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground">{secondaryLine ?? (active ? activeHint : hint)}</p>
       </div>
-      <div
-        className="mt-2.5 h-1 w-full rounded-full"
-        style={{ backgroundColor: theme.colorHex }}
-      />
+      <div className="mt-2.5 h-1 w-full rounded-full" style={{ backgroundColor: theme.colorHex }} />
     </button>
   );
 }

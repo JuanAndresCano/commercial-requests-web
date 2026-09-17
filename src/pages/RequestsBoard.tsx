@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Search, SlidersHorizontal, LayoutGrid, List, PlusCircle, UserCheck, Layers, Filter, Sparkles } from "@/components/icons";
+import { Search, SlidersHorizontal, LayoutGrid, List, PlusCircle, UserCheck } from "@/components/icons";
 import { Link, useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { Input } from "@/components/ui/input";
@@ -11,12 +11,11 @@ import { RoleBadge } from "@/components/RoleBadge";
 import { STATUS_META, REQUEST_TYPES, type RequestStatus } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
-import { IcesiCenefa } from "@/components/IcesiLogo";
 
 const COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "entregada"];
 
 export default function RequestsBoard() {
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const { requests, user } = useAuth();
   const role = user.role;
 
@@ -86,7 +85,8 @@ export default function RequestsBoard() {
               <RoleBadge label={user.roleLabel} />
             </div>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              {filtered.length} {filtered.length === 1 ? "solicitud encontrada" : "solicitudes encontradas"} en el flujo comercial
+              {filtered.length} {filtered.length === 1 ? "solicitud encontrada" : "solicitudes encontradas"} en el flujo
+              comercial
             </p>
           </div>
 
@@ -100,7 +100,7 @@ export default function RequestsBoard() {
                   "text-xs font-semibold h-9",
                   roleFilter === "sin-profesor"
                     ? "bg-[#e9683b] hover:bg-[#d85c32] text-white"
-                    : "border-border dark:border-[#2b2d3d]"
+                    : "border-border dark:border-[#2b2d3d]",
                 )}
               >
                 <UserCheck className="h-3.5 w-3.5 mr-1.5" />
@@ -124,7 +124,7 @@ export default function RequestsBoard() {
               "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
               roleFilter === "all"
                 ? "bg-[#5454e9] text-white shadow-xs"
-                : "bg-secondary dark:bg-[#1a1c28] text-muted-foreground hover:text-foreground"
+                : "bg-secondary dark:bg-[#1a1c28] text-muted-foreground hover:text-foreground",
             )}
           >
             Todas ({requests.length})
@@ -136,15 +136,19 @@ export default function RequestsBoard() {
               "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
               roleFilter === "mine"
                 ? "bg-[#5454e9] text-white shadow-xs"
-                : "bg-secondary dark:bg-[#1a1c28] text-muted-foreground hover:text-foreground"
+                : "bg-secondary dark:bg-[#1a1c28] text-muted-foreground hover:text-foreground",
             )}
           >
-            Asignadas a mi rol ({requests.filter((r) => {
-              if (role === "lider-producto") return r.productLeader === user.name;
-              if (role === "kam") return r.kam === user.name;
-              if (role === "profesor") return r.professor === user.name;
-              return true;
-            }).length})
+            Asignadas a mi rol (
+            {
+              requests.filter((r) => {
+                if (role === "lider-producto") return r.productLeader === user.name;
+                if (role === "kam") return r.kam === user.name;
+                if (role === "profesor") return r.professor === user.name;
+                return true;
+              }).length
+            }
+            )
           </button>
           <button
             type="button"
@@ -153,7 +157,7 @@ export default function RequestsBoard() {
               "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
               roleFilter === "sin-profesor"
                 ? "bg-[#e9683b] text-white shadow-xs"
-                : "bg-secondary dark:bg-[#1a1c28] text-muted-foreground hover:text-foreground"
+                : "bg-secondary dark:bg-[#1a1c28] text-muted-foreground hover:text-foreground",
             )}
           >
             Sin profesor asignado ({requests.filter((r) => !r.professor && r.status !== "entregada").length})
@@ -179,7 +183,9 @@ export default function RequestsBoard() {
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
                 {COLUMNS.map((c) => (
-                  <SelectItem key={c} value={c}>{STATUS_META[c].label}</SelectItem>
+                  <SelectItem key={c} value={c}>
+                    {STATUS_META[c].label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -201,7 +207,9 @@ export default function RequestsBoard() {
               <SelectContent>
                 <SelectItem value="all">Todos los tipos</SelectItem>
                 {REQUEST_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -212,7 +220,7 @@ export default function RequestsBoard() {
               onClick={() => setView("board")}
               className={cn(
                 "rounded-md p-1.5 transition-colors",
-                view === "board" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground"
+                view === "board" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground",
               )}
               aria-label="Vista kanban"
               title="Vista tablero kanban"
@@ -224,7 +232,7 @@ export default function RequestsBoard() {
               onClick={() => setView("list")}
               className={cn(
                 "rounded-md p-1.5 transition-colors",
-                view === "list" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground"
+                view === "list" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground",
               )}
               aria-label="Vista lista"
               title="Vista cuadrícula"
@@ -253,12 +261,16 @@ export default function RequestsBoard() {
         {/* List / Grid View */}
         {view === "list" && (
           <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((r) => <RequestCard key={r.id} req={r} />)}
+            {filtered.map((r) => (
+              <RequestCard key={r.id} req={r} />
+            ))}
             {filtered.length === 0 && (
               <div className="col-span-full rounded-xl border border-dashed border-border dark:border-[#252838] p-12 text-center">
                 <SlidersHorizontal className="mx-auto h-8 w-8 text-muted-foreground" />
                 <p className="mt-2 text-sm font-bold text-foreground">Sin resultados para esta búsqueda</p>
-                <p className="mt-1 text-xs text-muted-foreground">Ajusta los filtros de estado o el término de búsqueda.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Ajusta los filtros de estado o el término de búsqueda.
+                </p>
               </div>
             )}
           </div>

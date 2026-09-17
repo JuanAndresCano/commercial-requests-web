@@ -20,10 +20,26 @@ import { toast } from "sonner";
 // Additional faculty members from Universidad Icesi for realistic selection
 const ICESI_FACULTY = [
   { name: "Dr. Ricardo Mejía", dept: "Ingeniería de Sistemas y Computación", email: "ricardo.mejia@icesi.edu.co" },
-  { name: "Dra. Paula Henao", dept: "Facultad de Ciencias Administrativas y Económicas", email: "paula.henao@icesi.edu.co" },
-  { name: "Dr. Andrés Lozano", dept: "Departamento de Diseño de Medios Interactivos", email: "andres.lozano@icesi.edu.co" },
-  { name: "Dra. Marcela Rodríguez", dept: "Centro de Desarrollo del Espíritu Empresarial (CDEE)", email: "marcela.rodriguez@icesi.edu.co" },
-  { name: "Dr. Juan Carlos González", dept: "Departamento de Gestión Organizacional", email: "jc.gonzalez@icesi.edu.co" },
+  {
+    name: "Dra. Paula Henao",
+    dept: "Facultad de Ciencias Administrativas y Económicas",
+    email: "paula.henao@icesi.edu.co",
+  },
+  {
+    name: "Dr. Andrés Lozano",
+    dept: "Departamento de Diseño de Medios Interactivos",
+    email: "andres.lozano@icesi.edu.co",
+  },
+  {
+    name: "Dra. Marcela Rodríguez",
+    dept: "Centro de Desarrollo del Espíritu Empresarial (CDEE)",
+    email: "marcela.rodriguez@icesi.edu.co",
+  },
+  {
+    name: "Dr. Juan Carlos González",
+    dept: "Departamento de Gestión Organizacional",
+    email: "jc.gonzalez@icesi.edu.co",
+  },
   { name: "Mg. Diana Morales", dept: "Escuela de Ciencias de la Educación", email: "diana.morales@icesi.edu.co" },
 ];
 
@@ -31,47 +47,30 @@ interface AdvisorAssignmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   request: RequestItem;
-  onSaveAssignment: (
-    professorName: string,
-    type: "planta" | "externo",
-    externalData?: ExternalProfessorData
-  ) => void;
+  onSaveAssignment: (professorName: string, type: "planta" | "externo", externalData?: ExternalProfessorData) => void;
 }
 
-export function AdvisorAssignmentModal({
-  isOpen,
-  onClose,
-  request,
-  onSaveAssignment,
-}: AdvisorAssignmentModalProps) {
+export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignment }: AdvisorAssignmentModalProps) {
   const [activeTab, setActiveTab] = useState<"planta" | "externo">(
-    request.professorType === "externo" ? "externo" : "planta"
+    request.professorType === "externo" ? "externo" : "planta",
   );
 
   // Planta selection state
   const [selectedPlantaProf, setSelectedPlantaProf] = useState(
-    request.professorType === "planta" ? request.professor ?? PROFESSORS[0] : PROFESSORS[0]
+    request.professorType === "planta" ? (request.professor ?? PROFESSORS[0]) : PROFESSORS[0],
   );
 
   // Externo form state
   const [externoNombre, setExternoNombre] = useState(
-    request.externalProfessorData?.nombre ?? (request.professorType === "externo" ? request.professor ?? "" : "")
+    request.externalProfessorData?.nombre ?? (request.professorType === "externo" ? (request.professor ?? "") : ""),
   );
   const [externoIdentificacion, setExternoIdentificacion] = useState(
-    request.externalProfessorData?.identificacion ?? ""
+    request.externalProfessorData?.identificacion ?? "",
   );
-  const [externoEmpresa, setExternoEmpresa] = useState(
-    request.externalProfessorData?.empresaConsultora ?? ""
-  );
-  const [externoCorreo, setExternoCorreo] = useState(
-    request.externalProfessorData?.correo ?? ""
-  );
-  const [externoTelefono, setExternoTelefono] = useState(
-    request.externalProfessorData?.telefono ?? ""
-  );
-  const [externoPerfil, setExternoPerfil] = useState(
-    request.externalProfessorData?.perfil ?? ""
-  );
+  const [externoEmpresa, setExternoEmpresa] = useState(request.externalProfessorData?.empresaConsultora ?? "");
+  const [externoCorreo, setExternoCorreo] = useState(request.externalProfessorData?.correo ?? "");
+  const [externoTelefono, setExternoTelefono] = useState(request.externalProfessorData?.telefono ?? "");
+  const [externoPerfil, setExternoPerfil] = useState(request.externalProfessorData?.perfil ?? "");
 
   // Sync state when request changes or modal opens
   useEffect(() => {
@@ -128,16 +127,13 @@ export function AdvisorAssignmentModal({
             <DialogTitle className="text-lg">Asignación del Docente / Consultor</DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
-            Asigna el líder técnico para el diseño y ejecución de esta propuesta. Puedes seleccionar un profesor de planta de la Universidad Icesi o registrar un consultor/docente externo especializado.
+            Asigna el líder técnico para el diseño y ejecución de esta propuesta. Puedes seleccionar un profesor de
+            planta de la Universidad Icesi o registrar un consultor/docente externo especializado.
           </DialogDescription>
         </DialogHeader>
 
         <div className="mt-2">
-          <Tabs
-            value={activeTab}
-            onValueChange={(val) => setActiveTab(val as "planta" | "externo")}
-            className="w-full"
-          >
+          <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "planta" | "externo")} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="planta" className="flex items-center gap-2 text-xs">
                 <GraduationCap className="h-3.5 w-3.5" />
@@ -184,11 +180,11 @@ export function AdvisorAssignmentModal({
                 <div className="rounded-md border border-accent/20 bg-accent/5 p-3 text-xs">
                   <div className="flex items-center gap-2 font-medium text-foreground">
                     <GraduationCap className="h-4 w-4 text-accent" />
-                    <span>Docente seleccionado: <strong className="text-foreground">{selectedPlantaProf}</strong></span>
+                    <span>
+                      Docente seleccionado: <strong className="text-foreground">{selectedPlantaProf}</strong>
+                    </span>
                   </div>
-                  <p className="mt-1 text-muted-foreground">
-                    Institución: Universidad Icesi · Nodo: {request.node}
-                  </p>
+                  <p className="mt-1 text-muted-foreground">Institución: Universidad Icesi · Nodo: {request.node}</p>
                 </div>
               )}
             </TabsContent>
@@ -198,7 +194,8 @@ export function AdvisorAssignmentModal({
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-900 dark:text-amber-200">
                 <p className="font-semibold">Registro de Consultor o Asesor Externo</p>
                 <p className="mt-0.5 text-muted-foreground">
-                  Ingresa directamente los datos del profesional externo para emitir contratos y respaldar la propuesta comercial.
+                  Ingresa directamente los datos del profesional externo para emitir contratos y respaldar la propuesta
+                  comercial.
                 </p>
               </div>
 

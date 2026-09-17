@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment — never commit real values; document them in .env.example
+.env
+.env.*
+!.env.example
+
+# Test output
+coverage

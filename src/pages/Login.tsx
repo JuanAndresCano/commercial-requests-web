@@ -10,7 +10,7 @@ import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const DEMO_ACCOUNTS = (Object.entries(ROLE_CONFIGS) as [UserRole, (typeof ROLE_CONFIGS)[UserRole]][]).map(
-  ([key, cfg]) => ({ key, label: cfg.label, email: cfg.defaultEmail })
+  ([key, cfg]) => ({ key, label: cfg.label, email: cfg.defaultEmail }),
 );
 
 export default function Login() {
@@ -22,9 +22,7 @@ export default function Login() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const match = DEMO_ACCOUNTS.find(
-      (a) => a.email.toLowerCase() === email.trim().toLowerCase()
-    );
+    const match = DEMO_ACCOUNTS.find((a) => a.email.toLowerCase() === email.trim().toLowerCase());
     if (!match) {
       toast.error("Correo no reconocido en el directorio institucional.", {
         description: "Verifica tu usuario o contacta a TI si crees que esto es un error.",
@@ -74,7 +72,8 @@ export default function Login() {
               Transformando conocimiento en soluciones empresariales
             </h2>
             <p className="mt-2 text-sm text-white/80 font-light">
-              Plataforma oficial para la formulación, costeo y asignación de propuestas comerciales de consultoría, capacitación y mentoría.
+              Plataforma oficial para la formulación, costeo y asignación de propuestas comerciales de consultoría,
+              capacitación y mentoría.
             </p>
             <IcesiCenefa className="mt-4 opacity-70" barsCount={24} height={9} color="#ffffff" />
           </div>
@@ -87,9 +86,7 @@ export default function Login() {
             Llega más lejos
           </div>
           {/* Black Block: "icesi.edu.co" */}
-          <div className="bg-black text-white px-6 py-2 font-bold text-lg tracking-wide">
-            icesi.edu.co
-          </div>
+          <div className="bg-black text-white px-6 py-2 font-bold text-lg tracking-wide">icesi.edu.co</div>
         </div>
       </div>
 
@@ -107,9 +104,7 @@ export default function Login() {
 
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <h1 className="font-extrabold text-base sm:text-lg text-foreground tracking-tight">
-                Iniciar Sesión
-              </h1>
+              <h1 className="font-extrabold text-base sm:text-lg text-foreground tracking-tight">Iniciar Sesión</h1>
               <a
                 href="https://www.icesi.edu.co"
                 target="_blank"
@@ -127,12 +122,10 @@ export default function Login() {
         {/* Center Card: "Inicia sesión" */}
         <div className="my-auto max-w-md w-full mx-auto py-8">
           <div className="mb-6">
-            <h2 className="text-3xl font-extrabold tracking-tight text-foreground font-sans">
-              Inicia sesión
-            </h2>
+            <h2 className="text-3xl font-extrabold tracking-tight text-foreground font-sans">Inicia sesión</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ingresa con tus credenciales institucionales de la Universidad Icesi. Tu rol se
-              asigna automáticamente según tu cuenta.
+              Ingresa con tus credenciales institucionales de la Universidad Icesi. Tu rol se asigna automáticamente
+              según tu cuenta.
             </p>
           </div>
 
@@ -226,12 +219,15 @@ export default function Login() {
 
         {/* Footer info (matches Screenshot 1) */}
         <div className="pt-6 border-t border-border dark:border-[#252838] text-center text-[11px] text-muted-foreground leading-relaxed">
-          <p>
-            Universidad Icesi, Calle 18 No. 122–135 | Cali-Colombia | Teléfono: (602) 555 2334 | Fax: 555 1441
-          </p>
+          <p>Universidad Icesi, Calle 18 No. 122–135 | Cali-Colombia | Teléfono: (602) 555 2334 | Fax: 555 1441</p>
           <p className="mt-0.5">
             Copyright © {new Date().getFullYear()}{" "}
-            <a href="https://www.icesi.edu.co" target="_blank" rel="noreferrer" className="text-[#5454e9] hover:underline font-medium">
+            <a
+              href="https://www.icesi.edu.co"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[#5454e9] hover:underline font-medium"
+            >
               www.icesi.edu.co
             </a>
           </p>

@@ -1,31 +1,9 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import {
-  Plus,
-  Rocket,
-  Search,
-  ArrowRight,
-  Filter,
-  X,
-  FileText,
-  Clock,
-  CheckCircle2,
-  DollarSign,
-  Building2,
-  TrendingUp,
-  Sparkles,
-  LayoutGrid,
-  List,
-} from "@/components/icons";
+import { Plus, Rocket, Search, ArrowRight, X, Building2, LayoutGrid, List } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  RequestItem,
-  RequestStatus,
-  formatCop,
-  formatCompactCop,
-  getRelativeTime,
-} from "@/lib/mock-data";
+import { RequestItem, RequestStatus, formatCop, formatCompactCop, getRelativeTime } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { IcesiCenefa } from "@/components/IcesiLogo";
 import { UrgencyBadge } from "@/components/StatusBadge";
@@ -59,18 +37,9 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
   // el KAM al volver del detalle de una propuesta — antes se reiniciaba porque
   // el dashboard se desmonta y remonta en cada navegación.
-  const [activeFilter, setActiveFilter] = usePersistentState<FilterType>(
-    "icesi_kam_dashboard_filter_v1",
-    "all"
-  );
-  const [searchQuery, setSearchQuery] = usePersistentState(
-    "icesi_kam_dashboard_search_v1",
-    ""
-  );
-  const [viewMode, setViewMode] = usePersistentState<"tabla" | "kanban">(
-    "icesi_kam_dashboard_view_v1",
-    "tabla"
-  );
+  const [activeFilter, setActiveFilter] = usePersistentState<FilterType>("icesi_kam_dashboard_filter_v1", "all");
+  const [searchQuery, setSearchQuery] = usePersistentState("icesi_kam_dashboard_search_v1", "");
+  const [viewMode, setViewMode] = usePersistentState<"tabla" | "kanban">("icesi_kam_dashboard_view_v1", "tabla");
 
   const firstName = userName ? userName.split(" ")[0] : "Andrea";
 
@@ -151,7 +120,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   // Kanban. Es un estado de enfoque, no un filtro de datos.
   const [isolatedStage, setIsolatedStage] = usePersistentState<RequestStatus | null>(
     "icesi_kam_dashboard_isolated_v1",
-    null
+    null,
   );
 
   const handleCardClick = (stage: RequestStatus) => {
@@ -227,7 +196,9 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
             </div>
             <div>
               <p className="text-sm font-bold text-foreground">
-                ¡Tienes {misListasParaEntregarCount} {misListasParaEntregarCount === 1 ? "propuesta lista para entregar" : "propuestas listas para entregar"}!
+                ¡Tienes {misListasParaEntregarCount}{" "}
+                {misListasParaEntregarCount === 1 ? "propuesta lista para entregar" : "propuestas listas para entregar"}
+                !
               </p>
               <p className="text-xs text-muted-foreground">
                 El Líder de Producto ha finalizado el costeo y la propuesta está lista para remitir al cliente.
@@ -316,7 +287,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               onClick={() => setViewMode("tabla")}
               className={cn(
                 "rounded-md p-1.5 transition-colors",
-                viewMode === "tabla" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground"
+                viewMode === "tabla" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground",
               )}
               aria-label="Vista tabla"
               title="Vista tabla"
@@ -328,7 +299,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               onClick={() => setViewMode("kanban")}
               className={cn(
                 "rounded-md p-1.5 transition-colors",
-                viewMode === "kanban" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground"
+                viewMode === "kanban" ? "bg-[#5454e9] text-white" : "text-muted-foreground hover:text-foreground",
               )}
               aria-label="Vista kanban"
               title="Vista kanban por estado"
@@ -393,214 +364,210 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
           {/* Tabla comercial */}
           {viewMode === "tabla" && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm min-w-[720px]">
-              <thead className="border-b border-border dark:border-[#252838] bg-secondary/40 dark:bg-[#12131d] text-xs font-semibold text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">ID y Fecha</th>
-                  <th className="px-4 py-3 font-medium">Propuesta y Empresa</th>
-                  <th className="px-4 py-3 font-medium hidden md:table-cell">Líder de Producto</th>
-                  <th className="px-4 py-3 font-medium">Valor Ofertado</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="px-4 py-3 font-medium text-right min-w-[140px]">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border dark:divide-[#252838]">
-                {filteredRequests.length === 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm min-w-[720px]">
+                <thead className="border-b border-border dark:border-[#252838] bg-secondary/40 dark:bg-[#12131d] text-xs font-semibold text-muted-foreground">
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                      <div className="mx-auto max-w-sm">
-                        {!searchQuery && activeFilter === "all" && myRequests.length === 0 ? (
-                          <>
-                            <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Las solicitudes que registres quedarán aquí automáticamente.
-                            </p>
-                            <div className="mt-3 flex items-center justify-center gap-2">
-                              <Button asChild size="sm" className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white">
-                                <Link to="/solicitudes/nueva">Crear mi primera solicitud</Link>
-                              </Button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <p className="font-medium text-foreground">No se encontraron solicitudes</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {searchQuery || activeFilter !== "all"
-                                ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
-                                : "No hay registros disponibles en este momento."}
-                            </p>
-                            {(searchQuery || activeFilter !== "all") && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSearchQuery("");
-                                  setActiveFilter("all");
-                                }}
-                                className="mt-3 text-xs"
-                              >
-                                Restablecer filtros
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
+                    <th className="px-4 py-3 font-medium">ID y Fecha</th>
+                    <th className="px-4 py-3 font-medium">Propuesta y Empresa</th>
+                    <th className="px-4 py-3 font-medium hidden md:table-cell">Líder de Producto</th>
+                    <th className="px-4 py-3 font-medium">Valor Ofertado</th>
+                    <th className="px-4 py-3 font-medium">Estado</th>
+                    <th className="px-4 py-3 font-medium text-right min-w-[140px]">Acción</th>
                   </tr>
-                ) : (
-                  filteredRequests.map((r) => {
-                    const isReady = r.status === "en-costeo";
-                    const relativeTime = getRelativeTime(r.id);
-
-                    return (
-                      <tr
-                        key={r.id}
-                        className={cn(
-                          "transition-colors hover:bg-secondary/30 dark:hover:bg-[#1a1c2a]",
-                          isReady && "bg-[#4cb979]/5 dark:bg-[#4cb979]/10"
-                        )}
-                      >
-                        {/* 1. ID y Fecha */}
-                        <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs font-semibold text-foreground">
-                              {r.id}
-                            </span>
-                            <span className="text-muted-foreground/60 text-xs">·</span>
-                            <span className="text-xs text-muted-foreground">
-                              {relativeTime}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* 2. Propuesta y Empresa */}
-                        <td className="px-4 py-3.5 align-middle">
-                          <div className="flex flex-col gap-1 max-w-[320px]">
-                            <Link
-                              to={`/solicitudes/${r.id}`}
-                              className="font-semibold text-sm text-foreground hover:text-[#5454e9] dark:hover:text-[#865cf0] transition-colors leading-snug line-clamp-2"
-                              title={r.title}
-                            >
-                              {r.title}
-                            </Link>
-                            <div className="flex items-center gap-2 flex-wrap text-xs">
-                              <span
-                                className={cn(
-                                  "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium shrink-0",
-                                  getServiceTypeBadge(r.type)
-                                )}
-                              >
-                                {r.type}
-                              </span>
-                              <UrgencyBadge urgency={r.urgency} className="shrink-0" />
-                              <span className="inline-flex items-center gap-1 text-muted-foreground font-medium truncate">
-                                <Building2 className="h-3 w-3 shrink-0 opacity-70" />
-                                {r.company}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 3. Líder de Producto Responsable */}
-                        <td className="px-4 py-3.5 align-middle hidden md:table-cell">
-                          <div className="flex items-center gap-2.5">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary dark:bg-[#1e202d] text-xs font-bold text-foreground border border-border dark:border-[#2b2d3d]">
-                              {getProductLeaderInitials(r.productLeader)}
-                            </div>
-                            <span className="text-xs font-medium text-foreground/90 truncate max-w-[180px]">
-                              {r.productLeader}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* 4. Valor Ofertado */}
-                        <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          {r.status === "nueva" ? (
-                            <span className="inline-block rounded bg-muted/40 px-2 py-0.5 text-xs italic text-muted-foreground border border-border/50">
-                              - Pendiente de costeo -
-                            </span>
-                          ) : r.totalCostCop || r.costing?.totalOfferedCop ? (
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-foreground text-xs sm:text-sm tracking-tight">
-                                {formatCop(r.totalCostCop || r.costing?.totalOfferedCop || 0)}
-                              </span>
-                              {isReady && (
-                                <span className="text-[10px] text-[#4cb979] font-medium">
-                                  Costeo aprobado
-                                </span>
+                </thead>
+                <tbody className="divide-y divide-border dark:divide-[#252838]">
+                  {filteredRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                        <div className="mx-auto max-w-sm">
+                          {!searchQuery && activeFilter === "all" && myRequests.length === 0 ? (
+                            <>
+                              <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Las solicitudes que registres quedarán aquí automáticamente.
+                              </p>
+                              <div className="mt-3 flex items-center justify-center gap-2">
+                                <Button
+                                  asChild
+                                  size="sm"
+                                  className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white"
+                                >
+                                  <Link to="/solicitudes/nueva">Crear mi primera solicitud</Link>
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-medium text-foreground">No se encontraron solicitudes</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {searchQuery || activeFilter !== "all"
+                                  ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
+                                  : "No hay registros disponibles en este momento."}
+                              </p>
+                              {(searchQuery || activeFilter !== "all") && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSearchQuery("");
+                                    setActiveFilter("all");
+                                  }}
+                                  className="mt-3 text-xs"
+                                >
+                                  Restablecer filtros
+                                </Button>
                               )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRequests.map((r) => {
+                      const isReady = r.status === "en-costeo";
+                      const relativeTime = getRelativeTime(r.id);
+
+                      return (
+                        <tr
+                          key={r.id}
+                          className={cn(
+                            "transition-colors hover:bg-secondary/30 dark:hover:bg-[#1a1c2a]",
+                            isReady && "bg-[#4cb979]/5 dark:bg-[#4cb979]/10",
+                          )}
+                        >
+                          {/* 1. ID y Fecha */}
+                          <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-xs font-semibold text-foreground">{r.id}</span>
+                              <span className="text-muted-foreground/60 text-xs">·</span>
+                              <span className="text-xs text-muted-foreground">{relativeTime}</span>
                             </div>
-                          ) : (
-                            <span className="text-xs italic text-muted-foreground">
-                              - Pendiente de costeo -
-                            </span>
-                          )}
-                        </td>
+                          </td>
 
-                        {/* 5. Estado — mismas 4 etiquetas y colores que el Kanban */}
-                        <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          {r.status === "nueva" && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-2.5 py-0.5 text-xs font-medium text-[#5454e9] dark:text-[#865cf0]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9]" />
-                              Nueva
-                            </span>
-                          )}
-                          {r.status === "en-experto" && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e9683b]/30 bg-[#e9683b]/10 px-2.5 py-0.5 text-xs font-medium text-[#e9683b]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#e9683b] animate-pulse" />
-                              En Proceso
-                            </span>
-                          )}
-                          {isReady && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#865cf0]/30 bg-[#865cf0]/10 px-2.5 py-0.5 text-xs font-medium text-[#865cf0]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#865cf0]" />
-                              Lista para entregar
-                            </span>
-                          )}
-                          {r.status === "entregada" && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4cb979]/30 bg-[#4cb979]/10 px-2.5 py-0.5 text-xs font-medium text-[#4cb979]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#4cb979]" />
-                              Entregada
-                            </span>
-                          )}
-                        </td>
-
-                        {/* 6. Acción */}
-                        <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap min-w-[140px]">
-                          {isReady ? (
-                            <Button
-                              asChild
-                              size="sm"
-                              className="h-8 rounded-full bg-icesi-blue hover:bg-[#4343d0] px-3.5 text-xs font-bold text-white shadow-xs transition-colors"
-                            >
-                              <Link to={`/solicitudes/${r.id}`}>
-                                <span>Ver propuesta</span>
-                                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                          {/* 2. Propuesta y Empresa */}
+                          <td className="px-4 py-3.5 align-middle">
+                            <div className="flex flex-col gap-1 max-w-[320px]">
+                              <Link
+                                to={`/solicitudes/${r.id}`}
+                                className="font-semibold text-sm text-foreground hover:text-[#5454e9] dark:hover:text-[#865cf0] transition-colors leading-snug line-clamp-2"
+                                title={r.title}
+                              >
+                                {r.title}
                               </Link>
-                            </Button>
-                          ) : (
-                            <Link
-                              to={`/solicitudes/${r.id}`}
-                              className="inline-flex items-center text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
-                            >
-                              <span>Ver detalle</span>
-                              <ArrowRight className="ml-1 h-3 w-3 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
-                            </Link>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                              <div className="flex items-center gap-2 flex-wrap text-xs">
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium shrink-0",
+                                    getServiceTypeBadge(r.type),
+                                  )}
+                                >
+                                  {r.type}
+                                </span>
+                                <UrgencyBadge urgency={r.urgency} className="shrink-0" />
+                                <span className="inline-flex items-center gap-1 text-muted-foreground font-medium truncate">
+                                  <Building2 className="h-3 w-3 shrink-0 opacity-70" />
+                                  {r.company}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* 3. Líder de Producto Responsable */}
+                          <td className="px-4 py-3.5 align-middle hidden md:table-cell">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary dark:bg-[#1e202d] text-xs font-bold text-foreground border border-border dark:border-[#2b2d3d]">
+                                {getProductLeaderInitials(r.productLeader)}
+                              </div>
+                              <span className="text-xs font-medium text-foreground/90 truncate max-w-[180px]">
+                                {r.productLeader}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* 4. Valor Ofertado */}
+                          <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                            {r.status === "nueva" ? (
+                              <span className="inline-block rounded bg-muted/40 px-2 py-0.5 text-xs italic text-muted-foreground border border-border/50">
+                                - Pendiente de costeo -
+                              </span>
+                            ) : r.totalCostCop || r.costing?.totalOfferedCop ? (
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-foreground text-xs sm:text-sm tracking-tight">
+                                  {formatCop(r.totalCostCop || r.costing?.totalOfferedCop || 0)}
+                                </span>
+                                {isReady && (
+                                  <span className="text-[10px] text-[#4cb979] font-medium">Costeo aprobado</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs italic text-muted-foreground">- Pendiente de costeo -</span>
+                            )}
+                          </td>
+
+                          {/* 5. Estado — mismas 4 etiquetas y colores que el Kanban */}
+                          <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                            {r.status === "nueva" && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-2.5 py-0.5 text-xs font-medium text-[#5454e9] dark:text-[#865cf0]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#5454e9]" />
+                                Nueva
+                              </span>
+                            )}
+                            {r.status === "en-experto" && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e9683b]/30 bg-[#e9683b]/10 px-2.5 py-0.5 text-xs font-medium text-[#e9683b]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#e9683b] animate-pulse" />
+                                En Proceso
+                              </span>
+                            )}
+                            {isReady && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#865cf0]/30 bg-[#865cf0]/10 px-2.5 py-0.5 text-xs font-medium text-[#865cf0]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#865cf0]" />
+                                Lista para entregar
+                              </span>
+                            )}
+                            {r.status === "entregada" && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4cb979]/30 bg-[#4cb979]/10 px-2.5 py-0.5 text-xs font-medium text-[#4cb979]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#4cb979]" />
+                                Entregada
+                              </span>
+                            )}
+                          </td>
+
+                          {/* 6. Acción */}
+                          <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap min-w-[140px]">
+                            {isReady ? (
+                              <Button
+                                asChild
+                                size="sm"
+                                className="h-8 rounded-full bg-icesi-blue hover:bg-[#4343d0] px-3.5 text-xs font-bold text-white shadow-xs transition-colors"
+                              >
+                                <Link to={`/solicitudes/${r.id}`}>
+                                  <span>Ver propuesta</span>
+                                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                                </Link>
+                              </Button>
+                            ) : (
+                              <Link
+                                to={`/solicitudes/${r.id}`}
+                                className="inline-flex items-center text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
+                              >
+                                <span>Ver detalle</span>
+                                <ArrowRight className="ml-1 h-3 w-3 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                              </Link>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {/* Vista Kanban por estado */}
-          {viewMode === "kanban" && (
-            kanbanRequests.length === 0 ? (
+          {viewMode === "kanban" &&
+            (kanbanRequests.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                 <div className="mx-auto max-w-sm">
                   {!searchQuery && myRequests.length === 0 ? (
@@ -624,12 +591,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                           : "No hay registros disponibles en este momento."}
                       </p>
                       {searchQuery && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSearchQuery("")}
-                          className="mt-3 text-xs"
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setSearchQuery("")} className="mt-3 text-xs">
                           Limpiar búsqueda
                         </Button>
                       )}
@@ -641,7 +603,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               <div
                 className={cn(
                   "grid gap-4 p-4 items-start",
-                  isolatedStage ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-4"
+                  isolatedStage ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-4",
                 )}
               >
                 {(isolatedStage ? [isolatedStage] : BOARD_COLUMNS).map((col) => (
@@ -657,8 +619,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   />
                 ))}
               </div>
-            )
-          )}
+            ))}
         </div>
       </div>
     </div>

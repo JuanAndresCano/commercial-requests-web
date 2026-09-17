@@ -1,0 +1,18 @@
+# Rule files: changing them requires the lead's review, so no person or AI tool
+# can relax a check to make a change pass. Add co-owners by GitHub username.
+
+/AGENTS.md                      @JuanAndresCano
+/CLAUDE.md                      @JuanAndresCano
+/GEMINI.md                      @JuanAndresCano
+/.cursor/                       @JuanAndresCano
+/.github/                       @JuanAndresCano
+/.husky/                        @JuanAndresCano
+/eslint.config.js               @JuanAndresCano
+/tsconfig*.json                 @JuanAndresCano
+/vitest.config.ts               @JuanAndresCano
+/commitlint.config.js           @JuanAndresCano
+/.prettierrc.json               @JuanAndresCano
+/package.json                   @JuanAndresCano
+
+# Money: the costing formula
+/src/lib/costing.ts             @JuanAndresCano

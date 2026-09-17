@@ -1,14 +1,11 @@
 import { Link } from "react-router-dom";
-import { Calendar, User, Tag, ArrowUpRight, AlertCircle } from "@/components/icons";
+import { Calendar, User, ArrowUpRight, AlertCircle } from "@/components/icons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { StatusBadge, UrgencyBadge } from "./StatusBadge";
+import { UrgencyBadge } from "./StatusBadge";
 import type { RequestItem } from "@/lib/mock-data";
-import { cn } from "@/lib/utils";
 
 export function RequestCard({ req }: { req: RequestItem }) {
-  const isCapacitacion = req.type === "Capacitación";
-
   return (
     <Link
       to={`/solicitudes/${req.id}`}
@@ -19,9 +16,7 @@ export function RequestCard({ req }: { req: RequestItem }) {
       {req.clientObservations && (
         <div className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300/60 dark:border-amber-900/50 px-3.5 py-1.5">
           <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
-            Cliente pidió ajustes
-          </span>
+          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
         </div>
       )}
 
@@ -29,13 +24,9 @@ export function RequestCard({ req }: { req: RequestItem }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="font-mono text-[11px] font-semibold text-muted-foreground">
-                {req.id}
-              </span>
+              <span className="font-mono text-[11px] font-semibold text-muted-foreground">{req.id}</span>
               <span className="text-[10px] text-muted-foreground/60">•</span>
-              <span className="text-[11px] font-medium text-foreground truncate max-w-[130px]">
-                {req.company}
-              </span>
+              <span className="text-[11px] font-medium text-foreground truncate max-w-[130px]">{req.company}</span>
             </div>
             <h3 className="mt-1 line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-foreground group-hover:text-[#5454e9] transition-colors font-sans">
               {req.title}
@@ -57,9 +48,7 @@ export function RequestCard({ req }: { req: RequestItem }) {
               LP: {req.productLeader.split(" ")[0]} {req.productLeader.split(" ")[1] || ""}
             </span>
             {req.professor ? (
-              <span className="truncate max-w-[120px] text-[11px] font-semibold text-foreground">
-                {req.professor}
-              </span>
+              <span className="truncate max-w-[120px] text-[11px] font-semibold text-foreground">{req.professor}</span>
             ) : (
               <span className="rounded bg-[#e9683b]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#e9683b]">
                 Sin docente

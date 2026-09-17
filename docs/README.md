@@ -2,6 +2,12 @@
 
 > **Punto de entrada.** Si eres un agente de IA (o una persona) que llega a este repositorio sin contexto previo, empieza aquí y sigue los enlaces en el orden sugerido.
 
+> **Actualización (2026-09-16).** Este repositorio pasó a ser la base del **cliente web de
+> producción** (`commercial-requests-web`), que se conectará a `commercial-requests-backend`.
+> Lo que sigue describe el prototipo tal como se validó: las **reglas de negocio siguen
+> vigentes**, pero la persistencia en `localStorage` y el login simulado se van a reemplazar.
+> Reglas de código y de trabajo: [`AGENTS.md`](../AGENTS.md) y [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+
 ## ⚠️ Qué es (y qué NO es) este repositorio
 
 Este repositorio (`university-connect`) es **un prototipo de UX/UI**, construido en React + TypeScript + Vite + Tailwind + shadcn/ui, con **datos simulados (mock) y persistencia en `localStorage`** — no hay backend real, ni base de datos, ni autenticación real.

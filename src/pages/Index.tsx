@@ -24,10 +24,7 @@ const Index = () => {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle variant="pill" />
-            <Link
-              to="/login"
-              className="text-xs font-bold text-[#5454e9] dark:text-[#865cf0] hover:underline"
-            >
+            <Link to="/login" className="text-xs font-bold text-[#5454e9] dark:text-[#865cf0] hover:underline">
               Iniciar Sesión
             </Link>
           </div>
@@ -47,7 +44,8 @@ const Index = () => {
               Gestión Integral de Propuestas Comerciales
             </h1>
             <p className="mt-3 text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Plataforma institucional para la recepción, estructuración técnica, costeo financiero con estampilla Pro-Cultura y asignación de profesores de planta o consultores externos.
+              Plataforma institucional para la recepción, estructuración técnica, costeo financiero con estampilla
+              Pro-Cultura y asignación de profesores de planta o consultores externos.
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -64,9 +62,7 @@ const Index = () => {
           {/* Decorative Brand Cenefa */}
           <div className="mt-8 pt-4 border-t border-border dark:border-[#252838] flex items-center justify-between">
             <IcesiCenefa barsCount={30} height={9} color="#5454e9" className="opacity-40" />
-            <span className="text-xs font-extrabold text-[#5454e9] tracking-wide">
-              Llega más lejos · icesi.edu.co
-            </span>
+            <span className="text-xs font-extrabold text-[#5454e9] tracking-wide">Llega más lejos · icesi.edu.co</span>
           </div>
         </div>
       </main>
@@ -75,7 +71,8 @@ const Index = () => {
       <footer className="border-t border-border dark:border-[#252838] bg-card dark:bg-[#0e0f14] py-6 px-6 text-center text-xs text-muted-foreground">
         <p>Universidad Icesi · Calle 18 No. 122–135, Pance, Cali - Colombia</p>
         <p className="mt-1 text-[11px]">
-          Línea de atención: +57 (602) 555 2334 · <span className="text-[#5454e9] font-medium">Llega más lejos · icesi.edu.co</span>
+          Línea de atención: +57 (602) 555 2334 ·{" "}
+          <span className="text-[#5454e9] font-medium">Llega más lejos · icesi.edu.co</span>
         </p>
       </footer>
     </div>

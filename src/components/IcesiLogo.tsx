@@ -1,4 +1,3 @@
-import React from "react";
 import { cn } from "@/lib/utils";
 
 interface IcesiSymbolProps {
@@ -126,12 +125,7 @@ export function IcesiLogo({
       <div className={cn("inline-flex flex-col items-center text-center select-none", className)}>
         <IcesiSymbol size={symbolSizes[size]} color={symbolColor} />
         {withDescriptor && (
-          <span
-            className={cn(
-              "mt-1 text-[11px] font-medium tracking-tight leading-none",
-              descriptorColor
-            )}
-          >
+          <span className={cn("mt-1 text-[11px] font-medium tracking-tight leading-none", descriptorColor)}>
             {descriptorText}
           </span>
         )}
@@ -141,7 +135,7 @@ export function IcesiLogo({
             size === "sm" && "text-lg",
             size === "md" && "text-2xl",
             size === "lg" && "text-3xl",
-            textColor
+            textColor,
           )}
         >
           ICESI
@@ -156,12 +150,7 @@ export function IcesiLogo({
       <IcesiSymbol size={symbolSizes[size]} color={symbolColor} />
       <div className="flex flex-col leading-none">
         {withDescriptor && (
-          <span
-            className={cn(
-              "text-[11px] font-medium tracking-normal mb-0.5",
-              descriptorColor
-            )}
-          >
+          <span className={cn("text-[11px] font-medium tracking-normal mb-0.5", descriptorColor)}>
             {descriptorText}
           </span>
         )}
@@ -171,7 +160,7 @@ export function IcesiLogo({
             size === "sm" && "text-lg",
             size === "md" && "text-2xl",
             size === "lg" && "text-3xl",
-            textColor
+            textColor,
           )}
         >
           ICESI

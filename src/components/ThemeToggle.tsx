@@ -1,4 +1,3 @@
-import React from "react";
 import { Sun, Moon } from "@/components/icons";
 import { useTheme } from "@/context/ThemeContext";
 import { cn } from "@/lib/utils";
@@ -9,11 +8,7 @@ interface ThemeToggleProps {
   showLabel?: boolean;
 }
 
-export function ThemeToggle({
-  className,
-  variant = "icon",
-  showLabel = false,
-}: ThemeToggleProps) {
+export function ThemeToggle({ className, variant = "icon", showLabel = false }: ThemeToggleProps) {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
 
@@ -27,7 +22,7 @@ export function ThemeToggle({
           isDark
             ? "border-white/10 bg-[#1e202d] text-white hover:bg-[#252837]"
             : "border-border bg-white text-slate-700 hover:bg-slate-100 shadow-sm",
-          className
+          className,
         )}
         title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
         aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
@@ -57,7 +52,7 @@ export function ThemeToggle({
         isDark
           ? "text-zinc-400 hover:bg-white/10 hover:text-white"
           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-        className
+        className,
       )}
       title={isDark ? "Activar modo claro" : "Activar modo oscuro"}
       aria-label={isDark ? "Activar modo claro" : "Activar modo oscuro"}

@@ -1,0 +1,10 @@
+dist
+coverage
+node_modules
+package-lock.json
+
+# Business specification written by the product/UX side: not reformatted by tooling.
+docs
+
+# Generated shadcn/ui primitives: kept exactly as generated.
+src/components/ui

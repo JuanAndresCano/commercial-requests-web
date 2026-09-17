@@ -15,7 +15,6 @@ import {
   Mail,
   User,
   Check,
-  ChevronRight,
   MessageSquare,
   ArrowLeftRight,
   UserCheck,
@@ -41,13 +40,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -253,7 +246,10 @@ export default function RequestDetail() {
   if (fullInfoDraft.contactTelefono.trim() && !PHONE_RE.test(fullInfoDraft.contactTelefono.trim())) {
     fullInfoErrors.contactTelefono = "Teléfono con formato inválido";
   }
-  if (fullInfoDraft.contactTelefonoSecundario.trim() && !PHONE_RE.test(fullInfoDraft.contactTelefonoSecundario.trim())) {
+  if (
+    fullInfoDraft.contactTelefonoSecundario.trim() &&
+    !PHONE_RE.test(fullInfoDraft.contactTelefonoSecundario.trim())
+  ) {
     fullInfoErrors.contactTelefonoSecundario = "Teléfono con formato inválido";
   }
   const hasFullInfoErrors = Object.keys(fullInfoErrors).length > 0;
@@ -298,8 +294,7 @@ export default function RequestDetail() {
 
   // Borrador vacío solo para alimentar el formulario de costeo del Líder de
   // Producto — nunca se muestra como si fuera un valor ya definido.
-  const currentCosting: ProposalCosting =
-    req.costing ?? calculateCosting(req.type, 0, 30);
+  const currentCosting: ProposalCosting = req.costing ?? calculateCosting(req.type, 0, 30);
 
   const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
   const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
@@ -307,7 +302,7 @@ export default function RequestDetail() {
   const handleSaveAssignment = (
     professorName: string,
     type: "planta" | "externo",
-    externalData?: ExternalProfessorData
+    externalData?: ExternalProfessorData,
   ) => {
     assignProfessorDetailed(req.id, professorName, type, externalData);
     if (type === "externo") {
@@ -394,20 +389,22 @@ export default function RequestDetail() {
 
   const CONFIRM_ACTION_META = {
     experto: {
-      title: "¿Avanzar a \"En proceso por experto\"?",
-      description: "El docente asignado queda como responsable de formular la temática y el cronograma antes del costeo.",
+      title: '¿Avanzar a "En proceso por experto"?',
+      description:
+        "El docente asignado queda como responsable de formular la temática y el cronograma antes del costeo.",
       confirmLabel: "Sí, avanzar",
       onConfirm: handleMoveToExperto,
     },
     costeo: {
-      title: "¿Avanzar a \"En proceso de costeo\"?",
+      title: '¿Avanzar a "En proceso de costeo"?',
       description: "A partir de aquí se estructura el valor final de la propuesta.",
       confirmLabel: "Sí, avanzar",
       onConfirm: handleMoveToCosteo,
     },
     entregada: {
       title: "¿Marcar como Entregada?",
-      description: "Confirma que la propuesta ya fue remitida al cliente con el costeo definido. Esta acción cierra el flujo de la solicitud.",
+      description:
+        "Confirma que la propuesta ya fue remitida al cliente con el costeo definido. Esta acción cierra el flujo de la solicitud.",
       confirmLabel: "Sí, marcar entregada",
       onConfirm: handleSendToClient,
     },
@@ -438,15 +435,11 @@ export default function RequestDetail() {
         <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-6 shadow-xs">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div className="min-w-0 flex-1 space-y-2">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-sans">
-                {req.title}
-              </h1>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-sans">{req.title}</h1>
 
               {/* Fila de metadatos inline sutiles: Empresa, Contacto, Código REQ y Badges discretos */}
               <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-muted-foreground">
-                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">
-                  #{req.id}
-                </span>
+                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.id}</span>
 
                 <span className="text-border dark:text-[#252838]">·</span>
 
@@ -540,7 +533,11 @@ export default function RequestDetail() {
                   disabled={!hasValidCosting}
                   onClick={() => setConfirmingAction("entregada")}
                   className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                  title={hasValidCosting ? undefined : "El Líder de Producto aún no ha definido un valor real para esta propuesta"}
+                  title={
+                    hasValidCosting
+                      ? undefined
+                      : "El Líder de Producto aún no ha definido un valor real para esta propuesta"
+                  }
                 >
                   <Send className="h-3.5 w-3.5 mr-1.5" />
                   Enviar a cliente
@@ -674,12 +671,10 @@ export default function RequestDetail() {
               /* Vista comercial para KAM — el Líder de Producto aún no ha costeado */
               <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 p-8 text-center">
                 <Clock className="h-6 w-6 text-slate-400" />
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  Costeo en proceso
-                </p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Costeo en proceso</p>
                 <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
-                  El Líder de Producto todavía no ha estructurado el valor de esta propuesta.
-                  Aquí verás el valor oficial en cuanto quede definido.
+                  El Líder de Producto todavía no ha estructurado el valor de esta propuesta. Aquí verás el valor
+                  oficial en cuanto quede definido.
                 </p>
               </div>
             )}
@@ -735,9 +730,7 @@ export default function RequestDetail() {
                       <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                       Modalidad
                     </span>
-                    <span className="font-semibold text-foreground">
-                      {req.modalidad || "Sin especificar"}
-                    </span>
+                    <span className="font-semibold text-foreground">{req.modalidad || "Sin especificar"}</span>
                   </div>
 
                   {/* Participantes */}
@@ -768,15 +761,15 @@ export default function RequestDetail() {
                       <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                       Entrega esperada
                     </span>
-                    <span className="font-semibold text-foreground">
-                      {formattedDeadline}
-                    </span>
+                    <span className="font-semibold text-foreground">{formattedDeadline}</span>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3 text-xs mt-2">
                   <div className="space-y-1">
-                    <Label htmlFor="specs-horas" className="text-[11px] text-muted-foreground">Dedicación estimada (horas)</Label>
+                    <Label htmlFor="specs-horas" className="text-[11px] text-muted-foreground">
+                      Dedicación estimada (horas)
+                    </Label>
                     <Input
                       id="specs-horas"
                       value={specsDraft.horas}
@@ -787,8 +780,13 @@ export default function RequestDetail() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="specs-modalidad" className="text-[11px] text-muted-foreground">Modalidad</Label>
-                    <Select value={specsDraft.modalidad} onValueChange={(v) => setSpecsDraft((d) => ({ ...d, modalidad: v }))}>
+                    <Label htmlFor="specs-modalidad" className="text-[11px] text-muted-foreground">
+                      Modalidad
+                    </Label>
+                    <Select
+                      value={specsDraft.modalidad}
+                      onValueChange={(v) => setSpecsDraft((d) => ({ ...d, modalidad: v }))}
+                    >
                       <SelectTrigger id="specs-modalidad" className="h-8 text-xs">
                         <SelectValue placeholder="Seleccionar modalidad" />
                       </SelectTrigger>
@@ -802,8 +800,13 @@ export default function RequestDetail() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="specs-participantes" className="text-[11px] text-muted-foreground">Participantes</Label>
-                    <Select value={specsDraft.participantes} onValueChange={(v) => setSpecsDraft((d) => ({ ...d, participantes: v }))}>
+                    <Label htmlFor="specs-participantes" className="text-[11px] text-muted-foreground">
+                      Participantes
+                    </Label>
+                    <Select
+                      value={specsDraft.participantes}
+                      onValueChange={(v) => setSpecsDraft((d) => ({ ...d, participantes: v }))}
+                    >
                       <SelectTrigger id="specs-participantes" className="h-8 text-xs">
                         <SelectValue placeholder="Seleccionar rango" />
                       </SelectTrigger>
@@ -819,14 +822,21 @@ export default function RequestDetail() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="specs-tipo" className="text-[11px] text-muted-foreground">Tipo de servicio</Label>
-                    <Select value={specsDraft.type} onValueChange={(v) => setSpecsDraft((d) => ({ ...d, type: v as RequestType }))}>
+                    <Label htmlFor="specs-tipo" className="text-[11px] text-muted-foreground">
+                      Tipo de servicio
+                    </Label>
+                    <Select
+                      value={specsDraft.type}
+                      onValueChange={(v) => setSpecsDraft((d) => ({ ...d, type: v as RequestType }))}
+                    >
                       <SelectTrigger id="specs-tipo" className="h-8 text-xs">
                         <SelectValue placeholder="Seleccionar tipo" />
                       </SelectTrigger>
                       <SelectContent>
                         {REQUEST_TYPES.map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -834,7 +844,9 @@ export default function RequestDetail() {
 
                   {specsDraft.type === "Otro" && (
                     <div className="space-y-1">
-                      <Label htmlFor="specs-tipo-otro" className="text-[11px] text-muted-foreground">Especifica el tipo</Label>
+                      <Label htmlFor="specs-tipo-otro" className="text-[11px] text-muted-foreground">
+                        Especifica el tipo
+                      </Label>
                       <Input
                         id="specs-tipo-otro"
                         value={specsDraft.tipoOtro}
@@ -846,7 +858,9 @@ export default function RequestDetail() {
                   )}
 
                   <div className="space-y-1">
-                    <Label htmlFor="specs-deadline" className="text-[11px] text-muted-foreground">Entrega esperada</Label>
+                    <Label htmlFor="specs-deadline" className="text-[11px] text-muted-foreground">
+                      Entrega esperada
+                    </Label>
                     <Input
                       id="specs-deadline"
                       type="date"
@@ -857,10 +871,19 @@ export default function RequestDetail() {
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setIsEditingSpecs(false)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setIsEditingSpecs(false)}
+                    >
                       Cancelar
                     </Button>
-                    <Button size="sm" className="h-7 text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white" onClick={handleSaveSpecs}>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white"
+                      onClick={handleSaveSpecs}
+                    >
                       Guardar
                     </Button>
                   </div>
@@ -878,9 +901,7 @@ export default function RequestDetail() {
                 {/* Nodo Temático */}
                 <div className="space-y-0.5">
                   <span className="text-[11px] font-medium text-muted-foreground">Nodo Temático</span>
-                  <p className="font-semibold text-foreground leading-snug">
-                    {req.node}
-                  </p>
+                  <p className="font-semibold text-foreground leading-snug">{req.node}</p>
                 </div>
 
                 {/* Líder de Producto */}
@@ -904,21 +925,15 @@ export default function RequestDetail() {
                     )}
                   </div>
                   <div className="flex items-center justify-between">
-                    <p className="font-semibold text-foreground">
-                      {req.productLeader}
-                    </p>
-                    {req.productLeader === user.name && (
-                      <span className="text-[10px] text-muted-foreground">(Tú)</span>
-                    )}
+                    <p className="font-semibold text-foreground">{req.productLeader}</p>
+                    {req.productLeader === user.name && <span className="text-[10px] text-muted-foreground">(Tú)</span>}
                   </div>
                 </div>
 
                 {/* KAM asignado */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <span className="text-[11px] font-medium text-muted-foreground">KAM Responsable</span>
-                  <p className="font-semibold text-foreground">
-                    {req.kam}
-                  </p>
+                  <p className="font-semibold text-foreground">{req.kam}</p>
                 </div>
 
                 {/* Docente / Asesor asignado */}
@@ -940,9 +955,7 @@ export default function RequestDetail() {
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="font-semibold text-foreground truncate">
-                            {req.professor}
-                          </span>
+                          <span className="font-semibold text-foreground truncate">{req.professor}</span>
                           {req.professorType === "externo" ? (
                             <span className="rounded px-1.5 py-0.2 text-[10px] font-bold bg-[#e9683b]/10 text-[#e9683b] border border-[#e9683b]/30">
                               Externo
@@ -976,9 +989,7 @@ export default function RequestDetail() {
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs italic text-muted-foreground">
-                      Sin docente o asesor asignado
-                    </p>
+                    <p className="text-xs italic text-muted-foreground">Sin docente o asesor asignado</p>
                   )}
                 </div>
               </div>
@@ -999,7 +1010,7 @@ export default function RequestDetail() {
           <div
             className={cn(
               "flex items-center justify-between gap-3 p-5",
-              showFullInfo && "border-b border-border dark:border-[#252838]"
+              showFullInfo && "border-b border-border dark:border-[#252838]",
             )}
           >
             <button
@@ -1011,9 +1022,7 @@ export default function RequestDetail() {
                 <ClipboardList className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-bold text-foreground">
-                  Información completa de la solicitud
-                </h3>
+                <h3 className="text-sm font-bold text-foreground">Información completa de la solicitud</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground truncate">
                   {fullInfoCompleteness.filled} de {fullInfoCompleteness.total} campos diligenciados
                   {req.fullInfoUpdatedAt &&
@@ -1047,81 +1056,88 @@ export default function RequestDetail() {
           </div>
 
           {showFullInfo && (
-          <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
-            {/* Empresa */}
-            <InfoSection title="Empresa">
-              <InfoRow label="NIT" value={req.companyNit} />
-              <InfoRow label="Dirección" value={req.companyDireccion} />
-              <InfoRow label="Teléfono" value={req.companyTelefono} />
-              <InfoRow label="Correo" value={req.companyCorreo} />
-              <InfoRow
-                label="CIIU principal"
-                value={req.companyCiiuPrincipal ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}` : undefined}
-              />
-              <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
-              <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
-              <InfoRow label="Sitio web" value={req.companyWeb} />
-              <InfoRow label="Descripción" value={req.companyDescripcion} block />
-            </InfoSection>
-
-            {/* Contacto */}
-            <InfoSection title="Contacto del cliente">
-              <InfoRow label="Nombre" value={req.applicant} />
-              <InfoRow label="Cargo" value={req.contactCargo} />
-              <InfoRow label="Área o dependencia" value={req.contactArea} />
-              <InfoRow label="Teléfono" value={req.contactTelefono} />
-              <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
-              <InfoRow label="Correo" value={req.contactCorreo} />
-              <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
-
-              {req.additionalContacts && req.additionalContacts.length > 0 && (
-                <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Contactos adicionales
-                  </span>
-                  {req.additionalContacts.map((c) => (
-                    <div key={c.id} className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5">
-                      <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
-                      {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
-                      {(c.telefono || c.correo) && (
-                        <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </InfoSection>
-
-            {/* Diagnóstico del requerimiento */}
-            <InfoSection title="Diagnóstico del requerimiento">
-              <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
-              <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
-              <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
-              <InfoRow label="Resultados esperados" value={req.resultados} block />
-              <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
-              <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
-            </InfoSection>
-
-            {/* Formación previa */}
-            <InfoSection title="Formación previa">
-              <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
-              {req.formacionPrevia === "Sí" && (
-                <>
-                  <InfoRow label="Descripción" value={req.descFormacion} block />
-                  <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
-                  <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
-                </>
-              )}
-            </InfoSection>
-
-            {/* Observaciones */}
-            <div className="lg:col-span-2">
-              <InfoSection title="Observaciones del KAM">
-                <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
+            <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
+              {/* Empresa */}
+              <InfoSection title="Empresa">
+                <InfoRow label="NIT" value={req.companyNit} />
+                <InfoRow label="Dirección" value={req.companyDireccion} />
+                <InfoRow label="Teléfono" value={req.companyTelefono} />
+                <InfoRow label="Correo" value={req.companyCorreo} />
+                <InfoRow
+                  label="CIIU principal"
+                  value={
+                    req.companyCiiuPrincipal
+                      ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}`
+                      : undefined
+                  }
+                />
+                <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
+                <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
+                <InfoRow label="Sitio web" value={req.companyWeb} />
+                <InfoRow label="Descripción" value={req.companyDescripcion} block />
               </InfoSection>
+
+              {/* Contacto */}
+              <InfoSection title="Contacto del cliente">
+                <InfoRow label="Nombre" value={req.applicant} />
+                <InfoRow label="Cargo" value={req.contactCargo} />
+                <InfoRow label="Área o dependencia" value={req.contactArea} />
+                <InfoRow label="Teléfono" value={req.contactTelefono} />
+                <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
+                <InfoRow label="Correo" value={req.contactCorreo} />
+                <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
+
+                {req.additionalContacts && req.additionalContacts.length > 0 && (
+                  <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Contactos adicionales
+                    </span>
+                    {req.additionalContacts.map((c) => (
+                      <div
+                        key={c.id}
+                        className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5"
+                      >
+                        <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
+                        {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
+                        {(c.telefono || c.correo) && (
+                          <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InfoSection>
+
+              {/* Diagnóstico del requerimiento */}
+              <InfoSection title="Diagnóstico del requerimiento">
+                <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
+                <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
+                <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
+                <InfoRow label="Resultados esperados" value={req.resultados} block />
+                <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
+                <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
+              </InfoSection>
+
+              {/* Formación previa */}
+              <InfoSection title="Formación previa">
+                <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
+                {req.formacionPrevia === "Sí" && (
+                  <>
+                    <InfoRow label="Descripción" value={req.descFormacion} block />
+                    <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
+                    <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
+                  </>
+                )}
+              </InfoSection>
+
+              {/* Observaciones */}
+              <div className="lg:col-span-2">
+                <InfoSection title="Observaciones del KAM">
+                  <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
+                </InfoSection>
+              </div>
             </div>
-          </div>
-        )}
+          )}
         </div>
       </div>
 
@@ -1135,22 +1151,39 @@ export default function RequestDetail() {
               Editar información de la solicitud
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".
+              Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado
+              "Nueva".
             </DialogDescription>
           </DialogHeader>
 
           <Tabs defaultValue="general" className="mt-2">
             <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto">
-              <TabsTrigger value="general" className="text-[11px] py-1.5">General</TabsTrigger>
-              <TabsTrigger value="empresa" className="text-[11px] py-1.5">Empresa</TabsTrigger>
-              <TabsTrigger value="contacto" className="text-[11px] py-1.5">Contacto</TabsTrigger>
-              <TabsTrigger value="diagnostico" className="text-[11px] py-1.5">Diagnóstico</TabsTrigger>
-              <TabsTrigger value="formacion" className="text-[11px] py-1.5">Formación</TabsTrigger>
-              <TabsTrigger value="observaciones" className="text-[11px] py-1.5">Otros</TabsTrigger>
+              <TabsTrigger value="general" className="text-[11px] py-1.5">
+                General
+              </TabsTrigger>
+              <TabsTrigger value="empresa" className="text-[11px] py-1.5">
+                Empresa
+              </TabsTrigger>
+              <TabsTrigger value="contacto" className="text-[11px] py-1.5">
+                Contacto
+              </TabsTrigger>
+              <TabsTrigger value="diagnostico" className="text-[11px] py-1.5">
+                Diagnóstico
+              </TabsTrigger>
+              <TabsTrigger value="formacion" className="text-[11px] py-1.5">
+                Formación
+              </TabsTrigger>
+              <TabsTrigger value="observaciones" className="text-[11px] py-1.5">
+                Otros
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="general" className="space-y-2.5 pt-4">
-              <EditableField label="Título de la propuesta" value={fullInfoDraft.title} onChange={(v) => setFullInfoDraft((d) => ({ ...d, title: v }))} />
+              <EditableField
+                label="Título de la propuesta"
+                value={fullInfoDraft.title}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, title: v }))}
+              />
               <div className="space-y-1">
                 <Label className="text-[11px] text-muted-foreground">Urgencia</Label>
                 <Select
@@ -1162,7 +1195,9 @@ export default function RequestDetail() {
                   </SelectTrigger>
                   <SelectContent>
                     {(Object.keys(URGENCY_META) as Urgency[]).map((u) => (
-                      <SelectItem key={u} value={u}>{URGENCY_META[u].label}</SelectItem>
+                      <SelectItem key={u} value={u}>
+                        {URGENCY_META[u].label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1170,25 +1205,96 @@ export default function RequestDetail() {
             </TabsContent>
 
             <TabsContent value="empresa" className="space-y-2.5 pt-4">
-              <EditableField label="NIT" value={fullInfoDraft.companyNit} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyNit: v }))} />
-              <EditableField label="Dirección" value={fullInfoDraft.companyDireccion} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyDireccion: v }))} />
-              <EditableField label="Teléfono" value={fullInfoDraft.companyTelefono} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyTelefono: v }))} error={fullInfoErrors.companyTelefono} />
-              <EditableField label="Correo" value={fullInfoDraft.companyCorreo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCorreo: v }))} error={fullInfoErrors.companyCorreo} />
-              <EditableField label="CIIU principal" value={fullInfoDraft.companyCiiuPrincipal} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCiiuPrincipal: v }))} />
-              <EditableField label="Descripción CIIU" value={fullInfoDraft.companyCiiuPrincipalDesc} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCiiuPrincipalDesc: v }))} />
-              <EditableField label="Naturaleza jurídica" value={fullInfoDraft.companyTipo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyTipo: v }))} />
-              <EditableField label="Sitio web" value={fullInfoDraft.companyWeb} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyWeb: v }))} />
-              <EditableField label="Descripción" value={fullInfoDraft.companyDescripcion} onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyDescripcion: v }))} block />
+              <EditableField
+                label="NIT"
+                value={fullInfoDraft.companyNit}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyNit: v }))}
+              />
+              <EditableField
+                label="Dirección"
+                value={fullInfoDraft.companyDireccion}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyDireccion: v }))}
+              />
+              <EditableField
+                label="Teléfono"
+                value={fullInfoDraft.companyTelefono}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyTelefono: v }))}
+                error={fullInfoErrors.companyTelefono}
+              />
+              <EditableField
+                label="Correo"
+                value={fullInfoDraft.companyCorreo}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCorreo: v }))}
+                error={fullInfoErrors.companyCorreo}
+              />
+              <EditableField
+                label="CIIU principal"
+                value={fullInfoDraft.companyCiiuPrincipal}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCiiuPrincipal: v }))}
+              />
+              <EditableField
+                label="Descripción CIIU"
+                value={fullInfoDraft.companyCiiuPrincipalDesc}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCiiuPrincipalDesc: v }))}
+              />
+              <EditableField
+                label="Naturaleza jurídica"
+                value={fullInfoDraft.companyTipo}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyTipo: v }))}
+              />
+              <EditableField
+                label="Sitio web"
+                value={fullInfoDraft.companyWeb}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyWeb: v }))}
+              />
+              <EditableField
+                label="Descripción"
+                value={fullInfoDraft.companyDescripcion}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyDescripcion: v }))}
+                block
+              />
             </TabsContent>
 
             <TabsContent value="contacto" className="space-y-2.5 pt-4">
-              <EditableField label="Nombre" value={fullInfoDraft.applicant} onChange={(v) => setFullInfoDraft((d) => ({ ...d, applicant: v }))} />
-              <EditableField label="Cargo" value={fullInfoDraft.contactCargo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCargo: v }))} />
-              <EditableField label="Área o dependencia" value={fullInfoDraft.contactArea} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactArea: v }))} />
-              <EditableField label="Teléfono" value={fullInfoDraft.contactTelefono} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactTelefono: v }))} error={fullInfoErrors.contactTelefono} />
-              <EditableField label="Teléfono secundario" value={fullInfoDraft.contactTelefonoSecundario} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactTelefonoSecundario: v }))} error={fullInfoErrors.contactTelefonoSecundario} />
-              <EditableField label="Correo" value={fullInfoDraft.contactCorreo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCorreo: v }))} error={fullInfoErrors.contactCorreo} />
-              <EditableField label="Correo alternativo" value={fullInfoDraft.contactCorreoAlternativo} onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCorreoAlternativo: v }))} error={fullInfoErrors.contactCorreoAlternativo} />
+              <EditableField
+                label="Nombre"
+                value={fullInfoDraft.applicant}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, applicant: v }))}
+              />
+              <EditableField
+                label="Cargo"
+                value={fullInfoDraft.contactCargo}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCargo: v }))}
+              />
+              <EditableField
+                label="Área o dependencia"
+                value={fullInfoDraft.contactArea}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactArea: v }))}
+              />
+              <EditableField
+                label="Teléfono"
+                value={fullInfoDraft.contactTelefono}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactTelefono: v }))}
+                error={fullInfoErrors.contactTelefono}
+              />
+              <EditableField
+                label="Teléfono secundario"
+                value={fullInfoDraft.contactTelefonoSecundario}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactTelefonoSecundario: v }))}
+                error={fullInfoErrors.contactTelefonoSecundario}
+              />
+              <EditableField
+                label="Correo"
+                value={fullInfoDraft.contactCorreo}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCorreo: v }))}
+                error={fullInfoErrors.contactCorreo}
+              />
+              <EditableField
+                label="Correo alternativo"
+                value={fullInfoDraft.contactCorreoAlternativo}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCorreoAlternativo: v }))}
+                error={fullInfoErrors.contactCorreoAlternativo}
+              />
               {req.additionalContacts && req.additionalContacts.length > 0 && (
                 <p className="text-[11px] italic text-muted-foreground pt-1">
                   Los contactos adicionales no son editables aquí todavía — vuelve al wizard si necesitas corregirlos.
@@ -1197,12 +1303,41 @@ export default function RequestDetail() {
             </TabsContent>
 
             <TabsContent value="diagnostico" className="space-y-2.5 pt-4">
-              <EditableField label="Necesidad o problema a resolver" value={fullInfoDraft.necesidad} onChange={(v) => setFullInfoDraft((d) => ({ ...d, necesidad: v }))} block />
-              <EditableField label="Competencias a fortalecer" value={fullInfoDraft.competencias} onChange={(v) => setFullInfoDraft((d) => ({ ...d, competencias: v }))} block />
-              <EditableField label="Cómo se medirá el éxito" value={fullInfoDraft.exito} onChange={(v) => setFullInfoDraft((d) => ({ ...d, exito: v }))} block />
-              <EditableField label="Resultados esperados" value={fullInfoDraft.resultados} onChange={(v) => setFullInfoDraft((d) => ({ ...d, resultados: v }))} block />
-              <EditableField label="Perfil o área de los participantes" value={fullInfoDraft.areaParticipantes} onChange={(v) => setFullInfoDraft((d) => ({ ...d, areaParticipantes: v }))} />
-              <EditableField label="Servicio de alimentación y logística" value={fullInfoDraft.alimentacion} onChange={(v) => setFullInfoDraft((d) => ({ ...d, alimentacion: v }))} block />
+              <EditableField
+                label="Necesidad o problema a resolver"
+                value={fullInfoDraft.necesidad}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, necesidad: v }))}
+                block
+              />
+              <EditableField
+                label="Competencias a fortalecer"
+                value={fullInfoDraft.competencias}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, competencias: v }))}
+                block
+              />
+              <EditableField
+                label="Cómo se medirá el éxito"
+                value={fullInfoDraft.exito}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, exito: v }))}
+                block
+              />
+              <EditableField
+                label="Resultados esperados"
+                value={fullInfoDraft.resultados}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, resultados: v }))}
+                block
+              />
+              <EditableField
+                label="Perfil o área de los participantes"
+                value={fullInfoDraft.areaParticipantes}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, areaParticipantes: v }))}
+              />
+              <EditableField
+                label="Servicio de alimentación y logística"
+                value={fullInfoDraft.alimentacion}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, alimentacion: v }))}
+                block
+              />
             </TabsContent>
 
             <TabsContent value="formacion" className="space-y-2.5 pt-4">
@@ -1210,7 +1345,9 @@ export default function RequestDetail() {
                 <Label className="text-[11px] text-muted-foreground">¿Han tenido formación previa con Icesi?</Label>
                 <Select
                   value={fullInfoDraft.formacionPrevia || undefined}
-                  onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, formacionPrevia: v as "Sí" | "No" | "No sé" }))}
+                  onValueChange={(v) =>
+                    setFullInfoDraft((d) => ({ ...d, formacionPrevia: v as "Sí" | "No" | "No sé" }))
+                  }
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder="Seleccionar" />
@@ -1224,15 +1361,33 @@ export default function RequestDetail() {
               </div>
               {fullInfoDraft.formacionPrevia === "Sí" && (
                 <>
-                  <EditableField label="Descripción" value={fullInfoDraft.descFormacion} onChange={(v) => setFullInfoDraft((d) => ({ ...d, descFormacion: v }))} block />
-                  <EditableField label="Empresa que la dictó" value={fullInfoDraft.empresaPrevia} onChange={(v) => setFullInfoDraft((d) => ({ ...d, empresaPrevia: v }))} />
-                  <EditableField label="Fecha aproximada" value={fullInfoDraft.fechaPrevia} onChange={(v) => setFullInfoDraft((d) => ({ ...d, fechaPrevia: v }))} />
+                  <EditableField
+                    label="Descripción"
+                    value={fullInfoDraft.descFormacion}
+                    onChange={(v) => setFullInfoDraft((d) => ({ ...d, descFormacion: v }))}
+                    block
+                  />
+                  <EditableField
+                    label="Empresa que la dictó"
+                    value={fullInfoDraft.empresaPrevia}
+                    onChange={(v) => setFullInfoDraft((d) => ({ ...d, empresaPrevia: v }))}
+                  />
+                  <EditableField
+                    label="Fecha aproximada"
+                    value={fullInfoDraft.fechaPrevia}
+                    onChange={(v) => setFullInfoDraft((d) => ({ ...d, fechaPrevia: v }))}
+                  />
                 </>
               )}
             </TabsContent>
 
             <TabsContent value="observaciones" className="space-y-2.5 pt-4">
-              <EditableField label="Observaciones del KAM" value={fullInfoDraft.observaciones} onChange={(v) => setFullInfoDraft((d) => ({ ...d, observaciones: v }))} block />
+              <EditableField
+                label="Observaciones del KAM"
+                value={fullInfoDraft.observaciones}
+                onChange={(v) => setFullInfoDraft((d) => ({ ...d, observaciones: v }))}
+                block
+              />
             </TabsContent>
           </Tabs>
 
@@ -1266,10 +1421,7 @@ export default function RequestDetail() {
       {/* ========================================================================= */}
       {/* MODAL RÁPIDO DE CONTACTO: ASESOR EXTERNO */}
       {/* ========================================================================= */}
-      <Dialog
-        open={isContactAdvisorModalOpen}
-        onOpenChange={setIsContactAdvisorModalOpen}
-      >
+      <Dialog open={isContactAdvisorModalOpen} onOpenChange={setIsContactAdvisorModalOpen}>
         <DialogContent className="sm:max-w-md rounded-xl border border-slate-200/80 p-6 shadow-lg dark:border-border dark:bg-card">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -1365,11 +1517,7 @@ export default function RequestDetail() {
                   Editar datos
                 </Button>
               )}
-              <Button
-                size="sm"
-                className="h-8 text-xs font-medium"
-                onClick={() => setIsContactAdvisorModalOpen(false)}
-              >
+              <Button size="sm" className="h-8 text-xs font-medium" onClick={() => setIsContactAdvisorModalOpen(false)}>
                 Cerrar
               </Button>
             </div>
@@ -1378,25 +1526,19 @@ export default function RequestDetail() {
       </Dialog>
 
       {/* Modal Reasignar Líder de Producto */}
-      <Dialog
-        open={isReassignModalOpen}
-        onOpenChange={setIsReassignModalOpen}
-      >
+      <Dialog open={isReassignModalOpen} onOpenChange={setIsReassignModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-foreground">
-                {req.id}
-              </span>
+              <span className="font-mono text-xs font-bold text-foreground">{req.id}</span>
               <span className="rounded bg-[#5454e9]/10 px-2 py-0.5 text-[10px] font-bold text-[#5454e9] dark:text-[#865cf0]">
                 {req.node}
               </span>
             </div>
-            <DialogTitle className="text-base font-bold text-foreground mt-1">
-              Reasignar Líder de Producto
-            </DialogTitle>
+            <DialogTitle className="text-base font-bold text-foreground mt-1">Reasignar Líder de Producto</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Transfiere la gestión técnica de esta propuesta a otro líder académico si no corresponde a tu área temática o fue asignada por error.
+              Transfiere la gestión técnica de esta propuesta a otro líder académico si no corresponde a tu área
+              temática o fue asignada por error.
             </DialogDescription>
           </DialogHeader>
 
@@ -1404,9 +1546,7 @@ export default function RequestDetail() {
             <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
               <div className="flex justify-between gap-2">
                 <span className="text-muted-foreground shrink-0">Propuesta:</span>
-                <span className="font-semibold text-foreground text-right truncate">
-                  {req.title}
-                </span>
+                <span className="font-semibold text-foreground text-right truncate">{req.title}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Empresa:</span>
@@ -1414,9 +1554,7 @@ export default function RequestDetail() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Líder asignado actualmente:</span>
-                <span className="font-semibold text-[#e9683b]">
-                  {req.productLeader}
-                </span>
+                <span className="font-semibold text-[#e9683b]">{req.productLeader}</span>
               </div>
             </div>
 
@@ -1443,7 +1581,8 @@ export default function RequestDetail() {
                     const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, l]) => l === leader)?.[0];
                     return (
                       <SelectItem key={leader} value={leader} disabled={isCurrent}>
-                        {leader} {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
+                        {leader}{" "}
+                        {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
                       </SelectItem>
                     );
                   })}
@@ -1481,15 +1620,11 @@ export default function RequestDetail() {
                   <SelectItem value="Temática no afín / Corresponde a otro nodo">
                     Temática no afín / Corresponde a otro nodo
                   </SelectItem>
-                  <SelectItem value="Asignada por error por el KAM">
-                    Asignada por error por el KAM
-                  </SelectItem>
+                  <SelectItem value="Asignada por error por el KAM">Asignada por error por el KAM</SelectItem>
                   <SelectItem value="Redistribución por sobrecarga operativa">
                     Redistribución por sobrecarga operativa
                   </SelectItem>
-                  <SelectItem value="Especialidad técnica específica">
-                    Especialidad técnica específica
-                  </SelectItem>
+                  <SelectItem value="Especialidad técnica específica">Especialidad técnica específica</SelectItem>
                   <SelectItem value="Otro motivo">Otro motivo</SelectItem>
                 </SelectContent>
               </Select>
@@ -1537,15 +1672,19 @@ export default function RequestDetail() {
       <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-foreground">
-              ¿Cancelar esta solicitud?
-            </DialogTitle>
+            <DialogTitle className="text-base font-bold text-foreground">¿Cancelar esta solicitud?</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Se eliminará permanentemente la solicitud {req.id} ({req.company}). Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsCancelModalOpen(false)} className="text-xs">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCancelModalOpen(false)}
+              className="text-xs"
+            >
               Volver
             </Button>
             <Button
@@ -1568,7 +1707,8 @@ export default function RequestDetail() {
               Devolver propuesta con observaciones
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              La solicitud vuelve a "En proceso de costeo" para que el Líder de Producto ajuste la propuesta según lo que pidió el cliente.
+              La solicitud vuelve a "En proceso de costeo" para que el Líder de Producto ajuste la propuesta según lo
+              que pidió el cliente.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5 py-2">
@@ -1585,7 +1725,13 @@ export default function RequestDetail() {
             />
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsReturnModalOpen(false)} className="text-xs">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsReturnModalOpen(false)}
+              className="text-xs"
+            >
               Cancelar
             </Button>
             <Button
@@ -1616,7 +1762,13 @@ export default function RequestDetail() {
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="gap-2 sm:gap-0">
-                <Button type="button" variant="outline" size="sm" onClick={() => setConfirmingAction(null)} className="text-xs">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmingAction(null)}
+                  className="text-xs"
+                >
                   Cancelar
                 </Button>
                 <Button
@@ -1640,11 +1792,30 @@ export default function RequestDetail() {
 // completa de la solicitud" — le da al KAM una idea rápida de qué tan
 // diligenciada está la solicitud, sin tener que expandir la sección.
 const FULL_INFO_BASE_FIELDS: (keyof RequestItem)[] = [
-  "companyNit", "companyDireccion", "companyTelefono", "companyCorreo",
-  "companyCiiuPrincipal", "companyCiiuPrincipalDesc", "companyTipo", "companyWeb", "companyDescripcion",
-  "applicant", "contactCargo", "contactArea", "contactTelefono", "contactTelefonoSecundario", "contactCorreo", "contactCorreoAlternativo",
-  "necesidad", "competencias", "exito", "resultados", "areaParticipantes", "alimentacion",
-  "formacionPrevia", "observaciones",
+  "companyNit",
+  "companyDireccion",
+  "companyTelefono",
+  "companyCorreo",
+  "companyCiiuPrincipal",
+  "companyCiiuPrincipalDesc",
+  "companyTipo",
+  "companyWeb",
+  "companyDescripcion",
+  "applicant",
+  "contactCargo",
+  "contactArea",
+  "contactTelefono",
+  "contactTelefonoSecundario",
+  "contactCorreo",
+  "contactCorreoAlternativo",
+  "necesidad",
+  "competencias",
+  "exito",
+  "resultados",
+  "areaParticipantes",
+  "alimentacion",
+  "formacionPrevia",
+  "observaciones",
 ];
 
 function isFilledString(value: unknown): boolean {
@@ -1703,9 +1874,7 @@ function EditableField({
 function InfoSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-lg border border-border dark:border-[#252838] p-4 space-y-2.5">
-      <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-        {title}
-      </h4>
+      <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{title}</h4>
       <div className="space-y-2 text-xs">{children}</div>
     </div>
   );

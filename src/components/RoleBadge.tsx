@@ -8,7 +8,7 @@ export function RoleBadge({ label, className }: { label: string; className?: str
     <span
       className={cn(
         "rounded bg-[#e4eb60]/25 px-2.5 py-0.5 text-xs font-bold text-[#757a07] dark:text-[#e4eb60]",
-        className
+        className,
       )}
     >
       {label}

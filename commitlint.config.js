@@ -1,0 +1,3 @@
+// Conventional Commits, same convention as commercial-requests-backend.
+// Scopes are free-form but should name the feature area: kam, lp, costing, auth, api...
+export default { extends: ["@commitlint/config-conventional"] };

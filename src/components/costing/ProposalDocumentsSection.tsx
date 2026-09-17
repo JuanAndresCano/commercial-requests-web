@@ -11,7 +11,6 @@ import {
   Plus,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProposalDocument } from "@/lib/mock-data";
 import { toast } from "sonner";
@@ -42,11 +41,7 @@ export function ProposalDocumentsSection({
   const [isDraggingInternal, setIsDraggingInternal] = useState(false);
   const [internalDocTag, setInternalDocTag] = useState<string>("Matriz de Costeo");
 
-  const handleFileUpload = (
-    file: File,
-    category: "client_kam" | "internal_costing",
-    tag?: string
-  ) => {
+  const handleFileUpload = (file: File, category: "client_kam" | "internal_costing", tag?: string) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
 
     if (category === "client_kam") {
@@ -57,16 +52,10 @@ export function ProposalDocumentsSection({
     }
 
     const docType: ProposalDocument["type"] =
-      ext === "pdf"
-        ? "pdf"
-        : ext === "xlsx" || ext === "xls" || ext === "csv"
-        ? "excel"
-        : "doc";
+      ext === "pdf" ? "pdf" : ext === "xlsx" || ext === "xls" || ext === "csv" ? "excel" : "doc";
 
     const formattedSize =
-      file.size > 1024 * 1024
-        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-        : `${Math.round(file.size / 1024)} KB`;
+      file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`;
 
     const newDoc: ProposalDocument = {
       id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -121,7 +110,8 @@ export function ProposalDocumentsSection({
             </p>
           </div>
           <span className="text-xs font-medium text-slate-500">
-            {clientKamDocuments.length} {clientKamDocuments.length === 1 ? "archivo disponible" : "archivos disponibles"}
+            {clientKamDocuments.length}{" "}
+            {clientKamDocuments.length === 1 ? "archivo disponible" : "archivos disponibles"}
           </span>
         </div>
 
@@ -143,9 +133,7 @@ export function ProposalDocumentsSection({
                       {getFileIcon(doc.type)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
-                        {doc.name}
-                      </p>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{doc.name}</p>
                       <p className="text-[11px] text-slate-400">
                         {doc.size} · Subido el {doc.date} {doc.uploadedBy ? `por ${doc.uploadedBy}` : ""}
                       </p>
@@ -200,9 +188,7 @@ export function ProposalDocumentsSection({
               <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.2 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300">
                 <Eye className="h-2.5 w-2.5" /> KAM y Cliente
               </span>
-              <span className="text-[11px] text-slate-400">
-                ({clientKamDocuments.length})
-              </span>
+              <span className="text-[11px] text-slate-400">({clientKamDocuments.length})</span>
             </TabsTrigger>
 
             {/* TAB B: REPOSITORIO INTERNO */}
@@ -214,9 +200,7 @@ export function ProposalDocumentsSection({
               <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.2 text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300">
                 <Lock className="h-2.5 w-2.5" /> Privado
               </span>
-              <span className="text-[11px] text-slate-400">
-                ({internalCostingDocuments.length})
-              </span>
+              <span className="text-[11px] text-slate-400">({internalCostingDocuments.length})</span>
             </TabsTrigger>
           </TabsList>
 
@@ -262,9 +246,7 @@ export function ProposalDocumentsSection({
                   <span className="font-medium text-slate-700 dark:text-slate-200">
                     Subir propuesta comercial (.pdf, .docx)
                   </span>
-                  <span className="text-slate-400 text-[11px] hidden sm:inline">
-                    · Arrastra o haz clic
-                  </span>
+                  <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o haz clic</span>
                 </div>
               </div>
             )}
@@ -286,9 +268,7 @@ export function ProposalDocumentsSection({
                         {getFileIcon(doc.type)}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                          {doc.name}
-                        </p>
+                        <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">{doc.name}</p>
                         <p className="text-[11px] text-slate-400">
                           {doc.size} · Subido el {doc.date} {doc.uploadedBy ? `por ${doc.uploadedBy}` : ""}
                         </p>
@@ -371,9 +351,7 @@ export function ProposalDocumentsSection({
                     <span className="font-medium text-slate-700 dark:text-slate-200">
                       Subir archivo interno (.xlsx, .pdf, .docx)
                     </span>
-                    <span className="text-slate-400 text-[11px] hidden sm:inline">
-                      · Arrastra o selecciona
-                    </span>
+                    <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o selecciona</span>
                   </div>
                 </div>
 
@@ -422,9 +400,7 @@ export function ProposalDocumentsSection({
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                            {doc.name}
-                          </p>
+                          <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">{doc.name}</p>
                           {doc.tag && (
                             <span className="hidden sm:inline-block rounded px-1.5 py-0.2 text-[10px] font-normal bg-slate-100 text-slate-600 border border-slate-200 dark:bg-secondary dark:text-slate-300 dark:border-border">
                               {doc.tag}

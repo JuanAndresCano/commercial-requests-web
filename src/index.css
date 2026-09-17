@@ -76,22 +76,22 @@
 
   /* Dark Mode - Universidad Icesi Design System */
   .dark {
-    --background: 232 20% 7%;      /* #0e0f14 sleek dark background */
+    --background: 232 20% 7%; /* #0e0f14 sleek dark background */
     --foreground: 0 0% 98%;
 
-    --card: 232 18% 11%;           /* #141620 cards */
+    --card: 232 18% 11%; /* #141620 cards */
     --card-foreground: 0 0% 98%;
 
     --popover: 232 18% 11%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 240 78% 62%;        /* #5454e9 */
+    --primary: 240 78% 62%; /* #5454e9 */
     --primary-foreground: 0 0% 100%;
 
     --accent: 240 78% 62%;
     --accent-foreground: 0 0% 100%;
 
-    --secondary: 232 16% 16%;       /* #1e202d */
+    --secondary: 232 16% 16%; /* #1e202d */
     --secondary-foreground: 0 0% 96%;
 
     --muted: 232 16% 16%;
@@ -101,7 +101,7 @@
     --destructive: 6 63% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 232 14% 19%;         /* #252838 */
+    --border: 232 14% 19%; /* #252838 */
     --input: 232 14% 20%;
     --ring: 240 78% 62%;
 
@@ -124,7 +124,11 @@
   }
 
   html {
-    font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    font-family:
+      "Plus Jakarta Sans",
+      system-ui,
+      -apple-system,
+      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
@@ -134,8 +138,17 @@
     @apply bg-background text-foreground transition-colors duration-200;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family:
+      "Plus Jakarta Sans",
+      system-ui,
+      -apple-system,
+      sans-serif;
     letter-spacing: -0.015em;
   }
 }

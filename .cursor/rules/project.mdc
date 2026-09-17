@@ -1,0 +1,8 @@
+---
+description: Project rules — always read AGENTS.md
+alwaysApply: true
+---
+
+Read and follow `AGENTS.md` at the repository root before any change. It is the
+single source of rules for this project. Never weaken lint, TypeScript, test or CI
+configuration to make a check pass, and run `npm run verify` before finishing.

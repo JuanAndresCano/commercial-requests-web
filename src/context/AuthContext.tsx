@@ -1,12 +1,8 @@
-/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from "react";
 import {
   MOCK_REQUESTS,
   RequestItem,
   RequestStatus,
-  PRODUCT_LEADERS,
-  KAMS,
-  PROFESSORS,
   ProposalCosting,
   ProposalDocument,
   ExternalProfessorData,
@@ -22,7 +18,10 @@ export interface User {
   node?: string;
 }
 
-export const ROLE_CONFIGS: Record<UserRole, { label: string; defaultName: string; defaultEmail: string; node?: string }> = {
+export const ROLE_CONFIGS: Record<
+  UserRole,
+  { label: string; defaultName: string; defaultEmail: string; node?: string }
+> = {
   kam: {
     label: "KAM",
     defaultName: "Andrea Martínez",
@@ -64,7 +63,7 @@ interface AuthContextType {
     id: string,
     professorName: string,
     type: "planta" | "externo",
-    externalData?: ExternalProfessorData
+    externalData?: ExternalProfessorData,
   ) => void;
   updateCosting: (id: string, costing: ProposalCosting) => void;
   addDocument: (id: string, doc: ProposalDocument) => void;
@@ -212,7 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updated.statusUpdatedAt = new Date().toISOString();
         }
         return updated;
-      })
+      }),
     );
   };
 
@@ -228,7 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     id: string,
     professorName: string,
     type: "planta" | "externo",
-    externalData?: ExternalProfessorData
+    externalData?: ExternalProfessorData,
   ) => {
     updateRequest(id, {
       professor: professorName,
@@ -259,7 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             internalCostingDocuments: [doc, ...(r.internalCostingDocuments ?? [])],
           };
         }
-      })
+      }),
     );
   };
 
@@ -278,7 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             internalCostingDocuments: (r.internalCostingDocuments ?? []).filter((d) => d.id !== docId),
           };
         }
-      })
+      }),
     );
   };
 

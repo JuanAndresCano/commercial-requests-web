@@ -5,7 +5,6 @@ import {
   FileText,
   PlusCircle,
   LogOut,
-  UserCheck,
   Network,
   GraduationCap,
   ChevronDown,
@@ -16,7 +15,6 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth, UserRole, ROLE_CONFIGS } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IcesiLogo, IcesiSymbol, IcesiCenefa } from "@/components/IcesiLogo";
 import {
@@ -39,7 +37,11 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
   const { user, logout, switchRole, resetData } = useAuth();
 
   const handleResetData = () => {
-    if (window.confirm("¿Restablecer todas las solicitudes a los datos de ejemplo? Se perderá cualquier cambio hecho en esta sesión de prueba.")) {
+    if (
+      window.confirm(
+        "¿Restablecer todas las solicitudes a los datos de ejemplo? Se perderá cualquier cambio hecho en esta sesión de prueba.",
+      )
+    ) {
       resetData();
       // Los tableros guardan filtros/vista en su propio estado de React
       // (usePersistentState) que solo se relee de localStorage al montar el
@@ -50,7 +52,6 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
       window.setTimeout(() => window.location.reload(), 400);
     }
   };
-  const { theme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const activeRoleLabel = overrideRole || user.roleLabel;
@@ -95,9 +96,7 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
       // Una sola vista de solicitudes (tablero unificado con los 4 estados +
       // filtro rápido "Sin docente" integrado) — ya no hay "Inicio" separado
       // del tablero ni un tablero genérico aparte para asignar docentes.
-      return [
-        { to: "/dashboard", label: "Solicitudes", icon: FileText },
-      ];
+      return [{ to: "/dashboard", label: "Solicitudes", icon: FileText }];
     }
     if (activeRole === "lider-nodo") {
       return [
@@ -216,7 +215,7 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                       "relative flex h-11 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap transition-colors",
                       active
                         ? "bg-[#e4eb60] text-black shadow-md font-bold"
-                        : "text-zinc-400 hover:bg-white/10 hover:text-white"
+                        : "text-zinc-400 hover:bg-white/10 hover:text-white",
                     )}
                     title={item.label}
                     aria-label={item.label}
@@ -277,9 +276,7 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                     <span className="text-xs font-extrabold uppercase tracking-wider text-[#5454e9] dark:text-[#865cf0]">
                       Solicitudes Comerciales
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      Dirección de Extensión y Consultoría
-                    </span>
+                    <span className="text-[10px] text-muted-foreground">Dirección de Extensión y Consultoría</span>
                   </div>
                 </Link>
               </div>
@@ -310,10 +307,15 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                         <DropdownMenuItem
                           key={rKey}
                           onClick={() => switchRole(rKey)}
-                          className={cn("text-xs cursor-pointer", activeRole === rKey && "bg-accent/10 font-bold text-[#5454e9]")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            activeRole === rKey && "bg-accent/10 font-bold text-[#5454e9]",
+                          )}
                         >
                           <span>{cfg.label}</span>
-                          {activeRole === rKey && <span className="ml-auto text-[10px] font-bold text-[#5454e9]">Activo</span>}
+                          {activeRole === rKey && (
+                            <span className="ml-auto text-[10px] font-bold text-[#5454e9]">Activo</span>
+                          )}
                         </DropdownMenuItem>
                       );
                     })}
@@ -337,7 +339,7 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                       onClick={() => setMobileMenuOpen(false)}
                       className={cn(
                         "flex items-center gap-2 p-2 rounded-md text-xs font-medium border border-border",
-                        isItemActive(item.to) ? "bg-[#e4eb60] text-black font-bold" : "bg-card text-foreground"
+                        isItemActive(item.to) ? "bg-[#e4eb60] text-black font-bold" : "bg-card text-foreground",
                       )}
                     >
                       <item.icon className="h-4 w-4" />
@@ -356,7 +358,9 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
           <div className="bg-[#5454e9] text-white px-4 sm:px-6 lg:px-8 py-3 shadow-xs">
             <div className="mx-auto max-w-7xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2">
-                <span className="font-bold tracking-wide">Dirección de Extensión y Consultoría · Solicitudes Comerciales</span>
+                <span className="font-bold tracking-wide">
+                  Dirección de Extensión y Consultoría · Solicitudes Comerciales
+                </span>
                 <span className="hidden md:inline-block opacity-70">|</span>
                 <span className="hidden md:inline-block opacity-90">
                   {activeRoleLabel} — {user.name}
@@ -372,9 +376,7 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
           </div>
 
           {/* Page Body */}
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
-            {children}
-          </main>
+          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">{children}</main>
 
           {/* Official Footer with Brand Coordinates */}
           <footer className="border-t border-border dark:border-[#252838] bg-card dark:bg-[#0c0d12] mt-auto py-6 px-4 sm:px-6 lg:px-8 text-xs text-muted-foreground transition-colors">

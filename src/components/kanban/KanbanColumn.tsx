@@ -46,7 +46,7 @@ export function KanbanColumn<T>({
         "flex flex-col rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#121420] shadow-xs overflow-hidden",
         theme.borderTopClass,
         isolated && "ring-2",
-        className
+        className,
       )}
       style={isolated ? { boxShadow: `0 0 0 2px ${theme.colorHex}33` } : undefined}
     >
@@ -77,15 +77,13 @@ export function KanbanColumn<T>({
             </button>
           )}
         </div>
-        {description && (
-          <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">{description}</p>
-        )}
+        {description && <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">{description}</p>}
       </div>
 
       <div
         className={cn(
           "p-3 min-h-[220px]",
-          isolated ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3" : "space-y-3"
+          isolated ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3" : "space-y-3",
         )}
       >
         {items.length === 0 ? (

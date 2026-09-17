@@ -1,11 +1,7 @@
+import { calculateCosting } from "./costing";
 export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada";
 export type RequestType =
-  | "Capacitación"
-  | "Consultoría"
-  | "Mentoría"
-  | "Investigación"
-  | "Proyectos Especiales (Eventos)"
-  | "Otro";
+  "Capacitación" | "Consultoría" | "Mentoría" | "Investigación" | "Proyectos Especiales (Eventos)" | "Otro";
 export type Urgency = "alta" | "media" | "baja";
 
 export const REQUEST_TYPES: RequestType[] = [
@@ -280,34 +276,7 @@ export const NODE_DEFAULT_LEADERS: Record<string, string> = {
   "Salud Global, Calidad de Vida": "Sebastián Vélez",
 };
 
-export function calculateCosting(
-  type: RequestType,
-  baseCostCop: number,
-  expectedMarginPercent: number,
-  customOffered?: number,
-  requiresExternalAdvisor: boolean = false,
-  externalAdvisorDetails?: string,
-  negotiationNotes?: string
-): ProposalCosting {
-  const isCapacitacion = type === "Capacitación";
-  const proCulturaTaxPercent = isCapacitacion ? 1.5 : 0;
-  const marginAmount = baseCostCop * (expectedMarginPercent / 100);
-  const proCulturaTaxAmount = isCapacitacion ? Math.round(baseCostCop * 0.015) : 0;
-  const suggestedTotalCop = Math.round(baseCostCop + marginAmount + proCulturaTaxAmount);
-  const totalOfferedCop = customOffered !== undefined && customOffered !== null ? customOffered : suggestedTotalCop;
-
-  return {
-    requiresExternalAdvisor,
-    externalAdvisorDetails,
-    baseCostCop,
-    expectedMarginPercent,
-    proCulturaTaxPercent,
-    proCulturaTaxAmount,
-    suggestedTotalCop,
-    totalOfferedCop,
-    negotiationNotes,
-  };
-}
+export { calculateCosting };
 
 export const MOCK_REQUESTS: RequestItem[] = [
   {
@@ -355,9 +324,11 @@ export const MOCK_REQUESTS: RequestItem[] = [
         area: "Gestión Humana",
       },
     ],
-    necesidad: "Actualizar las competencias del equipo comercial en estrategias de marketing digital y analítica de clientes.",
+    necesidad:
+      "Actualizar las competencias del equipo comercial en estrategias de marketing digital y analítica de clientes.",
     competencias: "Marketing digital, analítica de datos de clientes, gestión de campañas omnicanal",
-    exito: "Encuesta de satisfacción post-capacitación con nota mínima de 4.5/5 y aplicación de al menos 2 herramientas vistas en el primer trimestre",
+    exito:
+      "Encuesta de satisfacción post-capacitación con nota mínima de 4.5/5 y aplicación de al menos 2 herramientas vistas en el primer trimestre",
     resultados: "Equipo comercial certificado y capaz de diseñar campañas basadas en datos",
     areaParticipantes: "Gerencia de Mercadeo y Banca Comercial",
     alimentacion: "Refrigerio A.M. y almuerzo para los 2 días de formación presencial",
@@ -442,13 +413,15 @@ export const MOCK_REQUESTS: RequestItem[] = [
     contactArea: "Vicepresidencia de Tecnología",
     contactTelefono: "+57 300 512 7789",
     contactCorreo: "mariana.lopez@grupo-exito.com",
-    necesidad: "Diagnosticar el nivel de madurez digital de los procesos logísticos y de e-commerce, y definir una hoja de ruta de transformación a 18 meses.",
+    necesidad:
+      "Diagnosticar el nivel de madurez digital de los procesos logísticos y de e-commerce, y definir una hoja de ruta de transformación a 18 meses.",
     competencias: "Arquitectura cloud, integración de datos, gobierno de TI",
     exito: "Hoja de ruta aprobada por la Junta Directiva antes de finalizar el segundo trimestre",
     resultados: "Plan de transformación digital priorizado con quick-wins identificados en los primeros 90 días",
     areaParticipantes: "Vicepresidencia de Tecnología y Logística",
     formacionPrevia: "No sé",
-    observaciones: "El cliente solicitó firmar acuerdo de confidencialidad (NDA) antes de compartir información financiera.",
+    observaciones:
+      "El cliente solicitó firmar acuerdo de confidencialidad (NDA) antes de compartir información financiera.",
     clientKamDocuments: [
       {
         id: "doc-ck-2",
@@ -492,7 +465,8 @@ export const MOCK_REQUESTS: RequestItem[] = [
     contactArea: "Dirección de Desarrollo Organizacional",
     contactTelefono: "+57 318 400 2211",
     contactCorreo: "roberto.castano@postobon.com",
-    necesidad: "Acompañar a un grupo de gerentes regionales recién ascendidos en su transición a roles de liderazgo senior.",
+    necesidad:
+      "Acompañar a un grupo de gerentes regionales recién ascendidos en su transición a roles de liderazgo senior.",
     competencias: "Toma de decisiones estratégicas, gestión de equipos multigeneracionales, comunicación ejecutiva",
     exito: "Los mentorados aplican al menos un plan de acción individual, evaluado por su jefe directo a los 3 meses",
     resultados: "Gerentes regionales con mayor autonomía y confianza en la toma de decisiones",
@@ -537,7 +511,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       24_000_000,
       false,
       undefined,
-      "Acuerdo de descuento del 1.3% por volumen de horas con SURA"
+      "Acuerdo de descuento del 1.3% por volumen de horas con SURA",
     ),
     horas: "32",
     modalidad: "Híbrida",
@@ -554,7 +528,8 @@ export const MOCK_REQUESTS: RequestItem[] = [
     contactArea: "Gestión Humana",
     contactTelefono: "+57 312 678 4432",
     contactCorreo: "camila.rios@sura.com.co",
-    necesidad: "Desarrollar habilidades técnicas en el equipo de producto para acelerar la entrega de nuevas funcionalidades del aplicativo móvil.",
+    necesidad:
+      "Desarrollar habilidades técnicas en el equipo de producto para acelerar la entrega de nuevas funcionalidades del aplicativo móvil.",
     competencias: "Metodologías ágiles, integración continua, pruebas automatizadas",
     exito: "Reducción del 20% en el tiempo de ciclo de desarrollo tras la capacitación",
     resultados: "Equipo de producto certificado en prácticas ágiles avanzadas",
@@ -633,13 +608,15 @@ export const MOCK_REQUESTS: RequestItem[] = [
     contactArea: "Vicepresidencia de Innovación",
     contactTelefono: "+57 300 888 2210",
     contactCorreo: "felipe.naranjo@gruponutresa.com",
-    necesidad: "Formar a un equipo interno en fundamentos de analítica de datos para soportar decisiones de la cadena de suministro.",
+    necesidad:
+      "Formar a un equipo interno en fundamentos de analítica de datos para soportar decisiones de la cadena de suministro.",
     competencias: "Estadística aplicada, visualización de datos, modelos predictivos básicos",
     exito: "Al menos 3 proyectos internos usando las herramientas vistas dentro de los 6 meses siguientes",
     resultados: "Equipo con capacidad de construir tableros de control propios",
     areaParticipantes: "Cadena de Suministro y Logística",
     formacionPrevia: "No sé",
-    observaciones: "La docente está terminando de definir el cronograma detallado con el cliente antes de pasar a costeo.",
+    observaciones:
+      "La docente está terminando de definir el cronograma detallado con el cliente antes de pasar a costeo.",
     clientKamDocuments: [],
     internalCostingDocuments: [],
   },
@@ -676,7 +653,8 @@ export const MOCK_REQUESTS: RequestItem[] = [
     contactArea: "Vicepresidencia de Sostenibilidad",
     contactTelefono: "+57 320 456 7890",
     contactCorreo: "ana.gutierrez@argos.co",
-    necesidad: "Evaluar el desempeño ambiental de tres plantas productivas y proponer un plan de eco-eficiencia operativa.",
+    necesidad:
+      "Evaluar el desempeño ambiental de tres plantas productivas y proponer un plan de eco-eficiencia operativa.",
     competencias: "Gestión ambiental industrial, economía circular, indicadores ESG",
     exito: "Plan de eco-eficiencia aprobado por la Vicepresidencia de Sostenibilidad",
     resultados: "Diagnóstico de sostenibilidad con hallazgos priorizados por planta",
@@ -800,12 +778,13 @@ export const MOCK_REQUESTS: RequestItem[] = [
       35,
       42_000_000,
       true,
-      "Experto externo en analítica de redes de gas"
+      "Experto externo en analítica de redes de gas",
     ),
     // Ejemplo de propuesta "devuelta con observaciones" (docs/08, pregunta 13):
     // el cliente ya la había recibido y pidió un ajuste de alcance — el KAM la
     // regresó a "en-costeo" y esta nota queda visible hasta que se reentregue.
-    clientObservations: "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
+    clientObservations:
+      "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
     horas: "100",
     modalidad: "Híbrida",
     participantes: "6 - 10",
@@ -821,7 +800,8 @@ export const MOCK_REQUESTS: RequestItem[] = [
     contactArea: "Vicepresidencia de Operaciones",
     contactTelefono: "+57 315 900 1122",
     contactCorreo: "jorge.echeverri@gdo.com.co",
-    necesidad: "Optimizar la distribución de gas natural en la red secundaria para reducir pérdidas técnicas y mejorar tiempos de respuesta ante fallas.",
+    necesidad:
+      "Optimizar la distribución de gas natural en la red secundaria para reducir pérdidas técnicas y mejorar tiempos de respuesta ante fallas.",
     competencias: "Analítica de redes de distribución, mantenimiento predictivo, optimización de rutas",
     exito: "Reducción del 8% en pérdidas técnicas de la red en el primer año",
     resultados: "Modelo de priorización de mantenimiento de red basado en datos",
@@ -871,7 +851,8 @@ export const MOCK_REQUESTS: RequestItem[] = [
     contactArea: "Vicepresidencia de Operaciones",
     contactTelefono: "+57 316 778 4420",
     contactCorreo: "mauricio.caicedo@gdo.com.co",
-    necesidad: "Capacitar al equipo de mantenimiento en herramientas de analítica predictiva para anticipar fallas en la red de distribución.",
+    necesidad:
+      "Capacitar al equipo de mantenimiento en herramientas de analítica predictiva para anticipar fallas en la red de distribución.",
     competencias: "Analítica predictiva, sensórica IoT, mantenimiento basado en condición",
     exito: "El equipo aplica al menos un modelo predictivo propio dentro de los primeros 2 meses",
     resultados: "Equipo de mantenimiento capacitado en analítica predictiva aplicada a redes de gas",
@@ -1302,7 +1283,8 @@ export const MOCK_REQUESTS: RequestItem[] = [
     costing: calculateCosting("Proyectos Especiales (Eventos)", 8_000_000, 28, 10_800_000, false),
     // Segundo ejemplo de propuesta "devuelta con observaciones" — para
     // probar el banner en más de una tarjeta a la vez.
-    clientObservations: "El cliente pidió mover el evento a otra sede porque la original ya no está disponible en esa fecha; hay que recotizar el rubro de logística.",
+    clientObservations:
+      "El cliente pidió mover el evento a otra sede porque la original ya no está disponible en esa fecha; hay que recotizar el rubro de logística.",
     horas: "16",
     modalidad: "Presencial en sede cliente",
     participantes: "Más de 25",
@@ -1356,7 +1338,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       35,
       33_750_000,
       true,
-      "Ing. Carlos Eduardo Valencia (Valencia & Partners) — trazabilidad IoT en cadena de frío"
+      "Ing. Carlos Eduardo Valencia (Valencia & Partners) — trazabilidad IoT en cadena de frío",
     ),
     horas: "70",
     modalidad: "Híbrida",
@@ -1493,7 +1475,14 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Estrategia Comercial y Pricing",
     },
     totalCostCop: 27_200_000,
-    costing: calculateCosting("Consultoría", 20_000_000, 34, 27_200_000, true, "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios"),
+    costing: calculateCosting(
+      "Consultoría",
+      20_000_000,
+      34,
+      27_200_000,
+      true,
+      "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios",
+    ),
     horas: "55",
     modalidad: "Híbrida",
     participantes: "1 - 5",
@@ -1518,7 +1507,10 @@ export const MOCK_REQUESTS: RequestItem[] = [
   },
 ];
 
-export const STATUS_META: Record<RequestStatus, { label: string; tone: string; dot: string; headerBg: string; borderTone: string }> = {
+export const STATUS_META: Record<
+  RequestStatus,
+  { label: string; tone: string; dot: string; headerBg: string; borderTone: string }
+> = {
   nueva: {
     label: "Nueva",
     tone: "bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0] border-[#5454e9]/30",
@@ -1556,7 +1548,9 @@ export const URGENCY_META: Record<Urgency, { label: string; tone: string }> = {
 };
 
 export function formatCop(amount: number) {
-  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(amount);
+  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(
+    amount,
+  );
 }
 
 export function formatCompactCop(amount: number): string {
@@ -1586,4 +1580,3 @@ export function getRelativeTime(id: string): string {
       return "Reciente";
   }
 }
-
