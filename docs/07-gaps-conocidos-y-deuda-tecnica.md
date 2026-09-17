@@ -1,0 +1,49 @@
+# Gaps conocidos y deuda técnica del prototipo
+
+Inventario de huecos funcionales, placeholders sin conectar y atajos propios de un prototipo de UX. El propósito de este documento es que **ningún agente confunda estos comportamientos con reglas de negocio intencionales** al usarlos como referencia para el desarrollo real.
+
+## 🔴 Funcionales (afectan lógica de negocio, no solo estética)
+
+### 1. ✅ RESUELTO — `RequestSummary.tsx` — vista "Resumen" con contenido 100% fijo
+La ruta `/solicitudes/:id/resumen` mostraba siempre datos de ejemplo fijos, sin importar qué solicitud se abriera. **Se eliminó la pantalla completa** (commit `6814a9f`) — quedan solo 2 pantallas por solicitud: el tablero y el detalle, que sí muestra la información real.
+
+### 2. ✅ RESUELTO — El botón "Enviar a cliente" (KAM) no estaba condicionado a que exista costeo real
+El botón ya solo aparece cuando `req.status === "en-costeo"`, y su clic pasa por un diálogo de confirmación (commit `6269cde`) — un KAM ya no puede marcar como entregada una solicitud sin costeo.
+
+### 3. ✅ RESUELTO — Avance de etapa sin validar que el trabajo previo esté completo
+En `ProductLeaderDashboard.tsx` y `RequestDetail.tsx`, los botones de avance de etapa:
+- ✅ No se puede pasar de `nueva` a `en-experto` sin haber asignado docente.
+- ✅ No se puede marcar `entregada` sin que `costing.totalOfferedCop` sea mayor a `0` — se encontró (reporte directo) que se podía entregar con costeo en $0. El botón "Enviar a cliente" del KAM (única acción que hoy marca `entregada`, ver el bullet siguiente) queda deshabilitado hasta que exista un valor real, con una validación adicional dentro del handler por si el botón queda desincronizado.
+- ✅ "Pasar a Experto" y "Pasar a Costeo" ahora piden confirmación explícita (con empresa + título de la solicitud a la vista) antes de ejecutar — antes cambiaban de estado al primer clic, riesgoso en una tarjeta de Kanban densa con varios botones pegados.
+- ✅ **El Líder de Producto podía marcar "Entregada" (enviar al cliente) directamente, saltándose al KAM por completo.** Se encontró (reporte directo) que en `RequestDetail.tsx`, cuando `req.status === "en-costeo"`, el Líder tenía su propio botón "Marcar Entregada" que llamaba exactamente al mismo handler que el "Enviar a cliente" del KAM — es decir, **cualquiera de los dos roles podía cerrar el ciclo comercial**, cuando la regla de negocio (`08`, pregunta 13: "después de que le llegue al KAM, ellos puedan volver a enviarla con observaciones") asume que el paso final al cliente es exclusivo del KAM. Se quitó el botón del Líder por completo: ahora, al dejar el costeo listo (`en-costeo` con valor > $0), la tarjeta del Líder (Kanban y detalle) solo muestra una etiqueta pasiva "Listo para el KAM" / "Costeo listo — a la espera del KAM" — sin ninguna acción que mueva el estado. Solo el KAM, desde su "Enviar a cliente", puede pasar la solicitud a `entregada`.
+
+### 4. Dashboard genérico roto para `lider-nodo` y `profesor`
+En `src/pages/Dashboard.tsx`, cuando el rol no es `kam` ni `lider-producto`, el componente cae en una rama de código que **usa variables nunca declaradas** (`displayedTableRequests`, `reassigningRequest`, `selectedNewLeader`, `selectedNewNode`, `reassignReason`, `reassignNotes`, `handleOpenReassign`, `handleConfirmReassign`, `listas`). Esto provocaría un `ReferenceError` en tiempo de ejecución si un usuario con rol Líder de Nodo o Profesor visita `/dashboard`.
+**No afecta** a KAM ni Líder de Producto (tienen componentes propios con `return` anticipado antes de llegar a ese código). Se documenta porque el flujo de reasignación menciona explícitamente "Líder de Nodo" conceptualmente, y porque cualquier trabajo futuro sobre esos dos roles debe empezar arreglando esto antes que nada.
+
+### 5. ✅ RESUELTO — Tarjeta "Especificaciones del Servicio" con valores fijos
+`horas`, `modalidad` y `participantes` ya se guardan en `RequestItem` y se leen en el detalle (con fallback "Sin especificar"). Además, el Líder de Producto puede corregirlos si el KAM los diligenció mal (commit `722c85a`, confirmado con Dianis en `08`, pregunta 5).
+
+### 11. "Requiere asesor externo" no está enlazado a una asignación real
+En `ProposalCostingModule.tsx`, el switch "¿Requiere asesor externo?" es independiente del docente realmente asignado (`req.professorType`/`req.professor`) — se puede activar el switch sin que exista ningún consultor externo vinculado, o dejarlo apagado con un consultor externo sí asignado. **Detectado pero no cerrado a propósito**: no hay una regla de negocio de Dianis que respalde una u otra solución (ej. deshabilitar el switch hasta que se asigne un externo, o sincronizarlo automáticamente). Ver `04-modelo-de-datos-logico.md`.
+
+## 🟡 De prototipo (esperables mientras no hay backend, pero a tener en cuenta)
+
+### 6. Sin autenticación ni backend real
+Todo vive en `localStorage` del navegador (`AuthContext.tsx`). No hay sesiones multiusuario ni control de acceso real — cualquiera puede cambiar de rol con un clic desde el dropdown de rol en la topbar. Es intencional para poder probar todos los roles rápido durante el diseño, pero **no debe existir en producción** tal cual. (El selector adicional que existía dentro de `RequestDetail.tsx` y el que estaba duplicado en el dropdown del avatar ya se eliminaron — solo queda un sitio para cambiar de rol.)
+
+### 7. `id` de solicitud generado de forma ingenua
+`REQ-2026-${requests.length + 145}` en `AuthContext.addRequest` — no es un identificador robusto (se rompe con borrados, concurrencia, o cambio de año). Solo válido como placeholder visual.
+
+### 8. `getRelativeTime()` hardcodeado por ID específico
+En `mock-data.ts`, la función que muestra "Hace 2 horas" / "Ayer" / etc. en `KamCommandCenter` tiene un `switch` con IDs de solicitud literales (`REQ-2026-0142` → `"Hace 2 horas"`, etc.) en vez de calcular la diferencia real contra `createdAt`. Cualquier solicitud nueva creada por el usuario cae en el `default: "Reciente"`.
+
+### 9. Modal de reasignación duplicado en 3 archivos
+Prácticamente el mismo JSX y lógica de reasignación de Líder de Producto está copiado en: la rama genérica rota de `Dashboard.tsx`, `ProductLeaderDashboard.tsx`, y `RequestDetail.tsx`. No es un bug de comportamiento (cada copia funciona igual), pero es deuda de mantenimiento — un cambio de reglas de reasignación (ej. nuevos motivos) hay que replicarlo 3 veces manualmente hoy.
+
+### 10. Documentos adjuntos son solo metadata
+`ProposalDocument` guarda `name`, `size` (como texto, no bytes), `date` (como texto formateado, no `Date`) — sugiere que la subida de archivos en `ProposalDocumentsSection.tsx` simula el registro pero no maneja binarios reales. Válido para prototipo; el backend real necesitará almacenamiento de archivos de verdad (S3, etc.) y metadata numérica/tipada.
+
+## Cómo usar este documento
+
+Si estás extendiendo el prototipo de UX/UI: puedes decidir dejar estos gaps tal cual (no son el foco si el objetivo es solo validar interacción/flujo), **pero nunca los repliques como si fueran la especificación correcta** al informar el diseño del backend real. Si estás diseñando el modelo de datos/backend de producción: usa `04-modelo-de-datos-logico.md` como referencia de reglas de negocio *validadas*, y este archivo como lista de lo que **no** se debe copiar literalmente.
