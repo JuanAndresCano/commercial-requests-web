@@ -267,6 +267,33 @@ export interface RequestItem {
   // "lleva X días en esta fase" en el Kanban del Líder para detectar cuellos
   // de botella. Se actualiza automáticamente en AuthContext.updateRequest.
   statusUpdatedAt?: string;
+
+  // Historial de rondas de negociación comercial (docs/12): cada vez que el
+  // Líder envía un valor final al KAM se abre una ronda nueva. Vive en
+  // RequestItem (no en ProposalCosting) porque sobrevive a los sucesivos
+  // sobrescritos de `costing` — es el registro de lo que pasó, no el estado
+  // actual del costeo.
+  negotiationRounds?: NegotiationRound[];
+}
+
+// No existe "aceptada" explícita: el sistema no tiene hoy un evento real de
+// "el cliente aceptó" — solo "fue entregada" (vigente mientras nadie la
+// devuelva). Inventar un estado "aceptada" sería fabricar un dato que nadie
+// confirma.
+export type ClientResponse = "pendiente" | "rechazada";
+
+export interface NegotiationRound {
+  id: string; // `${requestId}-r${roundNumber}`
+  roundNumber: number; // 1, 2, 3...
+  totalOfferedCop: number; // snapshot del valor final en esta ronda
+  marginAmountCop: number;
+  expectedMarginPercent: number;
+  leaderNote?: string; // obligatoria desde la ronda 2
+  sentToKamAt: string; // ISO — cuando el Líder confirmó "Enviar a KAM"
+  sentToClientAt?: string; // ISO — cuando el KAM efectivamente la entregó
+  clientResponse: ClientResponse;
+  clientObservation?: string; // solo si clientResponse === "rechazada"
+  clientRespondedAt?: string; // ISO — cuando el KAM registró la devolución
 }
 
 export const NODES = [
