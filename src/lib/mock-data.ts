@@ -163,12 +163,19 @@ export interface ClientContact {
 export interface ProposalCosting {
   requiresExternalAdvisor: boolean;
   externalAdvisorDetails?: string;
-  baseCostCop: number;
-  expectedMarginPercent: number; // e.g. 30 (%)
+  // Margen de Contribución en pesos — input manual e independiente (docs/11,
+  // Requisito 1). Es informativo: no tiene que cuadrar matemáticamente con
+  // `expectedMarginPercent` ni con `totalOfferedCop`.
+  marginAmountCop: number;
+  expectedMarginPercent: number; // e.g. 30 (%) — manual, informativo
   proCulturaTaxPercent: number; // 1.5% if Capacitación, 0% otherwise
+  // Estampilla Pro-Cultura: fila de referencia calculada sobre el valor
+  // final ya digitado. Nunca se suma ni se resta de `totalOfferedCop` — el
+  // equipo ya la contempla en el Excel externo del que sale ese valor.
   proCulturaTaxAmount: number;
-  suggestedTotalCop: number;
-  totalOfferedCop: number; // Editable Valor Total Ofertado (COP)
+  // Valor Final de la Propuesta (COP) — único campo operativo real. Ya no se
+  // deriva de una base + margen: el Líder lo digita directamente.
+  totalOfferedCop: number;
   negotiationNotes?: string;
 }
 
@@ -280,30 +287,34 @@ export const NODE_DEFAULT_LEADERS: Record<string, string> = {
   "Salud Global, Calidad de Vida": "Sebastián Vélez",
 };
 
+/**
+ * Arma un `ProposalCosting` a partir del valor final de la propuesta
+ * (docs/11, Requisito 1). Ya no hay cálculo hacia adelante desde una base:
+ * `totalOfferedCop` es el valor que el Líder digita directamente, y
+ * `marginAmountCop` es un input manual independiente (informativo). La
+ * estampilla Pro-Cultura es solo una referencia calculada sobre el valor
+ * final — nunca se suma ni se resta de él.
+ */
 export function calculateCosting(
   type: RequestType,
-  baseCostCop: number,
+  totalOfferedCop: number,
   expectedMarginPercent: number,
-  customOffered?: number,
+  marginAmountCop: number = 0,
   requiresExternalAdvisor: boolean = false,
   externalAdvisorDetails?: string,
   negotiationNotes?: string
 ): ProposalCosting {
   const isCapacitacion = type === "Capacitación";
   const proCulturaTaxPercent = isCapacitacion ? 1.5 : 0;
-  const marginAmount = baseCostCop * (expectedMarginPercent / 100);
-  const proCulturaTaxAmount = isCapacitacion ? Math.round(baseCostCop * 0.015) : 0;
-  const suggestedTotalCop = Math.round(baseCostCop + marginAmount + proCulturaTaxAmount);
-  const totalOfferedCop = customOffered !== undefined && customOffered !== null ? customOffered : suggestedTotalCop;
+  const proCulturaTaxAmount = isCapacitacion ? Math.round(totalOfferedCop * 0.015) : 0;
 
   return {
     requiresExternalAdvisor,
     externalAdvisorDetails,
-    baseCostCop,
+    marginAmountCop,
     expectedMarginPercent,
     proCulturaTaxPercent,
     proCulturaTaxAmount,
-    suggestedTotalCop,
     totalOfferedCop,
     negotiationNotes,
   };
@@ -532,9 +543,9 @@ export const MOCK_REQUESTS: RequestItem[] = [
     totalCostCop: 24_000_000,
     costing: calculateCosting(
       "Capacitación",
-      18_500_000,
-      30,
       24_000_000,
+      30,
+      5_550_000,
       false,
       undefined,
       "Acuerdo de descuento del 1.3% por volumen de horas con SURA"
@@ -660,7 +671,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 12_500_000,
-    costing: calculateCosting("Consultoría", 9_500_000, 31.5, 12_500_000, false),
+    costing: calculateCosting("Consultoría", 12_500_000, 31.5, 2_992_500, false),
     horas: "60",
     modalidad: "Presencial en sede cliente",
     participantes: "1 - 5",
@@ -724,7 +735,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 34_500_000,
-    costing: calculateCosting("Capacitación", 26_000_000, 30, 34_500_000, false),
+    costing: calculateCosting("Capacitación", 34_500_000, 30, 7_800_000, false),
     horas: "48",
     modalidad: "Presencial en sede cliente",
     participantes: "20 - 25",
@@ -796,9 +807,9 @@ export const MOCK_REQUESTS: RequestItem[] = [
     totalCostCop: 42_000_000,
     costing: calculateCosting(
       "Consultoría",
-      31_000_000,
-      35,
       42_000_000,
+      35,
+      10_850_000,
       true,
       "Experto externo en analítica de redes de gas"
     ),
@@ -1259,7 +1270,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Juan Carlos González",
     professorType: "planta",
     totalCostCop: 15_600_000,
-    costing: calculateCosting("Capacitación", 12_000_000, 30, 15_600_000, false),
+    costing: calculateCosting("Capacitación", 15_600_000, 30, 3_600_000, false),
     horas: "36",
     modalidad: "Presencial en sede cliente",
     participantes: "15 - 20",
@@ -1299,7 +1310,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 10_800_000,
-    costing: calculateCosting("Proyectos Especiales (Eventos)", 8_000_000, 28, 10_800_000, false),
+    costing: calculateCosting("Proyectos Especiales (Eventos)", 10_800_000, 28, 2_240_000, false),
     // Segundo ejemplo de propuesta "devuelta con observaciones" — para
     // probar el banner en más de una tarjeta a la vez.
     clientObservations: "El cliente pidió mover el evento a otra sede porque la original ya no está disponible en esa fecha; hay que recotizar el rubro de logística.",
@@ -1352,9 +1363,9 @@ export const MOCK_REQUESTS: RequestItem[] = [
     totalCostCop: 33_750_000,
     costing: calculateCosting(
       "Consultoría",
-      25_000_000,
-      35,
       33_750_000,
+      35,
+      8_750_000,
       true,
       "Ing. Carlos Eduardo Valencia (Valencia & Partners) — trazabilidad IoT en cadena de frío"
     ),
@@ -1402,7 +1413,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 19_500_000,
-    costing: calculateCosting("Capacitación", 15_000_000, 30, 19_500_000, false),
+    costing: calculateCosting("Capacitación", 19_500_000, 30, 4_500_000, false),
     horas: "28",
     modalidad: "Presencial en sede cliente",
     participantes: "11 - 15",
@@ -1445,7 +1456,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 8_900_000,
-    costing: calculateCosting("Mentoría", 6_800_000, 27, 8_900_000, false),
+    costing: calculateCosting("Mentoría", 8_900_000, 27, 1_836_000, false),
     horas: "18",
     modalidad: "Virtual sincrónica",
     participantes: "1 - 5",
@@ -1493,7 +1504,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Estrategia Comercial y Pricing",
     },
     totalCostCop: 27_200_000,
-    costing: calculateCosting("Consultoría", 20_000_000, 34, 27_200_000, true, "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios"),
+    costing: calculateCosting("Consultoría", 27_200_000, 34, 6_800_000, true, "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios"),
     horas: "55",
     modalidad: "Híbrida",
     participantes: "1 - 5",
