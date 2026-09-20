@@ -51,6 +51,10 @@ export function ProposalCostingModule({
   const [negotiationNotes, setNegotiationNotes] = useState<string>(
     initialCosting.negotiationNotes ?? ""
   );
+  // Gate de envío al KAM (docs/11, Requisito 2) — se preserva tal cual al
+  // guardar cambios que no afectan el valor final ni el margen, y se
+  // invalida (vuelve a false) si el Líder vuelve a tocar esos campos.
+  const [readyForKam, setReadyForKam] = useState<boolean>(initialCosting.readyForKam ?? false);
 
   // Collapsible section for the scope/negotiation note
   const [showNoteField, setShowNoteField] = useState<boolean>(
@@ -66,6 +70,7 @@ export function ProposalCostingModule({
       setRequiresExternalAdvisor(request.costing.requiresExternalAdvisor);
       setExternalAdvisorDetails(request.costing.externalAdvisorDetails ?? "");
       setNegotiationNotes(request.costing.negotiationNotes ?? "");
+      setReadyForKam(request.costing.readyForKam ?? false);
       if (request.costing.negotiationNotes?.trim()) {
         setShowNoteField(true);
       }
@@ -84,9 +89,16 @@ export function ProposalCostingModule({
     newMarginAmountCop: number,
     newExternal: boolean,
     newExtDetails: string,
-    newNotes: string
+    newNotes: string,
+    // Requisito 2: editar el valor final o el margen invalida el "Enviado
+    // al KAM" previo — el Líder debe volver a confirmarlo explícitamente.
+    invalidateReadyForKam: boolean = false
   ) => {
     const updatedTaxAmount = isCapacitacion ? Math.round(newTotalOffered * 0.015) : 0;
+    const nextReadyForKam = invalidateReadyForKam ? false : readyForKam;
+    if (invalidateReadyForKam && readyForKam) {
+      setReadyForKam(false);
+    }
 
     const updatedCosting: ProposalCosting = {
       requiresExternalAdvisor: newExternal,
@@ -97,6 +109,7 @@ export function ProposalCostingModule({
       proCulturaTaxAmount: updatedTaxAmount,
       totalOfferedCop: newTotalOffered,
       negotiationNotes: newNotes,
+      readyForKam: nextReadyForKam,
     };
 
     onUpdateCosting(updatedCosting);
@@ -108,19 +121,19 @@ export function ProposalCostingModule({
   const handleTotalOfferedChange = (rawVal: number) => {
     const val = Math.max(0, rawVal);
     setTotalOfferedCop(val);
-    triggerSave(val, marginPercent, marginAmountCop, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
+    triggerSave(val, marginPercent, marginAmountCop, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes, true);
   };
 
   const handleMarginPercentChange = (rawVal: number) => {
     const val = Math.min(100, Math.max(0, rawVal));
     setMarginPercent(val);
-    triggerSave(totalOfferedCop, val, marginAmountCop, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
+    triggerSave(totalOfferedCop, val, marginAmountCop, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes, true);
   };
 
   const handleMarginAmountChange = (rawVal: number) => {
     const val = Math.max(0, rawVal);
     setMarginAmountCop(val);
-    triggerSave(totalOfferedCop, marginPercent, val, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
+    triggerSave(totalOfferedCop, marginPercent, val, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes, true);
   };
 
   const handleRequiresExternalChange = (checked: boolean) => {

@@ -177,6 +177,11 @@ export interface ProposalCosting {
   // deriva de una base + margen: el Líder lo digita directamente.
   totalOfferedCop: number;
   negotiationNotes?: string;
+  // Gate explícito del Líder de Producto (docs/11, Requisito 2): mientras
+  // sea false, el KAM no puede enviar la propuesta al cliente aunque ya haya
+  // un valor ofertado > 0. Se invalida automáticamente (vuelve a false) si
+  // el Líder vuelve a editar el valor final o el margen tras haberlo marcado.
+  readyForKam: boolean;
 }
 
 export interface RequestItem {
@@ -302,7 +307,8 @@ export function calculateCosting(
   marginAmountCop: number = 0,
   requiresExternalAdvisor: boolean = false,
   externalAdvisorDetails?: string,
-  negotiationNotes?: string
+  negotiationNotes?: string,
+  readyForKam: boolean = false
 ): ProposalCosting {
   const isCapacitacion = type === "Capacitación";
   const proCulturaTaxPercent = isCapacitacion ? 1.5 : 0;
@@ -317,6 +323,7 @@ export function calculateCosting(
     proCulturaTaxAmount,
     totalOfferedCop,
     negotiationNotes,
+    readyForKam,
   };
 }
 
@@ -671,7 +678,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 12_500_000,
-    costing: calculateCosting("Consultoría", 12_500_000, 31.5, 2_992_500, false),
+    costing: calculateCosting("Consultoría", 12_500_000, 31.5, 2_992_500, false, undefined, undefined, true),
     horas: "60",
     modalidad: "Presencial en sede cliente",
     participantes: "1 - 5",
@@ -735,7 +742,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 34_500_000,
-    costing: calculateCosting("Capacitación", 34_500_000, 30, 7_800_000, false),
+    costing: calculateCosting("Capacitación", 34_500_000, 30, 7_800_000, false, undefined, undefined, true),
     horas: "48",
     modalidad: "Presencial en sede cliente",
     participantes: "20 - 25",
@@ -1413,7 +1420,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 19_500_000,
-    costing: calculateCosting("Capacitación", 19_500_000, 30, 4_500_000, false),
+    costing: calculateCosting("Capacitación", 19_500_000, 30, 4_500_000, false, undefined, undefined, true),
     horas: "28",
     modalidad: "Presencial en sede cliente",
     participantes: "11 - 15",
@@ -1456,7 +1463,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 8_900_000,
-    costing: calculateCosting("Mentoría", 8_900_000, 27, 1_836_000, false),
+    costing: calculateCosting("Mentoría", 8_900_000, 27, 1_836_000, false, undefined, undefined, true),
     horas: "18",
     modalidad: "Virtual sincrónica",
     participantes: "1 - 5",
@@ -1504,7 +1511,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Estrategia Comercial y Pricing",
     },
     totalCostCop: 27_200_000,
-    costing: calculateCosting("Consultoría", 27_200_000, 34, 6_800_000, true, "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios"),
+    costing: calculateCosting("Consultoría", 27_200_000, 34, 6_800_000, true, "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios", undefined, true),
     horas: "55",
     modalidad: "Híbrida",
     participantes: "1 - 5",

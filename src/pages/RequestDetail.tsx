@@ -342,7 +342,7 @@ export default function RequestDetail() {
   // consecuencias reales — se confirma explícitamente en vez de ejecutarse
   // directo desde el botón, para que un clic accidental o varios clics
   // seguidos no manden la propuesta al cliente sin querer.
-  const [confirmingAction, setConfirmingAction] = useState<"experto" | "costeo" | "entregada" | null>(null);
+  const [confirmingAction, setConfirmingAction] = useState<"experto" | "costeo" | "kam" | "entregada" | null>(null);
 
   const handleMoveToExperto = () => {
     updateStatus(req.id, "en-experto");
@@ -356,11 +356,27 @@ export default function RequestDetail() {
     setConfirmingAction(null);
   };
 
+  // Gate explícito del Líder de Producto antes de que el KAM pueda actuar
+  // (docs/11, Requisito 2): marca el costeo como enviado al KAM. Se
+  // construye a partir del costeo ya persistido (`req.costing`) para no
+  // pisar ningún campo — solo se cambia `readyForKam`.
+  const handleMarkReadyForKam = () => {
+    if (!req.costing) return;
+    updateCosting(req.id, { ...req.costing, readyForKam: true });
+    toast.success("Costeo enviado al KAM");
+    setConfirmingAction(null);
+  };
+
   const handleSendToClient = () => {
     // Defensa adicional además del `disabled` del botón — por si el estado
     // cambia entre que se abre el diálogo de confirmación y se confirma.
     if (!hasValidCosting) {
       toast.error("No se puede entregar sin un valor ofertado mayor a $0");
+      setConfirmingAction(null);
+      return;
+    }
+    if (!req.costing?.readyForKam) {
+      toast.error("El Líder de Producto aún no ha confirmado el envío del costeo");
       setConfirmingAction(null);
       return;
     }
@@ -404,6 +420,12 @@ export default function RequestDetail() {
       description: "A partir de aquí se estructura el valor final de la propuesta.",
       confirmLabel: "Sí, avanzar",
       onConfirm: handleMoveToCosteo,
+    },
+    kam: {
+      title: "¿Enviar el costeo al KAM?",
+      description: "Confirma que el valor final de la propuesta ya está listo. El KAM podrá enviarla al cliente a partir de este momento.",
+      confirmLabel: "Sí, enviar al KAM",
+      onConfirm: handleMarkReadyForKam,
     },
     entregada: {
       title: "¿Marcar como Entregada?",
@@ -520,11 +542,22 @@ export default function RequestDetail() {
 
                   {/* El Líder de Producto ya no puede marcar "Entregada" directamente:
                       esa es la acción del KAM (envía al cliente). El trabajo del Líder
-                      termina en dejar el costeo listo — eso ya deja la solicitud visible
-                      para el KAM como "Lista para Entregar" (docs/08, pregunta 13). */}
-                  {req.status === "en-costeo" && hasValidCosting && (
+                      termina en confirmar explícitamente que el costeo está listo para
+                      que el KAM pueda actuar (docs/11, Requisito 2). */}
+                  {req.status === "en-costeo" && hasValidCosting && !req.costing?.readyForKam && (
+                    <Button
+                      size="sm"
+                      onClick={() => setConfirmingAction("kam")}
+                      className="h-9 px-4 text-xs font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-xs"
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      Enviar a KAM
+                    </Button>
+                  )}
+
+                  {req.status === "en-costeo" && hasValidCosting && req.costing?.readyForKam && (
                     <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                      <Check className="h-3.5 w-3.5" /> Costeo listo — a la espera del KAM
+                      <Check className="h-3.5 w-3.5" /> Enviado al KAM — a la espera de envío al cliente
                     </div>
                   )}
 
@@ -537,10 +570,16 @@ export default function RequestDetail() {
               ) : isKam && req.status === "en-costeo" ? (
                 <Button
                   size="sm"
-                  disabled={!hasValidCosting}
+                  disabled={!hasValidCosting || !req.costing?.readyForKam}
                   onClick={() => setConfirmingAction("entregada")}
                   className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                  title={hasValidCosting ? undefined : "El Líder de Producto aún no ha definido un valor real para esta propuesta"}
+                  title={
+                    !hasValidCosting
+                      ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
+                      : !req.costing?.readyForKam
+                      ? "El Líder de Producto aún no ha confirmado el envío del costeo"
+                      : undefined
+                  }
                 >
                   <Send className="h-3.5 w-3.5 mr-1.5" />
                   Enviar a cliente

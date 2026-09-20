@@ -661,9 +661,10 @@ export function ProductLeaderDashboard({
                         )}
 
                         {/* "Entregar" (enviar al cliente) es una acción exclusiva del KAM,
-                            no del Líder de Producto — el trabajo del Líder termina en dejar
-                            el costeo listo (docs/08, pregunta 13). Por eso aquí solo se
-                            invita a completar el costeo, o se confirma que ya quedó listo. */}
+                            no del Líder de Producto — el trabajo del Líder termina en
+                            confirmar explícitamente que el costeo está listo para el KAM
+                            (docs/11, Requisito 2). La confirmación en sí (con diálogo) vive
+                            en el detalle de la solicitud — aquí solo se dirige hacia allá. */}
                         {stage.id === "en-costeo" && !hasRealCosting && (
                           <Button
                             asChild
@@ -676,7 +677,19 @@ export function ProductLeaderDashboard({
                             </Link>
                           </Button>
                         )}
-                        {stage.id === "en-costeo" && hasRealCosting && (
+                        {stage.id === "en-costeo" && hasRealCosting && !req.costing?.readyForKam && (
+                          <Button
+                            asChild
+                            size="sm"
+                            className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
+                          >
+                            <Link to={`/solicitudes/${req.id}`} title="Confirmar y enviar el costeo al KAM">
+                              Enviar a KAM
+                              <ArrowRight className="h-3 w-3 ml-0.5" />
+                            </Link>
+                          </Button>
+                        )}
+                        {stage.id === "en-costeo" && hasRealCosting && req.costing?.readyForKam && (
                           <span className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]">
                             <Check className="h-3 w-3" /> Listo para el KAM
                           </span>
