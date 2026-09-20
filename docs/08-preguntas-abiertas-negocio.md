@@ -528,7 +528,7 @@ Nodo' son el mismo cargo?"
 
 **Contexto:** Cuando un cliente devuelve una propuesta pidiendo un ajuste de **alcance** (ej. "reducir de 5 plantas a 3"), la corrección real vive en campos de "Información completa de la solicitud" (`necesidad`, y potencialmente otros) — no solo en el precio. Hasta el 2026-09-20, **nadie podía editar esos campos** una vez la solicitud salía de "Nueva" (ni el KAM que los diligenció, ni el Líder de Producto).
 
-**Decisión provisional implementada:** se le dio acceso al **Líder de Producto** para editar "Información completa de la solicitud" mientras la solicitud (suya) esté en "En Costeo" — mismo modal que ya usaba el KAM en "Nueva".
+**Decisión provisional implementada:** se le dio acceso al **Líder de Producto** para editar "Información completa de la solicitud", pero solo cuando la solicitud (suya) esté en "En Costeo" **y ya haya sido rechazada al menos una vez por el cliente** — no desde el primer paso de costeo. Mismo modal que ya usaba el KAM en "Nueva". Se ajustó así (2026-09-20) tras revisar que la condición original (cualquier momento en "En Costeo") le daba acceso sin que hubiera un motivo de negocio — la información sigue siendo del KAM salvo que haya algo concreto que corregir.
 
 **Pregunta para la Líder de Producto:** ¿es el Líder de Producto quien debería corregir estos campos, o debería volver al KAM (que fue quien habló originalmente con el cliente y los diligenció)? ¿O ambos, según el campo?
 
@@ -618,7 +618,7 @@ una pregunta abierta.)_
   en la plataforma (pregunta 11); el Profesor no tendrá cuenta propia por
   ahora (pregunta 4).
 
-### Ronda del 2026-09-19/20 (cambios de negocio en costeo, gate a KAM y trazabilidad — ver `docs/11`, `12`, `13`)
+### Ronda del 2026-09-19/20 (cambios de negocio en costeo, gate a KAM y trazabilidad)
 
 _No vinieron de audios nuevos de Dianis para todo el paquete — los 2 originales
 (valor final manual + margen manual, y "dónde le doy clic para pasarla al

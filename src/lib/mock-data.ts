@@ -161,7 +161,7 @@ export interface ClientContact {
 }
 
 export interface ProposalCosting {
-  // Margen de Contribución en pesos — input manual e independiente (docs/11,
+  // Margen de Contribución en pesos — input manual e independiente (docs/04,
   // Requisito 1). Es informativo: no tiene que cuadrar matemáticamente con
   // `expectedMarginPercent` ni con `totalOfferedCop`.
   marginAmountCop: number;
@@ -175,7 +175,7 @@ export interface ProposalCosting {
   // deriva de una base + margen: el Líder lo digita directamente.
   totalOfferedCop: number;
   negotiationNotes?: string;
-  // Gate explícito del Líder de Producto (docs/11, Requisito 2): mientras
+  // Gate explícito del Líder de Producto (docs/04): mientras
   // sea false, el KAM no puede enviar la propuesta al cliente aunque ya haya
   // un valor ofertado > 0. Se invalida automáticamente (vuelve a false) si
   // el Líder vuelve a editar el valor final o el margen tras haberlo marcado.
@@ -266,7 +266,7 @@ export interface RequestItem {
   // de botella. Se actualiza automáticamente en AuthContext.updateRequest.
   statusUpdatedAt?: string;
 
-  // Historial de rondas de negociación comercial (docs/12): cada vez que el
+  // Historial de rondas de negociación comercial (docs/04): cada vez que el
   // Líder envía un valor final al KAM se abre una ronda nueva. Vive en
   // RequestItem (no en ProposalCosting) porque sobrevive a los sucesivos
   // sobrescritos de `costing` — es el registro de lo que pasó, no el estado
@@ -292,7 +292,7 @@ export interface NegotiationRound {
   clientResponse: ClientResponse;
   clientObservation?: string; // solo si clientResponse === "rechazada"
   clientRespondedAt?: string; // ISO — cuando el KAM registró la devolución
-  // Snapshot de alcance vigente al momento del envío (docs/13) — además del
+  // Snapshot de alcance vigente al momento del envío (docs/04) — además del
   // precio, cada ronda congela estos campos tal como estaban en `req` (no en
   // `req.costing`) cuando el Líder confirmó "Enviar a KAM". Permite mostrar
   // qué cambió de alcance entre rondas, no solo el valor ofertado.
@@ -332,7 +332,7 @@ export const NODE_DEFAULT_LEADERS: Record<string, string> = {
 
 /**
  * Arma un `ProposalCosting` a partir del valor final de la propuesta
- * (docs/11, Requisito 1). Ya no hay cálculo hacia adelante desde una base:
+ * (docs/04). Ya no hay cálculo hacia adelante desde una base:
  * `totalOfferedCop` es el valor que el Líder digita directamente, y
  * `marginAmountCop` es un input manual independiente (informativo). La
  * estampilla Pro-Cultura es solo una referencia calculada sobre el valor
@@ -849,9 +849,9 @@ export const MOCK_REQUESTS: RequestItem[] = [
     // el cliente ya la había recibido y pidió un ajuste de alcance — el KAM la
     // regresó a "en-costeo" y esta nota queda visible hasta que se reentregue.
     clientObservations: "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
-    // Backfill (docs/13): esta solicitud ya traía `clientObservations` con un
+    // Backfill (docs/04): esta solicitud ya traía `clientObservations` con un
     // rechazo completo del cliente antes de que existiera `negotiationRounds`
-    // (docs/12) — sin esta ronda 1, su historial de negociación saldría
+    // (docs/04) — sin esta ronda 1, su historial de negociación saldría
     // vacío pese a que la narrativa ya cuenta un rechazo.
     negotiationRounds: [
       {
@@ -1616,7 +1616,7 @@ export const URGENCY_META: Record<Urgency, { label: string; tone: string }> = {
 
 // Fuente única de verdad para "¿de quién es el turno dentro de En Costeo?".
 // `status === "en-costeo"` no alcanza: desde que el Líder de Producto debe
-// confirmar explícitamente el envío (docs/11, Requisito 2), una solicitud
+// confirmar explícitamente el envío (docs/04), una solicitud
 // puede estar en esa etapa sin que el KAM tenga nada que hacer todavía.
 // Cualquier tablero que muestre "lista para el KAM" / "lista para entregar"
 // debe pasar por aquí en vez de repetir la condición — así no se repite el

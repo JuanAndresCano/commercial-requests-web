@@ -6,7 +6,7 @@ interface ReassignParams {
 }
 
 /**
- * Lógica compartida de reasignación de Líder de Producto (docs/11 —
+ * Lógica compartida de reasignación de Líder de Producto (docs/03 —
  * Requisito 3). Antes vivía triplicada (RequestDetail, ProductLeaderDashboard
  * y una tercera copia muerta en Dashboard.tsx); se centraliza aquí para que
  * la regla de negocio no vuelva a divergir entre pantallas.

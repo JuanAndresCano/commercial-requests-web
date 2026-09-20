@@ -86,7 +86,7 @@ export default function Dashboard() {
     // ProductLeaderDashboard), así que esta función solo atiende
     // "lider-nodo" y "profesor". Antes había aquí una rama muerta para
     // "lider-producto" que además referenciaba una variable `listas` nunca
-    // declarada (docs/11, Requisito 3) — se retiró en esta limpieza.
+    // declarada (docs/07, gap #9) — se retiró en esta limpieza.
     if (role === "profesor") {
       return [
         { label: "Propuestas a diseñar", value: requests.filter((r) => r.professor === user.name).length, icon: GraduationCap, color: "text-[#5454e9]" },

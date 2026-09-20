@@ -44,13 +44,13 @@ interface ReassignLeaderDialogProps {
 /**
  * Modal de "Reasignar Líder de Producto" — antes triplicado en
  * RequestDetail.tsx, ProductLeaderDashboard.tsx y una tercera copia muerta
- * en Dashboard.tsx (docs/11, Requisito 3). Se extrae aquí como componente
+ * en Dashboard.tsx (docs/03). Se extrae aquí como componente
  * compartido antes de habilitar la reasignación también desde "En Experto",
  * para no volver a duplicar la lógica una tercera vez.
  *
  * `reassignReason`/`reassignNotes` se capturan pero, igual que antes de esta
  * extracción, no se persisten en `RequestItem` — queda fuera de alcance
- * (docs/11).
+ * (docs/03).
  */
 export function ReassignLeaderDialog({ request, onOpenChange, onConfirm }: ReassignLeaderDialogProps) {
   const [selectedNewLeader, setSelectedNewLeader] = useState("");

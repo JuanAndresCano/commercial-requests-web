@@ -664,7 +664,7 @@ export function ProductLeaderDashboard({
 
                       <div className="flex items-center gap-1">
                         {/* Reasignar mientras la solicitud sigue en las etapas tempranas
-                            (aún no entra a costeo): "Nueva" o "En Experto" (docs/11). */}
+                            (aún no entra a costeo): "Nueva" o "En Experto" (docs/03). */}
                         {(req.status === "nueva" || req.status === "en-experto") && (
                           <button
                             type="button"
@@ -709,7 +709,7 @@ export function ProductLeaderDashboard({
                         {/* "Entregar" (enviar al cliente) es una acción exclusiva del KAM,
                             no del Líder de Producto — el trabajo del Líder termina en
                             confirmar explícitamente que el costeo está listo para el KAM
-                            (docs/11, Requisito 2). La confirmación en sí (con diálogo) vive
+                            (docs/03). La confirmación en sí (con diálogo) vive
                             en el detalle de la solicitud — aquí solo se dirige hacia allá. */}
                         {stage.id === "en-costeo" && !hasRealCosting && (
                           <Button

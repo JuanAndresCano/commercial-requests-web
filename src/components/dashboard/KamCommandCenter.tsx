@@ -86,7 +86,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   const enProcesoCount = activeDataset.filter((r) => r.status === "en-experto").length;
   // "Lista para Entregar" es una promesa concreta ("ya puedes enviarla al
   // cliente"), no solo la etapa "en-costeo" — desde que el Líder de Producto
-  // confirma explícitamente el envío (docs/11, Requisito 2), una solicitud
+  // confirma explícitamente el envío (docs/04), una solicitud
   // puede estar en "en-costeo" sin que el KAM tenga nada que hacer todavía.
   // Contar solo las confirmadas evita que este número (y el aviso de abajo)
   // le diga al KAM que puede entregar algo que el Líder aún está costeando.

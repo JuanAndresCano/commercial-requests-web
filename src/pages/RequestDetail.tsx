@@ -108,7 +108,7 @@ export default function RequestDetail() {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnObservations, setReturnObservations] = useState("");
-  // Diálogo dedicado para "Enviar a KAM" (docs/12): a partir de la ronda 2
+  // Diálogo dedicado para "Enviar a KAM" (docs/03): a partir de la ronda 2
   // exige una nota del motivo del ajuste, algo que el diálogo genérico
   // CONFIRM_ACTION_META no puede expresar (no admite campos condicionales).
   const [isSendToKamModalOpen, setIsSendToKamModalOpen] = useState(false);
@@ -155,12 +155,16 @@ export default function RequestDetail() {
   // El KAM es dueño de la información de su solicitud (empresa, contacto,
   // diagnóstico, formación previa) y puede corregirla mientras nadie la haya
   // empezado a trabajar — Dianis confirmó esto en docs/08, preguntas 4 y 8.
-  // El Líder de Producto, además, puede corregir el alcance (sobre todo
-  // `necesidad`) mientras está costeando — es el punto natural para ajustar
-  // la solicitud tras un rechazo del cliente (docs/13).
+  // El Líder de Producto NO tiene acceso general a esta sección — sigue
+  // siendo del KAM, que fue quien la diligenció. La única excepción: si el
+  // cliente ya rechazó la propuesta una vez, el Líder puede corregir el
+  // alcance (sobre todo `necesidad`) mientras está re-costeando, porque ahí
+  // sí hay un motivo de negocio concreto para tocarlo (docs/08, pregunta 16
+  // — sin validar todavía con Dianis).
+  const wasRejectedByClient = (req.negotiationRounds ?? []).some((r) => r.clientResponse === "rechazada");
   const canEditFullInfo =
     (isKam && req.kam === user.name && req.status === "nueva") ||
-    (role === "lider-producto" && req.productLeader === user.name && req.status === "en-costeo");
+    (role === "lider-producto" && req.productLeader === user.name && req.status === "en-costeo" && wasRejectedByClient);
   const fullInfoCompleteness = getFullInfoCompleteness(req);
   const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
   const emptyFullInfoDraft = {
@@ -309,7 +313,7 @@ export default function RequestDetail() {
   const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
   const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
 
-  // Historial de negociación (docs/12): la ronda que se abriría al confirmar
+  // Historial de negociación (docs/03): la ronda que se abriría al confirmar
   // "Enviar a KAM" y la última devolución del cliente, para dar contexto en
   // el diálogo sin que el Líder tenga que ir a buscarla al historial.
   const negotiationRounds: NegotiationRound[] = req.negotiationRounds ?? [];
@@ -332,7 +336,7 @@ export default function RequestDetail() {
     externalData?: ExternalProfessorData
   ) => {
     // El indicador de "asesor externo" del costeo ya no es un campo propio:
-    // se deriva de `professorType`/`professor`/`externalProfessorData` (docs/13,
+    // se deriva de `professorType`/`professor`/`externalProfessorData` (docs/04,
     // gap #11), así que asignar el docente/asesor aquí ya deja todo consistente
     // sin tocar `req.costing`.
     assignProfessorDetailed(req.id, professorName, type, externalData);
@@ -374,10 +378,10 @@ export default function RequestDetail() {
   };
 
   // Gate explícito del Líder de Producto antes de que el KAM pueda actuar
-  // (docs/11, Requisito 2): marca el costeo como enviado al KAM. Se
+  // (docs/04): marca el costeo como enviado al KAM. Se
   // construye a partir del costeo ya persistido (`req.costing`) para no
   // pisar ningún campo — solo se cambia `readyForKam`.
-  // Además (docs/12) abre una nueva ronda de negociación con un snapshot del
+  // Además (docs/04) abre una nueva ronda de negociación con un snapshot del
   // valor final vigente — `leaderNote` es obligatoria desde la ronda 2 y se
   // valida en la UI del diálogo dedicado antes de poder confirmar.
   const handleMarkReadyForKam = (leaderNote?: string) => {
@@ -397,7 +401,7 @@ export default function RequestDetail() {
               expectedMarginPercent: req.costing!.expectedMarginPercent,
               leaderNote: leaderNote?.trim() || round.leaderNote,
               sentToKamAt: now,
-              // Snapshot de alcance (docs/13): se toma de `req`, no de
+              // Snapshot de alcance (docs/04): se toma de `req`, no de
               // `req.costing`, y se refresca aunque la ronda ya existiera —
               // el Líder pudo haber corregido el alcance antes de reenviar.
               participantes: req.participantes,
@@ -419,7 +423,7 @@ export default function RequestDetail() {
         leaderNote: leaderNote?.trim() || undefined,
         sentToKamAt: now,
         clientResponse: "pendiente",
-        // Snapshot de alcance vigente al momento del envío (docs/13).
+        // Snapshot de alcance vigente al momento del envío (docs/04).
         participantes: req.participantes,
         modalidad: req.modalidad,
         horas: req.horas,
@@ -450,7 +454,7 @@ export default function RequestDetail() {
     }
     const now = new Date().toISOString();
     // Cierra el envío de la ronda pendiente (debería ser la última) con la
-    // fecha de entrega efectiva al cliente (docs/12).
+    // fecha de entrega efectiva al cliente (docs/04).
     const updatedRounds = negotiationRounds.map((round) =>
       round.clientResponse === "pendiente" ? { ...round, sentToClientAt: now } : round
     );
@@ -480,7 +484,7 @@ export default function RequestDetail() {
     const now = new Date().toISOString();
     const trimmedObservations = returnObservations.trim() || undefined;
     // Marca la ronda pendiente (debería ser la última) como rechazada con la
-    // observación del cliente (docs/12).
+    // observación del cliente (docs/04).
     const updatedRounds = negotiationRounds.map((round) =>
       round.clientResponse === "pendiente"
         ? {
@@ -495,8 +499,8 @@ export default function RequestDetail() {
       status: "en-costeo",
       clientObservations: trimmedObservations,
       negotiationRounds: updatedRounds,
-      // Bug encontrado en docs/12: al volver a "en-costeo" el gate del Líder
-      // (docs/11, Requisito 2) quedaba con `readyForKam`/`costingSentAt` del
+      // Bug encontrado en docs/04: al volver a "en-costeo" el gate del Líder
+      // (docs/04) quedaba con `readyForKam`/`costingSentAt` del
       // ciclo anterior, así que el botón "Enviar a cliente" del KAM se
       // re-habilitaba antes de que el Líder tocara nada. Se resetea aquí.
       costing: req.costing
@@ -637,7 +641,7 @@ export default function RequestDetail() {
                   {/* El Líder de Producto ya no puede marcar "Entregada" directamente:
                       esa es la acción del KAM (envía al cliente). El trabajo del Líder
                       termina en confirmar explícitamente que el costeo está listo para
-                      que el KAM pueda actuar (docs/11, Requisito 2). */}
+                      que el KAM pueda actuar (docs/03). */}
                   {req.status === "en-costeo" && hasValidCosting && !req.costing?.readyForKam && (
                     <Button
                       size="sm"
@@ -838,7 +842,7 @@ export default function RequestDetail() {
               userName={user.name}
             />
 
-            {/* 3. HISTORIAL DE NEGOCIACIÓN (docs/12) — solo si ya hay más de un
+            {/* 3. HISTORIAL DE NEGOCIACIÓN (docs/03) — solo si ya hay más de un
                 envío al KAM; con una sola ronda en curso no hace falta mostrar
                 "historial". Visible para Líder y KAM. */}
             {negotiationRounds.length > 0 && (
@@ -1373,7 +1377,7 @@ export default function RequestDetail() {
             <DialogDescription className="text-xs text-muted-foreground">
               {isKam
                 ? 'Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".'
-                : 'Corrige el alcance de la solicitud (por ejemplo la necesidad del cliente) mientras esté "En proceso de costeo".'}
+                : 'Corrige el alcance de la solicitud (por ejemplo la necesidad del cliente) — disponible porque el cliente ya devolvió esta propuesta pidiendo ajustes.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1690,7 +1694,7 @@ export default function RequestDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal dedicado: Enviar a KAM (docs/12) — el diálogo genérico
+      {/* Modal dedicado: Enviar a KAM (docs/03) — el diálogo genérico
           CONFIRM_ACTION_META no admite un campo de texto condicional, así
           que esta acción se sacó de ese patrón. Desde la ronda 2 exige una
           nota del motivo del ajuste y muestra la observación del cliente de
@@ -1836,7 +1840,7 @@ function getFullInfoCompleteness(req: RequestItem): { filled: number; total: num
   return { filled, total };
 }
 
-// Campos de alcance que cada ronda de negociación congela (docs/13) — si
+// Campos de alcance que cada ronda de negociación congela (docs/04) — si
 // alguno cambió respecto a la ronda anterior, el historial lo muestra como
 // parte del resumen de la ronda ("Participantes: 15-20 → 9-12"). La ronda 1
 // nunca tiene con qué compararse, así que no muestra diffs.

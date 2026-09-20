@@ -5,6 +5,7 @@ import {
   ExternalLink,
   ChevronUp,
   GraduationCap,
+  Calculator,
 } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +36,7 @@ export function ProposalCostingModule({
 
   // El campo que antes era "Costo Base Directo" ahora captura directamente
   // el Valor Final de la Propuesta — ya no hay un cálculo hacia adelante de
-  // base → total (docs/11, Requisito 1).
+  // base → total (docs/04).
   const [totalOfferedCop, setTotalOfferedCop] = useState<number>(initialCosting.totalOfferedCop);
   const [marginPercent, setMarginPercent] = useState<number>(initialCosting.expectedMarginPercent ?? 30);
   // Margen en plata: input manual e independiente, ya no derivado de
@@ -44,7 +45,7 @@ export function ProposalCostingModule({
   const [negotiationNotes, setNegotiationNotes] = useState<string>(
     initialCosting.negotiationNotes ?? ""
   );
-  // Gate de envío al KAM (docs/11, Requisito 2) — se preserva tal cual al
+  // Gate de envío al KAM (docs/04) — se preserva tal cual al
   // guardar cambios que no afectan el valor final ni el margen, y se
   // invalida (vuelve a false) si el Líder vuelve a tocar esos campos.
   const [readyForKam, setReadyForKam] = useState<boolean>(initialCosting.readyForKam ?? false);
@@ -73,7 +74,7 @@ export function ProposalCostingModule({
   // Referencia informativa: 1.5% solo para Capacitación, calculada sobre el
   // valor final ya digitado. Nunca se suma ni se resta de `totalOfferedCop`
   // — el equipo ya la contempla en el Excel externo del que sale ese valor
-  // (docs/11, Requisito 1).
+  // (docs/04).
   const proCulturaTaxAmount = isCapacitacion ? Math.round(totalOfferedCop * 0.015) : 0;
 
   const triggerSave = (
@@ -128,7 +129,7 @@ export function ProposalCostingModule({
     triggerSave(totalOfferedCop, marginPercent, val, negotiationNotes, true);
   };
 
-  // Indicador de solo lectura del asesor del servicio (docs/13, gap #11):
+  // Indicador de solo lectura del asesor del servicio (docs/07, gap #11):
   // ya no es un switch independiente — se deriva directamente del
   // docente/asesor realmente asignado en "Equipo Asignado", para que nunca
   // pueda contradecir esa asignación.
@@ -139,7 +140,7 @@ export function ProposalCostingModule({
     ? request.professor || "Docente de planta sin nombre registrado"
     : "Sin docente o asesor asignado todavía";
   const advisorSubtitle = isExternalAdvisor ? request.externalProfessorData?.empresaConsultora : undefined;
-  // Referencia informativa (docs/13): nunca sobreescribe el margen manual,
+  // Referencia informativa (docs/04): nunca sobreescribe el margen manual,
   // solo ayuda a detectar de un vistazo si el % y el valor en $ "cuadran".
   const marginReferenceAmount = Math.round((totalOfferedCop * marginPercent) / 100);
 
@@ -197,7 +198,7 @@ export function ProposalCostingModule({
           {/* Indicador de solo lectura del asesor del servicio (5 cols) —
               derivado del docente/asesor realmente asignado, ya no un switch
               independiente que se podía contradecir con esa asignación
-              (docs/13, gap #11 de 07-gaps-conocidos-y-deuda-tecnica.md). */}
+              (docs/07, gap #11). */}
           <div className="md:col-span-5 space-y-2">
             <Label className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-muted-foreground">
               Asesor del Servicio
@@ -283,13 +284,19 @@ export function ProposalCostingModule({
                   disabled={isReadOnly}
                 />
               </div>
-              {/* Referencia calculada, no editable y no guardada (docs/13):
+              {/* Referencia calculada, no editable y no guardada (docs/04):
                   el margen manual y el valor final siguen siendo campos
                   independientes — esto es solo para detectar de un vistazo
                   cuando "no cuadran". */}
-              <p className="text-[10px] font-mono text-slate-400 leading-snug">
-                Referencia: {marginPercent}% de {formatCop(totalOfferedCop)} = {formatCop(marginReferenceAmount)}
-              </p>
+              <div className="flex items-center gap-1.5 rounded-md bg-slate-50 dark:bg-white/5 px-2 py-1">
+                <Calculator className="h-3 w-3 shrink-0 text-slate-400" />
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                  {marginPercent}% de {formatCop(totalOfferedCop)} ={" "}
+                  <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
+                    {formatCop(marginReferenceAmount)}
+                  </span>
+                </p>
+              </div>
             </div>
 
             {/* Chips tipo pill minimalistas en tono slate suave */}

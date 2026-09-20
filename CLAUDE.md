@@ -27,7 +27,7 @@ Para correr un solo archivo de test: `npx vitest run src/test/<archivo>.test.ts(
 - **Nunca hagas push directo a `main` ni a `develop`.** Todo cambio pasa por una rama `feature/...` (o `docs/...` para documentación) y un Pull Request revisado por el equipo. Esto aplica también a ti como agente: si te piden implementar algo, termina en "rama creada + pusheada", no en un merge.
 - Antes de crear una rama, `git fetch origin` y parte desde `origin/develop` actualizado, no desde un `develop` local desactualizado.
 - Decisiones de gobernanza del repo (cosas que no son de negocio ni de UX pero afectan cómo se trabaja aquí) están en `docs/10-decisiones-pendientes-equipo.md`.
-- `docs/11`, `12` y `13` son **bitácora histórica** de cómo se llegó a los cambios de costeo/reasignación/trazabilidad de 2026-09 — no son la referencia vigente. El estado **actual y vivo** del modelo de datos y los flujos vive en `03-flujos-de-usuario.md`, `04-modelo-de-datos-logico.md`, `07-gaps-conocidos-y-deuda-tecnica.md` y `08-preguntas-abiertas-negocio.md` — **siempre parte de ahí**, no de los documentos numerados más altos.
+- El estado **actual y vivo** del modelo de datos y los flujos de negocio vive únicamente en `03-flujos-de-usuario.md`, `04-modelo-de-datos-logico.md`, `07-gaps-conocidos-y-deuda-tecnica.md` y `08-preguntas-abiertas-negocio.md` — no existen documentos numerados más allá de `10`.
 
 ## Arquitectura
 
