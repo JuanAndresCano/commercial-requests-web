@@ -136,6 +136,15 @@ export function ProductLeaderDashboard({
     "icesi_lp_dashboard_sin_docente_v1",
     false
   );
+  // Dentro de "En Costeo" hay dos situaciones muy distintas mezcladas en la
+  // misma columna: las que el Líder todavía tiene que trabajar, y las que ya
+  // confirmó y solo esperan a que el KAM las envíe al cliente. Sin este
+  // filtro, un Líder con varias solicitudes en costeo tiene que abrir tarjeta
+  // por tarjeta para saber cuáles ya no requieren su acción.
+  const [onlyWaitingForKam, setOnlyWaitingForKam] = usePersistentState(
+    "icesi_lp_dashboard_esperando_kam_v1",
+    false
+  );
   const [viewMode, setViewMode] = usePersistentState<"kanban" | "tabla">(
     "icesi_lp_dashboard_view_v1",
     "kanban"
@@ -237,6 +246,9 @@ export function ProductLeaderDashboard({
   );
 
   const sinDocenteCount = activeDataset.filter((r) => !r.professor && r.status !== "entregada").length;
+  const waitingForKamCount = activeDataset.filter(
+    (r) => r.status === "en-costeo" && r.costing?.readyForKam
+  ).length;
 
   // Métricas agregadas (no son una etapa del pipeline) — mismo cálculo que ya
   // usa el KAM, para que ambos tableros hablen del pipeline en los mismos términos.
@@ -250,6 +262,7 @@ export function ProductLeaderDashboard({
     return activeDataset.filter((r) => {
       if (activeStageFilter !== "todas" && r.status !== activeStageFilter) return false;
       if (onlyMissingProfessor && (r.professor || r.status === "entregada")) return false;
+      if (onlyWaitingForKam && !(r.status === "en-costeo" && r.costing?.readyForKam)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -263,7 +276,7 @@ export function ProductLeaderDashboard({
       }
       return true;
     });
-  }, [activeDataset, activeStageFilter, onlyMissingProfessor, searchQuery]);
+  }, [activeDataset, activeStageFilter, onlyMissingProfessor, onlyWaitingForKam, searchQuery]);
 
   // Vista Kanban: la columna ya ES el estado, así que el filtro de estado no debe vaciar el
   // contenido (no aporta nada nuevo) — solo aplican los filtros que sí cruzan información
@@ -272,6 +285,7 @@ export function ProductLeaderDashboard({
   const kanbanRequests = useMemo(() => {
     return activeDataset.filter((r) => {
       if (onlyMissingProfessor && (r.professor || r.status === "entregada")) return false;
+      if (onlyWaitingForKam && !(r.status === "en-costeo" && r.costing?.readyForKam)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -285,7 +299,7 @@ export function ProductLeaderDashboard({
       }
       return true;
     });
-  }, [activeDataset, onlyMissingProfessor, searchQuery]);
+  }, [activeDataset, onlyMissingProfessor, onlyWaitingForKam, searchQuery]);
 
   // Group by status for the single unified Kanban
   const groupedRequests = useMemo(() => {
@@ -432,6 +446,20 @@ export function ProductLeaderDashboard({
             <UserCheck className="h-3.5 w-3.5" />
             Sin docente ({sinDocenteCount})
           </button>
+          <button
+            type="button"
+            onClick={() => setOnlyWaitingForKam((prev) => !prev)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors",
+              onlyWaitingForKam
+                ? "border-[#5454e9] bg-[#5454e9] text-white"
+                : "border-border bg-secondary/50 text-foreground hover:bg-secondary"
+            )}
+            title="Mostrar solo solicitudes en Costeo ya enviadas al KAM, esperando que él las entregue"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            Esperando al KAM ({waitingForKamCount})
+          </button>
           {viewMode === "tabla" && activeStageFilter !== "todas" && (
             <button
               type="button"
@@ -494,11 +522,15 @@ export function ProductLeaderDashboard({
           <p className="font-medium text-foreground">
             {onlyMissingProfessor
               ? "Ninguna de tus solicitudes activas está sin docente en este momento."
+              : onlyWaitingForKam
+              ? "Ninguna de tus solicitudes en Costeo está esperando al KAM en este momento."
               : "No se encontraron solicitudes con esta búsqueda."}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {onlyMissingProfessor
               ? "El filtro \"Sin docente\" excluye además las que ya están Entregadas."
+              : onlyWaitingForKam
+              ? "El filtro \"Esperando al KAM\" solo muestra solicitudes en Costeo que ya confirmaste como listas."
               : "Intenta con otro término de búsqueda."}
           </p>
           <Button
@@ -506,6 +538,7 @@ export function ProductLeaderDashboard({
             size="sm"
             onClick={() => {
               setOnlyMissingProfessor(false);
+              setOnlyWaitingForKam(false);
               setSearchQuery("");
             }}
             className="mt-3 text-xs"
@@ -736,12 +769,13 @@ export function ProductLeaderDashboard({
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       <p>No se encontraron solicitudes con estos filtros.</p>
-                      {(onlyMissingProfessor || searchQuery || activeStageFilter !== "todas") && (
+                      {(onlyMissingProfessor || onlyWaitingForKam || searchQuery || activeStageFilter !== "todas") && (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
                             setOnlyMissingProfessor(false);
+                            setOnlyWaitingForKam(false);
                             setSearchQuery("");
                             setActiveStageFilter("todas");
                           }}
