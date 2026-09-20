@@ -315,7 +315,15 @@ export default function RequestDetail() {
   // "Enviar a KAM" y la última devolución del cliente, para dar contexto en
   // el diálogo sin que el Líder tenga que ir a buscarla al historial.
   const negotiationRounds: NegotiationRound[] = req.negotiationRounds ?? [];
-  const nextRoundNumber = negotiationRounds.length + 1;
+  // Si ya hay una ronda "pendiente" que nunca llegó a entregarse al cliente
+  // (el Líder la invalidó editando el costeo antes de que el KAM alcanzara a
+  // enviarla — ver ProposalCostingModule), reenviar debe actualizar esa misma
+  // ronda, no abrir una nueva: el cliente nunca llegó a ver ese número, así
+  // que no cuenta como una renegociación adicional.
+  const unsentPendingRound = negotiationRounds.find(
+    (round) => round.clientResponse === "pendiente" && !round.sentToClientAt
+  );
+  const nextRoundNumber = unsentPendingRound?.roundNumber ?? negotiationRounds.length + 1;
   const lastRejectedRound = [...negotiationRounds]
     .reverse()
     .find((round) => round.clientResponse === "rechazada");
@@ -382,20 +390,40 @@ export default function RequestDetail() {
   const handleMarkReadyForKam = (leaderNote?: string) => {
     if (!req.costing) return;
     const now = new Date().toISOString();
-    const roundNumber = negotiationRounds.length + 1;
-    const newRound: NegotiationRound = {
-      id: `${req.id}-r${roundNumber}`,
-      roundNumber,
-      totalOfferedCop: req.costing.totalOfferedCop,
-      marginAmountCop: req.costing.marginAmountCop,
-      expectedMarginPercent: req.costing.expectedMarginPercent,
-      leaderNote: leaderNote?.trim() || undefined,
-      sentToKamAt: now,
-      clientResponse: "pendiente",
-    };
+    let updatedRounds: NegotiationRound[];
+    if (unsentPendingRound) {
+      // Se actualiza en el mismo lugar del arreglo, conservando su id y
+      // roundNumber — sigue siendo la misma ronda, solo con el valor y la
+      // fecha de envío refrescados (y la nota, si el Líder escribió una nueva).
+      updatedRounds = negotiationRounds.map((round) =>
+        round.id === unsentPendingRound.id
+          ? {
+              ...round,
+              totalOfferedCop: req.costing!.totalOfferedCop,
+              marginAmountCop: req.costing!.marginAmountCop,
+              expectedMarginPercent: req.costing!.expectedMarginPercent,
+              leaderNote: leaderNote?.trim() || round.leaderNote,
+              sentToKamAt: now,
+            }
+          : round
+      );
+    } else {
+      const roundNumber = negotiationRounds.length + 1;
+      const newRound: NegotiationRound = {
+        id: `${req.id}-r${roundNumber}`,
+        roundNumber,
+        totalOfferedCop: req.costing.totalOfferedCop,
+        marginAmountCop: req.costing.marginAmountCop,
+        expectedMarginPercent: req.costing.expectedMarginPercent,
+        leaderNote: leaderNote?.trim() || undefined,
+        sentToKamAt: now,
+        clientResponse: "pendiente",
+      };
+      updatedRounds = [...negotiationRounds, newRound];
+    }
     updateRequest(req.id, {
       costing: { ...req.costing, readyForKam: true, costingSentAt: now },
-      negotiationRounds: [...negotiationRounds, newRound],
+      negotiationRounds: updatedRounds,
     });
     toast.success("Costeo enviado al KAM");
   };
