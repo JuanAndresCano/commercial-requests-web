@@ -110,6 +110,39 @@ Agregar un filtro tipo toggle (mismo patrón visual y de persistencia que el tog
 
 ---
 
+## Requisito 6 — Ajustes de claridad tras probar el gate en vivo (2026-09-20)
+
+Encontrados por Tomás probando el Requisito 2/4/5 en `localhost`, no por audio de Dianis.
+
+### 6.1 — Botón "Enviar a KAM" de la tarjeta del Kanban no hacía nada visible
+El botón de la tarjeta (`ProductLeaderDashboard.tsx`) es en realidad un `<Link>` al detalle, no una acción — la confirmación real vive solo ahí (decisión ya documentada en Requisito 2, para no duplicar el diálogo). El texto "Enviar a KAM" prometía una acción inmediata que no ocurría en la tarjeta, dando la sensación de que "no pasaba nada" al hacer clic.
+- [x] Renombrado a **"Completar envío"** (mismo comportamiento, mismo patrón que "Completar costeo"). Sin cambios de lógica.
+
+### 6.2 — Contador de tiempo esperando al KAM
+- [x] Nuevo campo `costingSentAt?: string` en `ProposalCosting` (`mock-data.ts`) — se fija en `handleMarkReadyForKam` (`RequestDetail.tsx`) al confirmar el envío, y se limpia junto con `readyForKam` cuando se invalida por edición posterior (`ProposalCostingModule.tsx`).
+- [x] La insignia "Enviado al KAM" (tarjeta del Kanban y detalle) muestra "hace X" (`date-fns/formatDistanceToNow`, locale `es`).
+- [x] Con el filtro "Esperando al KAM" activo, las solicitudes se ordenan por más antigua primero (tabla y Kanban).
+- Alcance decidido: sin selector de rango de fechas por ahora — se agrega solo si en operación real hace falta.
+
+### 6.3 — "Enviado al cliente" poco diferenciable de "Enviado al KAM"
+Ambas insignias usaban el mismo tono suave verde, pese a que una es un paso intermedio y la otra el cierre del flujo.
+- [x] "Enviado al cliente" / "Propuesta Entregada" ahora es una insignia sólida (fondo verde lleno, texto blanco, ícono más grande) en `ProductLeaderDashboard.tsx` y `RequestDetail.tsx` — visualmente distinta de "Enviado al KAM" (que se queda con el tono suave, por ser un estado intermedio).
+
+### 6.4 — "Sin docente" visible en etapas donde no aplica
+El botón/contador "Sin docente" se quedaba visible (con un conteo que no correspondía a lo aislado en pantalla) incluso al aislar "En Costeo" o "Entregadas" — etapas donde, por regla de negocio ya vigente (`docs/07`, gap #3: no se puede avanzar a "En Experto" sin docente asignado), esa condición ya no puede darse.
+- [x] `missingProfessorRelevant`: el botón "Sin docente" solo se muestra viendo "Todas" o aislado en "Nueva" (Kanban), o con el filtro de tabla en "Todas"/"Nueva".
+- [x] Mismo tratamiento simétrico para "Esperando al KAM" (`waitingForKamRelevant`): solo relevante en "Todas" o "En Costeo" — antes también quedaba visible, sin sentido, en las demás etapas.
+- El valor del toggle se conserva aunque el botón se oculte (no se resetea): si el Líder vuelve a la etapa donde sí aplica, el filtro sigue activo tal como lo dejó.
+
+### 6.5 — Pendiente, sin implementar: contacto de docentes de planta
+Al revisar la tarjeta "Equipo Asignado", Tomás pidió mostrar información de contacto del docente cuando es de planta, igual que ya existe para asesores externos (botón "Contacto" → nombre, empresa, correo, teléfono, perfil, todo capturado en `ExternalProfessorData`).
+
+**Estado real del dato:** `PROFESSORS` en `mock-data.ts` es solo un arreglo de 3 nombres (`"Dr. Ricardo Mejía"`, `"Dra. Paula Henao"`, `"Dr. Andrés Lozano"`) — no existe ningún correo, teléfono, ni oficina para docentes de planta en ningún lugar del código. No es un bug de UI: es un dato que nunca se capturó.
+
+**Decisión:** no fabricar datos de contacto ficticios. Queda pendiente — antes de implementar, se necesita definir con Dianis/el equipo qué información de contacto real existe para estos 3 docentes (¿correo institucional? ¿extensión?) y si esa lista de docentes de planta va a seguir siendo un arreglo fijo en el código o debe convertirse en un directorio propio. Revisar junto con el punto de `docs/07-gaps-conocidos-y-deuda-tecnica.md` cuando se tome la decisión.
+
+---
+
 ## Orden sugerido de implementación
 1. Requisito 3 (reasignación) — es el más autocontenido y no depende de los otros dos.
 2. Requisito 1 (costeo) — resolver primero los ⚠️ puntos pendientes con Dianis.
