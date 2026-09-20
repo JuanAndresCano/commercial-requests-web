@@ -55,6 +55,7 @@ export function ProposalCostingModule({
   // guardar cambios que no afectan el valor final ni el margen, y se
   // invalida (vuelve a false) si el Líder vuelve a tocar esos campos.
   const [readyForKam, setReadyForKam] = useState<boolean>(initialCosting.readyForKam ?? false);
+  const [costingSentAt, setCostingSentAt] = useState<string | undefined>(initialCosting.costingSentAt);
 
   // Collapsible section for the scope/negotiation note
   const [showNoteField, setShowNoteField] = useState<boolean>(
@@ -71,6 +72,7 @@ export function ProposalCostingModule({
       setExternalAdvisorDetails(request.costing.externalAdvisorDetails ?? "");
       setNegotiationNotes(request.costing.negotiationNotes ?? "");
       setReadyForKam(request.costing.readyForKam ?? false);
+      setCostingSentAt(request.costing.costingSentAt);
       if (request.costing.negotiationNotes?.trim()) {
         setShowNoteField(true);
       }
@@ -96,8 +98,10 @@ export function ProposalCostingModule({
   ) => {
     const updatedTaxAmount = isCapacitacion ? Math.round(newTotalOffered * 0.015) : 0;
     const nextReadyForKam = invalidateReadyForKam ? false : readyForKam;
+    const nextCostingSentAt = invalidateReadyForKam ? undefined : costingSentAt;
     if (invalidateReadyForKam && readyForKam) {
       setReadyForKam(false);
+      setCostingSentAt(undefined);
     }
 
     const updatedCosting: ProposalCosting = {
@@ -110,6 +114,7 @@ export function ProposalCostingModule({
       totalOfferedCop: newTotalOffered,
       negotiationNotes: newNotes,
       readyForKam: nextReadyForKam,
+      costingSentAt: nextCostingSentAt,
     };
 
     onUpdateCosting(updatedCosting);

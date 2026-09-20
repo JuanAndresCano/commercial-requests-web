@@ -362,7 +362,7 @@ export default function RequestDetail() {
   // pisar ningún campo — solo se cambia `readyForKam`.
   const handleMarkReadyForKam = () => {
     if (!req.costing) return;
-    updateCosting(req.id, { ...req.costing, readyForKam: true });
+    updateCosting(req.id, { ...req.costing, readyForKam: true, costingSentAt: new Date().toISOString() });
     toast.success("Costeo enviado al KAM");
     setConfirmingAction(null);
   };
@@ -557,13 +557,21 @@ export default function RequestDetail() {
 
                   {req.status === "en-costeo" && hasValidCosting && req.costing?.readyForKam && (
                     <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                      <Check className="h-3.5 w-3.5" /> Enviado al KAM — a la espera de envío al cliente
+                      <Check className="h-3.5 w-3.5" />
+                      Enviado al KAM — a la espera de envío al cliente
+                      {req.costing.costingSentAt && (
+                        <span className="font-medium text-muted-foreground">
+                          (hace {formatDistanceToNow(new Date(req.costing.costingSentAt), { locale: es })})
+                        </span>
+                      )}
                     </div>
                   )}
 
+                  {/* Insignia sólida y propia — es el cierre del flujo, no un paso
+                      intermedio, así que no debe verse igual que "Enviado al KAM". */}
                   {req.status === "entregada" && (
-                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                      <Check className="h-3.5 w-3.5" /> Propuesta Entregada
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-[#4cb979] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm">
+                      <CheckCircle2 className="h-4 w-4" /> Propuesta Entregada
                     </div>
                   )}
                 </>

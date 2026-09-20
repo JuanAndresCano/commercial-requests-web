@@ -182,6 +182,10 @@ export interface ProposalCosting {
   // un valor ofertado > 0. Se invalida automáticamente (vuelve a false) si
   // el Líder vuelve a editar el valor final o el margen tras haberlo marcado.
   readyForKam: boolean;
+  // ISO timestamp de cuándo se marcó `readyForKam = true` por última vez —
+  // permite mostrar "esperando hace X días" y ordenar por antigüedad en el
+  // tablero del Líder. Se limpia junto con `readyForKam` si se invalida.
+  costingSentAt?: string;
 }
 
 export interface RequestItem {
