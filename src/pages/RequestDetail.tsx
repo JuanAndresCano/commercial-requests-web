@@ -59,9 +59,6 @@ import {
   ProposalDocument,
   ExternalProfessorData,
   calculateCosting,
-  PRODUCT_LEADERS,
-  NODES,
-  NODE_DEFAULT_LEADERS,
   REQUEST_TYPES,
   URGENCY_META,
   type RequestType,
@@ -71,6 +68,8 @@ import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
 import { ProposalCostingModule } from "@/components/costing/ProposalCostingModule";
 import { ProposalDocumentsSection } from "@/components/costing/ProposalDocumentsSection";
+import { ReassignLeaderDialog } from "@/components/ReassignLeaderDialog";
+import { useReassignRequest } from "@/hooks/use-reassign-request";
 import { toast } from "sonner";
 
 export default function RequestDetail() {
@@ -108,10 +107,6 @@ export default function RequestDetail() {
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnObservations, setReturnObservations] = useState("");
   const [showFullInfo, setShowFullInfo] = useState(false);
-  const [selectedNewLeader, setSelectedNewLeader] = useState("");
-  const [selectedNewNode, setSelectedNewNode] = useState("");
-  const [reassignReason, setReassignReason] = useState("Temática no afín / Corresponde a otro nodo");
-  const [reassignNotes, setReassignNotes] = useState("");
 
   // Edición de "Especificaciones del Servicio" por el Líder de Producto,
   // para corregir datos que el KAM haya diligenciado de forma incorrecta.
@@ -286,13 +281,11 @@ export default function RequestDetail() {
     setIsEditingFullInfo(false);
   };
 
-  const handleConfirmReassign = () => {
-    if (!selectedNewLeader) return;
-    updateRequest(req.id, {
-      productLeader: selectedNewLeader,
-      node: selectedNewNode || req.node,
-    });
-    toast.success(`Solicitud ${req.id} reasignada a ${selectedNewLeader} exitosamente.`);
+  const reassignRequest = useReassignRequest(updateRequest);
+
+  const handleConfirmReassign = ({ newLeader, newNode }: { newLeader: string; newNode: string }) => {
+    reassignRequest(req, { newLeader, newNode });
+    toast.success(`Solicitud ${req.id} reasignada a ${newLeader} exitosamente.`);
     setIsReassignModalOpen(false);
   };
 
@@ -887,16 +880,10 @@ export default function RequestDetail() {
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Líder de Producto</span>
-                    {role === "lider-producto" && req.status === "nueva" && (
+                    {role === "lider-producto" && (req.status === "nueva" || req.status === "en-experto") && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedNewLeader("");
-                          setSelectedNewNode(req.node);
-                          setReassignReason("Temática no afín / Corresponde a otro nodo");
-                          setReassignNotes("");
-                          setIsReassignModalOpen(true);
-                        }}
+                        onClick={() => setIsReassignModalOpen(true)}
                         className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
                       >
                         <ArrowLeftRight className="h-3 w-3" /> Reasignar
@@ -1378,160 +1365,11 @@ export default function RequestDetail() {
       </Dialog>
 
       {/* Modal Reasignar Líder de Producto */}
-      <Dialog
-        open={isReassignModalOpen}
+      <ReassignLeaderDialog
+        request={isReassignModalOpen ? req : null}
         onOpenChange={setIsReassignModalOpen}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-foreground">
-                {req.id}
-              </span>
-              <span className="rounded bg-[#5454e9]/10 px-2 py-0.5 text-[10px] font-bold text-[#5454e9] dark:text-[#865cf0]">
-                {req.node}
-              </span>
-            </div>
-            <DialogTitle className="text-base font-bold text-foreground mt-1">
-              Reasignar Líder de Producto
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Transfiere la gestión técnica de esta propuesta a otro líder académico si no corresponde a tu área temática o fue asignada por error.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2 text-xs">
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground shrink-0">Propuesta:</span>
-                <span className="font-semibold text-foreground text-right truncate">
-                  {req.title}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Empresa:</span>
-                <span className="font-semibold text-foreground">{req.company}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Líder asignado actualmente:</span>
-                <span className="font-semibold text-[#e9683b]">
-                  {req.productLeader}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="detail-new-leader" className="text-xs font-semibold text-foreground">
-                Nuevo Líder de Producto destinatario *
-              </Label>
-              <Select
-                value={selectedNewLeader}
-                onValueChange={(val) => {
-                  setSelectedNewLeader(val);
-                  const foundNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, leader]) => leader === val);
-                  if (foundNode) {
-                    setSelectedNewNode(foundNode[0]);
-                  }
-                }}
-              >
-                <SelectTrigger id="detail-new-leader" className="text-xs h-9">
-                  <SelectValue placeholder="Seleccionar nuevo líder de producto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRODUCT_LEADERS.map((leader) => {
-                    const isCurrent = leader === req.productLeader;
-                    const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, l]) => l === leader)?.[0];
-                    return (
-                      <SelectItem key={leader} value={leader} disabled={isCurrent}>
-                        {leader} {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="detail-reassign-node" className="text-xs font-semibold text-foreground">
-                Nodo Temático sugerido
-              </Label>
-              <Select value={selectedNewNode} onValueChange={setSelectedNewNode}>
-                <SelectTrigger id="detail-reassign-node" className="text-xs h-9">
-                  <SelectValue placeholder="Seleccionar nodo temático" />
-                </SelectTrigger>
-                <SelectContent>
-                  {NODES.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="detail-reassign-reason" className="text-xs font-semibold text-foreground">
-                Motivo de la reasignación
-              </Label>
-              <Select value={reassignReason} onValueChange={setReassignReason}>
-                <SelectTrigger id="detail-reassign-reason" className="text-xs h-9">
-                  <SelectValue placeholder="Seleccionar motivo..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Temática no afín / Corresponde a otro nodo">
-                    Temática no afín / Corresponde a otro nodo
-                  </SelectItem>
-                  <SelectItem value="Asignada por error por el KAM">
-                    Asignada por error por el KAM
-                  </SelectItem>
-                  <SelectItem value="Redistribución por sobrecarga operativa">
-                    Redistribución por sobrecarga operativa
-                  </SelectItem>
-                  <SelectItem value="Especialidad técnica específica">
-                    Especialidad técnica específica
-                  </SelectItem>
-                  <SelectItem value="Otro motivo">Otro motivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="detail-reassign-notes" className="text-xs font-semibold text-muted-foreground">
-                Nota o mensaje para el nuevo líder (opcional)
-              </Label>
-              <Textarea
-                id="detail-reassign-notes"
-                rows={2}
-                placeholder="Ej. Reasignado para ajuste pedagógico según línea de especialidad..."
-                value={reassignNotes}
-                onChange={(e) => setReassignNotes(e.target.value)}
-                className="text-xs resize-none"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsReassignModalOpen(false)}
-              className="text-xs"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={!selectedNewLeader || selectedNewLeader === req.productLeader}
-              onClick={handleConfirmReassign}
-              className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white"
-            >
-              Confirmar Reasignación
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onConfirm={handleConfirmReassign}
+      />
 
       {/* Modal: Cancelar solicitud (KAM, solo mientras está "Nueva") */}
       <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
