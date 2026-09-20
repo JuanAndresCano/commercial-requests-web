@@ -4,14 +4,13 @@ import {
   MessageSquare,
   ExternalLink,
   ChevronUp,
+  GraduationCap,
 } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCop, RequestItem, ProposalCosting, calculateCosting } from "@/lib/mock-data";
-import { toast } from "sonner";
 
 interface ProposalCostingModuleProps {
   request: RequestItem;
@@ -42,12 +41,6 @@ export function ProposalCostingModule({
   // Margen en plata: input manual e independiente, ya no derivado de
   // baseCostCop * marginPercent.
   const [marginAmountCop, setMarginAmountCop] = useState<number>(initialCosting.marginAmountCop ?? 0);
-  const [requiresExternalAdvisor, setRequiresExternalAdvisor] = useState<boolean>(
-    initialCosting.requiresExternalAdvisor ?? (request.professorType === "externo")
-  );
-  const [externalAdvisorDetails, setExternalAdvisorDetails] = useState<string>(
-    initialCosting.externalAdvisorDetails ?? ""
-  );
   const [negotiationNotes, setNegotiationNotes] = useState<string>(
     initialCosting.negotiationNotes ?? ""
   );
@@ -68,8 +61,6 @@ export function ProposalCostingModule({
       setTotalOfferedCop(request.costing.totalOfferedCop);
       setMarginPercent(request.costing.expectedMarginPercent);
       setMarginAmountCop(request.costing.marginAmountCop ?? 0);
-      setRequiresExternalAdvisor(request.costing.requiresExternalAdvisor);
-      setExternalAdvisorDetails(request.costing.externalAdvisorDetails ?? "");
       setNegotiationNotes(request.costing.negotiationNotes ?? "");
       setReadyForKam(request.costing.readyForKam ?? false);
       setCostingSentAt(request.costing.costingSentAt);
@@ -89,8 +80,6 @@ export function ProposalCostingModule({
     newTotalOffered: number,
     newMarginPercent: number,
     newMarginAmountCop: number,
-    newExternal: boolean,
-    newExtDetails: string,
     newNotes: string,
     // Requisito 2: editar el valor final o el margen invalida el "Enviado
     // al KAM" previo — el Líder debe volver a confirmarlo explícitamente.
@@ -105,8 +94,6 @@ export function ProposalCostingModule({
     }
 
     const updatedCosting: ProposalCosting = {
-      requiresExternalAdvisor: newExternal,
-      externalAdvisorDetails: newExtDetails,
       marginAmountCop: newMarginAmountCop,
       expectedMarginPercent: newMarginPercent,
       proCulturaTaxPercent: isCapacitacion ? 1.5 : 0,
@@ -126,33 +113,35 @@ export function ProposalCostingModule({
   const handleTotalOfferedChange = (rawVal: number) => {
     const val = Math.max(0, rawVal);
     setTotalOfferedCop(val);
-    triggerSave(val, marginPercent, marginAmountCop, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes, true);
+    triggerSave(val, marginPercent, marginAmountCop, negotiationNotes, true);
   };
 
   const handleMarginPercentChange = (rawVal: number) => {
     const val = Math.min(100, Math.max(0, rawVal));
     setMarginPercent(val);
-    triggerSave(totalOfferedCop, val, marginAmountCop, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes, true);
+    triggerSave(totalOfferedCop, val, marginAmountCop, negotiationNotes, true);
   };
 
   const handleMarginAmountChange = (rawVal: number) => {
     const val = Math.max(0, rawVal);
     setMarginAmountCop(val);
-    triggerSave(totalOfferedCop, marginPercent, val, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes, true);
+    triggerSave(totalOfferedCop, marginPercent, val, negotiationNotes, true);
   };
 
-  const handleRequiresExternalChange = (checked: boolean) => {
-    setRequiresExternalAdvisor(checked);
-    triggerSave(totalOfferedCop, marginPercent, marginAmountCop, checked, externalAdvisorDetails, negotiationNotes);
-    if (checked && request.professorType !== "externo") {
-      toast.info("Requiere asesor externo seleccionado. Puedes registrar sus datos en un clic.", {
-        action: {
-          label: "Registrar Asesor",
-          onClick: onOpenAdvisorModal,
-        },
-      });
-    }
-  };
+  // Indicador de solo lectura del asesor del servicio (docs/13, gap #11):
+  // ya no es un switch independiente — se deriva directamente del
+  // docente/asesor realmente asignado en "Equipo Asignado", para que nunca
+  // pueda contradecir esa asignación.
+  const isExternalAdvisor = request.professorType === "externo";
+  const advisorDisplayName = isExternalAdvisor
+    ? request.externalProfessorData?.nombre || request.professor || "Asesor externo sin nombre registrado"
+    : request.professorType === "planta"
+    ? request.professor || "Docente de planta sin nombre registrado"
+    : "Sin docente o asesor asignado todavía";
+  const advisorSubtitle = isExternalAdvisor ? request.externalProfessorData?.empresaConsultora : undefined;
+  // Referencia informativa (docs/13): nunca sobreescribe el margen manual,
+  // solo ayuda a detectar de un vistazo si el % y el valor en $ "cuadran".
+  const marginReferenceAmount = Math.round((totalOfferedCop * marginPercent) / 100);
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card">
@@ -205,62 +194,53 @@ export function ProposalCostingModule({
             </p>
           </div>
 
-          {/* Switch inline Asesor Externo (5 cols) */}
+          {/* Indicador de solo lectura del asesor del servicio (5 cols) —
+              derivado del docente/asesor realmente asignado, ya no un switch
+              independiente que se podía contradecir con esa asignación
+              (docs/13, gap #11 de 07-gaps-conocidos-y-deuda-tecnica.md). */}
           <div className="md:col-span-5 space-y-2">
-            <div className="flex items-center justify-between rounded-lg border border-slate-200/80 bg-slate-50/40 p-2.5 dark:border-border dark:bg-secondary/20">
-              <div className="space-y-0.5">
-                <Label
-                  htmlFor="external-advisor-switch"
-                  className="text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer block"
-                >
-                  ¿Requiere asesor externo?
-                </Label>
-                <span className="text-[11px] text-slate-500 dark:text-muted-foreground block">
-                  {requiresExternalAdvisor ? "Sí, consultor externo" : "No, docente planta"}
-                </span>
-              </div>
-              <Switch
-                id="external-advisor-switch"
-                checked={requiresExternalAdvisor}
-                onCheckedChange={handleRequiresExternalChange}
-                disabled={isReadOnly}
-              />
-            </div>
-
-            {/* Input sutil de nombre sin crear otra caja gigante */}
-            {requiresExternalAdvisor && (
-              <div className="space-y-1 pt-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-medium text-slate-600 dark:text-slate-300">
-                    Nombre o empresa consultora:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={onOpenAdvisorModal}
-                    className="text-primary hover:underline font-medium inline-flex items-center gap-0.5"
-                  >
-                    Detalles <ExternalLink className="h-2.5 w-2.5" />
-                  </button>
+            <Label className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-muted-foreground">
+              Asesor del Servicio
+            </Label>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50/40 p-2.5 dark:border-border dark:bg-secondary/20">
+              <div className="min-w-0 flex items-start gap-2">
+                <GraduationCap className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+                <div className="min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {advisorDisplayName}
+                    </span>
+                    {request.professorType && (
+                      <Badge
+                        variant="outline"
+                        className={
+                          isExternalAdvisor
+                            ? "text-[10px] px-1.5 py-0 h-4 border-[#e9683b]/30 bg-[#e9683b]/10 text-[#e9683b] font-semibold shrink-0"
+                            : "text-[10px] px-1.5 py-0 h-4 border-[#5454e9]/30 bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0] font-semibold shrink-0"
+                        }
+                      >
+                        {isExternalAdvisor ? "Externo" : "Planta"}
+                      </Badge>
+                    )}
+                  </div>
+                  {advisorSubtitle && (
+                    <span className="text-[11px] text-slate-500 dark:text-muted-foreground block truncate">
+                      {advisorSubtitle}
+                    </span>
+                  )}
                 </div>
-                <Input
-                  value={externalAdvisorDetails}
-                  onChange={(e) => {
-                    setExternalAdvisorDetails(e.target.value);
-                    triggerSave(
-                      totalOfferedCop,
-                      marginPercent,
-                      marginAmountCop,
-                      requiresExternalAdvisor,
-                      e.target.value,
-                      negotiationNotes
-                    );
-                  }}
-                  placeholder="Ej: Ing. Jorge Mendoza (Consultoría TIC)"
-                  className="h-8 text-xs bg-white dark:bg-background border-slate-200 dark:border-border"
-                  disabled={isReadOnly}
-                />
               </div>
-            )}
+              <button
+                type="button"
+                onClick={onOpenAdvisorModal}
+                className="text-primary hover:underline font-medium text-[11px] inline-flex items-center gap-0.5 shrink-0"
+              >
+                {request.professor ? "Cambiar" : "Asignar"} <ExternalLink className="h-2.5 w-2.5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Derivado del docente/asesor asignado en "Equipo Asignado" — ya no es un campo independiente del costeo.
+            </p>
           </div>
         </div>
 
@@ -288,19 +268,28 @@ export function ProposalCostingModule({
             </div>
 
             {/* Input de margen en plata (manual, independiente del %) */}
-            <div className="relative w-full sm:w-48">
-              <span className="absolute left-3 top-2.5 text-xs font-mono text-slate-400">$</span>
-              <Input
-                id="margin-amount-input"
-                type="number"
-                step="100000"
-                min="0"
-                value={marginAmountCop || ""}
-                onChange={(e) => handleMarginAmountChange(Number(e.target.value) || 0)}
-                placeholder="0"
-                className="pl-7 font-mono text-sm h-9 bg-slate-50/50 border-slate-200 focus-visible:ring-1 focus-visible:ring-primary dark:bg-background dark:border-border"
-                disabled={isReadOnly}
-              />
+            <div className="w-full sm:w-48 space-y-1">
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-xs font-mono text-slate-400">$</span>
+                <Input
+                  id="margin-amount-input"
+                  type="number"
+                  step="100000"
+                  min="0"
+                  value={marginAmountCop || ""}
+                  onChange={(e) => handleMarginAmountChange(Number(e.target.value) || 0)}
+                  placeholder="0"
+                  className="pl-7 font-mono text-sm h-9 bg-slate-50/50 border-slate-200 focus-visible:ring-1 focus-visible:ring-primary dark:bg-background dark:border-border"
+                  disabled={isReadOnly}
+                />
+              </div>
+              {/* Referencia calculada, no editable y no guardada (docs/13):
+                  el margen manual y el valor final siguen siendo campos
+                  independientes — esto es solo para detectar de un vistazo
+                  cuando "no cuadran". */}
+              <p className="text-[10px] font-mono text-slate-400 leading-snug">
+                Referencia: {marginPercent}% de {formatCop(totalOfferedCop)} = {formatCop(marginReferenceAmount)}
+              </p>
             </div>
 
             {/* Chips tipo pill minimalistas en tono slate suave */}
@@ -427,14 +416,7 @@ export function ProposalCostingModule({
               value={negotiationNotes}
               onChange={(e) => {
                 setNegotiationNotes(e.target.value);
-                triggerSave(
-                  totalOfferedCop,
-                  marginPercent,
-                  marginAmountCop,
-                  requiresExternalAdvisor,
-                  externalAdvisorDetails,
-                  e.target.value
-                );
+                triggerSave(totalOfferedCop, marginPercent, marginAmountCop, e.target.value);
               }}
               placeholder="Ej: Se incluye ajuste de alcance en 2 módulos presenciales acordado con el cliente..."
               className="text-xs resize-none bg-white dark:bg-background border-slate-200 dark:border-border"

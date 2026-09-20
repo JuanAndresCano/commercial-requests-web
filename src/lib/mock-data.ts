@@ -161,8 +161,6 @@ export interface ClientContact {
 }
 
 export interface ProposalCosting {
-  requiresExternalAdvisor: boolean;
-  externalAdvisorDetails?: string;
   // Margen de Contribución en pesos — input manual e independiente (docs/11,
   // Requisito 1). Es informativo: no tiene que cuadrar matemáticamente con
   // `expectedMarginPercent` ni con `totalOfferedCop`.
@@ -294,6 +292,15 @@ export interface NegotiationRound {
   clientResponse: ClientResponse;
   clientObservation?: string; // solo si clientResponse === "rechazada"
   clientRespondedAt?: string; // ISO — cuando el KAM registró la devolución
+  // Snapshot de alcance vigente al momento del envío (docs/13) — además del
+  // precio, cada ronda congela estos campos tal como estaban en `req` (no en
+  // `req.costing`) cuando el Líder confirmó "Enviar a KAM". Permite mostrar
+  // qué cambió de alcance entre rondas, no solo el valor ofertado.
+  participantes?: string;
+  modalidad?: string;
+  horas?: string;
+  type?: RequestType;
+  necesidad?: string;
 }
 
 export const NODES = [
@@ -336,8 +343,6 @@ export function calculateCosting(
   totalOfferedCop: number,
   expectedMarginPercent: number,
   marginAmountCop: number = 0,
-  requiresExternalAdvisor: boolean = false,
-  externalAdvisorDetails?: string,
   negotiationNotes?: string,
   readyForKam: boolean = false
 ): ProposalCosting {
@@ -346,8 +351,6 @@ export function calculateCosting(
   const proCulturaTaxAmount = isCapacitacion ? Math.round(totalOfferedCop * 0.015) : 0;
 
   return {
-    requiresExternalAdvisor,
-    externalAdvisorDetails,
     marginAmountCop,
     expectedMarginPercent,
     proCulturaTaxPercent,
@@ -584,8 +587,6 @@ export const MOCK_REQUESTS: RequestItem[] = [
       24_000_000,
       30,
       5_550_000,
-      false,
-      undefined,
       "Acuerdo de descuento del 1.3% por volumen de horas con SURA"
     ),
     horas: "32",
@@ -709,7 +710,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 12_500_000,
-    costing: calculateCosting("Consultoría", 12_500_000, 31.5, 2_992_500, false, undefined, undefined, true),
+    costing: calculateCosting("Consultoría", 12_500_000, 31.5, 2_992_500, undefined, true),
     horas: "60",
     modalidad: "Presencial en sede cliente",
     participantes: "1 - 5",
@@ -773,7 +774,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 34_500_000,
-    costing: calculateCosting("Capacitación", 34_500_000, 30, 7_800_000, false, undefined, undefined, true),
+    costing: calculateCosting("Capacitación", 34_500_000, 30, 7_800_000, undefined, true),
     horas: "48",
     modalidad: "Presencial en sede cliente",
     participantes: "20 - 25",
@@ -843,18 +844,34 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Ing. Carlos Eduardo Valencia",
     professorType: "externo",
     totalCostCop: 42_000_000,
-    costing: calculateCosting(
-      "Consultoría",
-      42_000_000,
-      35,
-      10_850_000,
-      true,
-      "Experto externo en analítica de redes de gas"
-    ),
+    costing: calculateCosting("Consultoría", 42_000_000, 35, 10_850_000),
     // Ejemplo de propuesta "devuelta con observaciones" (docs/08, pregunta 13):
     // el cliente ya la había recibido y pidió un ajuste de alcance — el KAM la
     // regresó a "en-costeo" y esta nota queda visible hasta que se reentregue.
     clientObservations: "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
+    // Backfill (docs/13): esta solicitud ya traía `clientObservations` con un
+    // rechazo completo del cliente antes de que existiera `negotiationRounds`
+    // (docs/12) — sin esta ronda 1, su historial de negociación saldría
+    // vacío pese a que la narrativa ya cuenta un rechazo.
+    negotiationRounds: [
+      {
+        id: "REQ-2026-0135-r1",
+        roundNumber: 1,
+        totalOfferedCop: 42_000_000,
+        marginAmountCop: 10_850_000,
+        expectedMarginPercent: 35,
+        participantes: "6 - 10",
+        modalidad: "Híbrida",
+        horas: "100",
+        type: "Consultoría",
+        necesidad: "Optimizar la distribución de gas natural en la red secundaria para reducir pérdidas técnicas y mejorar tiempos de respuesta ante fallas.",
+        sentToKamAt: "2026-09-10T09:00:00.000Z",
+        sentToClientAt: "2026-09-12T14:00:00.000Z",
+        clientResponse: "rechazada",
+        clientObservation: "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
+        clientRespondedAt: "2026-09-15T08:00:00.000Z",
+      },
+    ],
     horas: "100",
     modalidad: "Híbrida",
     participantes: "6 - 10",
@@ -1308,7 +1325,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Juan Carlos González",
     professorType: "planta",
     totalCostCop: 15_600_000,
-    costing: calculateCosting("Capacitación", 15_600_000, 30, 3_600_000, false),
+    costing: calculateCosting("Capacitación", 15_600_000, 30, 3_600_000),
     horas: "36",
     modalidad: "Presencial en sede cliente",
     participantes: "15 - 20",
@@ -1348,7 +1365,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 10_800_000,
-    costing: calculateCosting("Proyectos Especiales (Eventos)", 10_800_000, 28, 2_240_000, false),
+    costing: calculateCosting("Proyectos Especiales (Eventos)", 10_800_000, 28, 2_240_000),
     // Segundo ejemplo de propuesta "devuelta con observaciones" — para
     // probar el banner en más de una tarjeta a la vez.
     clientObservations: "El cliente pidió mover el evento a otra sede porque la original ya no está disponible en esa fecha; hay que recotizar el rubro de logística.",
@@ -1399,14 +1416,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Transformación Digital y Arquitectura Cloud",
     },
     totalCostCop: 33_750_000,
-    costing: calculateCosting(
-      "Consultoría",
-      33_750_000,
-      35,
-      8_750_000,
-      true,
-      "Ing. Carlos Eduardo Valencia (Valencia & Partners) — trazabilidad IoT en cadena de frío"
-    ),
+    costing: calculateCosting("Consultoría", 33_750_000, 35, 8_750_000),
     horas: "70",
     modalidad: "Híbrida",
     participantes: "6 - 10",
@@ -1451,7 +1461,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 19_500_000,
-    costing: calculateCosting("Capacitación", 19_500_000, 30, 4_500_000, false, undefined, undefined, true),
+    costing: calculateCosting("Capacitación", 19_500_000, 30, 4_500_000, undefined, true),
     horas: "28",
     modalidad: "Presencial en sede cliente",
     participantes: "11 - 15",
@@ -1494,7 +1504,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 8_900_000,
-    costing: calculateCosting("Mentoría", 8_900_000, 27, 1_836_000, false, undefined, undefined, true),
+    costing: calculateCosting("Mentoría", 8_900_000, 27, 1_836_000, undefined, true),
     horas: "18",
     modalidad: "Virtual sincrónica",
     participantes: "1 - 5",
@@ -1542,7 +1552,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Estrategia Comercial y Pricing",
     },
     totalCostCop: 27_200_000,
-    costing: calculateCosting("Consultoría", 27_200_000, 34, 6_800_000, true, "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios", undefined, true),
+    costing: calculateCosting("Consultoría", 27_200_000, 34, 6_800_000, undefined, true),
     horas: "55",
     modalidad: "Híbrida",
     participantes: "1 - 5",

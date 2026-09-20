@@ -160,7 +160,12 @@ export default function RequestDetail() {
   // El KAM es dueño de la información de su solicitud (empresa, contacto,
   // diagnóstico, formación previa) y puede corregirla mientras nadie la haya
   // empezado a trabajar — Dianis confirmó esto en docs/08, preguntas 4 y 8.
-  const canEditFullInfo = isKam && req.kam === user.name && req.status === "nueva";
+  // El Líder de Producto, además, puede corregir el alcance (sobre todo
+  // `necesidad`) mientras está costeando — es el punto natural para ajustar
+  // la solicitud tras un rechazo del cliente (docs/13).
+  const canEditFullInfo =
+    (isKam && req.kam === user.name && req.status === "nueva") ||
+    (role === "lider-producto" && req.productLeader === user.name && req.status === "en-costeo");
   const fullInfoCompleteness = getFullInfoCompleteness(req);
   const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
   const emptyFullInfoDraft = {
@@ -333,16 +338,11 @@ export default function RequestDetail() {
     type: "planta" | "externo",
     externalData?: ExternalProfessorData
   ) => {
+    // El indicador de "asesor externo" del costeo ya no es un campo propio:
+    // se deriva de `professorType`/`professor`/`externalProfessorData` (docs/13,
+    // gap #11), así que asignar el docente/asesor aquí ya deja todo consistente
+    // sin tocar `req.costing`.
     assignProfessorDetailed(req.id, professorName, type, externalData);
-    if (type === "externo") {
-      updateCosting(req.id, {
-        ...currentCosting,
-        requiresExternalAdvisor: true,
-        externalAdvisorDetails: externalData?.empresaConsultora
-          ? `${externalData.nombre} (${externalData.empresaConsultora})`
-          : externalData?.nombre,
-      });
-    }
   };
 
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
@@ -404,6 +404,14 @@ export default function RequestDetail() {
               expectedMarginPercent: req.costing!.expectedMarginPercent,
               leaderNote: leaderNote?.trim() || round.leaderNote,
               sentToKamAt: now,
+              // Snapshot de alcance (docs/13): se toma de `req`, no de
+              // `req.costing`, y se refresca aunque la ronda ya existiera —
+              // el Líder pudo haber corregido el alcance antes de reenviar.
+              participantes: req.participantes,
+              modalidad: req.modalidad,
+              horas: req.horas,
+              type: req.type,
+              necesidad: req.necesidad,
             }
           : round
       );
@@ -418,6 +426,12 @@ export default function RequestDetail() {
         leaderNote: leaderNote?.trim() || undefined,
         sentToKamAt: now,
         clientResponse: "pendiente",
+        // Snapshot de alcance vigente al momento del envío (docs/13).
+        participantes: req.participantes,
+        modalidad: req.modalidad,
+        horas: req.horas,
+        type: req.type,
+        necesidad: req.necesidad,
       };
       updatedRounds = [...negotiationRounds, newRound];
     }
@@ -845,6 +859,7 @@ export default function RequestDetail() {
                   {negotiationRounds.map((round, idx) => {
                     const isCurrentRound =
                       round.clientResponse === "pendiente" && idx === negotiationRounds.length - 1;
+                    const scopeDiffs = getScopeDiffs(round, negotiationRounds[idx - 1]);
                     return (
                       <div
                         key={round.id}
@@ -905,6 +920,21 @@ export default function RequestDetail() {
                             <span className="font-semibold text-foreground">Motivo del ajuste: </span>
                             "{round.leaderNote}"
                           </p>
+                        )}
+
+                        {scopeDiffs.length > 0 && (
+                          <div className="rounded-lg border border-border dark:border-[#252838] bg-secondary/30 dark:bg-secondary/10 p-2.5 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Cambios de alcance frente a la ronda anterior
+                            </span>
+                            <ul className="space-y-0.5">
+                              {scopeDiffs.map((diff) => (
+                                <li key={diff} className="text-foreground leading-relaxed break-words">
+                                  {diff}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
                       </div>
                     );
@@ -1354,7 +1384,9 @@ export default function RequestDetail() {
               Editar información de la solicitud
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".
+              {isKam
+                ? 'Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".'
+                : 'Corrige el alcance de la solicitud (por ejemplo la necesidad del cliente) mientras esté "En proceso de costeo".'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1964,6 +1996,31 @@ function getFullInfoCompleteness(req: RequestItem): { filled: number; total: num
   }
 
   return { filled, total };
+}
+
+// Campos de alcance que cada ronda de negociación congela (docs/13) — si
+// alguno cambió respecto a la ronda anterior, el historial lo muestra como
+// parte del resumen de la ronda ("Participantes: 15-20 → 9-12"). La ronda 1
+// nunca tiene con qué compararse, así que no muestra diffs.
+const SCOPE_DIFF_FIELDS: { key: keyof NegotiationRound; label: string }[] = [
+  { key: "participantes", label: "Participantes" },
+  { key: "modalidad", label: "Modalidad" },
+  { key: "horas", label: "Horas" },
+  { key: "type", label: "Tipo de servicio" },
+  { key: "necesidad", label: "Necesidad" },
+];
+
+function getScopeDiffs(round: NegotiationRound, previousRound?: NegotiationRound): string[] {
+  if (!previousRound) return [];
+  const diffs: string[] = [];
+  for (const { key, label } of SCOPE_DIFF_FIELDS) {
+    const prevValue = previousRound[key];
+    const newValue = round[key];
+    if (prevValue !== undefined && newValue !== undefined && prevValue !== newValue) {
+      diffs.push(`${label}: ${prevValue} → ${newValue}`);
+    }
+  }
+  return diffs;
 }
 
 function EditableField({
