@@ -73,7 +73,16 @@ interface RequestItem {
   // Nota que deja el KAM al devolver una propuesta "Entregada" a costeo
   // porque el cliente pidió ajustes — visible para el Líder de Producto
   // hasta que se vuelva a entregar (ver "Reglas de negocio validadas" abajo).
+  // Redundante con la última ronda "rechazada" de `negotiationRounds` (abajo)
+  // desde que existe ese historial, pero se conserva por compatibilidad con
+  // el banner que ya la muestra.
   clientObservations?: string;
+
+  // Historial de negociación comercial — una entrada por cada vez que el
+  // Líder confirma "Enviar a KAM" (ver `NegotiationRound` más abajo). Sin
+  // esto, cada ajuste de precio o alcance sobrescribía al anterior sin dejar
+  // rastro de qué cambió ni por qué.
+  negotiationRounds?: NegotiationRound[];
 
   // ISO timestamp de la última vez que el KAM guardó cambios en "Información
   // completa de la solicitud" (empresa/contacto/diagnóstico/etc.).
@@ -99,55 +108,111 @@ Estas reglas ya fueron confirmadas por Dianis y quedan implementadas en el proto
 
 - **Propiedad de la solicitud:** el KAM (`kam`) es dueño de los datos que él mismo diligencia (empresa, contacto, diagnóstico, formación previa, observaciones) y es quien debe corregirlos si se equivoca — no el Líder de Producto. El Líder de Producto, en cambio, es dueño de "Especificaciones del Servicio" (horas, modalidad, participantes, tipo, fecha de entrega) una vez tiene información real del cliente.
 - **Ventana de edición del KAM:** el KAM solo puede editar o cancelar su propia solicitud mientras el estado es `nueva` — es decir, antes de que el Líder de Producto empiece a trabajarla. Una vez avanza a `en-experto`, esos campos deben quedar de solo lectura para el KAM (en el modelo real esto es una regla de autorización por campo + estado, no solo de UI).
-- **Visibilidad económica del KAM:** el KAM nunca ve `baseCostCop` ni `expectedMarginPercent` (ni su monto derivado) — son información interna del costeo. Solo ve `totalOfferedCop` y, si aplica, `proCulturaTaxAmount`. Pendiente de confirmar con la Líder (pregunta 3 en `08`, no quedó clara en la primera ronda): si esta restricción aplica también mientras la solicitud está en `en-costeo` sin valor aún definido, y si la nota de negociación (`negotiationNotes`) debe ocultarse también.
-- **Costeo se define de una sola vez:** no hay valores parciales de costeo antes de la fase `en-costeo` — todo el costeo (`baseCostCop`, margen, valor ofertado) se define en ese único momento, no hay que modelar estados intermedios de costeo parcial.
-- **Sin bloqueo de precio post-entrega:** es intencional que el Líder de Producto pueda seguir editando el costeo después de `entregada` — no se debe agregar un concepto de "versión final protegida" salvo que el negocio lo pida explícitamente más adelante.
+- **Visibilidad económica del KAM:** el KAM nunca ve `expectedMarginPercent`/`marginAmountCop` (información interna del costeo). Solo ve `totalOfferedCop` y, si aplica, la referencia de `proCulturaTaxAmount`. Pendiente de confirmar con la Líder (pregunta 3 en `08`, no quedó clara en la primera ronda): si esta restricción aplica también mientras la solicitud está en `en-costeo` sin valor aún definido, y si la nota de negociación (`negotiationNotes`) debe ocultarse también.
+- **Costeo se define de una sola vez:** no hay valores parciales de costeo antes de la fase `en-costeo` — todo el costeo (valor final, margen) se define en ese único momento, no hay que modelar estados intermedios de costeo parcial.
+- **Sin bloqueo de precio post-entrega, pero con trazabilidad:** es intencional que el Líder de Producto pueda seguir editando el costeo después de `entregada` (vía "Devolver con observaciones") — no hay una "versión final protegida". Lo que sí cambió: cada ajuste ya no sobreescribe en silencio, queda registrado como una ronda nueva en `negotiationRounds` (ver más abajo) — esto responde directamente lo que la pregunta 9 de `08` dejaba pendiente ("en algún momento se necesitará un historial de cambios").
 - **Sin aprobación adicional:** el Líder de Producto tiene autonomía total sobre el precio final — no hay un segundo visto bueno (jefe de nodo, dirección comercial) en el flujo real. No modelar un estado "Pendiente de aprobación".
 - **Honorarios del asesor externo fuera de la plataforma:** el pago al asesor externo se documenta en el "Documento de Costeo" (adjunto/externo a la app), no como un campo estructurado en `ProposalCosting`. No se necesita un campo `advisorFeeCop` en el modelo real, salvo que el negocio pida lo contrario más adelante.
 - **El Profesor no tiene cuenta propia (por ahora):** son muchos profesores y no se espera que entren a ver solicitudes pendientes; la coordinación sigue siendo manual (WhatsApp/correo) y el Líder de Producto refleja el avance en la app. No hay urgencia de modelar autenticación/permisos para este rol todavía.
 - **Cancelación real, no lógica:** cancelar una solicitud (`deleteRequest` en el prototipo) la elimina por completo — no se modeló un estado `cancelada` porque no se pidió conservar el histórico de solicitudes canceladas. Si el negocio real necesita auditoría de solicitudes canceladas, esto debe revisarse (borrado lógico vs. físico) antes de construir el backend.
-- **"Devolver con observaciones" reabre el pipeline:** cuando el cliente pide ajustes tras `entregada`, el KAM la regresa a `en-costeo` con una nota (`clientObservations`). No se modeló un estado explícito "Rechazada" — se reutiliza el mismo pipeline lineal. Si el volumen real de este caso es alto, valdría la pena un estado dedicado con historial (ver duda en `08`, pregunta 13, sobre si el negocio a veces prefiere crear una solicitud nueva en vez de reabrir la misma).
-- **Reasignación restringida a "Nueva":** sigue así porque la Líder no dio un caso concreto que la contradiga ("quizás todo puede pasar en la vida" — respuesta no concluyente). No relajar esta regla sin un caso de negocio específico.
+- **"Devolver con observaciones" reabre el pipeline:** cuando el cliente pide ajustes tras `entregada`, el KAM la regresa a `en-costeo` con una nota (`clientObservations`). No se modeló un estado explícito "Rechazada" — se reutiliza el mismo pipeline lineal, y la ronda correspondiente en `negotiationRounds` queda marcada `"rechazada"` en su lugar (ver `NegotiationRound` más abajo — esto ya responde la duda de `08`, pregunta 13, sobre llevar historial de estos casos). Si el volumen real es alto y se necesita un estado dedicado en vez de reutilizar el pipeline lineal, seguirá siendo una decisión de diseño pendiente para el backend real.
+- **Reasignación en "Nueva" y "En Experto":** ⚠️ la Líder solo confirmó "Nueva" (pregunta 6 en `08`, respuesta no concluyente: "quizás todo puede pasar en la vida"). Se amplió a "En Experto" también por decisión de Tomás (caso concreto: el experto determina que el tema no corresponde a su nodo), **sin validación explícita de Dianis todavía** — ver `08`, pregunta 16. Al reasignar desde "En Experto" el estado vuelve a `nueva` y se limpia el docente/asesor asignado.
 
 ## Reglas adicionales descubiertas durante la implementación (post-ronda `08`)
 
 Estas no vinieron de una pregunta explícita a Dianis — se encontraron auditando el código en busca de huecos de la misma familia que uno reportado directamente ("se pudo entregar una propuesta con costeo en $0"). Igual de importantes para el modelo real:
 
-- **Valor de entrega obligatorio y positivo:** ninguna solicitud puede marcarse `entregada` (ni por el Líder ni por el KAM) si `costing.totalOfferedCop` no es mayor a `0`. Antes no existía ninguna validación — se podía "entregar" con el costeo completamente vacío. En el modelo real, esta es una restricción de integridad a nivel de transición de estado (`en-costeo → entregada`), no solo de UI.
-- **Montos financieros no negativos:** `baseCostCop`, `expectedMarginPercent` (acotado además a 0–100) y `totalOfferedCop` (el ajuste manual) se acotan a valores ≥ 0 en el formulario. Antes no había ningún límite — se podía guardar un costo base negativo sin ningún aviso. Debe replicarse como constraint de base de datos, no solo validación de formulario.
-- **Fricción proporcional al riesgo en las transiciones de estado:** "Pasar a Experto" y "Pasar a Costeo" requieren confirmación explícita (con los datos de la solicitud a la vista, no un texto genérico) antes de ejecutar — se encontró que el tablero del Líder ejecutaba estos cambios al primer clic, sin ningún tipo de confirmación, en tarjetas densas donde un clic de más movía la solicitud sin querer. "Entregar" específicamente **no tiene una acción de un solo clic** en ningún tablero — siempre exige pasar por el detalle y ver el valor final antes de confirmar, por ser el punto sin retorno comercial.
+- **Valor de entrega obligatorio y positivo:** ninguna solicitud puede marcarse `entregada` si `costing.totalOfferedCop` no es mayor a `0`. Antes no existía ninguna validación — se podía "entregar" con el costeo completamente vacío. En el modelo real, esta es una restricción de integridad a nivel de transición de estado (`en-costeo → entregada`), no solo de UI.
+- **Montos financieros no negativos:** `totalOfferedCop`, `expectedMarginPercent` (acotado además a 0–100) y `marginAmountCop` se acotan a valores ≥ 0 en el formulario. Antes no había ningún límite — se podía guardar un valor negativo sin ningún aviso. Debe replicarse como constraint de base de datos, no solo validación de formulario.
+- **Fricción proporcional al riesgo en las transiciones de estado:** "Pasar a Experto" y "Pasar a Costeo" requieren confirmación explícita (con los datos de la solicitud a la vista, no un texto genérico) antes de ejecutar — se encontró que el tablero del Líder ejecutaba estos cambios al primer clic, sin ningún tipo de confirmación, en tarjetas densas donde un clic de más movía la solicitud sin querer.
+- **`entregada` es una transición exclusiva del KAM:** se encontró (reporte directo) que el Líder de Producto tenía su propio botón "Marcar Entregada" en `RequestDetail.tsx` que ejecutaba el mismo handler que el "Enviar a cliente" del KAM — cualquiera de los dos roles podía cerrar el ciclo comercial, contradiciendo la regla de negocio (`08`, pregunta 13) de que el envío final al cliente es del KAM. Se quitó esa acción del Líder por completo: en el modelo real, la transición `en-costeo → entregada` debería estar autorizada solo para el rol KAM, nunca para el Líder de Producto.
 - **"Sin docente" no debe vaciar completamente una vista sin explicación:** un filtro que produce cero resultados debe decirlo explícitamente (con opción de quitarlo), en vez de dejar 4 columnas vacías indistinguibles de "no hay datos". Aplica a cualquier filtro combinable futuro, no solo a este.
 - **El "reset a datos de ejemplo" debe limpiar también el estado de UI persistido**, no solo los datos: filtros, vista activa (Kanban/Tabla) y columna aislada se guardan en el cliente (hoy `localStorage`, vía `usePersistentState`) de forma independiente a los datos de negocio. Si el reset solo restaura los datos, un filtro que quedó activo (ej. "Sin docente") sigue ocultando todo después del reset, sin ninguna pista de por qué. En producción esto es más relevante aún si el estado de UI se sincroniza entre sesiones/dispositivos.
-- **"Requiere asesor externo" no está enlazado a una asignación real:** el switch en el módulo de costeo se puede activar sin que exista un `professorType === "externo"` real asignado — quedaría "requiere asesor externo: sí" sin ningún consultor vinculado. Detectado pero **no cerrado a propósito** (no hay una regla de negocio que lo respalde explícitamente); queda como pendiente de decisión, no como bug confirmado.
+- **Un filtro no debe quedar visible en una etapa donde no puede aportar nada:** se encontró que "Sin docente" seguía mostrándose (con un conteo que no correspondía a lo visible en pantalla) incluso aislando "En Costeo" o "Entregadas" — etapas donde, por la regla de arriba ("docente obligatorio desde En Experto"), esa condición ya no puede darse. Un filtro/indicador que no puede producir información útil en cierto contexto debe ocultarse ahí, no mostrarse con un dato que no aplica.
+- **Un tablero de resumen no debe asumir "listo" solo por el estado del pipeline:** se encontró que el tablero del KAM etiquetaba *toda* la columna/conteo de `en-costeo` como "Lista para Entregar" y la resaltaba como accionable, sin revisar si el Líder ya había confirmado el envío (`readyForKam`) — el KAM veía como lista una propuesta que el Líder todavía estaba costeando. Cualquier vista de resumen que derive un estado "accionable" de un sub-campo (no solo del `status` principal) debe calcularlo desde una única función/regla compartida, para que no se repita el mismo olvido en cada tablero que muestre esa solicitud.
+- **"Requiere asesor externo" ya no es un campo independiente** — ver la nota en `ProposalCosting` más arriba. Se resolvió eliminándolo y derivándolo de la asignación real de docente/asesor (`07`, gap #11).
 
 ## `ProposalCosting` (costeo financiero — subdocumento de `RequestItem`)
 
+> ⚠️ **Este modelo cambió por completo el 2026-09-19/20** (ver `07`, y las preguntas 9/13 de `08` que ya anticipaban la necesidad). La versión anterior (`baseCostCop` + margen% → `suggestedTotalCop` calculado, con `totalOfferedCop` como override opcional) quedó **retirada**: el equipo ya trae el valor final calculado de un Excel externo y necesita digitarlo exacto, sin que el sistema lo recalcule ni lo contradiga.
+
 ```ts
 interface ProposalCosting {
-  requiresExternalAdvisor: boolean;
-  externalAdvisorDetails?: string;
-  baseCostCop: number;             // Costo Base Directo, ingresado manualmente
+  // Valor Final de la Propuesta (COP) — único campo operativo real. El Líder
+  // lo digita directamente; ya NO se deriva de una base + margen.
+  totalOfferedCop: number;
+
+  // Margen de Contribución — dos campos manuales e independientes entre sí y
+  // de `totalOfferedCop`. Es intencional que puedan no cuadrar matemáticamente
+  // (ej. 35% de $32M no tiene por qué dar exacto el monto en pesos que se
+  // registró) — son informativos, no una fórmula. La UI muestra una
+  // referencia calculada junto al campo en pesos solo para comparar.
   expectedMarginPercent: number;   // ej. 30 (= 30%)
+  marginAmountCop: number;         // monto en pesos, digitado a mano
+
+  // Estampilla Pro-Cultura — fila de referencia informativa, calculada sobre
+  // `totalOfferedCop` pero nunca sumada/restada de él (el equipo ya la
+  // contempla en el Excel externo del que sale ese valor).
   proCulturaTaxPercent: number;    // 1.5 si type === "Capacitación", si no 0
-  proCulturaTaxAmount: number;     // baseCostCop * 0.015 (redondeado), si aplica
-  suggestedTotalCop: number;       // baseCostCop + margen + estampilla (redondeado)
-  totalOfferedCop: number;         // valor final mostrado al cliente — editable, default = suggestedTotalCop
-  negotiationNotes?: string;
+  proCulturaTaxAmount: number;     // round(totalOfferedCop * 0.015), si aplica
+
+  negotiationNotes?: string;       // nota de alcance libre, independiente del historial de rondas
+
+  // Gate explícito del Líder de Producto antes de que el KAM pueda entregar
+  // al cliente — mientras sea `false`, el botón "Enviar a cliente" del KAM
+  // permanece deshabilitado aunque ya exista un valor > 0.
+  readyForKam: boolean;
+  // ISO timestamp de cuándo se marcó `readyForKam = true` por última vez —
+  // alimenta "hace X" en el tablero del Líder. Se limpia junto con
+  // `readyForKam` si se invalida (ver reglas abajo).
+  costingSentAt?: string;
 }
 ```
 
-**Fórmula de cálculo** (función `calculateCosting` en `mock-data.ts`, replicada también dentro de `ProposalCostingModule.tsx`):
+**Reglas de invalidación del gate:** si el Líder edita el valor final o el margen (%o$) *después* de haber marcado `readyForKam = true`, ese flag vuelve a `false` automáticamente (y `costingSentAt` se limpia) — el Líder debe reconfirmar el envío. Lo mismo ocurre cuando el KAM usa "Devolver con observaciones" (ver más abajo): es la corrección de un bug real que existía al construir esto — sin este reseteo explícito, el botón del KAM quedaba reactivado solo, sin que el Líder hubiera vuelto a confirmar nada.
 
-```
-esCapacitación      = type === "Capacitación"
-proCulturaTaxPercent = esCapacitación ? 1.5 : 0
-montoMargen          = baseCostCop * (expectedMarginPercent / 100)
-proCulturaTaxAmount  = esCapacitación ? round(baseCostCop * 0.015) : 0
-suggestedTotalCop    = round(baseCostCop + montoMargen + proCulturaTaxAmount)
-totalOfferedCop      = customOffered ?? suggestedTotalCop   // el usuario puede sobreescribir
+⚠️ **Tarifa de Estampilla Pro-Cultura por confirmar:** el prototipo usa 1.5%, pero al responder `08` (pregunta 2) la Líder de Producto mencionó de forma informal "el 1% de procultura" al describir cómo se presenta una cotización al cliente. No se cambió la tarifa en el código a partir de ese comentario suelto — falta confirmar explícitamente cuál es la tarifa vigente (y si varía) antes de tocar el cálculo. Ver `08`, pregunta 12 (sigue abierta, sin responder en esta ronda).
+
+⚠️ **"Asesor del Servicio" ya no es un campo de `ProposalCosting`** — antes existían `requiresExternalAdvisor`/`externalAdvisorDetails` aquí, independientes del docente/asesor realmente asignado en `RequestItem.professorType`/`professor`/`externalProfessorData`, y podían contradecirse entre sí sin ninguna validación (`07`, gap #11, ya resuelto). El indicador que hoy se ve en la tarjeta de costeo es puramente derivado de esos campos de `RequestItem` — no dupliques esta información en el modelo real, una sola fuente de verdad basta.
+
+## `NegotiationRound` (una entrada por cada ronda de negociación con el cliente)
+
+Vive en `RequestItem.negotiationRounds` (no dentro de `ProposalCosting`), porque es historial del ciclo de vida completo de la solicitud, no del costeo vigente:
+
+```ts
+type ClientResponse = "pendiente" | "rechazada";
+// No existe "aceptada" explícita: el sistema no tiene un evento real de "el
+// cliente aceptó" — solo "fue entregada" (vigente mientras nadie la
+// devuelva). Modelarlo como "aceptada" sería fabricar un dato que nadie
+// confirma explícitamente hoy.
+
+interface NegotiationRound {
+  id: string;
+  roundNumber: number;             // 1, 2, 3...
+  // Snapshot del costeo Y del alcance en el momento en que el Líder confirmó
+  // el envío — no solo precio, también lo que cambió si el rechazo del
+  // cliente fue por alcance (ej. "reducir de 5 plantas a 3").
+  totalOfferedCop: number;
+  marginAmountCop: number;
+  expectedMarginPercent: number;
+  participantes?: string;
+  modalidad?: string;
+  horas?: string;
+  type?: RequestType;
+  necesidad?: string;
+  leaderNote?: string;             // obligatoria desde la ronda 2 (validado en la UI)
+  sentToKamAt: string;             // ISO — cuando el Líder confirmó "Enviar a KAM"
+  sentToClientAt?: string;         // ISO — cuando el KAM efectivamente la entregó
+  clientResponse: ClientResponse;
+  clientObservation?: string;      // solo si clientResponse === "rechazada"
+  clientRespondedAt?: string;      // ISO — cuando el KAM registró la devolución
+}
 ```
 
-⚠️ **Tarifa de Estampilla Pro-Cultura por confirmar:** el prototipo usa 1.5%, pero al responder `08` (pregunta 2) la Líder de Producto mencionó de forma informal "el 1% de procultura" al describir cómo se presenta una cotización al cliente. No se cambió la tarifa en el código a partir de ese comentario suelto — falta confirmar explícitamente cuál es la tarifa vigente (y si varía) antes de tocar `calculateCosting`. Ver `08`, pregunta 12 (sigue abierta, sin responder en esta ronda).
+**Ciclo de vida de una ronda:**
+1. El Líder confirma "Enviar a KAM" → se abre una ronda `"pendiente"` con el snapshot vigente. **Si el Líder invalida el envío editando el costeo antes de que el KAM alcance a entregarlo** (`sentToClientAt` nunca se llegó a fijar), reenviar **actualiza esa misma ronda** en vez de abrir una nueva — el cliente nunca llegó a ver ese número, así que no cuenta como una renegociación.
+2. El KAM entrega al cliente (`status → entregada`) → esa ronda recibe `sentToClientAt`.
+3. Si el cliente rechaza (KAM usa "Devolver con observaciones") → esa ronda pasa a `"rechazada"` con `clientObservation` y `clientRespondedAt`. Recién aquí, la siguiente vez que el Líder confirme "Enviar a KAM", sí se abre una ronda nueva (`roundNumber + 1`), y la UI exige un `leaderNote` explicando el ajuste.
 
 ## `ClientContact` (contacto adicional de la empresa cliente)
 

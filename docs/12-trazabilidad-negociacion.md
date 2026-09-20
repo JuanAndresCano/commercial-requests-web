@@ -73,14 +73,14 @@ En `RequestDetail.tsx`, dentro o junto a la tarjeta de costeo — visible para L
 - La ronda vigente (`clientResponse === "pendiente"` y es la última) se resalta visualmente distinta de las rondas cerradas.
 
 ## Checklist de implementación
-- [ ] `NegotiationRound`, `ClientResponse`, y `negotiationRounds?: NegotiationRound[]` en `mock-data.ts`.
-- [ ] `handleMarkReadyForKam`: acepta nota opcional, exige nota si `roundNumber > 1`, agrega la ronda.
-- [ ] `handleSendToClient`: cierra `sentToClientAt` de la ronda pendiente.
-- [ ] `handleReturnWithObservations`: marca la ronda como rechazada + **corrige el bug de `readyForKam`/`costingSentAt` no reseteados**.
-- [ ] Nuevo diálogo dedicado para "Enviar a KAM" con nota condicional (reemplaza el uso de `CONFIRM_ACTION_META.kam` para este caso).
-- [ ] Sección "Historial de Negociación" en el detalle de la solicitud.
-- [ ] Verificar `npm run build`, `npm run lint`, `npm run test` antes de dar por terminado.
-- [ ] No es necesario tocar `ProductLeaderDashboard.tsx` ni `KamCommandCenter.tsx` para esto — el historial vive solo en el detalle de la solicitud, no en las tarjetas del tablero.
+- [x] `NegotiationRound`, `ClientResponse`, y `negotiationRounds?: NegotiationRound[]` en `mock-data.ts`.
+- [x] `handleMarkReadyForKam`: acepta nota opcional, exige nota si `roundNumber > 1`, agrega la ronda.
+- [x] `handleSendToClient`: cierra `sentToClientAt` de la ronda pendiente.
+- [x] `handleReturnWithObservations`: marca la ronda como rechazada + **corrige el bug de `readyForKam`/`costingSentAt` no reseteados**.
+- [x] Nuevo diálogo dedicado para "Enviar a KAM" con nota condicional (reemplaza el uso de `CONFIRM_ACTION_META.kam` para este caso).
+- [x] Sección "Historial de Negociación" en el detalle de la solicitud.
+- [x] Verificar `npm run build`, `npm run lint`, `npm run test` antes de dar por terminado.
+- [x] No es necesario tocar `ProductLeaderDashboard.tsx` ni `KamCommandCenter.tsx` para esto — el historial vive solo en el detalle de la solicitud, no en las tarjetas del tablero.
 
 ## Rama
 `feature/historial-negociacion`, creada desde `feature/gate-envio-kam` (depende de `readyForKam`/`costingSentAt`, que viven ahí y aún no están en `develop`).

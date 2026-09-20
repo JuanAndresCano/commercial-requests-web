@@ -34,9 +34,9 @@ La aplicación se pondrá en producción en pocos días. El objetivo central de 
 | [`08-preguntas-abiertas-negocio.md`](./08-preguntas-abiertas-negocio.md) | Bitácora de preguntas de negocio que necesitaban decisión de la Líder de Producto (Dianis) — la mayoría ya respondidas e implementadas; quedan unas pocas pendientes de una siguiente ronda. |
 | [`09-guion-de-prueba-dianis.md`](./09-guion-de-prueba-dianis.md) | Guion corto, click a click, para que la Líder de Producto pruebe el prototipo de punta a punta y dé el aval para construir la versión real. |
 | [`10-decisiones-pendientes-equipo.md`](./10-decisiones-pendientes-equipo.md) | Decisiones de gobernanza del repositorio (no de negocio) que deben resolverse entre Tomás y Juan Andrés antes de ejecutarse. |
-| [`11-especificacion-costeo-y-reasignacion.md`](./11-especificacion-costeo-y-reasignacion.md) | Especificación validada de cambios pedidos por Dianis (costeo con valor final manual, gate de envío al KAM, reasignación desde "En Experto") más los ajustes de claridad encontrados al probarlos en vivo. |
-| [`12-trazabilidad-negociacion.md`](./12-trazabilidad-negociacion.md) | Modelo de datos y UI para versionar el ciclo completo de negociación (rondas de costeo, devoluciones del cliente, notas de ajuste) en vez de sobrescribir el valor actual sin dejar rastro. |
-| [`13-cierre-gaps-costeo-post-rechazo.md`](./13-cierre-gaps-costeo-post-rechazo.md) | Cierra gaps encontrados al probar el historial de negociación: quién puede corregir el alcance tras un rechazo, qué campos quedan en cada ronda, y el switch "asesor externo" desconectado de la asignación real. |
+| [`11-especificacion-costeo-y-reasignacion.md`](./11-especificacion-costeo-y-reasignacion.md) | 🗄️ **Histórico** — cómo se llegó a los cambios de costeo/reasignación de 2026-09. El estado vigente ya está fusionado en `03`, `04`, `07` y `08`; no lo uses como referencia actual. |
+| [`12-trazabilidad-negociacion.md`](./12-trazabilidad-negociacion.md) | 🗄️ **Histórico** — cómo se diseñó el historial de negociación (`NegotiationRound`). El modelo vigente está en `04`. |
+| [`13-cierre-gaps-costeo-post-rechazo.md`](./13-cierre-gaps-costeo-post-rechazo.md) | 🗄️ **Histórico** — gaps encontrados al probar el historial de negociación en vivo. Ya fusionado en `03`, `04`, `07` y `08`. |
 
 ## Cómo correr el prototipo localmente
 

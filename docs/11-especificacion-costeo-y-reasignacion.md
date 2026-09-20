@@ -1,5 +1,7 @@
 # Especificación de cambios — Costeo (valor final y margen) y Reasignación en "En Experto"
 
+> 🗄️ **Histórico — ya implementado y fusionado.** Todo lo implementado aquí ya vive en `03-flujos-de-usuario.md`, `04-modelo-de-datos-logico.md`, `07-gaps-conocidos-y-deuda-tecnica.md` y `08-preguntas-abiertas-negocio.md`. Este archivo se conserva solo como registro de cómo se llegó a esas decisiones (los audios originales, las preguntas resueltas en el momento) — **no lo uses como referencia del estado actual del código**, puede haber quedado desactualizado frente a esos documentos.
+
 > **Estado: VALIDADO, listo para implementación (2026-09-19).** Origen: transcripción literal de 2 audios de Dianis (Líder de Producto), más las decisiones tomadas en conversación con Tomás sobre los puntos ambiguos de la transcripción. Este documento es la especificación que debe seguir el agente que implemente los cambios — no programar contra la transcripción cruda, programar contra esto.
 
 ## Requisito 1 — El campo de costeo pasa a capturar el valor final, no una base pre-margen
@@ -19,12 +21,12 @@ Donde hoy dice "Costo Base Directo", ya no debe pedir una base sobre la que el s
 3. Si base/margen%/margen$ no cuadran matemáticamente entre sí, **se permite la inconsistencia** — son campos informativos independientes; lo único que importa operativamente es el valor final de la propuesta.
 
 ### Checklist de implementación
-- [ ] En `src/lib/mock-data.ts`, interfaz `ProposalCosting`: agregar `marginAmountCop: number` (nuevo campo persistido); retirar `baseCostCop` y `suggestedTotalCop` (ya no se usan).
-- [ ] En `ProposalCostingModule.tsx`: renombrar el input actual de costo base a **"Valor Final de la Propuesta (COP)"**, y que escriba directamente sobre `totalOfferedCop` en vez de sobre `baseCostCop`.
-- [ ] Convertir el renglón de margen en plata (hoy texto "+{formatCop(marginAmount)} COP") en un `<Input>` numérico editable, vinculado a `marginAmountCop`.
-- [ ] Eliminar el auto-cálculo hacia adelante: quitar `calculatedTotalCop`, la resincronización automática en `handleBaseCostChange`/`handleMarginChange`, el toggle "Personalizar valor ofertado" y el botón "Sincronizar a $X" — ya no aplican porque no hay un total "sugerido" del cual desviarse; el total **es** lo que el Líder digita.
-- [ ] Actualizar el desglose visual (línea ~347 actual) para reflejar los campos nuevos, no la fórmula vieja: fila "Valor Final de la Propuesta" (manual), fila "Margen de Contribución" (% + $, ambos manuales), fila "Referencia Pro-Cultura (1.5%)" solo cuando el tipo de servicio sea Capacitación — informativa, calculada sobre el valor final, nunca sumada/restada de él.
-- [ ] Actualizar `calculateCosting(...)` (helper que arma el objeto `ProposalCosting`) para la nueva forma de construir el objeto.
+- [x] En `src/lib/mock-data.ts`, interfaz `ProposalCosting`: agregar `marginAmountCop: number` (nuevo campo persistido); retirar `baseCostCop` y `suggestedTotalCop` (ya no se usan).
+- [x] En `ProposalCostingModule.tsx`: renombrar el input actual de costo base a **"Valor Final de la Propuesta (COP)"**, y que escriba directamente sobre `totalOfferedCop` en vez de sobre `baseCostCop`.
+- [x] Convertir el renglón de margen en plata (hoy texto "+{formatCop(marginAmount)} COP") en un `<Input>` numérico editable, vinculado a `marginAmountCop`.
+- [x] Eliminar el auto-cálculo hacia adelante: quitar `calculatedTotalCop`, la resincronización automática en `handleBaseCostChange`/`handleMarginChange`, el toggle "Personalizar valor ofertado" y el botón "Sincronizar a $X" — ya no aplican porque no hay un total "sugerido" del cual desviarse; el total **es** lo que el Líder digita.
+- [x] Actualizar el desglose visual (línea ~347 actual) para reflejar los campos nuevos, no la fórmula vieja: fila "Valor Final de la Propuesta" (manual), fila "Margen de Contribución" (% + $, ambos manuales), fila "Referencia Pro-Cultura (1.5%)" solo cuando el tipo de servicio sea Capacitación — informativa, calculada sobre el valor final, nunca sumada/restada de él.
+- [x] Actualizar `calculateCosting(...)` (helper que arma el objeto `ProposalCosting`) para la nueva forma de construir el objeto.
 
 ### Puntos resueltos (2026-09-19, con Tomás)
 - **Impuesto Pro-Cultura (1.5% en Capacitación):** el equipo ya calcula estos valores en un Excel externo y el valor final digitado debe quedar **exacto** a ese Excel — ningún cálculo del sistema debe alterarlo. Se convierte en **una fila de referencia informativa, no una operación**: se calcula (1.5% sobre el valor final, solo para servicios tipo Capacitación) y se muestra como recordatorio ("Referencia Pro-Cultura (1.5%): $X — ya debe estar contemplado en tu valor final"), pero **nunca se suma ni se resta** del valor final que el Líder digitó.
@@ -44,11 +46,11 @@ Cuando `status === "en-costeo"`, el Líder de Producto **no tiene ningún botón
 Se agrega un **gate formal**: el Líder debe confirmar explícitamente que el costeo está listo antes de que el KAM pueda actuar.
 
 ### Checklist de implementación
-- [ ] En `src/lib/mock-data.ts`, interfaz `ProposalCosting`: agregar `readyForKam: boolean` (default `false`).
-- [ ] En `RequestDetail.tsx` (rama `role === "lider-producto" && status === "en-costeo"`, líneas ~525-529 actuales): reemplazar el badge estático por un botón **"Enviar a KAM"** cuando `hasValidCosting && !costing.readyForKam`, y por un badge "Enviado al KAM — a la espera de envío al cliente" cuando `readyForKam === true`. Reusar el patrón de confirmación existente (`confirmingAction` + `CONFIRM_ACTION_META`) para pedir confirmación antes de marcar `readyForKam = true`.
-- [ ] En `RequestDetail.tsx`, botón "Enviar a cliente" del KAM (línea ~537-547): cambiar `disabled={!hasValidCosting}` por `disabled={!hasValidCosting || !req.costing?.readyForKam}`.
-- [ ] **Regla de invalidación:** si el Líder edita cualquier campo del costeo (`baseCostCop`/valor final, margen %, margen $) después de haber marcado `readyForKam = true`, ese flag debe volver a `false` automáticamente — para que el KAM no actúe sobre cifras que el Líder ya está corrigiendo. Implementar dentro del `triggerSave(...)` de `ProposalCostingModule.tsx`.
-- [ ] Verificar si `ProductLeaderDashboard.tsx` (vista Kanban) también necesita esta acción o si basta con tenerla en el detalle (`RequestDetail.tsx`).
+- [x] En `src/lib/mock-data.ts`, interfaz `ProposalCosting`: agregar `readyForKam: boolean` (default `false`).
+- [x] En `RequestDetail.tsx` (rama `role === "lider-producto" && status === "en-costeo"`, líneas ~525-529 actuales): reemplazar el badge estático por un botón **"Enviar a KAM"** cuando `hasValidCosting && !costing.readyForKam`, y por un badge "Enviado al KAM — a la espera de envío al cliente" cuando `readyForKam === true`. Reusar el patrón de confirmación existente (`confirmingAction` + `CONFIRM_ACTION_META`) para pedir confirmación antes de marcar `readyForKam = true`.
+- [x] En `RequestDetail.tsx`, botón "Enviar a cliente" del KAM (línea ~537-547): cambiar `disabled={!hasValidCosting}` por `disabled={!hasValidCosting || !req.costing?.readyForKam}`.
+- [x] **Regla de invalidación:** si el Líder edita cualquier campo del costeo (`baseCostCop`/valor final, margen %, margen $) después de haber marcado `readyForKam = true`, ese flag debe volver a `false` automáticamente — para que el KAM no actúe sobre cifras que el Líder ya está corrigiendo. Implementar dentro del `triggerSave(...)` de `ProposalCostingModule.tsx`.
+- [x] Verificar si `ProductLeaderDashboard.tsx` (vista Kanban) también necesita esta acción o si basta con tenerla en el detalle (`RequestDetail.tsx`).
 
 ### Addendum (2026-09-20) — Bug encontrado en el tablero del KAM + decisión de arquitectura
 
@@ -61,7 +63,7 @@ Al probar el gate en vivo, Tomás preguntó si convenía crear un **5to estado f
 - [x] `isReadyForKamHandoff(req)` en `src/lib/mock-data.ts` — única fuente de verdad para "¿ya puede el KAM actuar?" (`status === "en-costeo" && !!costing?.readyForKam`).
 - [x] `KamCommandCenter.tsx`: `isReady` (tabla) ahora usa este helper — corrige el resaltado verde, el badge "Lista para entregar", el texto "Costeo aprobado" y el botón de acción destacado, todos derivados de la misma variable. Se agregó un badge neutro "En Costeo" para el caso `en-costeo && !readyForKam` (antes quedaba en blanco). El contador `listasParaEntregarCount` (y el aviso "¡Tienes N propuestas listas para entregar!") ahora solo cuenta las confirmadas.
 - [x] `ProductLeaderDashboard.tsx`: los chequeos sueltos de `readyForKam` (filtro "Esperando al KAM", badges del Kanban) migrados al mismo helper, para que no se repita el tipo de olvido que causó el bug del tablero del KAM.
-- [ ] **No se tocó** el título de columna "Lista para Entregar" en `KamCommandCenter.tsx` (es copia de negocio validada con Dianis, ver `docs/08`, pregunta 2) — sigue siendo el nombre de la columna/bucket por estado real, aunque ya no todas las tarjetas dentro de ella se marquen individualmente como "listas". Si el volumen de solicitudes "en costeo sin confirmar" crece y esto genera confusión real, revalidar el nombre de la columna con Dianis en ese momento — no antes.
+- [x] **No se tocó** el título de columna "Lista para Entregar" en `KamCommandCenter.tsx` (es copia de negocio validada con Dianis, ver `docs/08`, pregunta 2) — sigue siendo el nombre de la columna/bucket por estado real, aunque ya no todas las tarjetas dentro de ella se marquen individualmente como "listas". Si el volumen de solicitudes "en costeo sin confirmar" crece y esto genera confusión real, revalidar el nombre de la columna con Dianis en ese momento — no antes.
 - **Si más adelante el volumen de solicitudes acumuladas "esperando al KAM" resulta ser alto en operación real**, reconsiderar promover esto a un 5to estado formal (Opción B) — en ese momento el costo de la migración se paga una sola vez con datos reales de uso, en vez de anticiparlo ahora sin evidencia.
 
 ---
@@ -79,12 +81,12 @@ La opción "Reasignar" solo existe cuando `status === "nueva"`, duplicada en `Re
 - Al reasignar desde `en-experto`, el `status` **vuelve a `"nueva"`** (el nuevo líder reinicia el flujo, incluyendo la asignación de experto/profesor).
 
 ### Checklist de implementación
-- [ ] **Refactor recomendado primero:** extraer el modal + `handleConfirmReassign` (hoy duplicado en 2 archivos vivos) a un componente/hook compartido (ej. `useReassignRequest` o `<ReassignDialog />`) antes de agregar la segunda condición de estado — evita triplicar la lógica que ya está señalada como deuda técnica en `07-gaps-conocidos-y-deuda-tecnica.md` (punto 9).
-- [ ] Cambiar la condición de visibilidad del botón "Reasignar" de `status === "nueva"` a `status === "nueva" || status === "en-experto"` en `RequestDetail.tsx` y `ProductLeaderDashboard.tsx`.
-- [ ] En `handleConfirmReassign`: si `req.status === "en-experto"` al momento de reasignar, incluir `status: "nueva"` en el `updateRequest(...)`.
-- [ ] Al volver a `"nueva"`, limpiar los campos de asignación de experto/profesor que ya no aplican bajo el nuevo líder/nodo (revisar `professorType`/`professor` en `RequestItem`, ver `04-modelo-de-datos-logico.md` y el gap #11 de `07-...`) — de lo contrario la solicitud vuelve a "nueva" pero conserva un profesor ya asignado que puede no corresponder al nuevo nodo.
-- [ ] Eliminar la tercera copia muerta del modal de reasignación en `Dashboard.tsx` (rama inalcanzable para `lider-producto`, con el bug ya documentado de `listas` no declarada) como limpieza incluida en este mismo cambio, ya que se está tocando ese código de todas formas.
-- [ ] Confirmar si `reassignReason`/`reassignNotes` (hoy se capturan y se pierden, nunca se persisten) deben empezar a guardarse en este cambio, o se deja igual (fuera de alcance salvo que se pida explícitamente).
+- [x] **Refactor recomendado primero:** extraer el modal + `handleConfirmReassign` (hoy duplicado en 2 archivos vivos) a un componente/hook compartido (ej. `useReassignRequest` o `<ReassignDialog />`) antes de agregar la segunda condición de estado — evita triplicar la lógica que ya está señalada como deuda técnica en `07-gaps-conocidos-y-deuda-tecnica.md` (punto 9).
+- [x] Cambiar la condición de visibilidad del botón "Reasignar" de `status === "nueva"` a `status === "nueva" || status === "en-experto"` en `RequestDetail.tsx` y `ProductLeaderDashboard.tsx`.
+- [x] En `handleConfirmReassign`: si `req.status === "en-experto"` al momento de reasignar, incluir `status: "nueva"` en el `updateRequest(...)`.
+- [x] Al volver a `"nueva"`, limpiar los campos de asignación de experto/profesor que ya no aplican bajo el nuevo líder/nodo (revisar `professorType`/`professor` en `RequestItem`, ver `04-modelo-de-datos-logico.md` y el gap #11 de `07-...`) — de lo contrario la solicitud vuelve a "nueva" pero conserva un profesor ya asignado que puede no corresponder al nuevo nodo.
+- [x] Eliminar la tercera copia muerta del modal de reasignación en `Dashboard.tsx` (rama inalcanzable para `lider-producto`, con el bug ya documentado de `listas` no declarada) como limpieza incluida en este mismo cambio, ya que se está tocando ese código de todas formas.
+- [x] Confirmar si `reassignReason`/`reassignNotes` (hoy se capturan y se pierden, nunca se persisten) deben empezar a guardarse en este cambio, o se deja igual (fuera de alcance salvo que se pida explícitamente).
 
 ---
 
