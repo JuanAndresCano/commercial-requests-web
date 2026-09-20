@@ -1,4 +1,3 @@
-import { calculateCosting } from "./costing";
 export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada";
 export type RequestType =
   "Capacitación" | "Consultoría" | "Mentoría" | "Investigación" | "Proyectos Especiales (Eventos)" | "Otro";
@@ -157,15 +156,29 @@ export interface ClientContact {
 }
 
 export interface ProposalCosting {
-  requiresExternalAdvisor: boolean;
-  externalAdvisorDetails?: string;
-  baseCostCop: number;
-  expectedMarginPercent: number; // e.g. 30 (%)
+  // Margen de Contribución en pesos — input manual e independiente (docs/04,
+  // Requisito 1). Es informativo: no tiene que cuadrar matemáticamente con
+  // `expectedMarginPercent` ni con `totalOfferedCop`.
+  marginAmountCop: number;
+  expectedMarginPercent: number; // e.g. 30 (%) — manual, informativo
   proCulturaTaxPercent: number; // 1.5% if Capacitación, 0% otherwise
+  // Estampilla Pro-Cultura: fila de referencia calculada sobre el valor
+  // final ya digitado. Nunca se suma ni se resta de `totalOfferedCop` — el
+  // equipo ya la contempla en el Excel externo del que sale ese valor.
   proCulturaTaxAmount: number;
-  suggestedTotalCop: number;
-  totalOfferedCop: number; // Editable Valor Total Ofertado (COP)
+  // Valor Final de la Propuesta (COP) — único campo operativo real. Ya no se
+  // deriva de una base + margen: el Líder lo digita directamente.
+  totalOfferedCop: number;
   negotiationNotes?: string;
+  // Gate explícito del Líder de Producto (docs/04): mientras
+  // sea false, el KAM no puede enviar la propuesta al cliente aunque ya haya
+  // un valor ofertado > 0. Se invalida automáticamente (vuelve a false) si
+  // el Líder vuelve a editar el valor final o el margen tras haberlo marcado.
+  readyForKam: boolean;
+  // ISO timestamp de cuándo se marcó `readyForKam = true` por última vez —
+  // permite mostrar "esperando hace X días" y ordenar por antigüedad en el
+  // tablero del Líder. Se limpia junto con `readyForKam` si se invalida.
+  costingSentAt?: string;
 }
 
 export interface RequestItem {
@@ -247,6 +260,42 @@ export interface RequestItem {
   // "lleva X días en esta fase" en el Kanban del Líder para detectar cuellos
   // de botella. Se actualiza automáticamente en AuthContext.updateRequest.
   statusUpdatedAt?: string;
+
+  // Historial de rondas de negociación comercial (docs/04): cada vez que el
+  // Líder envía un valor final al KAM se abre una ronda nueva. Vive en
+  // RequestItem (no en ProposalCosting) porque sobrevive a los sucesivos
+  // sobrescritos de `costing` — es el registro de lo que pasó, no el estado
+  // actual del costeo.
+  negotiationRounds?: NegotiationRound[];
+}
+
+// No existe "aceptada" explícita: el sistema no tiene hoy un evento real de
+// "el cliente aceptó" — solo "fue entregada" (vigente mientras nadie la
+// devuelva). Inventar un estado "aceptada" sería fabricar un dato que nadie
+// confirma.
+export type ClientResponse = "pendiente" | "rechazada";
+
+export interface NegotiationRound {
+  id: string; // `${requestId}-r${roundNumber}`
+  roundNumber: number; // 1, 2, 3...
+  totalOfferedCop: number; // snapshot del valor final en esta ronda
+  marginAmountCop: number;
+  expectedMarginPercent: number;
+  leaderNote?: string; // obligatoria desde la ronda 2
+  sentToKamAt: string; // ISO — cuando el Líder confirmó "Enviar a KAM"
+  sentToClientAt?: string; // ISO — cuando el KAM efectivamente la entregó
+  clientResponse: ClientResponse;
+  clientObservation?: string; // solo si clientResponse === "rechazada"
+  clientRespondedAt?: string; // ISO — cuando el KAM registró la devolución
+  // Snapshot de alcance vigente al momento del envío (docs/04) — además del
+  // precio, cada ronda congela estos campos tal como estaban en `req` (no en
+  // `req.costing`) cuando el Líder confirmó "Enviar a KAM". Permite mostrar
+  // qué cambió de alcance entre rondas, no solo el valor ofertado.
+  participantes?: string;
+  modalidad?: string;
+  horas?: string;
+  type?: RequestType;
+  necesidad?: string;
 }
 
 export const NODES = [
@@ -276,7 +325,36 @@ export const NODE_DEFAULT_LEADERS: Record<string, string> = {
   "Salud Global, Calidad de Vida": "Sebastián Vélez",
 };
 
-export { calculateCosting };
+/**
+ * Arma un `ProposalCosting` a partir del valor final de la propuesta
+ * (docs/04). Ya no hay cálculo hacia adelante desde una base:
+ * `totalOfferedCop` es el valor que el Líder digita directamente, y
+ * `marginAmountCop` es un input manual independiente (informativo). La
+ * estampilla Pro-Cultura es solo una referencia calculada sobre el valor
+ * final — nunca se suma ni se resta de él.
+ */
+export function calculateCosting(
+  type: RequestType,
+  totalOfferedCop: number,
+  expectedMarginPercent: number,
+  marginAmountCop: number = 0,
+  negotiationNotes?: string,
+  readyForKam: boolean = false,
+): ProposalCosting {
+  const isCapacitacion = type === "Capacitación";
+  const proCulturaTaxPercent = isCapacitacion ? 1.5 : 0;
+  const proCulturaTaxAmount = isCapacitacion ? Math.round(totalOfferedCop * 0.015) : 0;
+
+  return {
+    marginAmountCop,
+    expectedMarginPercent,
+    proCulturaTaxPercent,
+    proCulturaTaxAmount,
+    totalOfferedCop,
+    negotiationNotes,
+    readyForKam,
+  };
+}
 
 export const MOCK_REQUESTS: RequestItem[] = [
   {
@@ -506,11 +584,9 @@ export const MOCK_REQUESTS: RequestItem[] = [
     totalCostCop: 24_000_000,
     costing: calculateCosting(
       "Capacitación",
-      18_500_000,
-      30,
       24_000_000,
-      false,
-      undefined,
+      30,
+      5_550_000,
       "Acuerdo de descuento del 1.3% por volumen de horas con SURA",
     ),
     horas: "32",
@@ -637,7 +713,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 12_500_000,
-    costing: calculateCosting("Consultoría", 9_500_000, 31.5, 12_500_000, false),
+    costing: calculateCosting("Consultoría", 12_500_000, 31.5, 2_992_500, undefined, true),
     horas: "60",
     modalidad: "Presencial en sede cliente",
     participantes: "1 - 5",
@@ -702,7 +778,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 34_500_000,
-    costing: calculateCosting("Capacitación", 26_000_000, 30, 34_500_000, false),
+    costing: calculateCosting("Capacitación", 34_500_000, 30, 7_800_000, undefined, true),
     horas: "48",
     modalidad: "Presencial en sede cliente",
     participantes: "20 - 25",
@@ -772,19 +848,37 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Ing. Carlos Eduardo Valencia",
     professorType: "externo",
     totalCostCop: 42_000_000,
-    costing: calculateCosting(
-      "Consultoría",
-      31_000_000,
-      35,
-      42_000_000,
-      true,
-      "Experto externo en analítica de redes de gas",
-    ),
+    costing: calculateCosting("Consultoría", 42_000_000, 35, 10_850_000),
     // Ejemplo de propuesta "devuelta con observaciones" (docs/08, pregunta 13):
     // el cliente ya la había recibido y pidió un ajuste de alcance — el KAM la
     // regresó a "en-costeo" y esta nota queda visible hasta que se reentregue.
     clientObservations:
       "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
+    // Backfill (docs/04): esta solicitud ya traía `clientObservations` con un
+    // rechazo completo del cliente antes de que existiera `negotiationRounds`
+    // (docs/04) — sin esta ronda 1, su historial de negociación saldría
+    // vacío pese a que la narrativa ya cuenta un rechazo.
+    negotiationRounds: [
+      {
+        id: "REQ-2026-0135-r1",
+        roundNumber: 1,
+        totalOfferedCop: 42_000_000,
+        marginAmountCop: 10_850_000,
+        expectedMarginPercent: 35,
+        participantes: "6 - 10",
+        modalidad: "Híbrida",
+        horas: "100",
+        type: "Consultoría",
+        necesidad:
+          "Optimizar la distribución de gas natural en la red secundaria para reducir pérdidas técnicas y mejorar tiempos de respuesta ante fallas.",
+        sentToKamAt: "2026-09-10T09:00:00.000Z",
+        sentToClientAt: "2026-09-12T14:00:00.000Z",
+        clientResponse: "rechazada",
+        clientObservation:
+          "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
+        clientRespondedAt: "2026-09-15T08:00:00.000Z",
+      },
+    ],
     horas: "100",
     modalidad: "Híbrida",
     participantes: "6 - 10",
@@ -1240,7 +1334,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Juan Carlos González",
     professorType: "planta",
     totalCostCop: 15_600_000,
-    costing: calculateCosting("Capacitación", 12_000_000, 30, 15_600_000, false),
+    costing: calculateCosting("Capacitación", 15_600_000, 30, 3_600_000),
     horas: "36",
     modalidad: "Presencial en sede cliente",
     participantes: "15 - 20",
@@ -1280,7 +1374,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 10_800_000,
-    costing: calculateCosting("Proyectos Especiales (Eventos)", 8_000_000, 28, 10_800_000, false),
+    costing: calculateCosting("Proyectos Especiales (Eventos)", 10_800_000, 28, 2_240_000),
     // Segundo ejemplo de propuesta "devuelta con observaciones" — para
     // probar el banner en más de una tarjeta a la vez.
     clientObservations:
@@ -1332,14 +1426,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Transformación Digital y Arquitectura Cloud",
     },
     totalCostCop: 33_750_000,
-    costing: calculateCosting(
-      "Consultoría",
-      25_000_000,
-      35,
-      33_750_000,
-      true,
-      "Ing. Carlos Eduardo Valencia (Valencia & Partners) — trazabilidad IoT en cadena de frío",
-    ),
+    costing: calculateCosting("Consultoría", 33_750_000, 35, 8_750_000),
     horas: "70",
     modalidad: "Híbrida",
     participantes: "6 - 10",
@@ -1384,7 +1471,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 19_500_000,
-    costing: calculateCosting("Capacitación", 15_000_000, 30, 19_500_000, false),
+    costing: calculateCosting("Capacitación", 19_500_000, 30, 4_500_000, undefined, true),
     horas: "28",
     modalidad: "Presencial en sede cliente",
     participantes: "11 - 15",
@@ -1427,7 +1514,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 8_900_000,
-    costing: calculateCosting("Mentoría", 6_800_000, 27, 8_900_000, false),
+    costing: calculateCosting("Mentoría", 8_900_000, 27, 1_836_000, undefined, true),
     horas: "18",
     modalidad: "Virtual sincrónica",
     participantes: "1 - 5",
@@ -1475,14 +1562,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Estrategia Comercial y Pricing",
     },
     totalCostCop: 27_200_000,
-    costing: calculateCosting(
-      "Consultoría",
-      20_000_000,
-      34,
-      27_200_000,
-      true,
-      "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios",
-    ),
+    costing: calculateCosting("Consultoría", 27_200_000, 34, 6_800_000, undefined, true),
     horas: "55",
     modalidad: "Híbrida",
     participantes: "1 - 5",
@@ -1546,6 +1626,18 @@ export const URGENCY_META: Record<Urgency, { label: string; tone: string }> = {
   media: { label: "Media", tone: "text-[#757a07] dark:text-[#e4eb60] bg-[#e4eb60]/25 border-[#e4eb60]/40" },
   baja: { label: "Baja", tone: "text-muted-foreground bg-muted border-border" },
 };
+
+// Fuente única de verdad para "¿de quién es el turno dentro de En Costeo?".
+// `status === "en-costeo"` no alcanza: desde que el Líder de Producto debe
+// confirmar explícitamente el envío (docs/04), una solicitud
+// puede estar en esa etapa sin que el KAM tenga nada que hacer todavía.
+// Cualquier tablero que muestre "lista para el KAM" / "lista para entregar"
+// debe pasar por aquí en vez de repetir la condición — así no se repite el
+// olvido que causó que el tablero del KAM mostrara "Lista para Entregar"
+// sobre solicitudes que el Líder ni siquiera había confirmado.
+export function isReadyForKamHandoff(req: Pick<RequestItem, "status" | "costing">): boolean {
+  return req.status === "en-costeo" && !!req.costing?.readyForKam;
+}
 
 export function formatCop(amount: number) {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(

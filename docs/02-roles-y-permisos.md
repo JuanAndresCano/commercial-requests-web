@@ -51,7 +51,7 @@ Estructura (de arriba hacia abajo):
    - **En vista Kanban**, un clic **no oculta nada** (las columnas del Kanban ya son el filtro) — en cambio **aísla esa columna a pantalla completa**, mostrando las tarjetas en una cuadrícula de hasta 3 por fila en vez de una lista angosta. Un botón "Ver las 4 fases" (en la columna aislada y junto al buscador) regresa a la vista completa, o se hace clic de nuevo en la misma tarjeta.
 5. **Toggle Tabla/Kanban** y buscador (por ID, empresa, título, tipo, Líder de Producto).
 6. **Vista Tabla**: columnas ID+fecha relativa, Propuesta+Empresa+tipo de servicio, Líder de Producto, Valor Ofertado (o "Pendiente de costeo"), Estado (4 badges de color, ya no fusiona Nueva+En Proceso), Acción.
-7. **Vista Kanban**: 4 columnas (o 1 si hay una aislada), tarjetas `RequestCard` compactas (ID, empresa, título, urgencia, tipo, Líder de Producto, docente o "Sin docente", fecha).
+7. **Vista Kanban**: 4 columnas (o 1 si hay una aislada), tarjetas `RequestCard` compactas (banner ámbar "Cliente pidió ajustes" si tiene `clientObservations`, ID, empresa, título, urgencia, tipo, Líder de Producto, docente o "Sin docente", fecha).
 
 ### Su journey de creación de solicitud
 
@@ -98,17 +98,19 @@ Archivo: `src/components/dashboard/ProductLeaderDashboard.tsx`, montado desde `s
 
 Estructura:
 1. **Header** con saludo personalizado ("Hola, Juan Pablo" + `RoleBadge`).
-2. **4 tarjetas KPI** — una por cada etapa del pipeline (1. Nuevas / 2. En Experto / 3. En Costeo / 4. Entregadas, esta última con el valor real aprobado en COP como dato secundario). Mismo comportamiento dual que en el dashboard del KAM: **filtran en vista Tabla, aíslan la columna a pantalla completa en vista Kanban** (no vacían las 4 columnas sin motivo, como pasaba antes).
-3. **Buscador** (por empresa, código, docente, título) y botón-filtro **"Sin docente (N)"** — solo cuenta/muestra solicitudes activas (no `entregada`) sin profesor asignado. Si el filtro deja el tablero vacío, se muestra un aviso explícito con botón "Quitar filtros" (antes las 4 columnas se veían vacías sin ninguna pista de que había un filtro activo).
-4. **Toggle Kanban/Tabla** (arranca en Kanban, a diferencia del KAM que arranca en Tabla).
-5. **Kanban de 4 columnas** (o 1 si hay una aislada). Cada tarjeta de solicitud muestra, de arriba hacia abajo:
+2. **Banner contextual** que solo aparece si hay ≥1 solicitud propia en estado `nueva`: *"¡Tienes N solicitudes nuevas por revisar!"* — botón "Ver nuevas" que aísla/filtra la columna "Nueva" (mismo comportamiento dual tabla/kanban que el resto de tarjetas KPI). Espejo del banner equivalente del KAM.
+3. **Dato agregado secundario** (texto, no tarjeta): "N solicitudes en total · $X COP en pipeline cotizado" (suma de `en-costeo` + `entregada`) — mismo formato que usa `KamCommandCenter`.
+4. **4 tarjetas KPI** — una por cada etapa del pipeline (1. Nuevas / 2. En Experto / 3. En Costeo / 4. Entregadas, esta última con el valor real aprobado en COP como dato secundario). Mismo comportamiento dual que en el dashboard del KAM: **filtran en vista Tabla, aíslan la columna a pantalla completa en vista Kanban** (no vacían las 4 columnas sin motivo, como pasaba antes).
+5. **Buscador** (por empresa, código, docente, título) y botón-filtro **"Sin docente (N)"** — solo cuenta/muestra solicitudes activas (no `entregada`) sin profesor asignado. Si el filtro deja el tablero vacío, se muestra un aviso explícito con botón "Quitar filtros" (antes las 4 columnas se veían vacías sin ninguna pista de que había un filtro activo).
+6. **Toggle Kanban/Tabla** (arranca en Kanban, a diferencia del KAM que arranca en Tabla).
+7. **Kanban de 4 columnas** (o 1 si hay una aislada). Cada tarjeta de solicitud muestra, de arriba hacia abajo:
    - Banner ámbar "Cliente pidió ajustes" si la solicitud tiene `clientObservations` (viene de una devolución del KAM) — es la señal más prioritaria de la tarjeta.
    - ID, empresa, urgencia, título.
    - Tipo de servicio + **valor cotizado** (visible solo si ya hay costeo real, en "En Costeo"/"Entregada").
    - Docente asignado (o "Sin docente").
    - **Antigüedad en la fase actual** ("En esta fase hace X días/horas") — usa `statusUpdatedAt`, útil para detectar cuellos de botella.
    - Pie: fecha de creación + **fecha límite** (coloreada: roja si venció, naranja si vence en ≤3 días, gris si no hay apuro; no se muestra en "Entregada"), botón de reasignar (ícono, solo en "Nueva"), y la acción/indicador de etapa correspondiente (ver confirmaciones arriba) — en "En Costeo" ya no es un botón de avance, es "Completar costeo" o la etiqueta pasiva "Listo para el KAM".
-6. **Vista Tabla**: columnas ID+fecha, Propuesta+Empresa+tipo+urgencia, Docente, Valor Ofertado, Estado (`StatusBadge`), Acción (solo "Ver detalle" — sin botones de avance directos en esta vista).
+8. **Vista Tabla**: columnas ID+fecha, Propuesta+Empresa+tipo+urgencia, Docente, Valor Ofertado, Estado (`StatusBadge`), Acción (solo "Ver detalle" — sin botones de avance directos en esta vista).
 
 ### Su journey de trabajo sobre una solicitud
 

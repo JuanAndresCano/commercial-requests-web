@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import Index from "./pages/Index.tsx";
 import Login from "./pages/Login.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
@@ -28,6 +29,7 @@ const App = () => (
               v7_relativeSplatPath: true,
             }}
           >
+            <ScrollToTop />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />

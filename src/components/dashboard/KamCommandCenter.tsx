@@ -1,9 +1,16 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Rocket, Search, ArrowRight, X, Building2, LayoutGrid, List } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RequestItem, RequestStatus, formatCop, formatCompactCop, getRelativeTime } from "@/lib/mock-data";
+import {
+  RequestItem,
+  RequestStatus,
+  formatCop,
+  formatCompactCop,
+  getRelativeTime,
+  isReadyForKamHandoff,
+} from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { IcesiCenefa } from "@/components/IcesiLogo";
 import { UrgencyBadge } from "@/components/StatusBadge";
@@ -52,7 +59,13 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   // a una tarjeta KPI, para que nunca se desalineen entre vistas.
   const nuevaCount = activeDataset.filter((r) => r.status === "nueva").length;
   const enProcesoCount = activeDataset.filter((r) => r.status === "en-experto").length;
-  const listasParaEntregarCount = activeDataset.filter((r) => r.status === "en-costeo").length;
+  // "Lista para Entregar" es una promesa concreta ("ya puedes enviarla al
+  // cliente"), no solo la etapa "en-costeo" — desde que el Líder de Producto
+  // confirma explícitamente el envío (docs/04), una solicitud
+  // puede estar en "en-costeo" sin que el KAM tenga nada que hacer todavía.
+  // Contar solo las confirmadas evita que este número (y el aviso de abajo)
+  // le diga al KAM que puede entregar algo que el Líder aún está costeando.
+  const listasParaEntregarCount = activeDataset.filter(isReadyForKamHandoff).length;
   const entregadasCount = activeDataset.filter((r) => r.status === "entregada").length;
   const stageCounts: Record<RequestStatus, number> = {
     nueva: nuevaCount,
@@ -425,7 +438,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     </tr>
                   ) : (
                     filteredRequests.map((r) => {
-                      const isReady = r.status === "en-costeo";
+                      const isReady = isReadyForKamHandoff(r);
+                      const isBeingCosted = r.status === "en-costeo" && !isReady;
                       const relativeTime = getRelativeTime(r.id);
 
                       return (
@@ -517,6 +531,12 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                               <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e9683b]/30 bg-[#e9683b]/10 px-2.5 py-0.5 text-xs font-medium text-[#e9683b]">
                                 <span className="h-1.5 w-1.5 rounded-full bg-[#e9683b] animate-pulse" />
                                 En Proceso
+                              </span>
+                            )}
+                            {isBeingCosted && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                                En Costeo
                               </span>
                             )}
                             {isReady && (
