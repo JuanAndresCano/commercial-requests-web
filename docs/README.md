@@ -36,6 +36,7 @@ La aplicación se pondrá en producción en pocos días. El objetivo central de 
 | [`10-decisiones-pendientes-equipo.md`](./10-decisiones-pendientes-equipo.md) | Decisiones de gobernanza del repositorio (no de negocio) que deben resolverse entre Tomás y Juan Andrés antes de ejecutarse. |
 | [`11-especificacion-costeo-y-reasignacion.md`](./11-especificacion-costeo-y-reasignacion.md) | Especificación validada de cambios pedidos por Dianis (costeo con valor final manual, gate de envío al KAM, reasignación desde "En Experto") más los ajustes de claridad encontrados al probarlos en vivo. |
 | [`12-trazabilidad-negociacion.md`](./12-trazabilidad-negociacion.md) | Modelo de datos y UI para versionar el ciclo completo de negociación (rondas de costeo, devoluciones del cliente, notas de ajuste) en vez de sobrescribir el valor actual sin dejar rastro. |
+| [`13-cierre-gaps-costeo-post-rechazo.md`](./13-cierre-gaps-costeo-post-rechazo.md) | Cierra gaps encontrados al probar el historial de negociación: quién puede corregir el alcance tras un rechazo, qué campos quedan en cada ronda, y el switch "asesor externo" desconectado de la asignación real. |
 
 ## Cómo correr el prototipo localmente
 
