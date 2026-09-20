@@ -749,11 +749,29 @@ export default function RequestDetail() {
 
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
-              <ProposalCostingModule
-                request={req}
-                onUpdateCosting={handleUpdateCosting}
-                onOpenAdvisorModal={() => setIsAssignModalOpen(true)}
-              />
+              req.status === "en-costeo" || req.status === "entregada" ? (
+                <ProposalCostingModule
+                  request={req}
+                  onUpdateCosting={handleUpdateCosting}
+                  onOpenAdvisorModal={() => setIsAssignModalOpen(true)}
+                />
+              ) : (
+                /* Antes se mostraba editable en cualquier estado — se podía
+                   fijar un valor final desde "Nueva", antes de asignar
+                   siquiera un docente, contradiciendo la regla ya validada
+                   con Dianis (docs/08, pregunta 7: "todo se hace en el
+                   momento del costeo", sin valores parciales antes de esa
+                   fase). Se oculta por completo hasta llegar a "En Costeo". */
+                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 p-8 text-center">
+                  <Clock className="h-6 w-6 text-slate-400" />
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Costeo aún no disponible
+                  </p>
+                  <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
+                    El módulo de costeo se habilita cuando la solicitud llegue a "En Costeo" — todavía hay trabajo previo por completar (asignar docente, avanzar a "En Experto").
+                  </p>
+                </div>
+              )
             ) : req.costing && req.costing.totalOfferedCop > 0 ? (
               /* Vista comercial para KAM — solo cuando el Líder ya guardó un costeo real */
               <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card space-y-4">
@@ -914,7 +932,7 @@ export default function RequestDetail() {
 
                         {round.leaderNote && (
                           <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                            <span className="font-semibold text-foreground">Motivo del ajuste: </span>
+                            <span className="font-semibold text-foreground">Ajuste del Líder: </span>
                             "{round.leaderNote}"
                           </p>
                         )}
@@ -1735,12 +1753,12 @@ export default function RequestDetail() {
               )}
               <div className="space-y-1.5">
                 <Label htmlFor="send-to-kam-note" className="text-xs font-semibold text-foreground">
-                  Motivo del ajuste *
+                  ¿Qué ajustaste y por qué? *
                 </Label>
                 <Textarea
                   id="send-to-kam-note"
                   rows={3}
-                  placeholder="Explica qué cambió frente a la propuesta anterior..."
+                  placeholder="Ej: Reduje el alcance a 3 plantas y ajusté el valor según lo solicitado por el cliente..."
                   value={sendToKamNote}
                   onChange={(e) => setSendToKamNote(e.target.value)}
                   className="text-xs resize-none"

@@ -95,7 +95,8 @@ Aterriza en su Kanban de 4 columnas (vista por defecto, a diferencia del KAM que
 6. Avanza el estado con el botón **"Pasar a Experto"** (deshabilitado sin docente asignado) — desde el Kanban o el detalle, ambos con un diálogo de confirmación que muestra la empresa y el título de la solicitud antes de ejecutar.
 
 ### B.4 — Costeo de la propuesta
-1. Cuando la propuesta está madura, el Líder de Producto avanza a `en-costeo` (botón "Pasar a Costeo", con el mismo diálogo de confirmación).
+0. **Mientras la solicitud está en "Nueva" o "En Experto", la tarjeta de costeo no se muestra** — en su lugar hay un aviso "Costeo aún no disponible". Antes se mostraba editable en cualquier estado (se podía fijar un valor final desde "Nueva"), contradiciendo la regla ya validada de que el costeo se define todo de una vez, en su fase (`08`, pregunta 7).
+1. Cuando la propuesta está madura, el Líder de Producto avanza a `en-costeo` (botón "Pasar a Costeo", con el mismo diálogo de confirmación) — recién aquí aparece la tarjeta de costeo.
 2. En el detalle, el módulo `ProposalCostingModule` (columna principal, solo visible para este rol) permite:
    - Ingresar el **Valor Final de la Propuesta** (COP) — el número que se le va a mostrar al cliente. Ya **no** se calcula a partir de un costo base + margen: el Líder lo digita directamente, porque el equipo ya trae este número calculado de un Excel externo y necesita que quede exacto (docs/04, `ProposalCosting`).
    - Ajustar el **Margen de Contribución**, tanto en **porcentaje** (chips 25/30/35/40% o valor libre) como en **pesos** (input manual) — ambos son informativos e independientes entre sí y del valor final; junto al campo en pesos se muestra una referencia calculada ("X% de $Y = $Z") solo para comparar, sin forzar que cuadren.
