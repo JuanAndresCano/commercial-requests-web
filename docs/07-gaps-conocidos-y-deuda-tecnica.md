@@ -24,8 +24,8 @@ En `src/pages/Dashboard.tsx`, cuando el rol no es `kam` ni `lider-producto`, el 
 ### 5. ✅ RESUELTO — Tarjeta "Especificaciones del Servicio" con valores fijos
 `horas`, `modalidad` y `participantes` ya se guardan en `RequestItem` y se leen en el detalle (con fallback "Sin especificar"). Además, el Líder de Producto puede corregirlos si el KAM los diligenció mal (commit `722c85a`, confirmado con Dianis en `08`, pregunta 5).
 
-### 11. "Requiere asesor externo" no está enlazado a una asignación real
-En `ProposalCostingModule.tsx`, el switch "¿Requiere asesor externo?" es independiente del docente realmente asignado (`req.professorType`/`req.professor`) — se puede activar el switch sin que exista ningún consultor externo vinculado, o dejarlo apagado con un consultor externo sí asignado. **Detectado pero no cerrado a propósito**: no hay una regla de negocio de Dianis que respalde una u otra solución (ej. deshabilitar el switch hasta que se asigne un externo, o sincronizarlo automáticamente). Ver `04-modelo-de-datos-logico.md`.
+### 11. ✅ RESUELTO — "Requiere asesor externo" no estaba enlazado a una asignación real
+En `ProposalCostingModule.tsx`, el switch "¿Requiere asesor externo?" era independiente del docente realmente asignado (`req.professorType`/`req.professor`) — se podía activar sin que existiera ningún consultor externo vinculado, o dejarlo apagado con uno sí asignado. Se quitaron `requiresExternalAdvisor`/`externalAdvisorDetails` de `ProposalCosting` (y de `calculateCosting`) y se reemplazó el switch por un indicador de solo lectura ("Asesor del Servicio") derivado directamente de `req.professorType`/`req.professor`/`req.externalProfessorData` — ya no puede existir la contradicción porque no hay dos fuentes de verdad (docs/13).
 
 ## 🟡 De prototipo (esperables mientras no hay backend, pero a tener en cuenta)
 

@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Edit3,
   ClipboardList,
+  History,
 } from "@/components/icons";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -63,6 +64,7 @@ import {
   URGENCY_META,
   type RequestType,
   type Urgency,
+  type NegotiationRound,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
@@ -106,6 +108,11 @@ export default function RequestDetail() {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnObservations, setReturnObservations] = useState("");
+  // Diálogo dedicado para "Enviar a KAM" (docs/12): a partir de la ronda 2
+  // exige una nota del motivo del ajuste, algo que el diálogo genérico
+  // CONFIRM_ACTION_META no puede expresar (no admite campos condicionales).
+  const [isSendToKamModalOpen, setIsSendToKamModalOpen] = useState(false);
+  const [sendToKamNote, setSendToKamNote] = useState("");
   const [showFullInfo, setShowFullInfo] = useState(false);
 
   // Edición de "Especificaciones del Servicio" por el Líder de Producto,
@@ -148,7 +155,12 @@ export default function RequestDetail() {
   // El KAM es dueño de la información de su solicitud (empresa, contacto,
   // diagnóstico, formación previa) y puede corregirla mientras nadie la haya
   // empezado a trabajar — Dianis confirmó esto en docs/08, preguntas 4 y 8.
-  const canEditFullInfo = isKam && req.kam === user.name && req.status === "nueva";
+  // El Líder de Producto, además, puede corregir el alcance (sobre todo
+  // `necesidad`) mientras está costeando — es el punto natural para ajustar
+  // la solicitud tras un rechazo del cliente (docs/13).
+  const canEditFullInfo =
+    (isKam && req.kam === user.name && req.status === "nueva") ||
+    (role === "lider-producto" && req.productLeader === user.name && req.status === "en-costeo");
   const fullInfoCompleteness = getFullInfoCompleteness(req);
   const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
   const emptyFullInfoDraft = {
@@ -297,21 +309,33 @@ export default function RequestDetail() {
   const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
   const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
 
+  // Historial de negociación (docs/12): la ronda que se abriría al confirmar
+  // "Enviar a KAM" y la última devolución del cliente, para dar contexto en
+  // el diálogo sin que el Líder tenga que ir a buscarla al historial.
+  const negotiationRounds: NegotiationRound[] = req.negotiationRounds ?? [];
+  // Si ya hay una ronda "pendiente" que nunca llegó a entregarse al cliente
+  // (el Líder la invalidó editando el costeo antes de que el KAM alcanzara a
+  // enviarla — ver ProposalCostingModule), reenviar debe actualizar esa misma
+  // ronda, no abrir una nueva: el cliente nunca llegó a ver ese número, así
+  // que no cuenta como una renegociación adicional.
+  const unsentPendingRound = negotiationRounds.find(
+    (round) => round.clientResponse === "pendiente" && !round.sentToClientAt
+  );
+  const nextRoundNumber = unsentPendingRound?.roundNumber ?? negotiationRounds.length + 1;
+  const lastRejectedRound = [...negotiationRounds]
+    .reverse()
+    .find((round) => round.clientResponse === "rechazada");
+
   const handleSaveAssignment = (
     professorName: string,
     type: "planta" | "externo",
     externalData?: ExternalProfessorData
   ) => {
+    // El indicador de "asesor externo" del costeo ya no es un campo propio:
+    // se deriva de `professorType`/`professor`/`externalProfessorData` (docs/13,
+    // gap #11), así que asignar el docente/asesor aquí ya deja todo consistente
+    // sin tocar `req.costing`.
     assignProfessorDetailed(req.id, professorName, type, externalData);
-    if (type === "externo") {
-      updateCosting(req.id, {
-        ...currentCosting,
-        requiresExternalAdvisor: true,
-        externalAdvisorDetails: externalData?.empresaConsultora
-          ? `${externalData.nombre} (${externalData.empresaConsultora})`
-          : externalData?.nombre,
-      });
-    }
   };
 
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
@@ -349,6 +373,68 @@ export default function RequestDetail() {
     setConfirmingAction(null);
   };
 
+  // Gate explícito del Líder de Producto antes de que el KAM pueda actuar
+  // (docs/11, Requisito 2): marca el costeo como enviado al KAM. Se
+  // construye a partir del costeo ya persistido (`req.costing`) para no
+  // pisar ningún campo — solo se cambia `readyForKam`.
+  // Además (docs/12) abre una nueva ronda de negociación con un snapshot del
+  // valor final vigente — `leaderNote` es obligatoria desde la ronda 2 y se
+  // valida en la UI del diálogo dedicado antes de poder confirmar.
+  const handleMarkReadyForKam = (leaderNote?: string) => {
+    if (!req.costing) return;
+    const now = new Date().toISOString();
+    let updatedRounds: NegotiationRound[];
+    if (unsentPendingRound) {
+      // Se actualiza en el mismo lugar del arreglo, conservando su id y
+      // roundNumber — sigue siendo la misma ronda, solo con el valor y la
+      // fecha de envío refrescados (y la nota, si el Líder escribió una nueva).
+      updatedRounds = negotiationRounds.map((round) =>
+        round.id === unsentPendingRound.id
+          ? {
+              ...round,
+              totalOfferedCop: req.costing!.totalOfferedCop,
+              marginAmountCop: req.costing!.marginAmountCop,
+              expectedMarginPercent: req.costing!.expectedMarginPercent,
+              leaderNote: leaderNote?.trim() || round.leaderNote,
+              sentToKamAt: now,
+              // Snapshot de alcance (docs/13): se toma de `req`, no de
+              // `req.costing`, y se refresca aunque la ronda ya existiera —
+              // el Líder pudo haber corregido el alcance antes de reenviar.
+              participantes: req.participantes,
+              modalidad: req.modalidad,
+              horas: req.horas,
+              type: req.type,
+              necesidad: req.necesidad,
+            }
+          : round
+      );
+    } else {
+      const roundNumber = negotiationRounds.length + 1;
+      const newRound: NegotiationRound = {
+        id: `${req.id}-r${roundNumber}`,
+        roundNumber,
+        totalOfferedCop: req.costing.totalOfferedCop,
+        marginAmountCop: req.costing.marginAmountCop,
+        expectedMarginPercent: req.costing.expectedMarginPercent,
+        leaderNote: leaderNote?.trim() || undefined,
+        sentToKamAt: now,
+        clientResponse: "pendiente",
+        // Snapshot de alcance vigente al momento del envío (docs/13).
+        participantes: req.participantes,
+        modalidad: req.modalidad,
+        horas: req.horas,
+        type: req.type,
+        necesidad: req.necesidad,
+      };
+      updatedRounds = [...negotiationRounds, newRound];
+    }
+    updateRequest(req.id, {
+      costing: { ...req.costing, readyForKam: true, costingSentAt: now },
+      negotiationRounds: updatedRounds,
+    });
+    toast.success("Costeo enviado al KAM");
+  };
+
   const handleSendToClient = () => {
     // Defensa adicional además del `disabled` del botón — por si el estado
     // cambia entre que se abre el diálogo de confirmación y se confirma.
@@ -357,9 +443,24 @@ export default function RequestDetail() {
       setConfirmingAction(null);
       return;
     }
+    if (!req.costing?.readyForKam) {
+      toast.error("El Líder de Producto aún no ha confirmado el envío del costeo");
+      setConfirmingAction(null);
+      return;
+    }
+    const now = new Date().toISOString();
+    // Cierra el envío de la ronda pendiente (debería ser la última) con la
+    // fecha de entrega efectiva al cliente (docs/12).
+    const updatedRounds = negotiationRounds.map((round) =>
+      round.clientResponse === "pendiente" ? { ...round, sentToClientAt: now } : round
+    );
     // Al reentregar (por ejemplo tras una devolución con observaciones) se
     // limpia la nota anterior — ya quedó resuelta en la nueva versión.
-    updateRequest(req.id, { status: "entregada", clientObservations: undefined });
+    updateRequest(req.id, {
+      status: "entregada",
+      clientObservations: undefined,
+      negotiationRounds: updatedRounds,
+    });
     toast.success("Propuesta enviada al cliente y marcada como Entregada");
     setConfirmingAction(null);
   };
@@ -376,9 +477,31 @@ export default function RequestDetail() {
   // Si el cliente pide ajustes tras la entrega, el KAM la devuelve a costeo
   // con una nota de observaciones para el Líder de Producto (docs/08, pregunta 13).
   const handleReturnWithObservations = () => {
+    const now = new Date().toISOString();
+    const trimmedObservations = returnObservations.trim() || undefined;
+    // Marca la ronda pendiente (debería ser la última) como rechazada con la
+    // observación del cliente (docs/12).
+    const updatedRounds = negotiationRounds.map((round) =>
+      round.clientResponse === "pendiente"
+        ? {
+            ...round,
+            clientResponse: "rechazada" as const,
+            clientObservation: trimmedObservations,
+            clientRespondedAt: now,
+          }
+        : round
+    );
     updateRequest(req.id, {
       status: "en-costeo",
-      clientObservations: returnObservations.trim() || undefined,
+      clientObservations: trimmedObservations,
+      negotiationRounds: updatedRounds,
+      // Bug encontrado en docs/12: al volver a "en-costeo" el gate del Líder
+      // (docs/11, Requisito 2) quedaba con `readyForKam`/`costingSentAt` del
+      // ciclo anterior, así que el botón "Enviar a cliente" del KAM se
+      // re-habilitaba antes de que el Líder tocara nada. Se resetea aquí.
+      costing: req.costing
+        ? { ...req.costing, readyForKam: false, costingSentAt: undefined }
+        : req.costing,
     });
     toast.success("Propuesta devuelta a costeo con las observaciones del cliente");
     setIsReturnModalOpen(false);
@@ -513,27 +636,55 @@ export default function RequestDetail() {
 
                   {/* El Líder de Producto ya no puede marcar "Entregada" directamente:
                       esa es la acción del KAM (envía al cliente). El trabajo del Líder
-                      termina en dejar el costeo listo — eso ya deja la solicitud visible
-                      para el KAM como "Lista para Entregar" (docs/08, pregunta 13). */}
-                  {req.status === "en-costeo" && hasValidCosting && (
+                      termina en confirmar explícitamente que el costeo está listo para
+                      que el KAM pueda actuar (docs/11, Requisito 2). */}
+                  {req.status === "en-costeo" && hasValidCosting && !req.costing?.readyForKam && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setSendToKamNote("");
+                        setIsSendToKamModalOpen(true);
+                      }}
+                      className="h-9 px-4 text-xs font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-xs"
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      Enviar a KAM
+                    </Button>
+                  )}
+
+                  {req.status === "en-costeo" && hasValidCosting && req.costing?.readyForKam && (
                     <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                      <Check className="h-3.5 w-3.5" /> Costeo listo — a la espera del KAM
+                      <Check className="h-3.5 w-3.5" />
+                      Enviado al KAM — a la espera de envío al cliente
+                      {req.costing.costingSentAt && (
+                        <span className="font-medium text-muted-foreground">
+                          (hace {formatDistanceToNow(new Date(req.costing.costingSentAt), { locale: es })})
+                        </span>
+                      )}
                     </div>
                   )}
 
+                  {/* Insignia sólida y propia — es el cierre del flujo, no un paso
+                      intermedio, así que no debe verse igual que "Enviado al KAM". */}
                   {req.status === "entregada" && (
-                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                      <Check className="h-3.5 w-3.5" /> Propuesta Entregada
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-[#4cb979] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm">
+                      <CheckCircle2 className="h-4 w-4" /> Propuesta Entregada
                     </div>
                   )}
                 </>
               ) : isKam && req.status === "en-costeo" ? (
                 <Button
                   size="sm"
-                  disabled={!hasValidCosting}
+                  disabled={!hasValidCosting || !req.costing?.readyForKam}
                   onClick={() => setConfirmingAction("entregada")}
                   className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                  title={hasValidCosting ? undefined : "El Líder de Producto aún no ha definido un valor real para esta propuesta"}
+                  title={
+                    !hasValidCosting
+                      ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
+                      : !req.costing?.readyForKam
+                      ? "El Líder de Producto aún no ha confirmado el envío del costeo"
+                      : undefined
+                  }
                 >
                   <Send className="h-3.5 w-3.5 mr-1.5" />
                   Enviar a cliente
@@ -686,6 +837,104 @@ export default function RequestDetail() {
               userRole={role}
               userName={user.name}
             />
+
+            {/* 3. HISTORIAL DE NEGOCIACIÓN (docs/12) — solo si ya hay más de un
+                envío al KAM; con una sola ronda en curso no hace falta mostrar
+                "historial". Visible para Líder y KAM. */}
+            {negotiationRounds.length > 0 && (
+              <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-6 shadow-xs space-y-4">
+                <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border dark:border-[#252838] pb-3">
+                  <History className="h-3.5 w-3.5" />
+                  Historial de Negociación
+                </h2>
+
+                <div className="space-y-3">
+                  {negotiationRounds.map((round, idx) => {
+                    const isCurrentRound =
+                      round.clientResponse === "pendiente" && idx === negotiationRounds.length - 1;
+                    const scopeDiffs = getScopeDiffs(round, negotiationRounds[idx - 1]);
+                    return (
+                      <div
+                        key={round.id}
+                        className={cn(
+                          "rounded-lg border p-3.5 text-xs space-y-2",
+                          isCurrentRound
+                            ? "border-[#5454e9]/40 bg-[#5454e9]/5 dark:bg-[#5454e9]/10"
+                            : "border-border dark:border-[#252838] bg-secondary/20 dark:bg-secondary/10"
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-foreground">
+                              Ronda {round.roundNumber}
+                            </span>
+                            <span className="font-mono font-semibold text-foreground">
+                              {formatCop(round.totalOfferedCop)}
+                            </span>
+                          </div>
+                          {isCurrentRound && (
+                            <span className="rounded-full bg-[#5454e9] px-2 py-0.5 text-[10px] font-bold text-white">
+                              Ronda vigente
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-muted-foreground">
+                          Enviada a KAM el {format(new Date(round.sentToKamAt), "d 'de' MMMM, yyyy", { locale: es })}
+                        </p>
+
+                        {round.sentToClientAt && (
+                          <p className="flex items-center gap-1.5 text-[#5454e9] dark:text-[#865cf0] font-medium">
+                            <Send className="h-3 w-3" />
+                            → entregada al cliente el {format(new Date(round.sentToClientAt), "d 'de' MMMM, yyyy", { locale: es })}
+                          </p>
+                        )}
+
+                        {round.clientResponse === "rechazada" && (
+                          <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-2.5 space-y-1">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                              <RotateCcw className="h-3 w-3" /> Devuelta por el cliente
+                            </span>
+                            {round.clientObservation && (
+                              <p className="text-amber-700 dark:text-amber-400 leading-relaxed">
+                                Cliente: "{round.clientObservation}"
+                              </p>
+                            )}
+                            {round.clientRespondedAt && (
+                              <p className="text-[11px] text-amber-600/80 dark:text-amber-500/70">
+                                Devuelta el {format(new Date(round.clientRespondedAt), "d 'de' MMMM, yyyy", { locale: es })}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {round.leaderNote && (
+                          <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            <span className="font-semibold text-foreground">Motivo del ajuste: </span>
+                            "{round.leaderNote}"
+                          </p>
+                        )}
+
+                        {scopeDiffs.length > 0 && (
+                          <div className="rounded-lg border border-border dark:border-[#252838] bg-secondary/30 dark:bg-secondary/10 p-2.5 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Cambios de alcance frente a la ronda anterior
+                            </span>
+                            <ul className="space-y-0.5">
+                              {scopeDiffs.map((diff) => (
+                                <li key={diff} className="text-foreground leading-relaxed break-words">
+                                  {diff}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ======================================================================= */}
@@ -1122,7 +1371,9 @@ export default function RequestDetail() {
               Editar información de la solicitud
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".
+              {isKam
+                ? 'Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".'
+                : 'Corrige el alcance de la solicitud (por ejemplo la necesidad del cliente) mientras esté "En proceso de costeo".'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1439,6 +1690,88 @@ export default function RequestDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal dedicado: Enviar a KAM (docs/12) — el diálogo genérico
+          CONFIRM_ACTION_META no admite un campo de texto condicional, así
+          que esta acción se sacó de ese patrón. Desde la ronda 2 exige una
+          nota del motivo del ajuste y muestra la observación del cliente de
+          la ronda anterior como contexto. */}
+      <Dialog
+        open={isSendToKamModalOpen}
+        onOpenChange={(open) => {
+          setIsSendToKamModalOpen(open);
+          if (!open) setSendToKamNote("");
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">
+              {nextRoundNumber === 1
+                ? '¿Enviar el costeo al KAM?'
+                : `¿Enviar el ajuste al KAM? (Ronda ${nextRoundNumber})`}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Confirma que el valor final de la propuesta ya está listo. El KAM podrá enviarla al cliente a partir de este momento.
+            </DialogDescription>
+          </DialogHeader>
+
+          {nextRoundNumber > 1 && (
+            <div className="space-y-3 py-1">
+              {lastRejectedRound?.clientObservation && (
+                <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3 flex items-start gap-2.5">
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5 min-w-0">
+                    <p className="text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      El cliente devolvió la ronda {lastRejectedRound.roundNumber} con esta observación:
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed whitespace-pre-wrap">
+                      "{lastRejectedRound.clientObservation}"
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="send-to-kam-note" className="text-xs font-semibold text-foreground">
+                  Motivo del ajuste *
+                </Label>
+                <Textarea
+                  id="send-to-kam-note"
+                  rows={3}
+                  placeholder="Explica qué cambió frente a la propuesta anterior..."
+                  value={sendToKamNote}
+                  onChange={(e) => setSendToKamNote(e.target.value)}
+                  className="text-xs resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSendToKamModalOpen(false)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={nextRoundNumber > 1 && !sendToKamNote.trim()}
+              onClick={() => {
+                handleMarkReadyForKam(nextRoundNumber > 1 ? sendToKamNote : undefined);
+                setIsSendToKamModalOpen(false);
+                setSendToKamNote("");
+              }}
+              className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white disabled:opacity-50"
+            >
+              Sí, enviar al KAM
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Confirmación de avance de estado — evita que un clic accidental
           (o varios seguidos) cambie el estado o mande la propuesta al cliente. */}
       <Dialog open={!!confirmingAction} onOpenChange={(open) => !open && setConfirmingAction(null)}>
@@ -1501,6 +1834,31 @@ function getFullInfoCompleteness(req: RequestItem): { filled: number; total: num
   }
 
   return { filled, total };
+}
+
+// Campos de alcance que cada ronda de negociación congela (docs/13) — si
+// alguno cambió respecto a la ronda anterior, el historial lo muestra como
+// parte del resumen de la ronda ("Participantes: 15-20 → 9-12"). La ronda 1
+// nunca tiene con qué compararse, así que no muestra diffs.
+const SCOPE_DIFF_FIELDS: { key: keyof NegotiationRound; label: string }[] = [
+  { key: "participantes", label: "Participantes" },
+  { key: "modalidad", label: "Modalidad" },
+  { key: "horas", label: "Horas" },
+  { key: "type", label: "Tipo de servicio" },
+  { key: "necesidad", label: "Necesidad" },
+];
+
+function getScopeDiffs(round: NegotiationRound, previousRound?: NegotiationRound): string[] {
+  if (!previousRound) return [];
+  const diffs: string[] = [];
+  for (const { key, label } of SCOPE_DIFF_FIELDS) {
+    const prevValue = previousRound[key];
+    const newValue = round[key];
+    if (prevValue !== undefined && newValue !== undefined && prevValue !== newValue) {
+      diffs.push(`${label}: ${prevValue} → ${newValue}`);
+    }
+  }
+  return diffs;
 }
 
 function EditableField({
