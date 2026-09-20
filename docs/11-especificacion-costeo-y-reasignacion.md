@@ -74,6 +74,28 @@ La opción "Reasignar" solo existe cuando `status === "nueva"`, duplicada en `Re
 
 ---
 
+## Requisito 4 — Filtro "Esperando al KAM" en el tablero del Líder de Producto
+
+### Origen
+No viene de los audios de Dianis — surgió al probar en vivo el Requisito 2 (gate a KAM): Tomás preguntó si las solicitudes que ya se enviaron al KAM desaparecían del tablero del Líder o si había forma de consultarlas.
+
+### Estado verificado tras implementar el Requisito 2
+No desaparecen: mientras el KAM no las entregue al cliente, `status` sigue siendo `"en-costeo"`, así que la tarjeta se queda en la columna "En Costeo" del Kanban (y en esa misma fila en la vista Tabla). Lo único que cambia es el contenido de la tarjeta (botón "Enviar a KAM" vs. insignia "Listo para el KAM"). Pero no existía ningún filtro/contador que separara, dentro de esa misma etapa, "todavía tengo que trabajar esto" de "ya lo confirmé, solo espero al KAM" — ambos casos se cuentan juntos y hay que revisar tarjeta por tarjeta para distinguirlos.
+
+### Decisión validada
+Agregar un filtro tipo toggle (mismo patrón visual y de persistencia que el toggle existente "Sin docente"), que muestre solo las solicitudes con `status === "en-costeo" && costing.readyForKam === true`, aplicable tanto en la vista Kanban como en la vista Tabla del tablero del Líder de Producto.
+
+### Checklist de implementación
+- [x] Nuevo estado persistido `onlyWaitingForKam` en `ProductLeaderDashboard.tsx` (mismo mecanismo `usePersistentState` que `onlyMissingProfessor`).
+- [x] Contador `waitingForKamCount` sobre `activeDataset`.
+- [x] Aplicar el filtro tanto en `filteredRequests` (vista Tabla) como en `kanbanRequests` (vista Kanban).
+- [x] Botón toggle "Esperando al KAM (N)" junto al botón existente "Sin docente (N)", mismo estilo visual.
+- [x] Actualizar los mensajes de "sin resultados" (Kanban y Tabla) y los botones "Quitar filtros" para que también limpien este filtro nuevo.
+
+**Nota:** implementado directamente como commit adicional sobre `feature/gate-envio-kam` (depende de `costing.readyForKam`, introducido en ese mismo requisito) — no requirió una rama propia por ser una extensión pequeña y directamente derivada de esa misma funcionalidad.
+
+---
+
 ## Orden sugerido de implementación
 1. Requisito 3 (reasignación) — es el más autocontenido y no depende de los otros dos.
 2. Requisito 1 (costeo) — resolver primero los ⚠️ puntos pendientes con Dianis.
