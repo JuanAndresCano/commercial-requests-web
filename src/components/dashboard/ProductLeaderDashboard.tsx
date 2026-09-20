@@ -36,6 +36,7 @@ import {
   STATUS_META,
   formatCop,
   formatCompactCop,
+  isReadyForKamHandoff,
   type RequestItem,
   type RequestStatus,
 } from "@/lib/mock-data";
@@ -246,9 +247,7 @@ export function ProductLeaderDashboard({
   );
 
   const sinDocenteCount = activeDataset.filter((r) => !r.professor && r.status !== "entregada").length;
-  const waitingForKamCount = activeDataset.filter(
-    (r) => r.status === "en-costeo" && r.costing?.readyForKam
-  ).length;
+  const waitingForKamCount = activeDataset.filter(isReadyForKamHandoff).length;
 
   // Métricas agregadas (no son una etapa del pipeline) — mismo cálculo que ya
   // usa el KAM, para que ambos tableros hablen del pipeline en los mismos términos.
@@ -262,7 +261,7 @@ export function ProductLeaderDashboard({
     return activeDataset.filter((r) => {
       if (activeStageFilter !== "todas" && r.status !== activeStageFilter) return false;
       if (onlyMissingProfessor && (r.professor || r.status === "entregada")) return false;
-      if (onlyWaitingForKam && !(r.status === "en-costeo" && r.costing?.readyForKam)) return false;
+      if (onlyWaitingForKam && !isReadyForKamHandoff(r)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -285,7 +284,7 @@ export function ProductLeaderDashboard({
   const kanbanRequests = useMemo(() => {
     return activeDataset.filter((r) => {
       if (onlyMissingProfessor && (r.professor || r.status === "entregada")) return false;
-      if (onlyWaitingForKam && !(r.status === "en-costeo" && r.costing?.readyForKam)) return false;
+      if (onlyWaitingForKam && !isReadyForKamHandoff(r)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -710,7 +709,7 @@ export function ProductLeaderDashboard({
                             </Link>
                           </Button>
                         )}
-                        {stage.id === "en-costeo" && hasRealCosting && !req.costing?.readyForKam && (
+                        {stage.id === "en-costeo" && hasRealCosting && !isReadyForKamHandoff(req) && (
                           <Button
                             asChild
                             size="sm"
@@ -722,7 +721,7 @@ export function ProductLeaderDashboard({
                             </Link>
                           </Button>
                         )}
-                        {stage.id === "en-costeo" && hasRealCosting && req.costing?.readyForKam && (
+                        {stage.id === "en-costeo" && hasRealCosting && isReadyForKamHandoff(req) && (
                           <span
                             className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]"
                             title="Ya confirmaste el costeo; ahora depende del KAM enviarlo al cliente"

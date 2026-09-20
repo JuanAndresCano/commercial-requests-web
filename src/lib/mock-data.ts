@@ -1573,6 +1573,18 @@ export const URGENCY_META: Record<Urgency, { label: string; tone: string }> = {
   baja: { label: "Baja", tone: "text-muted-foreground bg-muted border-border" },
 };
 
+// Fuente única de verdad para "¿de quién es el turno dentro de En Costeo?".
+// `status === "en-costeo"` no alcanza: desde que el Líder de Producto debe
+// confirmar explícitamente el envío (docs/11, Requisito 2), una solicitud
+// puede estar en esa etapa sin que el KAM tenga nada que hacer todavía.
+// Cualquier tablero que muestre "lista para el KAM" / "lista para entregar"
+// debe pasar por aquí en vez de repetir la condición — así no se repite el
+// olvido que causó que el tablero del KAM mostrara "Lista para Entregar"
+// sobre solicitudes que el Líder ni siquiera había confirmado.
+export function isReadyForKamHandoff(req: Pick<RequestItem, "status" | "costing">): boolean {
+  return req.status === "en-costeo" && !!req.costing?.readyForKam;
+}
+
 export function formatCop(amount: number) {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(amount);
 }
