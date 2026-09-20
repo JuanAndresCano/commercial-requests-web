@@ -137,6 +137,16 @@ export default function RequestDetail() {
     setIsEditingSpecs(true);
   };
 
+  // Estos campos quedan congelados en cada ronda del Historial de Negociación
+  // (docs/04) igual que el valor final y el margen — si ya se confirmó
+  // "Enviar a KAM" y el Líder corrige alguno después, el gate debe
+  // invalidarse igual que cuando se edita el precio, para que el KAM no
+  // entregue un alcance distinto al que el Líder confirmó por última vez.
+  const invalidateReadyForKamIfNeeded = (): Partial<RequestItem> =>
+    req.costing?.readyForKam
+      ? { costing: { ...req.costing, readyForKam: false, costingSentAt: undefined } }
+      : {};
+
   const handleSaveSpecs = () => {
     updateRequest(req.id, {
       horas: specsDraft.horas || undefined,
@@ -145,6 +155,7 @@ export default function RequestDetail() {
       type: (specsDraft.type || req.type) as RequestType,
       tipoOtro: specsDraft.type === "Otro" ? specsDraft.tipoOtro.trim() || undefined : undefined,
       deadline: specsDraft.deadline || undefined,
+      ...invalidateReadyForKamIfNeeded(),
     });
     setIsEditingSpecs(false);
     toast.success("Especificaciones del servicio actualizadas");
@@ -281,6 +292,12 @@ export default function RequestDetail() {
       title: fullInfoDraft.title.trim(),
       formacionPrevia: fullInfoDraft.formacionPrevia || undefined,
       fullInfoUpdatedAt: new Date().toISOString(),
+      // Cuando lo edita el Líder (tras un rechazo, ver docs/03 B.7) puede
+      // afectar `necesidad`, que también queda congelada por ronda — mismo
+      // tratamiento que editar el precio. Para el KAM en "Nueva" esto nunca
+      // aplica (`req.costing` todavía no existe), así que no hace falta
+      // condicionar por rol aquí.
+      ...invalidateReadyForKamIfNeeded(),
     });
     setIsEditingFullInfo(false);
     toast.success("Información de la solicitud actualizada");
@@ -306,19 +323,15 @@ export default function RequestDetail() {
   const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
   const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
 
-  // Historial de negociación (docs/03): la ronda que se abriría al confirmar
-  // "Enviar a KAM" y la última devolución del cliente, para dar contexto en
-  // el diálogo sin que el Líder tenga que ir a buscarla al historial.
+  // Historial de negociación (docs/03/04): cada confirmación de "Enviar a
+  // KAM" abre una ronda nueva, sin excepción — aunque la anterior nunca haya
+  // llegado a entregarse al cliente. Antes se reutilizaba la ronda "pendiente
+  // sin entregar" para no dejar rondas huérfanas, pero probando en vivo
+  // (Tomás) quedó claro que el Líder espera ver un número de ronda por cada
+  // vez que confirma un envío, no solo por cada rechazo real del cliente —
+  // es la trazabilidad de cada intento, no solo de los que el cliente vio.
   const negotiationRounds: NegotiationRound[] = req.negotiationRounds ?? [];
-  // Si ya hay una ronda "pendiente" que nunca llegó a entregarse al cliente
-  // (el Líder la invalidó editando el costeo antes de que el KAM alcanzara a
-  // enviarla — ver ProposalCostingModule), reenviar debe actualizar esa misma
-  // ronda, no abrir una nueva: el cliente nunca llegó a ver ese número, así
-  // que no cuenta como una renegociación adicional.
-  const unsentPendingRound = negotiationRounds.find(
-    (round) => round.clientResponse === "pendiente" && !round.sentToClientAt
-  );
-  const nextRoundNumber = unsentPendingRound?.roundNumber ?? negotiationRounds.length + 1;
+  const nextRoundNumber = negotiationRounds.length + 1;
   const lastRejectedRound = [...negotiationRounds]
     .reverse()
     .find((round) => round.clientResponse === "rechazada");
@@ -375,54 +388,26 @@ export default function RequestDetail() {
   const handleMarkReadyForKam = (leaderNote?: string) => {
     if (!req.costing) return;
     const now = new Date().toISOString();
-    let updatedRounds: NegotiationRound[];
-    if (unsentPendingRound) {
-      // Se actualiza en el mismo lugar del arreglo, conservando su id y
-      // roundNumber — sigue siendo la misma ronda, solo con el valor y la
-      // fecha de envío refrescados (y la nota, si el Líder escribió una nueva).
-      updatedRounds = negotiationRounds.map((round) =>
-        round.id === unsentPendingRound.id
-          ? {
-              ...round,
-              totalOfferedCop: req.costing!.totalOfferedCop,
-              marginAmountCop: req.costing!.marginAmountCop,
-              expectedMarginPercent: req.costing!.expectedMarginPercent,
-              leaderNote: leaderNote?.trim() || round.leaderNote,
-              sentToKamAt: now,
-              // Snapshot de alcance (docs/04): se toma de `req`, no de
-              // `req.costing`, y se refresca aunque la ronda ya existiera —
-              // el Líder pudo haber corregido el alcance antes de reenviar.
-              participantes: req.participantes,
-              modalidad: req.modalidad,
-              horas: req.horas,
-              type: req.type,
-              necesidad: req.necesidad,
-            }
-          : round
-      );
-    } else {
-      const roundNumber = negotiationRounds.length + 1;
-      const newRound: NegotiationRound = {
-        id: `${req.id}-r${roundNumber}`,
-        roundNumber,
-        totalOfferedCop: req.costing.totalOfferedCop,
-        marginAmountCop: req.costing.marginAmountCop,
-        expectedMarginPercent: req.costing.expectedMarginPercent,
-        leaderNote: leaderNote?.trim() || undefined,
-        sentToKamAt: now,
-        clientResponse: "pendiente",
-        // Snapshot de alcance vigente al momento del envío (docs/04).
-        participantes: req.participantes,
-        modalidad: req.modalidad,
-        horas: req.horas,
-        type: req.type,
-        necesidad: req.necesidad,
-      };
-      updatedRounds = [...negotiationRounds, newRound];
-    }
+    const roundNumber = negotiationRounds.length + 1;
+    const newRound: NegotiationRound = {
+      id: `${req.id}-r${roundNumber}`,
+      roundNumber,
+      totalOfferedCop: req.costing.totalOfferedCop,
+      marginAmountCop: req.costing.marginAmountCop,
+      expectedMarginPercent: req.costing.expectedMarginPercent,
+      leaderNote: leaderNote?.trim() || undefined,
+      sentToKamAt: now,
+      clientResponse: "pendiente",
+      // Snapshot de alcance vigente al momento del envío (docs/04).
+      participantes: req.participantes,
+      modalidad: req.modalidad,
+      horas: req.horas,
+      type: req.type,
+      necesidad: req.necesidad,
+    };
     updateRequest(req.id, {
       costing: { ...req.costing, readyForKam: true, costingSentAt: now },
-      negotiationRounds: updatedRounds,
+      negotiationRounds: [...negotiationRounds, newRound],
     });
     toast.success("Costeo enviado al KAM");
   };
@@ -441,10 +426,16 @@ export default function RequestDetail() {
       return;
     }
     const now = new Date().toISOString();
-    // Cierra el envío de la ronda pendiente (debería ser la última) con la
-    // fecha de entrega efectiva al cliente (docs/04).
-    const updatedRounds = negotiationRounds.map((round) =>
-      round.clientResponse === "pendiente" ? { ...round, sentToClientAt: now } : round
+    // Cierra el envío de la ronda vigente (la última del arreglo) con la
+    // fecha de entrega efectiva al cliente (docs/04). Ahora que cada "Enviar
+    // a KAM" siempre abre una ronda nueva, puede haber más de una ronda
+    // "pendiente" en el historial (las que se reemplazaron sin llegar a
+    // entregarse) — filtrar solo por clientResponse marcaría todas a la vez.
+    const lastRoundIndex = negotiationRounds.length - 1;
+    const updatedRounds = negotiationRounds.map((round, idx) =>
+      idx === lastRoundIndex && round.clientResponse === "pendiente"
+        ? { ...round, sentToClientAt: now }
+        : round
     );
     // Al reentregar (por ejemplo tras una devolución con observaciones) se
     // limpia la nota anterior — ya quedó resuelta en la nueva versión.
@@ -471,10 +462,13 @@ export default function RequestDetail() {
   const handleReturnWithObservations = () => {
     const now = new Date().toISOString();
     const trimmedObservations = returnObservations.trim() || undefined;
-    // Marca la ronda pendiente (debería ser la última) como rechazada con la
-    // observación del cliente (docs/04).
-    const updatedRounds = negotiationRounds.map((round) =>
-      round.clientResponse === "pendiente"
+    // Marca la ronda vigente (la última) como rechazada con la observación
+    // del cliente (docs/04) — ver nota arriba sobre por qué no basta filtrar
+    // solo por `clientResponse === "pendiente"` desde que puede haber más de
+    // una ronda pendiente en el historial.
+    const lastRoundIndex = negotiationRounds.length - 1;
+    const updatedRounds = negotiationRounds.map((round, idx) =>
+      idx === lastRoundIndex && round.clientResponse === "pendiente"
         ? {
             ...round,
             clientResponse: "rechazada" as const,
@@ -917,6 +911,16 @@ export default function RequestDetail() {
                           <p className="flex items-center gap-1.5 text-[#5454e9] dark:text-[#865cf0] font-medium">
                             <Send className="h-3 w-3" />
                             → entregada al cliente el {format(new Date(round.sentToClientAt), "d 'de' MMMM, yyyy", { locale: es })}
+                          </p>
+                        )}
+
+                        {/* Ronda "pendiente" pero ya no es la vigente: el Líder
+                            la reemplazó con un envío más reciente antes de que
+                            el KAM alcanzara a entregarla — no quedó rechazada
+                            por el cliente, simplemente se abandonó. */}
+                        {round.clientResponse === "pendiente" && !isCurrentRound && (
+                          <p className="text-muted-foreground italic">
+                            Reemplazada por una ronda posterior antes de llegar a entregarse al cliente.
                           </p>
                         )}
 

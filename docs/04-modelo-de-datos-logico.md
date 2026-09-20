@@ -210,9 +210,12 @@ interface NegotiationRound {
 ```
 
 **Ciclo de vida de una ronda:**
-1. El Líder confirma "Enviar a KAM" → se abre una ronda `"pendiente"` con el snapshot vigente. **Si el Líder invalida el envío editando el costeo antes de que el KAM alcance a entregarlo** (`sentToClientAt` nunca se llegó a fijar), reenviar **actualiza esa misma ronda** en vez de abrir una nueva — el cliente nunca llegó a ver ese número, así que no cuenta como una renegociación.
-2. El KAM entrega al cliente (`status → entregada`) → esa ronda recibe `sentToClientAt`.
-3. Si el cliente rechaza (KAM usa "Devolver con observaciones") → esa ronda pasa a `"rechazada"` con `clientObservation` y `clientRespondedAt`. Recién aquí, la siguiente vez que el Líder confirme "Enviar a KAM", sí se abre una ronda nueva (`roundNumber + 1`), y la UI exige un `leaderNote` explicando el ajuste.
+1. **Cada confirmación de "Enviar a KAM" abre una ronda nueva, sin excepción** — con el snapshot vigente del costeo y el alcance, `clientResponse: "pendiente"`. No importa si la ronda anterior nunca llegó a entregarse al cliente: cada clic de confirmación es su propio número de ronda. (Versión anterior de esta regla: se reutilizaba la ronda si nunca se había entregado, para "no dejar rondas huérfanas" — se revirtió el 2026-09-20 tras probarlo en vivo: el Líder espera ver un número de ronda por cada envío que confirma, no solo por cada rechazo real del cliente.)
+2. El KAM entrega al cliente (`status → entregada`) → la **ronda vigente** (la última del arreglo) recibe `sentToClientAt`.
+3. Si el cliente rechaza (KAM usa "Devolver con observaciones") → la ronda vigente pasa a `"rechazada"` con `clientObservation` y `clientRespondedAt`.
+4. Como puede haber varias rondas `"pendiente"` en el historial (las que el Líder reemplazó con un envío más reciente antes de que el KAM llegara a entregarlas), los pasos 2 y 3 identifican la ronda a modificar **por posición (la última del arreglo), no solo por `clientResponse === "pendiente"`** — de lo contrario se marcarían todas las pendientes a la vez. Las rondas pendientes que no son la última se muestran en el Historial como "reemplazada por una ronda posterior", no como rechazadas.
+5. La UI exige un `leaderNote` desde la ronda 2 en adelante, sin excepción — explicando qué cambió frente a la ronda anterior.
+6. **Cualquier edición posterior a la confirmación** — no solo del valor final o el margen, también de los campos que cada ronda congela (`participantes`, `modalidad`, `horas`, `type`, `necesidad`, vía "Especificaciones del Servicio" o "Información completa de la solicitud") — invalida `readyForKam` igual que editar el precio. Antes solo el precio invalidaba el gate, dejando que el alcance cambiara sin que el KAM se enterara de que la propuesta que iba a entregar ya no era la que el Líder confirmó por última vez.
 
 ## `ClientContact` (contacto adicional de la empresa cliente)
 
