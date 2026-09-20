@@ -50,6 +50,20 @@ Se agrega un **gate formal**: el Líder debe confirmar explícitamente que el co
 - [ ] **Regla de invalidación:** si el Líder edita cualquier campo del costeo (`baseCostCop`/valor final, margen %, margen $) después de haber marcado `readyForKam = true`, ese flag debe volver a `false` automáticamente — para que el KAM no actúe sobre cifras que el Líder ya está corrigiendo. Implementar dentro del `triggerSave(...)` de `ProposalCostingModule.tsx`.
 - [ ] Verificar si `ProductLeaderDashboard.tsx` (vista Kanban) también necesita esta acción o si basta con tenerla en el detalle (`RequestDetail.tsx`).
 
+### Addendum (2026-09-20) — Bug encontrado en el tablero del KAM + decisión de arquitectura
+
+Al probar el gate en vivo, Tomás preguntó si convenía crear un **5to estado formal** en el pipeline (ej. `"esperando-kam"`) para las solicitudes ya enviadas, en vez de dejarlo como un flag dentro de `"en-costeo"` — sobre todo pensando en qué pasa si se acumulan muchas.
+
+**Bug real encontrado durante el análisis:** `KamCommandCenter.tsx` (tablero del KAM, no tocado por el checklist original de este Requisito) etiquetaba la columna/KPI `"en-costeo"` completa como **"Lista para Entregar"** y resaltaba en verde (`isReady = r.status === "en-costeo"`) cualquier solicitud en esa etapa, **sin revisar `readyForKam`**. Es decir: el KAM veía como "lista para entregar" una propuesta que el Líder todavía estaba costeando y ni siquiera había confirmado.
+
+**Decisión validada:** no crear un 5to estado real en `RequestStatus` (se descartó por alto costo/blast radius: la revisé y `RequestStatus` aparece en 11 archivos — 3 tableros con Kanban duplicado, `STATUS_META`, `StatusBadge.tsx`, `kanban-theme.ts`, además de toda la lógica de transición — y reabriría este mismo Requisito recién construido). En su lugar, **"Opción C": un predicado derivado compartido**, sin tocar el modelo de datos:
+
+- [x] `isReadyForKamHandoff(req)` en `src/lib/mock-data.ts` — única fuente de verdad para "¿ya puede el KAM actuar?" (`status === "en-costeo" && !!costing?.readyForKam`).
+- [x] `KamCommandCenter.tsx`: `isReady` (tabla) ahora usa este helper — corrige el resaltado verde, el badge "Lista para entregar", el texto "Costeo aprobado" y el botón de acción destacado, todos derivados de la misma variable. Se agregó un badge neutro "En Costeo" para el caso `en-costeo && !readyForKam` (antes quedaba en blanco). El contador `listasParaEntregarCount` (y el aviso "¡Tienes N propuestas listas para entregar!") ahora solo cuenta las confirmadas.
+- [x] `ProductLeaderDashboard.tsx`: los chequeos sueltos de `readyForKam` (filtro "Esperando al KAM", badges del Kanban) migrados al mismo helper, para que no se repita el tipo de olvido que causó el bug del tablero del KAM.
+- [ ] **No se tocó** el título de columna "Lista para Entregar" en `KamCommandCenter.tsx` (es copia de negocio validada con Dianis, ver `docs/08`, pregunta 2) — sigue siendo el nombre de la columna/bucket por estado real, aunque ya no todas las tarjetas dentro de ella se marquen individualmente como "listas". Si el volumen de solicitudes "en costeo sin confirmar" crece y esto genera confusión real, revalidar el nombre de la columna con Dianis en ese momento — no antes.
+- **Si más adelante el volumen de solicitudes acumuladas "esperando al KAM" resulta ser alto en operación real**, reconsiderar promover esto a un 5to estado formal (Opción B) — en ese momento el costo de la migración se paga una sola vez con datos reales de uso, en vez de anticiparlo ahora sin evidencia.
+
 ---
 
 ## Requisito 3 — Reasignar a otro líder desde la etapa "En Experto"
