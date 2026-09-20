@@ -86,8 +86,8 @@ Aterriza en su Kanban de 4 columnas (vista por defecto, a diferencia del KAM que
 
 ### B.3 — Triage de una solicitud nueva
 1. En la columna **"Nueva"**, cada tarjeta muestra si tiene o no docente asignado ("Sin docente" en naranja si no), su antigüedad en la fase, y la fecha límite coloreada si está por vencer o vencida.
-2. Clic en la tarjeta → `/solicitudes/:id`.
-3. En la columna lateral "Equipo Asignado" → sección "Docente / Asesor" → botón **"Asignar"** abre `AdvisorAssignmentModal`.
+2. Clic en la tarjeta → `/solicitudes/:id`. Si todavía no hay docente asignado, arriba de todo en la columna principal aparece un aviso explícito **"Siguiente paso: asigna un docente o asesor"** con un botón "Asignar ahora" que abre el modal directo, sin tener que subir a la cabecera a buscar el botón deshabilitado (antes la única pista era un tooltip sobre ese botón, invisible para alguien nuevo en la app).
+3. Ese mismo botón, o el de "Asignar"/"Cambiar" en la columna lateral "Equipo Asignado" → sección "Docente / Asesor", abren `AdvisorAssignmentModal`.
 4. En el modal, dos pestañas:
    - **Profesor de Planta**: selecciona de una lista cerrada de facultad interna (`ICESI_FACULTY`), con vista previa de departamento.
    - **Consultor/Docente Externo**: formulario completo (nombre obligatorio; identificación, firma consultora, correo, teléfono, perfil opcionales). El costeo (B.4) refleja automáticamente que el asesor es externo — ya no es un switch independiente que se pueda desincronizar, es un indicador derivado directamente de esta asignación (el valor de sus honorarios sigue sin registrarse en la plataforma — va en el documento de costeo externo, confirmado con Dianis).

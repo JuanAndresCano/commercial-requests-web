@@ -9,7 +9,6 @@ import {
   Clock,
   Layers,
   Calendar,
-  Save,
   Send,
   Phone,
   Mail,
@@ -59,7 +58,6 @@ import {
   ProposalCosting,
   ProposalDocument,
   ExternalProfessorData,
-  calculateCosting,
   REQUEST_TYPES,
   URGENCY_META,
   type RequestType,
@@ -305,11 +303,6 @@ export default function RequestDetail() {
     setIsReassignModalOpen(false);
   };
 
-  // Borrador vacío solo para alimentar el formulario de costeo del Líder de
-  // Producto — nunca se muestra como si fuera un valor ya definido.
-  const currentCosting: ProposalCosting =
-    req.costing ?? calculateCosting(req.type, 0, 30);
-
   const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
   const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
 
@@ -352,11 +345,6 @@ export default function RequestDetail() {
 
   const handleRemoveDocument = (docId: string, category: "client_kam" | "internal_costing") => {
     removeDocument(req.id, docId, category);
-  };
-
-  const handleSaveChanges = () => {
-    updateCosting(req.id, currentCosting);
-    toast.success("Cambios guardados correctamente");
   };
 
   // Avanzar de estado (y sobre todo "marcar entregada") es una acción con
@@ -604,16 +592,6 @@ export default function RequestDetail() {
             <div className="flex flex-wrap items-center gap-2.5 pt-1 lg:pt-0 shrink-0">
               {role === "lider-producto" ? (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSaveChanges}
-                    className="h-9 px-3 text-xs font-medium border-border hover:bg-secondary text-foreground"
-                  >
-                    <Save className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                    Guardar Cambios
-                  </Button>
-
                   {req.status === "nueva" && (
                     <Button
                       size="sm"
@@ -731,6 +709,36 @@ export default function RequestDetail() {
           {/* 🅰️ COLUMNA PRINCIPAL (Izquierda ~65% - Flujo de Trabajo) */}
           {/* ======================================================================= */}
           <div className="lg:col-span-8 space-y-6">
+            {/* Guía explícita del siguiente paso — antes el único indicio de que
+               hacía falta un docente era un tooltip sobre un botón deshabilitado
+               en la cabecera (invisible para alguien nuevo en la app, y que
+               obligaba a subir el scroll desde "Equipo Asignado"). El botón de
+               aquí abre el modal directo, sin necesidad de desplazarse. */}
+            {role === "lider-producto" && req.status === "nueva" && !req.professor && (
+              <div className="flex flex-col gap-3 rounded-xl border border-[#5454e9]/30 bg-[#5454e9]/10 dark:bg-[#5454e9]/15 p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3.5 sm:items-center">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5454e9] text-white">
+                    <UserCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-foreground">
+                      Siguiente paso: asigna un docente o asesor
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Necesitas asignar un docente de planta o un asesor externo antes de poder avanzar a "En Experto".
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => setIsAssignModalOpen(true)}
+                  className="shrink-0 self-start sm:self-auto bg-[#5454e9] hover:bg-[#4343d3] text-white"
+                >
+                  Asignar ahora
+                </Button>
+              </div>
+            )}
+
             {/* Observaciones del cliente tras una devolución — visibles para
                 ambos roles hasta que el Líder reentregue una versión corregida. */}
             {req.clientObservations && req.clientObservations.trim() && (
