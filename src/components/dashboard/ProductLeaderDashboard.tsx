@@ -723,8 +723,11 @@ export function ProductLeaderDashboard({
                           </Button>
                         )}
                         {stage.id === "en-costeo" && hasRealCosting && req.costing?.readyForKam && (
-                          <span className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]">
-                            <Check className="h-3 w-3" /> Listo para el KAM
+                          <span
+                            className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]"
+                            title="Ya confirmaste el costeo; ahora depende del KAM enviarlo al cliente"
+                          >
+                            <Check className="h-3 w-3" /> Enviado al KAM
                           </span>
                         )}
 
