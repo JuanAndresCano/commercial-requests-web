@@ -63,6 +63,7 @@ import { ProposalCostingModule } from "@/components/costing/ProposalCostingModul
 import { ProposalDocumentsSection } from "@/components/costing/ProposalDocumentsSection";
 import { ReassignLeaderDialog } from "@/components/ReassignLeaderDialog";
 import { useReassignRequest } from "@/hooks/use-reassign-request";
+import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
 import { toast } from "sonner";
 
 export default function RequestDetail() {
@@ -379,28 +380,8 @@ export default function RequestDetail() {
   // valida en la UI del diálogo dedicado antes de poder confirmar.
   const handleMarkReadyForKam = (leaderNote?: string) => {
     if (!req.costing) return;
-    const now = new Date().toISOString();
-    const roundNumber = negotiationRounds.length + 1;
-    const newRound: NegotiationRound = {
-      id: `${req.id}-r${roundNumber}`,
-      roundNumber,
-      totalOfferedCop: req.costing.totalOfferedCop,
-      marginAmountCop: req.costing.marginAmountCop,
-      expectedMarginPercent: req.costing.expectedMarginPercent,
-      leaderNote: leaderNote?.trim() || undefined,
-      sentToKamAt: now,
-      clientResponse: "pendiente",
-      // Snapshot de alcance vigente al momento del envío (docs/04).
-      participantes: req.participantes,
-      modalidad: req.modalidad,
-      horas: req.horas,
-      type: req.type,
-      necesidad: req.necesidad,
-    };
-    updateRequest(req.id, {
-      costing: { ...req.costing, readyForKam: true, costingSentAt: now },
-      negotiationRounds: [...negotiationRounds, newRound],
-    });
+    const { costing, negotiationRounds: updatedRounds } = openNegotiationRound(req, negotiationRounds, leaderNote);
+    updateRequest(req.id, { costing, negotiationRounds: updatedRounds });
     toast.success("Costeo enviado al KAM");
   };
 
@@ -417,16 +398,10 @@ export default function RequestDetail() {
       setConfirmingAction(null);
       return;
     }
-    const now = new Date().toISOString();
-    // Cierra el envío de la ronda vigente (la última del arreglo) con la
-    // fecha de entrega efectiva al cliente (docs/04). Ahora que cada "Enviar
-    // a KAM" siempre abre una ronda nueva, puede haber más de una ronda
-    // "pendiente" en el historial (las que se reemplazaron sin llegar a
-    // entregarse) — filtrar solo por clientResponse marcaría todas a la vez.
-    const lastRoundIndex = negotiationRounds.length - 1;
-    const updatedRounds = negotiationRounds.map((round, idx) =>
-      idx === lastRoundIndex && round.clientResponse === "pendiente" ? { ...round, sentToClientAt: now } : round,
-    );
+    // Cierra el envío de la ronda vigente con la fecha de entrega efectiva
+    // al cliente (docs/04) — ver `closeRoundForClientDelivery` sobre por qué
+    // no basta filtrar solo por `clientResponse`.
+    const updatedRounds = closeRoundForClientDelivery(negotiationRounds);
     // Al reentregar (por ejemplo tras una devolución con observaciones) se
     // limpia la nota anterior — ya quedó resuelta en la nueva versión.
     updateRequest(req.id, {
@@ -450,32 +425,20 @@ export default function RequestDetail() {
   // Si el cliente pide ajustes tras la entrega, el KAM la devuelve a costeo
   // con una nota de observaciones para el Líder de Producto (docs/08, pregunta 13).
   const handleReturnWithObservations = () => {
-    const now = new Date().toISOString();
     const trimmedObservations = returnObservations.trim() || undefined;
-    // Marca la ronda vigente (la última) como rechazada con la observación
-    // del cliente (docs/04) — ver nota arriba sobre por qué no basta filtrar
-    // solo por `clientResponse === "pendiente"` desde que puede haber más de
-    // una ronda pendiente en el historial.
-    const lastRoundIndex = negotiationRounds.length - 1;
-    const updatedRounds = negotiationRounds.map((round, idx) =>
-      idx === lastRoundIndex && round.clientResponse === "pendiente"
-        ? {
-            ...round,
-            clientResponse: "rechazada" as const,
-            clientObservation: trimmedObservations,
-            clientRespondedAt: now,
-          }
-        : round,
+    // Marca la ronda vigente como rechazada con la observación del cliente y
+    // resetea el gate del Líder (docs/04) — ver `rejectRoundWithObservations`
+    // sobre el bug que corrige ese reset.
+    const { negotiationRounds: updatedRounds, costing: updatedCosting } = rejectRoundWithObservations(
+      negotiationRounds,
+      req.costing,
+      trimmedObservations,
     );
     updateRequest(req.id, {
       status: "en-costeo",
       clientObservations: trimmedObservations,
       negotiationRounds: updatedRounds,
-      // Bug encontrado en docs/04: al volver a "en-costeo" el gate del Líder
-      // (docs/04) quedaba con `readyForKam`/`costingSentAt` del
-      // ciclo anterior, así que el botón "Enviar a cliente" del KAM se
-      // re-habilitaba antes de que el Líder tocara nada. Se resetea aquí.
-      costing: req.costing ? { ...req.costing, readyForKam: false, costingSentAt: undefined } : req.costing,
+      costing: updatedCosting,
     });
     toast.success("Propuesta devuelta a costeo con las observaciones del cliente");
     setIsReturnModalOpen(false);
