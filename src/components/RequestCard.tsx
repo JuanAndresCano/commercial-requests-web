@@ -23,6 +23,15 @@ export function RequestCard({ req, cta }: RequestCardProps) {
       to={`/solicitudes/${req.id}`}
       className="group block rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-2xs transition-all hover:border-[#5454e9]/40 hover:shadow-md dark:hover:bg-[#171926] overflow-hidden"
     >
+      {/* El cliente pidió ajustes — el KAM habla directo con el cliente, así
+          que necesita ver esta señal igual que el Líder de Producto. */}
+      {req.clientObservations && (
+        <div className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300/60 dark:border-amber-900/50 px-3.5 py-1.5">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
+        </div>
+      )}
+
       <div className="p-3.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
@@ -39,16 +48,6 @@ export function RequestCard({ req, cta }: RequestCardProps) {
         </div>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {/* El cliente pidió ajustes — el KAM habla directo con el cliente, así
-              que necesita ver esta señal igual que el Líder de Producto. Insignia
-              en línea (no un banner de ancho completo) para que todas las
-              tarjetas mantengan la misma estructura y proporción entre sí. */}
-          {req.clientObservations && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 dark:border-amber-900/50 bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              Cliente pidió ajustes
-            </span>
-          )}
           <UrgencyBadge urgency={req.urgency} />
           <span className="rounded-md border border-border dark:border-[#2b2d3d] bg-secondary/50 dark:bg-[#1c1e2b] px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
             {req.type}
