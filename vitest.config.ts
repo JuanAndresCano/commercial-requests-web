@@ -24,6 +24,7 @@ export default defineConfig({
       // that gain tests here and never lower an existing number.
       thresholds: {
         "src/lib/costing.ts": { lines: 90, functions: 90, branches: 90, statements: 90 },
+        "src/lib/negotiation.ts": { lines: 90, functions: 90, branches: 90, statements: 90 },
       },
     },
   },
