@@ -12,6 +12,15 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const THEME_KEY = "icesi_theme_mode";
 
+/** Theme to use until the user picks one: follows the OS preference, light when unknown. */
+export function systemTheme(): Theme {
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
     try {
@@ -19,10 +28,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (stored === "light" || stored === "dark") {
         return stored;
       }
-      // Default to dark mode
-      return "dark";
+      return systemTheme();
     } catch {
-      return "dark";
+      return systemTheme();
     }
   });
 

@@ -29,9 +29,9 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col antialiased selection:bg-[#5454e9] selection:text-white">
+    <div className="min-h-screen bg-background text-foreground flex flex-col antialiased selection:bg-primary selection:text-white">
       {/* Institutional Top Blue Band (Pantone 2131 C #5454e9) */}
-      <div className="h-1.5 w-full bg-[#5454e9] shrink-0" />
+      <div className="h-1.5 w-full bg-primary shrink-0" />
 
       <div className="flex flex-1 relative">
         {/* Desktop side menu: fixed, expandable with a button, keeps its state. */}
@@ -79,7 +79,7 @@ export function AppShell({ children }: AppShellProps) {
           )}
         >
           {/* Top Brand Application Bar */}
-          <header className="sticky top-0 z-20 border-b border-border dark:border-[#252838] bg-card/95 dark:bg-[#11121a]/95 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-3 transition-colors">
+          <header className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-3 transition-colors">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
               {/* Left: Mobile menu toggle + Logo + Current Context */}
               <div className="flex items-center gap-3">
@@ -95,7 +95,7 @@ export function AppShell({ children }: AppShellProps) {
                 <Link to="/dashboard" className="flex items-center gap-3 group">
                   <IcesiLogo variant="horizontal" size="sm" withDescriptor={true} />
                   <div className="hidden sm:flex flex-col border-l border-border pl-3">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-[#5454e9] dark:text-[#865cf0]">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-primary dark:text-icesi-purple">
                       Solicitudes Comerciales
                     </span>
                     <span className="text-[10px] text-muted-foreground">Dirección de Extensión y Consultoría</span>
@@ -104,15 +104,15 @@ export function AppShell({ children }: AppShellProps) {
               </div>
 
               {/* Right: active role (read-only — it comes from the session) */}
-              <div className="hidden sm:flex items-center gap-2 rounded-lg border border-border dark:border-[#2b2d3e] bg-secondary/60 dark:bg-[#1a1c28] px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs">
-                <span className="h-2 w-2 rounded-full bg-[#5454e9]" />
+              <div className="hidden sm:flex items-center gap-2 rounded-lg border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs">
+                <span className="h-2 w-2 rounded-full bg-primary" />
                 <span className="truncate max-w-[140px] md:max-w-[180px]">{activeRoleLabel}</span>
               </div>
             </div>
           </header>
 
           {/* Sub-header visual strip in vibrant Azul Icesi #5454e9 */}
-          <div className="bg-[#5454e9] text-white px-4 sm:px-6 lg:px-8 py-3 shadow-xs">
+          <div className="bg-primary text-primary-foreground px-4 sm:px-6 lg:px-8 py-3 shadow-xs">
             <div className="mx-auto max-w-7xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2">
                 <span className="font-bold tracking-wide">
@@ -136,7 +136,7 @@ export function AppShell({ children }: AppShellProps) {
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">{children}</main>
 
           {/* Official Footer with Brand Coordinates */}
-          <footer className="border-t border-border dark:border-[#252838] bg-card dark:bg-[#0c0d12] mt-auto py-6 px-4 sm:px-6 lg:px-8 text-xs text-muted-foreground transition-colors">
+          <footer className="border-t border-border bg-card mt-auto py-6 px-4 sm:px-6 lg:px-8 text-xs text-muted-foreground transition-colors">
             <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <IcesiLogo variant="horizontal" size="sm" colorScheme="auto" />
@@ -150,7 +150,7 @@ export function AppShell({ children }: AppShellProps) {
                   href="https://www.icesi.edu.co"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#5454e9] dark:text-[#865cf0] font-semibold hover:underline"
+                  className="text-primary dark:text-icesi-purple font-semibold hover:underline"
                 >
                   icesi.edu.co
                 </a>
