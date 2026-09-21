@@ -636,7 +636,22 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     getKey={(r) => r.id}
                     isolated={!!isolatedStage}
                     onExitIsolation={() => setIsolatedStage(null)}
-                    renderItem={(r) => <RequestCard req={r} />}
+                    renderItem={(r) => (
+                      <RequestCard
+                        req={r}
+                        // "Lista para Entregar" agrupa toda la etapa "en-costeo", no solo las
+                        // confirmadas — el número de la columna cuenta únicamente las listas
+                        // (isReadyForKamHandoff). Sin esta insignia por tarjeta, el KAM veía
+                        // "1" arriba y 3 tarjetas iguales abajo, sin poder distinguir cuál era.
+                        badge={
+                          col === "en-costeo"
+                            ? isReadyForKamHandoff(r)
+                              ? { label: "Lista para entregar", tone: "ready" }
+                              : { label: "En costeo", tone: "pending" }
+                            : undefined
+                        }
+                      />
+                    )}
                   />
                 ))}
               </div>
