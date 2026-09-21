@@ -3,6 +3,7 @@ import { Calendar, User, ArrowUpRight, AlertCircle, ArrowRight } from "@/compone
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { UrgencyBadge } from "./StatusBadge";
+import { cn } from "@/lib/utils";
 import type { RequestItem } from "@/lib/mock-data";
 
 interface RequestCardProps {
@@ -24,13 +25,21 @@ export function RequestCard({ req, cta }: RequestCardProps) {
       className="group block rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-2xs transition-all hover:border-[#5454e9]/40 hover:shadow-md dark:hover:bg-[#171926] overflow-hidden"
     >
       {/* El cliente pidió ajustes — el KAM habla directo con el cliente, así
-          que necesita ver esta señal igual que el Líder de Producto. */}
-      {req.clientObservations && (
-        <div className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300/60 dark:border-amber-900/50 px-3.5 py-1.5">
-          <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
-        </div>
-      )}
+          que necesita ver esta señal igual que el Líder de Producto. Se
+          renderiza siempre (invisible si no aplica) para reservar el mismo
+          espacio en todas las tarjetas — así ninguna se ve más "alta" ni
+          desplaza su contenido según tenga o no el aviso. */}
+      <div
+        className={cn(
+          "flex items-center gap-1.5 border-b px-3.5 py-1.5",
+          req.clientObservations
+            ? "bg-amber-100 dark:bg-amber-950/40 border-amber-300/60 dark:border-amber-900/50"
+            : "invisible border-transparent",
+        )}
+      >
+        <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
+      </div>
 
       <div className="p-3.5">
         <div className="flex items-start justify-between gap-2">
