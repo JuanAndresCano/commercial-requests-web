@@ -757,8 +757,24 @@ export default function RequestDetail() {
                   </p>
                 </div>
               )
+            ) : hasValidCosting && !req.costing?.readyForKam ? (
+              /* Costeo ya definido, pero el Líder todavía no confirmó el envío
+                 (docs/04, gate readyForKam) — antes esta situación caía en la
+                 misma vista de "Aprobado por Líder" de abajo, con badge verde
+                 y todo, aunque el botón "Enviar a cliente" seguía deshabilitado:
+                 una señal visual contradictoria para el KAM. */
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 p-8 text-center">
+                <Clock className="h-6 w-6 text-slate-400" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Costeo definido — pendiente de confirmación del Líder
+                </p>
+                <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
+                  El Líder de Producto ya calculó un valor ({formatCop(req.costing!.totalOfferedCop)}), pero todavía no
+                  confirma el envío. En cuanto lo haga, verás aquí la propuesta oficial y podrás enviarla al cliente.
+                </p>
+              </div>
             ) : req.costing && req.costing.totalOfferedCop > 0 ? (
-              /* Vista comercial para KAM — solo cuando el Líder ya guardó un costeo real */
+              /* Vista comercial para KAM — solo cuando el Líder ya confirmó "Enviar a KAM" */
               <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-border">
                   <div>

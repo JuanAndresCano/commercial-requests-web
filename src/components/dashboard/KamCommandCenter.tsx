@@ -632,6 +632,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     stage={col}
                     title={KAM_STAGE_LABELS[col]}
                     items={groupedByStatus[col] || []}
+                    count={stageCounts[col]}
                     getKey={(r) => r.id}
                     isolated={!!isolatedStage}
                     onExitIsolation={() => setIsolatedStage(null)}
