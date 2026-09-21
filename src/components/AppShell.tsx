@@ -1,43 +1,27 @@
 import React, { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, Menu, X } from "@/components/icons";
+import { Link, useNavigate } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Menu } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
-import { getNavItems, isNavItemActive } from "@/lib/navigation";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { IcesiLogo, IcesiSymbol, IcesiCenefa } from "@/components/IcesiLogo";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { usePersistentState } from "@/hooks/use-persistent-state";
+import { SidebarContent } from "@/components/SidebarContent";
+import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
 interface AppShellProps {
   children: React.ReactNode;
 }
 
+export const SIDEBAR_STORAGE_KEY = "icesi_sidebar_expanded";
+
 export function AppShell({ children }: AppShellProps) {
-  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  // Desktop menu: expanded/collapsed is remembered across pages and reloads.
+  const [expanded, setExpanded] = usePersistentState(SIDEBAR_STORAGE_KEY, false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const activeRoleLabel = user.roleLabel;
-  const isItemActive = (itemTo: string) => isNavItemActive(itemTo, pathname, search);
-  // The menu is derived from the role of the live session, never from client state.
-  const navItems = getNavItems(user.role);
-
-  const initials = user.name
-    ? user.name
-        .split(" ")
-        .map((p) => p[0])
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-    : activeRoleLabel.slice(0, 2).toUpperCase();
 
   const handleLogout = () => {
     logout();
@@ -50,120 +34,50 @@ export function AppShell({ children }: AppShellProps) {
       <div className="h-1.5 w-full bg-[#5454e9] shrink-0" />
 
       <div className="flex flex-1 relative">
-        {/* Left Navigation Rail */}
+        {/* Desktop side menu: fixed, expandable with a button, keeps its state. */}
         <aside
           id="icesi-sidebar-rail"
-          className="group fixed inset-y-0 left-0 z-30 hidden w-16 hover:w-64 flex-col justify-between overflow-hidden border-r border-border dark:border-[#1e202d] bg-[#090a0e] text-white py-4 lg:flex select-none transition-[width,box-shadow] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:shadow-2xl"
+          aria-label="Menú lateral"
+          data-expanded={expanded}
+          className={cn(
+            "fixed inset-y-0 left-0 z-30 hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex",
+            "transition-[width] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]",
+            expanded ? "w-64" : "w-16",
+          )}
         >
-          {/* Top Section: Icesi Sun Wheel Symbol & User Avatar */}
-          <div className="flex flex-col gap-4 w-full px-2">
-            <Link
-              to="/dashboard"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform hover:scale-105"
-              title="Universidad Icesi - Solicitudes Comerciales"
-              aria-label="Ir al inicio"
-            >
-              <IcesiSymbol size={32} color="#ffffff" />
-            </Link>
-
-            {/* User Avatar with status — el nombre se revela cuando el rail
-                se expande al pasar el cursor (igual al portal de estudiantes
-                de Icesi: rail angosto con iconos, que se ensancha en hover
-                mostrando las etiquetas completas). */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex h-10 w-full items-center gap-3 rounded-lg px-0.5 whitespace-nowrap hover:bg-white/5 transition-colors"
-                  title={`${user.name} (${activeRoleLabel})`}
-                  aria-label="Menú de usuario y rol"
-                >
-                  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1e202d] border border-white/20 text-xs font-bold text-white">
-                    {initials}
-                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-[#4cb979] ring-2 ring-[#090a0e]" />
-                  </span>
-                  <span className="flex max-w-0 flex-col items-start justify-center gap-0.5 overflow-hidden opacity-0 leading-tight transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:max-w-[140px] group-hover:opacity-100 group-hover:delay-75">
-                    <span className="text-xs font-bold text-white truncate max-w-[140px]">{user.name}</span>
-                    <span className="text-[10px] text-zinc-400">{activeRoleLabel}</span>
-                  </span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="right" className="w-60 ml-2">
-                <DropdownMenuLabel>
-                  <div className="font-bold text-foreground text-sm">{user.name}</div>
-                  <div className="text-xs text-muted-foreground">{user.email}</div>
-                  <div className="mt-1 inline-flex items-center gap-1 rounded bg-[#5454e9]/10 px-2 py-0.5 text-[11px] font-semibold text-[#5454e9]">
-                    Rol: {activeRoleLabel}
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive text-xs cursor-pointer">
-                  <LogOut className="mr-2 h-3.5 w-3.5" />
-                  Cerrar sesión
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Separator */}
-            <div className="w-full h-px bg-white/10 my-1" />
-
-            {/* Primary Nav Icons — misma fila fija (icono + etiqueta); la
-                etiqueta queda recortada por el `overflow-hidden` del rail
-                mientras esté colapsado, y aparece al expandirse. */}
-            <nav className="flex flex-col gap-2 w-full">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const active = isItemActive(item.to);
-
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={cn(
-                      "relative flex h-11 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap transition-colors",
-                      active
-                        ? "bg-[#e4eb60] text-black shadow-md font-bold"
-                        : "text-zinc-400 hover:bg-white/10 hover:text-white",
-                    )}
-                    title={item.label}
-                    aria-label={item.label}
-                  >
-                    <Icon className="h-5 w-5 shrink-0" />
-                    <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:max-w-[160px] group-hover:opacity-100 group-hover:delay-75">
-                      {item.label}
-                    </span>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* Bottom Controls of Rail (Theme Toggle, Logout) */}
-          <div className="flex flex-col gap-2.5 w-full px-2">
-            {/* Theme Toggle Button (Sol / Luna) */}
-            <ThemeToggle
-              showLabel
-              className="w-full h-11 justify-start gap-3 px-2.5 whitespace-nowrap hover:bg-white/10 text-zinc-400 hover:text-white"
-            />
-
-            {/* Logout */}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap text-zinc-400 hover:bg-red-500/20 hover:text-red-400 transition-all"
-              title="Cerrar sesión"
-              aria-label="Cerrar sesión"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:max-w-[160px] group-hover:opacity-100 group-hover:delay-75">
-                Cerrar sesión
-              </span>
-            </button>
-          </div>
+          <SidebarContent expanded={expanded} onLogout={handleLogout} />
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            aria-controls="icesi-sidebar-rail"
+            aria-label={expanded ? "Contraer menú" : "Expandir menú"}
+            title={expanded ? "Contraer menú" : "Expandir menú"}
+            className="absolute -right-3 top-20 z-40 flex h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-md transition-colors hover:bg-sidebar-accent"
+          >
+            {expanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
         </aside>
 
-        {/* Main Application Container (offset by left rail on desktop) */}
-        <div className="flex-1 lg:pl-16 flex flex-col min-h-screen">
+        {/* Mobile menu: drawer that mirrors the same role-based links. */}
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetContent
+            side="left"
+            className="w-64 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground lg:hidden"
+          >
+            <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
+            <SheetDescription className="sr-only">Enlaces principales según tu rol</SheetDescription>
+            <SidebarContent expanded onLogout={handleLogout} onNavigate={() => setMobileMenuOpen(false)} />
+          </SheetContent>
+        </Sheet>
+
+        {/* Main Application Container (offset by the side menu on desktop) */}
+        <div
+          className={cn(
+            "flex-1 flex flex-col min-h-screen min-w-0 transition-[padding] duration-300",
+            expanded ? "lg:pl-64" : "lg:pl-16",
+          )}
+        >
           {/* Top Brand Application Bar */}
           <header className="sticky top-0 z-20 border-b border-border dark:border-[#252838] bg-card/95 dark:bg-[#11121a]/95 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-3 transition-colors">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
@@ -171,11 +85,11 @@ export function AppShell({ children }: AppShellProps) {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  onClick={() => setMobileMenuOpen(true)}
                   className="lg:hidden p-1.5 text-muted-foreground hover:text-foreground rounded-md border border-border"
                   aria-label="Menú de navegación"
                 >
-                  {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                  <Menu className="h-5 w-5" />
                 </button>
 
                 <Link to="/dashboard" className="flex items-center gap-3 group">
@@ -195,35 +109,6 @@ export function AppShell({ children }: AppShellProps) {
                 <span className="truncate max-w-[140px] md:max-w-[180px]">{activeRoleLabel}</span>
               </div>
             </div>
-
-            {/* Mobile drawer when open */}
-            {mobileMenuOpen && (
-              <div className="mt-3 pt-3 border-t border-border lg:hidden flex flex-col gap-2 animate-in fade-in">
-                <div className="flex items-center justify-between px-2 py-1 text-xs">
-                  <span className="text-muted-foreground">Rol activo:</span>
-                  <span className="font-bold text-[#5454e9]">{activeRoleLabel}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  {navItems.map((item) => (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={cn(
-                        "flex items-center gap-2 p-2 rounded-md text-xs font-medium border border-border",
-                        isItemActive(item.to) ? "bg-[#e4eb60] text-black font-bold" : "bg-card text-foreground",
-                      )}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between pt-2">
-                  <ThemeToggle variant="pill" />
-                </div>
-              </div>
-            )}
           </header>
 
           {/* Sub-header visual strip in vibrant Azul Icesi #5454e9 */}
