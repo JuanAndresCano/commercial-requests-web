@@ -40,6 +40,19 @@ interface KamCommandCenterProps {
 
 type FilterType = RequestStatus | "all";
 
+// Reclasifica una solicitud a la etapa que el KAM realmente percibe. Una
+// "en-costeo" que el Líder todavía no confirmó ("Enviar a KAM") sigue siendo,
+// desde la óptica del KAM, trabajo en proceso — no algo que ya pueda revisar
+// para entregar. Antes esa distinción solo se aplicaba al contador de la
+// tarjeta KPI ("Lista para Entregar"), mientras el Kanban seguía agrupando
+// por el estado real "en-costeo" completo: la tarjeta decía "1" pero la
+// columna mostraba las 3 solicitudes en costeo. Con una sola función como
+// fuente de verdad para KPI, tabla y Kanban, ese desfase no puede repetirse.
+function kamStageOf(r: RequestItem): RequestStatus {
+  if (r.status === "en-costeo" && !isReadyForKamHandoff(r)) return "en-experto";
+  return r.status;
+}
+
 export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
   // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
   // el KAM al volver del detalle de una propuesta — antes se reiniciaba porque
@@ -55,18 +68,19 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   const myRequests = requests.filter((r) => r.kam === userName);
   const activeDataset = myRequests;
 
-  // Conteos por estado real — cada uno mapea 1:1 a una columna del Kanban y
-  // a una tarjeta KPI, para que nunca se desalineen entre vistas.
-  const nuevaCount = activeDataset.filter((r) => r.status === "nueva").length;
-  const enProcesoCount = activeDataset.filter((r) => r.status === "en-experto").length;
+  // Conteos por etapa percibida por el KAM (ver kamStageOf) — cada uno mapea
+  // 1:1 a una columna del Kanban y a una tarjeta KPI, para que nunca se
+  // desalineen entre vistas.
+  const nuevaCount = activeDataset.filter((r) => kamStageOf(r) === "nueva").length;
+  const enProcesoCount = activeDataset.filter((r) => kamStageOf(r) === "en-experto").length;
   // "Lista para Entregar" es una promesa concreta ("ya puedes enviarla al
   // cliente"), no solo la etapa "en-costeo" — desde que el Líder de Producto
   // confirma explícitamente el envío (docs/04), una solicitud
   // puede estar en "en-costeo" sin que el KAM tenga nada que hacer todavía.
   // Contar solo las confirmadas evita que este número (y el aviso de abajo)
   // le diga al KAM que puede entregar algo que el Líder aún está costeando.
-  const listasParaEntregarCount = activeDataset.filter(isReadyForKamHandoff).length;
-  const entregadasCount = activeDataset.filter((r) => r.status === "entregada").length;
+  const listasParaEntregarCount = activeDataset.filter((r) => kamStageOf(r) === "en-costeo").length;
+  const entregadasCount = activeDataset.filter((r) => kamStageOf(r) === "entregada").length;
   const stageCounts: Record<RequestStatus, number> = {
     nueva: nuevaCount,
     "en-experto": enProcesoCount,
@@ -96,7 +110,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
     return activeDataset.filter((req) => {
       if (searchQuery.trim() && !matchesSearch(req, searchQuery.toLowerCase().trim())) return false;
       if (activeFilter !== "all") {
-        return req.status === activeFilter;
+        return kamStageOf(req) === activeFilter;
       }
       return true;
     });
@@ -113,7 +127,10 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
     });
   }, [activeDataset, searchQuery]);
 
-  // Agrupación por estado real (para la vista Kanban)
+  // Agrupación por etapa percibida por el KAM (ver kamStageOf), para la vista
+  // Kanban — así la columna "Lista para Entregar" solo contiene tarjetas que
+  // de verdad se pueden entregar, y las "en-costeo" aún sin confirmar caen en
+  // "En Proceso" junto con las que están con el experto.
   const groupedByStatus = useMemo(() => {
     const g: Record<RequestStatus, RequestItem[]> = {
       nueva: [],
@@ -122,7 +139,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
       entregada: [],
     };
     kanbanRequests.forEach((r) => {
-      if (g[r.status]) g[r.status].push(r);
+      const stage = kamStageOf(r);
+      if (g[stage]) g[stage].push(r);
     });
     return g;
   }, [kanbanRequests]);
@@ -632,25 +650,14 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     stage={col}
                     title={KAM_STAGE_LABELS[col]}
                     items={groupedByStatus[col] || []}
-                    count={stageCounts[col]}
                     getKey={(r) => r.id}
                     isolated={!!isolatedStage}
                     onExitIsolation={() => setIsolatedStage(null)}
                     renderItem={(r) => (
-                      <RequestCard
-                        req={r}
-                        // "Lista para Entregar" agrupa toda la etapa "en-costeo", no solo las
-                        // confirmadas — el número de la columna cuenta únicamente las listas
-                        // (isReadyForKamHandoff). Sin esta insignia por tarjeta, el KAM veía
-                        // "1" arriba y 3 tarjetas iguales abajo, sin poder distinguir cuál era.
-                        badge={
-                          col === "en-costeo"
-                            ? isReadyForKamHandoff(r)
-                              ? { label: "Lista para entregar", tone: "ready" }
-                              : { label: "En costeo", tone: "pending" }
-                            : undefined
-                        }
-                      />
+                      // Toda tarjeta en "en-costeo" ya pasó por kamStageOf, así que aquí solo
+                      // llegan las confirmadas por el Líder — el atajo siempre aplica, igual
+                      // que los botones de acción del tablero del Líder de Producto.
+                      <RequestCard req={r} cta={col === "en-costeo" ? "Revisar y entregar" : undefined} />
                     )}
                   />
                 ))}

@@ -11,16 +11,6 @@ interface KanbanColumnProps<T> {
   items: T[];
   renderItem: (item: T) => ReactNode;
   getKey: (item: T) => string;
-  /**
-   * Número mostrado en la insignia de la cabecera. Por defecto es
-   * `items.length`, pero algunos tableros necesitan mostrar un conteo
-   * distinto al número de tarjetas visibles (ej. el KAM: la columna
-   * "en-costeo" siempre muestra todas las tarjetas en esa etapa, pero la
-   * insignia debe reflejar solo las que de verdad están listas para
-   * entregar — mostrar `items.length` ahí decía "3" mientras la tarjeta KPI
-   * de arriba, que sí filtra por listas, decía "0").
-   */
-  count?: number;
   emptyLabel?: string;
   className?: string;
   columnRef?: (el: HTMLDivElement | null) => void;
@@ -41,7 +31,6 @@ export function KanbanColumn<T>({
   items,
   renderItem,
   getKey,
-  count,
   emptyLabel = "Sin solicitudes en esta fase",
   className,
   columnRef,
@@ -73,7 +62,7 @@ export function KanbanColumn<T>({
               className="rounded-full px-2 py-0.5 text-xs font-bold text-white shrink-0"
               style={{ backgroundColor: theme.colorHex }}
             >
-              {count ?? items.length}
+              {items.length}
             </span>
           </div>
           {isolated && onExitIsolation && (

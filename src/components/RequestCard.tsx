@@ -1,25 +1,23 @@
 import { Link } from "react-router-dom";
-import { Calendar, User, ArrowUpRight, AlertCircle } from "@/components/icons";
+import { Calendar, User, ArrowUpRight, AlertCircle, ArrowRight } from "@/components/icons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { UrgencyBadge } from "./StatusBadge";
-import { cn } from "@/lib/utils";
 import type { RequestItem } from "@/lib/mock-data";
 
 interface RequestCardProps {
   req: RequestItem;
   /**
-   * Insignia opcional para distinguir tarjetas dentro de una misma columna del
-   * Kanban que en realidad mezcla más de un sub-estado — ej. la columna
-   * "Lista para Entregar" del KAM agrupa TODO lo que está en "en-costeo",
-   * pero el número de la cabecera solo cuenta las confirmadas por el Líder
-   * (ver KamCommandCenter). Sin esto, el KAM veía "1" arriba y 3 tarjetas
-   * idénticas abajo, sin forma de saber cuál de las 3 era la que contaba.
+   * Texto de un atajo visual al fondo de la tarjeta (ej. "Revisar y
+   * entregar") para columnas donde la tarjeta ya representa una acción
+   * concreta pendiente, igual que los botones de acción del tablero del
+   * Líder de Producto. Es solo un refuerzo visual — toda la tarjeta ya
+   * navega al detalle, así que no es un enlace independiente.
    */
-  badge?: { label: string; tone: "ready" | "pending" };
+  cta?: string;
 }
 
-export function RequestCard({ req, badge }: RequestCardProps) {
+export function RequestCard({ req, cta }: RequestCardProps) {
   return (
     <Link
       to={`/solicitudes/${req.id}`}
@@ -50,18 +48,6 @@ export function RequestCard({ req, badge }: RequestCardProps) {
         </div>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {badge && (
-            <span
-              className={cn(
-                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold",
-                badge.tone === "ready"
-                  ? "border-[#865cf0]/30 bg-[#865cf0]/10 text-[#865cf0]"
-                  : "border-border dark:border-[#2b2d3d] bg-secondary/70 dark:bg-[#1c1e2b] text-muted-foreground",
-              )}
-            >
-              {badge.label}
-            </span>
-          )}
           <UrgencyBadge urgency={req.urgency} />
           <span className="rounded-md border border-border dark:border-[#2b2d3d] bg-secondary/50 dark:bg-[#1c1e2b] px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
             {req.type}
@@ -94,6 +80,13 @@ export function RequestCard({ req, badge }: RequestCardProps) {
           </div>
         </div>
       </div>
+
+      {cta && (
+        <div className="flex items-center justify-between gap-2 border-t border-icesi-blue/20 bg-icesi-blue/5 px-3.5 py-2 dark:bg-icesi-blue/10 group-hover:bg-icesi-blue/10 dark:group-hover:bg-icesi-blue/15 transition-colors">
+          <span className="text-[11px] font-bold text-icesi-blue">{cta}</span>
+          <ArrowRight className="h-3.5 w-3.5 text-icesi-blue" />
+        </div>
+      )}
     </Link>
   );
 }
