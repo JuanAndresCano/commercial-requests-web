@@ -15,10 +15,13 @@ src/
 │   └── utils.ts                # helper cn() (clsx + tailwind-merge)
 ├── pages/                     # Una carpeta por ruta (ver tabla abajo)
 ├── hooks/
-│   └── use-persistent-state.ts # useState que persiste en localStorage (filtros/vista de los dashboards)
+│   ├── use-persistent-state.ts # useState que persiste en localStorage (filtros/vista de los dashboards)
+│   └── use-reassign-request.ts # Regla de negocio de reasignación (compartida, ver `07` gap #9)
 ├── components/
 │   ├── AppShell.tsx            # Layout raíz: sidebar (hover-expand), topbar, footer (todas las páginas autenticadas)
 │   ├── RequestCard.tsx         # Tarjeta compacta de solicitud (usada en tablero y grids)
+│   ├── ReassignLeaderDialog.tsx # Modal compartido de reasignación de Líder de Producto (antes triplicado, ver `07` gap #9)
+│   ├── ScrollToTop.tsx         # Resetea el scroll a (0,0) en cada cambio de ruta (ver `07` gap #19)
 │   ├── RoleBadge.tsx           # Insignia de rol junto al saludo ("Hola, X [Rol]") — 1 solo color, reutilizada en 3 pantallas
 │   ├── StatusBadge.tsx         # Badge de estado + badge de urgencia
 │   ├── IcesiLogo.tsx           # Logo, símbolo y "cenefa" de marca Icesi (SVG)
@@ -66,7 +69,8 @@ src/
 - `ProductLeaderDashboard.tsx` — Kanban de 4 columnas con KPIs-filtro y acciones de avance inline.
 - `RequestDetail.tsx` (rama Líder de Producto) — monta `ProposalCostingModule` + `ProposalDocumentsSection` + botones de avance de etapa + modal de reasignación.
 - `AdvisorAssignmentModal.tsx` — modal con tabs "Planta" / "Externo".
-- `ProposalCostingModule.tsx` — el módulo financiero interactivo (inputs de costo base, margen, switch de externo, desglose en vivo, ajuste manual de valor ofertado, nota de negociación).
+- `ProposalCostingModule.tsx` — el módulo financiero interactivo: Valor Final de la Propuesta y Margen de Contribución (% y $) digitados directamente (ya no hay costo base ni switch de "requiere asesor externo" — ver `04`, `ProposalCosting`), referencia de Estampilla Pro-Cultura, indicador de solo lectura del asesor, nota de alcance libre, y el botón de gate "Enviar a KAM".
+- **"Historial de Negociación"** (sección dentro de `RequestDetail.tsx`, no un archivo aparte) — visible para Líder y KAM, solo si ya hay más de una ronda o una rechazada; cada ronda registra valor, margen y alcance del momento en que el Líder confirmó "Enviar a KAM" (ver `04`, `NegotiationRound`).
 
 ### Compartidos entre ambos
 - `AppShell.tsx` — layout raíz. Contiene: rail lateral fijo (ícono app, avatar+dropdown de usuario/cambio de rol/**restablecer datos de ejemplo**, navegación por ítems dinámicos según rol, toggle de tema, logout), con **animación de expansión al pasar el cursor** (ancho angosto de solo íconos que se ensancha revelando las etiquetas de texto — inspirado en el portal de estudiantes de Icesi), topbar (logo, dropdown de rol, toggle de tema), franja de marca secundaria, `<main>`, footer institucional. Ya **no** tiene ningún widget flotante.

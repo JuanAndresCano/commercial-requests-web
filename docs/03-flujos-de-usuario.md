@@ -46,8 +46,8 @@ Al enviar: se crea el `RequestItem` con `status: "nueva"` siempre, sin costeo ni
 
 ### A.4 — Seguimiento
 El KAM no tiene que hacer nada más hasta que la propuesta avance. Se entera de que algo está listo por:
-- El **banner verde** en su dashboard ("¡Tienes N propuestas listas para entregar!") cuando alguna solicitud llega a `en-costeo`.
-- La tarjeta KPI "Lista para Entregar".
+- El **banner verde** en su dashboard ("¡Tienes N propuestas listas para entregar!") — solo cuenta lo que el Líder ya confirmó con "Enviar a KAM" (`readyForKam`), no basta con que la solicitud haya llegado a `en-costeo` (ver B.4).
+- La tarjeta KPI "Lista para Entregar" (mismo criterio; una `en-costeo` sin confirmar aparece bajo "En Proceso").
 - La columna "Estado" en la tabla (4 badges de color, uno por estado real — ya no fusiona "Nueva" y "En Proceso" en un solo badge como antes).
 
 ### A.5 — Ver el detalle y confirmar entrega (`/solicitudes/:id`)
@@ -103,7 +103,7 @@ Aterriza en su Kanban de 4 columnas (vista por defecto, a diferencia del KAM que
    - Ver, solo si el tipo es "Capacitación", una fila de referencia **"Estampilla Pro-Cultura (1.5%)"** — igual de informativa, nunca se suma ni se resta del valor final.
    - Ver un indicador de solo lectura **"Asesor del Servicio"**, derivado de a quién se le asignó como docente/asesor en B.3 (planta o externo) — ya no es un switch editable aparte.
    - Opcionalmente expandir "+ Agregar nota de alcance" para justificar el ajuste en texto libre (`negotiationNotes`, distinto del motivo de ajuste de una ronda — ver más abajo).
-   - Cada cambio se guarda solo (no hay botón de "guardar" separado dentro del módulo; existe un botón general "Guardar Cambios" en la cabecera del detalle como refuerzo).
+   - Cada cambio se guarda solo, campo por campo — no hay ningún botón de "guardar" general. El botón "Guardar Cambios" que existía en la cabecera del detalle se quitó (`07`, gap #17): no cumplía ninguna función real y, con el costeo oculto antes de "En Costeo", podía escribirle a una solicitud "Nueva"/"En Experto" un costeo vacío en $0 donde antes no había ninguno.
 3. Paralelamente, en `ProposalDocumentsSection` (debajo del costeo), puede subir documentos internos de costeo (matrices Excel, contratos) y documentos de cara al cliente.
 4. Cuando el valor final ya es mayor a $0, aparece un botón **"Enviar a KAM"** — al confirmarlo, la propuesta queda marcada como lista y **se abre una ronda en el Historial de Negociación** (ver abajo) con el valor, margen y alcance de ese momento. Recién ahí el KAM puede usar su "Enviar a cliente" (A.5) — antes de confirmar, aunque el valor ya esté puesto, el botón del KAM sigue deshabilitado. **No hay ningún botón de "Entregar" para el Líder de Producto**: el envío final al cliente sigue siendo exclusivo del KAM. En el Kanban, la tarjeta en "En Costeo" muestra "Completar costeo" mientras falta valor, "Completar envío" (enlace al detalle) mientras el valor existe pero no se ha confirmado, y la insignia **"Enviado al KAM"** (con "hace X tiempo") una vez confirmado.
 5. **Historial de Negociación** (sección nueva en el detalle, visible para Líder y KAM, solo si ya hay más de una ronda o una ronda cerrada): cada vez que el Líder confirma "Enviar a KAM" se abre o actualiza una ronda con el valor, margen, participantes/modalidad/horas/tipo/necesidad de ese momento. Si el cliente rechaza (A.7), esa ronda queda marcada como rechazada con su observación. **Desde la segunda ronda en adelante, el Líder debe escribir un motivo del ajuste obligatorio** antes de poder reenviar — el diálogo le muestra la observación del cliente de la ronda anterior como contexto.
