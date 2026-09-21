@@ -1,37 +1,44 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, ShieldCheck, Sparkles, FlaskConical } from "@/components/icons";
+import { ArrowLeft, Eye, EyeOff, ShieldCheck, Sparkles } from "@/components/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth, UserRole, ROLE_CONFIGS } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
+import { ApiError } from "@/lib/api/client";
 import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-const DEMO_ACCOUNTS = (Object.entries(ROLE_CONFIGS) as [UserRole, (typeof ROLE_CONFIGS)[UserRole]][]).map(
-  ([key, cfg]) => ({ key, label: cfg.label, email: cfg.defaultEmail }),
-);
-
 export default function Login() {
   const [showPwd, setShowPwd] = useState(false);
-  const [password, setPassword] = useState("••••••••••••");
+  const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const match = DEMO_ACCOUNTS.find((a) => a.email.toLowerCase() === email.trim().toLowerCase());
-    if (!match) {
-      toast.error("Correo no reconocido en el directorio institucional.", {
-        description: "Verifica tu usuario o contacta a TI si crees que esto es un error.",
-      });
-      return;
+    setSubmitting(true);
+    try {
+      await login(email.trim(), password);
+      navigate("/dashboard");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        toast.error("Correo o contraseña incorrectos.", {
+          description: "Verifica tus credenciales o contacta a TI si crees que esto es un error.",
+        });
+      } else if (error instanceof ApiError) {
+        toast.error("No pudimos iniciar tu sesión.", { description: "Intenta de nuevo en unos minutos." });
+      } else {
+        toast.error("No pudimos iniciar tu sesión.", {
+          description: error instanceof Error ? error.message : "Error inesperado.",
+        });
+      }
+    } finally {
+      setSubmitting(false);
     }
-    const cfg = ROLE_CONFIGS[match.key];
-    login(match.key, cfg.defaultName, match.email);
-    navigate("/dashboard");
   };
 
   return (
@@ -182,9 +189,10 @@ export default function Login() {
             {/* Iniciar sesión Button in official Azul Icesi #5454e9 */}
             <Button
               type="submit"
+              disabled={submitting}
               className="w-full h-11 text-sm font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white rounded-lg shadow-md transition-all active:scale-[0.99] mt-2"
             >
-              Iniciar sesión
+              {submitting ? "Ingresando…" : "Iniciar sesión"}
             </Button>
           </form>
 
@@ -192,28 +200,6 @@ export default function Login() {
           <div className="mt-6 rounded-lg border border-border dark:border-[#252838] bg-secondary/20 dark:bg-[#141520] p-3 text-xs text-muted-foreground flex items-center gap-2.5">
             <ShieldCheck className="h-4 w-4 text-[#4cb979] shrink-0" />
             <span>Acceso seguro con autenticación institucional y Directorio Activo Icesi.</span>
-          </div>
-
-          {/* Demo accounts helper — clearly secondary, prototype-only */}
-          <div className="mt-4 rounded-lg border border-dashed border-border dark:border-[#2b2d3d] p-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-              <FlaskConical className="h-3.5 w-3.5" />
-              <span>Cuentas de prueba (solo en este entorno de prototipo)</span>
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {DEMO_ACCOUNTS.map((a) => (
-                <button
-                  key={a.key}
-                  type="button"
-                  onClick={() => setEmail(a.email)}
-                  className="rounded-md border border-border/60 dark:border-[#252838] bg-secondary/10 dark:bg-[#141520] px-2 py-1.5 text-left text-[10px] leading-tight text-muted-foreground hover:border-[#5454e9]/40 hover:text-foreground transition-colors"
-                  title={a.email}
-                >
-                  <span className="block font-semibold">{a.label}</span>
-                  <span className="block truncate opacity-80">{a.email}</span>
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
