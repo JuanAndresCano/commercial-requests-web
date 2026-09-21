@@ -536,6 +536,18 @@ Nodo' son el mismo cargo?"
 
 ---
 
+## 17. Empresas duplicadas: si llega un NIT nuevo y ya existe una empresa histórica con el mismo nombre (sin NIT), ¿se fusionan?
+
+**Estado:** 🔴 Abierta — el código **no toma la decisión**; deja dos registros separados
+
+**Contexto:** El directorio de empresas del backend ahora identifica a cada empresa por NIT (único). Las empresas históricas (importadas antes de esta regla) no tienen NIT. Cuando el KAM crea una solicitud con un NIT que no existe todavía, pero ya hay una empresa histórica con el mismo nombre y sin NIT, hoy el sistema **crea una empresa nueva con ese NIT** y deja la histórica como registro aparte — es decir, ese caso genera un duplicado por nombre. Si el NIT ya existe, sí se reutiliza esa empresa. Si el KAM no escribe NIT, se mantiene la búsqueda anterior por nombre.
+
+**Pregunta para la Líder de Producto:** ¿se deben fusionar automáticamente (asignarle el NIT a la empresa histórica del mismo nombre), fusionar solo con confirmación del usuario, o dejarlas separadas hasta una depuración manual? ¿Qué pasa con nombres parecidos pero no idénticos ("Bancolombia" vs "Bancolombia S.A.")?
+
+**Por qué importa:** fusionar por nombre puede unir por error a dos empresas distintas con el mismo nombre (y mezclar su historial de propuestas); no fusionar deja duplicados. Tampoco resuelve los duplicados históricos que ya existen entre sí.
+
+---
+
 ## Confirmado e implementado en este ciclo
 
 _(Feedback de la Líder de Producto que ya se validó contra el código y quedó
@@ -653,6 +665,9 @@ abstractas.)_
   (`necesidad` y afines) cuando el cliente rechaza por un tema distinto al
   precio — el Líder, el KAM, o ambos? Hoy implementado provisionalmente como
   "el Líder, en En Costeo", sin confirmar con ella.
+- **Pregunta 17 (nueva):** ¿una empresa histórica del mismo nombre y sin NIT
+  debe fusionarse con la que llega con NIT, o quedan separadas? Hoy quedan
+  separadas; el código no decide por nombre.
 - **Pregunta 6 (actualizada):** ¿reasignar desde "En Experto" (no solo
   "Nueva") es correcto? Implementado con un caso concreto en mano esta vez
   (el experto determina que el tema no corresponde a su nodo) — a diferencia
