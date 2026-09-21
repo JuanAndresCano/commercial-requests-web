@@ -17,9 +17,10 @@ const BACKEND_ROLE_TO_USER_ROLE: Record<string, UserRole> = {
   PRODUCT_LEADER: "lider-producto",
   NODE_LEADER: "lider-nodo",
   PROFESSOR: "profesor",
+  ADMIN: "administrador",
 };
 
-/** Maps backend role codes to UI roles; codes without a UI counterpart (ADMIN, ASSISTANT) are dropped. */
+/** Maps backend role codes to UI roles; codes without a UI counterpart (ASSISTANT) are dropped. */
 export function mapBackendRoles(codes: string[]): UserRole[] {
   const mapped = codes.flatMap((code) => BACKEND_ROLE_TO_USER_ROLE[code] ?? []);
   return Array.from(new Set(mapped));

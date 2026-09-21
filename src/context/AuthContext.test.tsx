@@ -71,7 +71,7 @@ describe("AuthProvider session handling", () => {
     await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
 
     mocked.login.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
-    mocked.getMe.mockResolvedValue(session({ roles: ["ADMIN"] }));
+    mocked.getMe.mockResolvedValue(session({ roles: ["ASSISTANT"] }));
     await act(async () => {
       await expect(auth.current.login("a@icesi.edu.co", "x")).rejects.toThrow();
     });
