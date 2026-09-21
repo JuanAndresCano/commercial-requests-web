@@ -11,7 +11,7 @@ import {
   ExternalProfessorData,
 } from "@/lib/mock-data";
 
-export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor";
+export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor" | "administrador";
 
 export interface User {
   role: UserRole;
@@ -21,32 +21,18 @@ export interface User {
   node?: string;
 }
 
-export const ROLE_CONFIGS: Record<
-  UserRole,
-  { label: string; defaultName: string; defaultEmail: string; node?: string }
-> = {
-  kam: {
-    label: "KAM",
-    defaultName: "Andrea Martínez",
-    defaultEmail: "andrea.martinez@icesi.edu.co",
-  },
+export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = {
+  kam: { label: "KAM" },
   "lider-producto": {
     label: "Líder de Producto",
-    defaultName: "Juan Pablo Corrales Arenas",
-    defaultEmail: "juanpablo.corrales@icesi.edu.co",
     node: "Inteligencia Artificial y Tecnologías Digitales",
   },
   "lider-nodo": {
     label: "Líder de Nodo",
-    defaultName: "Carlos Riveros",
-    defaultEmail: "carlos.riveros@icesi.edu.co",
     node: "Competitividad Organizacional, Economías Creativas",
   },
-  profesor: {
-    label: "Profesor",
-    defaultName: "Dr. Ricardo Mejía",
-    defaultEmail: "ricardo.mejia@icesi.edu.co",
-  },
+  profesor: { label: "Profesor" },
+  administrador: { label: "Administrador" },
 };
 
 // Legacy key of the mock login; the session now lives in an httpOnly cookie.

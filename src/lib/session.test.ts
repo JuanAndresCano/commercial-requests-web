@@ -28,11 +28,15 @@ describe("msUntilExpiry", () => {
 
 describe("mapBackendRoles", () => {
   it("maps backend codes to UI roles and drops unknown ones", () => {
-    expect(mapBackendRoles(["ADMIN", "KAM", "PRODUCT_LEADER", "ASSISTANT"])).toEqual(["kam", "lider-producto"]);
+    expect(mapBackendRoles(["ADMIN", "KAM", "PRODUCT_LEADER", "ASSISTANT"])).toEqual([
+      "administrador",
+      "kam",
+      "lider-producto",
+    ]);
   });
 
   it("returns an empty list when no role is usable", () => {
-    expect(mapBackendRoles(["ADMIN"])).toEqual([]);
+    expect(mapBackendRoles(["ASSISTANT"])).toEqual([]);
   });
 
   it("does not repeat roles", () => {
