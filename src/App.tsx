@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { RequireAuth } from "@/components/RequireAuth";
 import Index from "./pages/Index.tsx";
 import Login from "./pages/Login.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
@@ -33,10 +34,12 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/solicitudes" element={<RequestsBoard />} />
-              <Route path="/solicitudes/nueva" element={<NewRequest />} />
-              <Route path="/solicitudes/:id" element={<RequestDetail />} />
+              <Route element={<RequireAuth />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/solicitudes" element={<RequestsBoard />} />
+                <Route path="/solicitudes/nueva" element={<NewRequest />} />
+                <Route path="/solicitudes/:id" element={<RequestDetail />} />
+              </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

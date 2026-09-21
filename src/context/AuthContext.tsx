@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { authApi, type SessionUser } from "@/lib/api/auth";
+import { setUnauthorizedHandler } from "@/lib/api/client";
+import { isSessionActive, mapBackendRoles, msUntilExpiry } from "@/lib/session";
 import {
   MOCK_REQUESTS,
   RequestItem,
@@ -46,12 +49,22 @@ export const ROLE_CONFIGS: Record<
   },
 };
 
-const STORAGE_KEY_USER = "icesi_auth_user_v3";
+// Legacy key of the mock login; the session now lives in an httpOnly cookie.
+const LEGACY_STORAGE_KEY_USER = "icesi_auth_user_v3";
 const STORAGE_KEY_REQUESTS = "icesi_requests_data_v3";
+
+export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
+// Placeholder while nobody is signed in. Routes are guarded by RequireAuth, so
+// no page renders with it; it only keeps `user` non-nullable for consumers.
+const ANONYMOUS_USER: User = { role: "kam", roleLabel: "", name: "", email: "" };
 
 interface AuthContextType {
   user: User;
-  login: (role: UserRole, customName?: string, customEmail?: string) => void;
+  status: AuthStatus;
+  /** Signs in against the backend; rejects with ApiError (401 = bad credentials). */
+  login: (email: string, password: string) => Promise<void>;
+  /** Switches between the roles the signed-in account really has. */
   switchRole: (role: UserRole) => void;
   logout: () => void;
   requests: RequestItem[];
@@ -75,24 +88,73 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_USER);
-      if (stored) {
-        return JSON.parse(stored);
+  const [user, setUser] = useState<User>(ANONYMOUS_USER);
+  const [status, setStatus] = useState<AuthStatus>("loading");
+  const [availableRoles, setAvailableRoles] = useState<UserRole[]>([]);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+
+  const clearSession = useCallback(() => {
+    setUser(ANONYMOUS_USER);
+    setAvailableRoles([]);
+    setExpiresAt(null);
+    setStatus("unauthenticated");
+  }, []);
+
+  // Returns false (and leaves the user signed out) when the session is expired
+  // or the account has no role the UI knows about.
+  const applySession = useCallback(
+    (session: SessionUser): boolean => {
+      const roles = mapBackendRoles(session.roles);
+      if (roles.length === 0 || !isSessionActive(session.expiresAt)) {
+        clearSession();
+        return false;
       }
-    } catch {
-      // Fallback
-    }
-    const defaultCfg = ROLE_CONFIGS["kam"];
-    return {
-      role: "kam",
-      roleLabel: defaultCfg.label,
-      name: defaultCfg.defaultName,
-      email: defaultCfg.defaultEmail,
-      node: defaultCfg.node,
+      const cfg = ROLE_CONFIGS[roles[0]];
+      const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
+      setUser({
+        role: roles[0],
+        roleLabel: cfg.label,
+        name: fullName || session.email,
+        email: session.email,
+        node: cfg.node,
+      });
+      setAvailableRoles(roles);
+      setExpiresAt(session.expiresAt);
+      setStatus("authenticated");
+      return true;
+    },
+    [clearSession],
+  );
+
+  // Restore the session from the cookie on load; never trust local state.
+  useEffect(() => {
+    localStorage.removeItem(LEGACY_STORAGE_KEY_USER);
+    let cancelled = false;
+    authApi
+      .getMe()
+      .then((session) => {
+        if (!cancelled) applySession(session);
+      })
+      .catch(() => {
+        if (!cancelled) clearSession();
+      });
+    return () => {
+      cancelled = true;
     };
-  });
+  }, [applySession, clearSession]);
+
+  // Any 401 on an authenticated request (revoked or expired session) signs out.
+  useEffect(() => {
+    setUnauthorizedHandler(clearSession);
+    return () => setUnauthorizedHandler(null);
+  }, [clearSession]);
+
+  // Sign out the moment the token expires, even if the tab stays idle.
+  useEffect(() => {
+    if (expiresAt === null) return;
+    const timer = window.setTimeout(clearSession, msUntilExpiry(expiresAt));
+    return () => window.clearTimeout(timer);
+  }, [expiresAt, clearSession]);
 
   const [requests, setRequests] = useState<RequestItem[]>(() => {
     try {
@@ -132,46 +194,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-    } catch {
-      // Ignore storage errors
-    }
-  }, [user]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(requests));
     } catch {
       // Ignore storage errors
     }
   }, [requests]);
 
-  const login = (role: UserRole, customName?: string, customEmail?: string) => {
-    const config = ROLE_CONFIGS[role] ?? ROLE_CONFIGS["kam"];
-    const newUser: User = {
-      role,
-      roleLabel: config.label,
-      name: customName || config.defaultName,
-      email: customEmail || config.defaultEmail,
-      node: config.node,
-    };
-    setUser(newUser);
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUser));
+  const login = async (email: string, password: string) => {
+    await authApi.login(email, password);
+    const session = await authApi.getMe();
+    if (!applySession(session)) {
+      throw new Error("La cuenta no tiene un rol habilitado en esta plataforma.");
+    }
   };
 
   const switchRole = (role: UserRole) => {
-    login(role);
+    if (!availableRoles.includes(role)) return;
+    const cfg = ROLE_CONFIGS[role];
+    setUser((prev) => ({ ...prev, role, roleLabel: cfg.label, node: cfg.node }));
   };
 
   const logout = () => {
-    localStorage.removeItem(STORAGE_KEY_USER);
-    const defaultCfg = ROLE_CONFIGS["kam"];
-    setUser({
-      role: "kam",
-      roleLabel: defaultCfg.label,
-      name: defaultCfg.defaultName,
-      email: defaultCfg.defaultEmail,
-    });
+    // Clear local state first; the request still carries the cookie and bumps
+    // tokenVersion server-side so the token cannot be replayed.
+    clearSession();
+    void authApi.logout().catch(() => undefined);
   };
 
   const addRequest = (item: Omit<RequestItem, "id" | "createdAt">): RequestItem => {
@@ -303,6 +350,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
+        status,
         login,
         switchRole,
         logout,
