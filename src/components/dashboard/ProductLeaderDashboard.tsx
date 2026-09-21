@@ -568,15 +568,24 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
                       <div className="group relative rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
                         {/* Alerta prioritaria: el cliente pidió ajustes — es la señal
                       más urgente que puede tener una tarjeta, va antes que
-                      cualquier otra cosa (docs/08, pregunta 13). */}
-                        {req.clientObservations && (
-                          <div className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300/60 dark:border-amber-900/50 px-3 py-1.5">
-                            <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-                            <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                              Cliente pidió ajustes
-                            </span>
-                          </div>
-                        )}
+                      cualquier otra cosa (docs/08, pregunta 13). Se renderiza
+                      siempre (invisible si no aplica) para reservar el mismo
+                      espacio en todas las tarjetas de la columna — así una
+                      tarjeta sin el aviso no se ve más "baja"/distinta que
+                      una con él (mismo criterio que RequestCard.tsx). */}
+                        <div
+                          className={cn(
+                            "flex items-center gap-1.5 border-b px-3 py-1.5",
+                            req.clientObservations
+                              ? "bg-amber-100 dark:bg-amber-950/40 border-amber-300/60 dark:border-amber-900/50"
+                              : "invisible border-transparent",
+                          )}
+                        >
+                          <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                            Cliente pidió ajustes
+                          </span>
+                        </div>
 
                         {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
                         <Link to={`/solicitudes/${req.id}`} className="block p-3.5">
