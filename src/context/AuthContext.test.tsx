@@ -15,7 +15,7 @@ const session = (overrides: Partial<SessionUser> = {}): SessionUser => ({
   email: "ana@icesi.edu.co",
   firstName: "Ana",
   lastName: "Pérez",
-  roles: ["KAM", "PRODUCT_LEADER"],
+  roles: ["KAM"],
   expiresAt: Date.now() + 60_000,
   ...overrides,
 });
@@ -49,6 +49,30 @@ describe("AuthProvider session handling", () => {
     expect(auth.current.status).toBe("loading");
     await waitFor(() => expect(auth.current.status).toBe("authenticated"));
     expect(auth.current.user).toMatchObject({ role: "kam", name: "Ana Pérez", email: "ana@icesi.edu.co" });
+  });
+
+  it("accepts a single role without warning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocked.getMe.mockResolvedValue(session({ roles: ["PRODUCT_LEADER"] }));
+    const auth = mountProvider();
+
+    await waitFor(() => expect(auth.current.status).toBe("authenticated"));
+    expect(auth.current.user.role).toBe("lider-producto");
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("warns with the user id and received roles when the session carries more than one", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocked.getMe.mockResolvedValue(session({ id: "u-42", roles: ["KAM", "PRODUCT_LEADER"] }));
+    const auth = mountProvider();
+
+    await waitFor(() => expect(auth.current.status).toBe("authenticated"));
+    expect(warn).toHaveBeenCalledTimes(1);
+    const message = String(warn.mock.calls[0][0]);
+    expect(message).toContain("u-42");
+    expect(message).toContain("KAM, PRODUCT_LEADER");
+    warn.mockRestore();
   });
 
   it("does not assume the session is valid when the backend says it is already expired", async () => {

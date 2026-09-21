@@ -90,6 +90,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearSession();
         return false;
       }
+      // An account has exactly one role. More than one means badly migrated data:
+      // say so loudly instead of silently picking one (the first is used so the
+      // user is not locked out, and the menu never mixes modules of several roles).
+      if (roles.length > 1) {
+        console.warn(
+          `[auth] Session for user ${session.id} arrived with ${roles.length} roles; expected exactly one. ` +
+            `Received: ${session.roles.join(", ")}. Using "${roles[0]}".`,
+        );
+      }
       const cfg = ROLE_CONFIGS[roles[0]];
       const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
       setUser({
