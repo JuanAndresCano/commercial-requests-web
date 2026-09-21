@@ -2,7 +2,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiRequest } from "@/lib/api/client";
 import { authApi, type SessionUser } from "@/lib/api/auth";
-import { AuthProvider, useAuth, type UserRole } from "./AuthContext";
+import { AuthProvider, useAuth } from "./AuthContext";
 
 vi.mock("@/lib/api/auth", () => ({
   authApi: { login: vi.fn(), getMe: vi.fn(), logout: vi.fn() },
@@ -78,7 +78,7 @@ describe("AuthProvider session handling", () => {
     expect(auth.current.status).toBe("unauthenticated");
   });
 
-  it("signs in and only allows switching to roles the account really has", async () => {
+  it("signs in and takes the role from the backend session", async () => {
     mocked.getMe.mockRejectedValueOnce(new ApiError(401, "no cookie"));
     const auth = mountProvider();
     await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
@@ -89,13 +89,7 @@ describe("AuthProvider session handling", () => {
       await auth.current.login("ana@icesi.edu.co", "secret");
     });
     expect(auth.current.status).toBe("authenticated");
-
-    const forbidden: UserRole = "profesor";
-    act(() => auth.current.switchRole(forbidden));
     expect(auth.current.user.role).toBe("kam");
-
-    act(() => auth.current.switchRole("lider-producto"));
-    expect(auth.current.user.role).toBe("lider-producto");
   });
 
   it("logout clears local state and revokes the session on the backend", async () => {

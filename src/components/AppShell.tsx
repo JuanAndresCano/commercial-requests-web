@@ -1,20 +1,9 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import {
-  Home,
-  FileText,
-  PlusCircle,
-  LogOut,
-  Network,
-  GraduationCap,
-  ChevronDown,
-  Menu,
-  X,
-  RotateCcw,
-} from "@/components/icons";
-import { toast } from "sonner";
+import { LogOut, Menu, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import { useAuth, UserRole, ROLE_CONFIGS } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
+import { getNavItems, isNavItemActive } from "@/lib/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IcesiLogo, IcesiSymbol, IcesiCenefa } from "@/components/IcesiLogo";
 import {
@@ -25,98 +14,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
 interface AppShellProps {
   children: React.ReactNode;
-  role?: string;
 }
 
-export function AppShell({ children, role: overrideRole }: AppShellProps) {
-  const location = useLocation();
-  const { pathname, search } = location;
+export function AppShell({ children }: AppShellProps) {
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
-  const { user, logout, switchRole, resetData } = useAuth();
-
-  const handleResetData = () => {
-    if (
-      window.confirm(
-        "¿Restablecer todas las solicitudes a los datos de ejemplo? Se perderá cualquier cambio hecho en esta sesión de prueba.",
-      )
-    ) {
-      resetData();
-      // Los tableros guardan filtros/vista en su propio estado de React
-      // (usePersistentState) que solo se relee de localStorage al montar el
-      // componente — sin recargar, un filtro que ya estaba activo (ej. "Sin
-      // docente") seguiría aplicado en memoria aunque los datos ya se hayan
-      // restablecido. Recargar garantiza que todo arranque limpio.
-      toast.success("Datos de ejemplo restablecidos");
-      window.setTimeout(() => window.location.reload(), 400);
-    }
-  };
+  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const activeRoleLabel = overrideRole || user.roleLabel;
-  const activeRole = user.role;
-
-  // Function to accurately determine which nav item is active
-  const isItemActive = (itemTo: string) => {
-    const [itemPath, itemQuery] = itemTo.split("?");
-
-    // 1. Items with query parameters (e.g. ?filter=sin-profesor)
-    if (itemQuery) {
-      return pathname === itemPath && search.includes(itemQuery);
-    }
-
-    // 2. Dashboard / Home
-    if (itemTo === "/dashboard") {
-      return pathname === "/dashboard" || pathname === "/";
-    }
-
-    // 3. New request page
-    if (itemTo === "/solicitudes/nueva") {
-      return pathname === "/solicitudes/nueva";
-    }
-
-    // 4. Main Solicitudes tab
-    if (itemTo === "/solicitudes") {
-      if (pathname === "/solicitudes/nueva") {
-        return false;
-      }
-      if (search.includes("filter=sin-profesor")) {
-        return false;
-      }
-      return pathname.startsWith("/solicitudes");
-    }
-
-    return pathname === itemPath;
-  };
-
-  // Role-specific navigation items
-  const navItems = (() => {
-    if (activeRole === "lider-producto") {
-      // Una sola vista de solicitudes (tablero unificado con los 4 estados +
-      // filtro rápido "Sin docente" integrado) — ya no hay "Inicio" separado
-      // del tablero ni un tablero genérico aparte para asignar docentes.
-      return [{ to: "/dashboard", label: "Solicitudes", icon: FileText }];
-    }
-    if (activeRole === "lider-nodo") {
-      return [
-        { to: "/dashboard", label: "Inicio", icon: Home },
-        { to: "/solicitudes", label: "Solicitudes de nodo", icon: Network },
-      ];
-    }
-    if (activeRole === "profesor") {
-      return [
-        { to: "/dashboard", label: "Inicio", icon: Home },
-        { to: "/solicitudes", label: "Mis propuestas", icon: GraduationCap },
-      ];
-    }
-    // Default: KAM — una sola vista de solicitudes (KPIs + tabla, ya no hay
-    // un "Inicio" separado del tablero: es la misma pantalla) + creación directa.
-    return [
-      { to: "/dashboard", label: "Solicitudes", icon: FileText },
-      { to: "/solicitudes/nueva", label: "Nueva solicitud", icon: PlusCircle },
-    ];
-  })();
+  const activeRoleLabel = user.roleLabel;
+  const isItemActive = (itemTo: string) => isNavItemActive(itemTo, pathname, search);
+  // The menu is derived from the role of the live session, never from client state.
+  const navItems = getNavItems(user.role);
 
   const initials = user.name
     ? user.name
@@ -185,10 +97,6 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleResetData} className="text-xs cursor-pointer">
-                  <RotateCcw className="mr-2 h-3.5 w-3.5" />
-                  Restablecer datos de ejemplo
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive text-xs cursor-pointer">
                   <LogOut className="mr-2 h-3.5 w-3.5" />
                   Cerrar sesión
@@ -281,46 +189,10 @@ export function AppShell({ children, role: overrideRole }: AppShellProps) {
                 </Link>
               </div>
 
-              {/* Right: Role Switcher, Quick Actions & Theme Toggle */}
-              <div className="flex items-center gap-2.5">
-                {/* Role dropdown switcher */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="hidden sm:flex items-center gap-2 rounded-lg border border-border dark:border-[#2b2d3e] bg-secondary/60 dark:bg-[#1a1c28] px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors shadow-xs"
-                      title="Haz clic para cambiar el rol de usuario"
-                    >
-                      <span className="h-2 w-2 rounded-full bg-[#5454e9]" />
-                      <span className="truncate max-w-[140px] md:max-w-[180px]">{activeRoleLabel}</span>
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel className="text-xs text-muted-foreground">
-                      Vista activa (simulación de rol)
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {(Object.keys(ROLE_CONFIGS) as UserRole[]).map((rKey) => {
-                      const cfg = ROLE_CONFIGS[rKey];
-                      return (
-                        <DropdownMenuItem
-                          key={rKey}
-                          onClick={() => switchRole(rKey)}
-                          className={cn(
-                            "text-xs cursor-pointer",
-                            activeRole === rKey && "bg-accent/10 font-bold text-[#5454e9]",
-                          )}
-                        >
-                          <span>{cfg.label}</span>
-                          {activeRole === rKey && (
-                            <span className="ml-auto text-[10px] font-bold text-[#5454e9]">Activo</span>
-                          )}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              {/* Right: active role (read-only — it comes from the session) */}
+              <div className="hidden sm:flex items-center gap-2 rounded-lg border border-border dark:border-[#2b2d3e] bg-secondary/60 dark:bg-[#1a1c28] px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs">
+                <span className="h-2 w-2 rounded-full bg-[#5454e9]" />
+                <span className="truncate max-w-[140px] md:max-w-[180px]">{activeRoleLabel}</span>
               </div>
             </div>
 
