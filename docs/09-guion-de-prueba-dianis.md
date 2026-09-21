@@ -32,10 +32,12 @@ Arriba a la derecha, cambia el rol a **"Líder de Producto"**.
 - [ ] En una solicitud "Nueva" sin docente → clic **"Asignar"** → elige un profesor de planta → guarda.
 - [ ] Clic **"Pasar a Experto"** → aparece una confirmación con el nombre de la empresa → confirma.
 - [ ] Clic **"Pasar a Costeo"** → confirma.
-- [ ] En el detalle, en "Costeo Financiero": pon un Costo Base, ajusta el Margen, mira el Total calculado en vivo.
-- [ ] Intenta escribir un costo base **negativo** → no te deja.
-- [ ] Con el Total Ofertado ya en un valor mayor a $0, la tarjeta debe mostrar **"Listo para el KAM"** — como Líder ya no tienes ningún botón para "entregar"; eso lo hace el KAM (vuelve a la Parte 1 si quieres verlo cerrar el ciclo).
-- [ ] Intenta **reasignar** una solicitud "Nueva" a otro Líder (ícono de flechas en la tarjeta).
+- [ ] En el detalle, en "Costeo Financiero": pon el **Valor Final de la Propuesta**, y por separado el Margen de Contribución (% y $) — son independientes, no se calculan solos.
+- [ ] Intenta escribir un valor **negativo** → no te deja.
+- [ ] Con el valor final ya en un valor mayor a $0, clic **"Enviar a KAM"** y confirma — recién ahí el KAM puede entregar al cliente; antes de confirmar, aunque el valor ya esté puesto, el botón del KAM sigue deshabilitado.
+- [ ] Devuelve esa misma solicitud con observaciones (vuelve a la Parte 1) y mira el **Historial de Negociación** en el detalle — debe verse la ronda anterior marcada como rechazada, con tu observación.
+- [ ] Ajusta el valor y vuelve a "Enviar a KAM" — esta vez debe **exigirte una nota** explicando el ajuste antes de dejarte confirmar.
+- [ ] Intenta **reasignar** una solicitud "Nueva" o "En proceso por experto" a otro Líder (ícono de flechas en la tarjeta).
 - [ ] Clic en el filtro **"Sin docente"** para ver solo lo pendiente de asignar.
 
 ---

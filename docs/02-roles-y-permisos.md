@@ -44,14 +44,14 @@ Archivo: `src/components/dashboard/KamCommandCenter.tsx`, montado desde `src/pag
 
 Estructura (de arriba hacia abajo):
 1. **Saludo personalizado** ("Hola, Andrea" + `RoleBadge` "KAM Icesi") + botón prominente "Nueva Solicitud".
-2. **Banner contextual** que solo aparece si hay ≥1 solicitud propia en estado `en-costeo`: *"¡Tienes N propuestas listas para entregar!"* — botón "Ver listas" que filtra la tabla (vista Tabla) o aísla la columna "Lista para Entregar" (vista Kanban), según cuál esté activa.
+2. **Banner contextual** que solo aparece si hay ≥1 solicitud propia realmente lista para entregar — es decir, con `readyForKam === true` (el Líder ya confirmó "Enviar a KAM"), **no basta con que esté en estado `en-costeo`**: *"¡Tienes N propuestas listas para entregar!"* — botón "Ver listas" que filtra la tabla (vista Tabla) o aísla la columna "Lista para Entregar" (vista Kanban), según cuál esté activa.
 3. **Dato agregado secundario** (texto, no tarjeta): "N solicitudes en total · $X COP en pipeline cotizado" (suma de `en-costeo` + `entregada`).
-4. **4 tarjetas KPI**, una por cada estado real del pipeline (Nueva / En Proceso / Lista para Entregar / Entregada — mismos 4 estados y colores que usa el Kanban, para que nunca se desalineen entre vistas):
+4. **4 tarjetas KPI**, una por cada etapa tal como la percibe el KAM (Nueva / En Proceso / Lista para Entregar / Entregada — mismos 4 estados y colores que usa el Kanban, para que nunca se desalineen entre vistas). "Lista para Entregar" cuenta y agrupa **solo** lo confirmado por el Líder (`readyForKam`); una solicitud en `en-costeo` que el Líder todavía está trabajando (incluida una con "Cliente pidió ajustes") cae bajo "En Proceso" — se corrigió porque antes el número de la tarjeta ya filtraba así, pero el Kanban seguía agrupando toda la etapa `en-costeo` sin filtrar, y un KAM veía "1" arriba con 3 tarjetas idénticas debajo (`KamCommandCenter.tsx`, función `kamStageOf`, fuente única de verdad para KPI/tabla/Kanban):
    - **En vista Tabla**, un clic filtra la tabla (oculta filas que no coinciden) — aquí sí aporta valor porque la tabla mezcla todos los estados en una lista plana.
-   - **En vista Kanban**, un clic **no oculta nada** (las columnas del Kanban ya son el filtro) — en cambio **aísla esa columna a pantalla completa**, mostrando las tarjetas en una cuadrícula de hasta 3 por fila en vez de una lista angosta. Un botón "Ver las 4 fases" (en la columna aislada y junto al buscador) regresa a la vista completa, o se hace clic de nuevo en la misma tarjeta.
+   - **En vista Kanban**, un clic **no oculta nada** (las columnas del Kanban ya son el filtro) — en cambio **aísla esa columna a pantalla completa**, mostrando las tarjetas en una cuadrícula de hasta 3 por fila en vez de una lista angosta. Un botón "Ver las 4 fases" (en la columna aislada y junto al buscador) regresa a la vista completa, o se hace clic de nuevo en la misma tarjeta. Cada tarjeta en "Lista para Entregar" muestra además un atajo "Revisar y entregar" al pie, igual que los botones de acción del tablero del Líder.
 5. **Toggle Tabla/Kanban** y buscador (por ID, empresa, título, tipo, Líder de Producto).
 6. **Vista Tabla**: columnas ID+fecha relativa, Propuesta+Empresa+tipo de servicio, Líder de Producto, Valor Ofertado (o "Pendiente de costeo"), Estado (4 badges de color, ya no fusiona Nueva+En Proceso), Acción.
-7. **Vista Kanban**: 4 columnas (o 1 si hay una aislada), tarjetas `RequestCard` compactas (ID, empresa, título, urgencia, tipo, Líder de Producto, docente o "Sin docente", fecha).
+7. **Vista Kanban**: 4 columnas (o 1 si hay una aislada), tarjetas `RequestCard` compactas (banner ámbar "Cliente pidió ajustes" si tiene `clientObservations`, ID, empresa, título, urgencia, tipo, Líder de Producto, docente o "Sin docente", fecha).
 
 ### Su journey de creación de solicitud
 
@@ -73,9 +73,9 @@ A diferencia del KAM (que opera con pocas solicitudes activas a la vez conceptua
 
 - Ver **únicamente las solicitudes asignadas a su nombre** ("Mis Solicitudes") — se eliminó el toggle "Todas" que existía antes; ya no ve el pipeline de otros líderes.
 - **Asignar docente/experto** a una solicitud (`nueva` → tiene que hacerlo antes/al avanzar): elige entre profesor de planta (lista cerrada, `ICESI_FACULTY`) o registra un consultor externo (ficha completa: nombre obligatorio, identificación, firma consultora, correo, teléfono, perfil).
-- **Editar el costeo financiero completo**: costo base, margen %, activar/desactivar "requiere asesor externo", ajustar manualmente el valor ofertado, agregar nota de negociación. Los campos numéricos (costo base, margen, valor ofertado personalizado) están protegidos contra valores negativos — se corrigió un hueco donde se podían guardar sin ningún aviso.
+- **Editar el costeo financiero completo**: el Valor Final de la Propuesta y el Margen de Contribución (% y $) se digitan directamente — ya no se calculan a partir de un costo base, porque el equipo trae ese número exacto de un Excel externo (ver `04`, `ProposalCosting`). También puede agregar una nota de alcance libre y confirmar explícitamente el envío al KAM con el botón "Enviar a KAM" (ver más abajo). Ya no existe el switch "requiere asesor externo": el indicador de asesor es de solo lectura, derivado directamente de a quién se asignó como docente/experto. Los campos numéricos están protegidos contra valores negativos (y el margen % contra >100) — se corrigió un hueco donde se podían guardar sin ningún aviso.
 - **Avanzar el estado** de la solicitud a través de las 4 etapas, con fricción proporcional al riesgo de cada transición (ver "Confirmaciones y validaciones" más abajo).
-- **Reasignar** una solicitud completa a otro Líder de Producto/nodo — solo mientras está en "Nueva" (si el tema no corresponde a su especialidad, fue mal asignada por el KAM, o hay sobrecarga operativa) — con motivo estructurado (`select` de razones) y nota opcional. Ya está protegido por su propio modal (selección + confirmación), no es un riesgo de un solo clic.
+- **Reasignar** una solicitud completa a otro Líder de Producto/nodo — mientras está en **"Nueva" o "En Experto"** (si el tema no corresponde a su especialidad, fue mal asignada por el KAM, hay sobrecarga operativa, o el experto asignado determina que el tema es de otro nodo) — con motivo estructurado (`select` de razones) y nota opcional. Ya está protegido por su propio modal (selección + confirmación), no es un riesgo de un solo clic. Si la solicitud estaba en "En Experto", reasignar la devuelve a "Nueva" y limpia el docente/asesor asignado (no aplicaría necesariamente bajo el nuevo nodo). ⚠️ La ampliación a "En Experto" es una decisión de Tomás, no confirmada aún por Dianis (`08`, pregunta 16).
 - Subir/eliminar documentos (ambas categorías: cara al cliente e internos de costeo).
 - Ver contacto del asesor externo asignado.
 
@@ -85,7 +85,7 @@ Se auditó cada transición de estado buscando huecos donde un clic accidental (
 
 - **"Pasar a Experto"**: deshabilitado sin docente asignado; requiere confirmar en un diálogo que muestra la empresa y el título de la solicitud (no un texto genérico).
 - **"Pasar a Costeo"**: requiere el mismo diálogo de confirmación.
-- **"Entregar" (enviar al cliente): ya no es una acción del Líder de Producto, es exclusiva del KAM.** Se encontró (reporte directo) que el Líder tenía su propio botón "Marcar Entregada" en el detalle que hacía exactamente lo mismo que el "Enviar a cliente" del KAM — saltándose por completo al KAM, cuando la regla de negocio (`08`, pregunta 13: "después de que le llegue al KAM, ellos puedan volver a enviarla") asume que es el KAM quien hace ese último paso. Se quitó ese botón: el trabajo del Líder termina en dejar el costeo completo (`en-costeo` con un Valor Total Ofertado mayor a $0), momento en el que la tarjeta ya queda visible para el KAM como "Lista para Entregar" sin necesidad de ninguna acción adicional del Líder. En el Kanban, la tarjeta muestra "Completar costeo" (enlace al detalle) mientras no hay costeo válido, y una etiqueta pasiva **"Listo para el KAM"** una vez lo hay — ya no hay ningún botón de avance en esa columna. En el detalle, el mismo estado se refleja como un indicativo **"Costeo listo — a la espera del KAM"**.
+- **"Entregar" (enviar al cliente): ya no es una acción del Líder de Producto, es exclusiva del KAM.** Se encontró (reporte directo) que el Líder tenía su propio botón "Marcar Entregada" en el detalle que hacía exactamente lo mismo que el "Enviar a cliente" del KAM — saltándose por completo al KAM, cuando la regla de negocio (`08`, pregunta 13: "después de que le llegue al KAM, ellos puedan volver a enviarla") asume que es el KAM quien hace ese último paso. Se quitó ese botón. El trabajo del Líder termina con un **gate explícito**: dejar el costeo completo no basta — debe confirmar con el botón **"Enviar a KAM"** (que además abre una ronda en el Historial de Negociación, ver `04`, `NegotiationRound`); mientras no lo haga, el "Enviar a cliente" del KAM sigue deshabilitado aunque ya exista un valor > $0. En el Kanban, la tarjeta en "En Costeo" pasa por tres estados: **"Completar costeo"** (enlace al detalle, mientras no hay valor), **"Completar envío"** (enlace al detalle, valor ya existe pero falta confirmar), y la insignia pasiva **"Enviado al KAM"** (con "hace X tiempo") una vez confirmado — ya no hay ningún botón de avance en esa columna. En el detalle, el mismo estado final se refleja como un indicativo **"Enviado al KAM — a la espera de envío al cliente"**.
 
 ### Qué NO hace
 
@@ -98,17 +98,19 @@ Archivo: `src/components/dashboard/ProductLeaderDashboard.tsx`, montado desde `s
 
 Estructura:
 1. **Header** con saludo personalizado ("Hola, Juan Pablo" + `RoleBadge`).
-2. **4 tarjetas KPI** — una por cada etapa del pipeline (1. Nuevas / 2. En Experto / 3. En Costeo / 4. Entregadas, esta última con el valor real aprobado en COP como dato secundario). Mismo comportamiento dual que en el dashboard del KAM: **filtran en vista Tabla, aíslan la columna a pantalla completa en vista Kanban** (no vacían las 4 columnas sin motivo, como pasaba antes).
-3. **Buscador** (por empresa, código, docente, título) y botón-filtro **"Sin docente (N)"** — solo cuenta/muestra solicitudes activas (no `entregada`) sin profesor asignado. Si el filtro deja el tablero vacío, se muestra un aviso explícito con botón "Quitar filtros" (antes las 4 columnas se veían vacías sin ninguna pista de que había un filtro activo).
-4. **Toggle Kanban/Tabla** (arranca en Kanban, a diferencia del KAM que arranca en Tabla).
-5. **Kanban de 4 columnas** (o 1 si hay una aislada). Cada tarjeta de solicitud muestra, de arriba hacia abajo:
+2. **Banner contextual** que solo aparece si hay ≥1 solicitud propia en estado `nueva`: *"¡Tienes N solicitudes nuevas por revisar!"* — botón "Ver nuevas" que aísla/filtra la columna "Nueva" (mismo comportamiento dual tabla/kanban que el resto de tarjetas KPI). Espejo del banner equivalente del KAM.
+3. **Dato agregado secundario** (texto, no tarjeta): "N solicitudes en total · $X COP en pipeline cotizado" (suma de `en-costeo` + `entregada`) — mismo formato que usa `KamCommandCenter`.
+4. **4 tarjetas KPI** — una por cada etapa del pipeline (1. Nuevas / 2. En Experto / 3. En Costeo / 4. Entregadas, esta última con el valor real aprobado en COP como dato secundario). Mismo comportamiento dual que en el dashboard del KAM: **filtran en vista Tabla, aíslan la columna a pantalla completa en vista Kanban** (no vacían las 4 columnas sin motivo, como pasaba antes).
+5. **Buscador** (por empresa, código, docente, título) y botón-filtro **"Sin docente (N)"** — solo cuenta/muestra solicitudes activas (no `entregada`) sin profesor asignado. Si el filtro deja el tablero vacío, se muestra un aviso explícito con botón "Quitar filtros" (antes las 4 columnas se veían vacías sin ninguna pista de que había un filtro activo).
+6. **Toggle Kanban/Tabla** (arranca en Kanban, a diferencia del KAM que arranca en Tabla).
+7. **Kanban de 4 columnas** (o 1 si hay una aislada). Cada tarjeta de solicitud muestra, de arriba hacia abajo:
    - Banner ámbar "Cliente pidió ajustes" si la solicitud tiene `clientObservations` (viene de una devolución del KAM) — es la señal más prioritaria de la tarjeta.
    - ID, empresa, urgencia, título.
    - Tipo de servicio + **valor cotizado** (visible solo si ya hay costeo real, en "En Costeo"/"Entregada").
    - Docente asignado (o "Sin docente").
    - **Antigüedad en la fase actual** ("En esta fase hace X días/horas") — usa `statusUpdatedAt`, útil para detectar cuellos de botella.
-   - Pie: fecha de creación + **fecha límite** (coloreada: roja si venció, naranja si vence en ≤3 días, gris si no hay apuro; no se muestra en "Entregada"), botón de reasignar (ícono, solo en "Nueva"), y la acción/indicador de etapa correspondiente (ver confirmaciones arriba) — en "En Costeo" ya no es un botón de avance, es "Completar costeo" o la etiqueta pasiva "Listo para el KAM".
-6. **Vista Tabla**: columnas ID+fecha, Propuesta+Empresa+tipo+urgencia, Docente, Valor Ofertado, Estado (`StatusBadge`), Acción (solo "Ver detalle" — sin botones de avance directos en esta vista).
+   - Pie: fecha de creación + **fecha límite** (coloreada: roja si venció, naranja si vence en ≤3 días, gris si no hay apuro; no se muestra en "Entregada"), botón de reasignar (ícono, en "Nueva" **y** "En Experto"), y la acción/indicador de etapa correspondiente (ver confirmaciones arriba) — en "En Costeo" ya no es un botón de avance de estado, es "Completar costeo", "Completar envío" o la etiqueta pasiva "Enviado al KAM", según qué tan confirmado esté el gate.
+8. **Vista Tabla**: columnas ID+fecha, Propuesta+Empresa+tipo+urgencia, Docente, Valor Ofertado, Estado (`StatusBadge`), Acción (solo "Ver detalle" — sin botones de avance directos en esta vista).
 
 ### Su journey de trabajo sobre una solicitud
 
@@ -148,11 +150,11 @@ Todos los roles tienen, en el menú del avatar (rail lateral), la opción **"Res
 | Ver solicitudes | ✅ (solo las suyas) | ✅ (solo las suyas) | ✅ (implícito, de su nodo) | ❌ (solo las suyas) |
 | Asignar docente/experto | ❌ | ✅ | ❌ | ❌ |
 | Editar costeo | ❌ (no ve costo base ni margen) | ✅ | ❌ | ❌ |
-| Editar información propia de la solicitud (empresa, contacto, diagnóstico) | ✅ (mientras esté "Nueva") | ❌ | — | — |
+| Editar información propia de la solicitud (empresa, contacto, diagnóstico) | ✅ (mientras esté "Nueva") | ⚠️ Solo en "En Costeo" y solo tras un rechazo del cliente (`03`, B.7) | — | — |
 | Editar Especificaciones del Servicio | ❌ | ✅ | — | — |
 | Cancelar solicitud | ✅ (mientras esté "Nueva") | ❌ | — | — |
 | Avanzar etapa del pipeline (Nueva → Experto → Costeo) | ❌ | ✅ | ❌ | ❌ |
-| Reasignar Líder de Producto | ❌ | ✅ (solo mientras "Nueva") | — (no implementado) | — |
+| Reasignar Líder de Producto | ❌ | ✅ ("Nueva" o "En Experto") | — (no implementado) | — |
 | Subir/eliminar documentos | ✅ | ✅ | — | — |
 | Marcar "Entregada"/"Enviar a cliente" | ✅ (única acción que cierra el ciclo) | ❌ (corregido — antes también podía) | — | — |
 | Devolver propuesta entregada con observaciones | ✅ | ❌ | — | — |

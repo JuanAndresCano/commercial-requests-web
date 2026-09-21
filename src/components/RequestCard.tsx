@@ -1,24 +1,45 @@
 import { Link } from "react-router-dom";
-import { Calendar, User, ArrowUpRight, AlertCircle } from "@/components/icons";
+import { Calendar, User, ArrowUpRight, AlertCircle, ArrowRight } from "@/components/icons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { UrgencyBadge } from "./StatusBadge";
+import { cn } from "@/lib/utils";
 import type { RequestItem } from "@/lib/mock-data";
 
-export function RequestCard({ req }: { req: RequestItem }) {
+interface RequestCardProps {
+  req: RequestItem;
+  /**
+   * Texto de un atajo visual al fondo de la tarjeta (ej. "Revisar y
+   * entregar") para columnas donde la tarjeta ya representa una acción
+   * concreta pendiente, igual que los botones de acción del tablero del
+   * Líder de Producto. Es solo un refuerzo visual — toda la tarjeta ya
+   * navega al detalle, así que no es un enlace independiente.
+   */
+  cta?: string;
+}
+
+export function RequestCard({ req, cta }: RequestCardProps) {
   return (
     <Link
       to={`/solicitudes/${req.id}`}
       className="group block rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-2xs transition-all hover:border-[#5454e9]/40 hover:shadow-md dark:hover:bg-[#171926] overflow-hidden"
     >
       {/* El cliente pidió ajustes — el KAM habla directo con el cliente, así
-          que necesita ver esta señal igual que el Líder de Producto. */}
-      {req.clientObservations && (
-        <div className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300/60 dark:border-amber-900/50 px-3.5 py-1.5">
-          <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
-        </div>
-      )}
+          que necesita ver esta señal igual que el Líder de Producto. Se
+          renderiza siempre (invisible si no aplica) para reservar el mismo
+          espacio en todas las tarjetas — así ninguna se ve más "alta" ni
+          desplaza su contenido según tenga o no el aviso. */}
+      <div
+        className={cn(
+          "flex items-center gap-1.5 border-b px-3.5 py-1.5",
+          req.clientObservations
+            ? "bg-amber-100 dark:bg-amber-950/40 border-amber-300/60 dark:border-amber-900/50"
+            : "invisible border-transparent",
+        )}
+      >
+        <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
+      </div>
 
       <div className="p-3.5">
         <div className="flex items-start justify-between gap-2">
@@ -68,6 +89,13 @@ export function RequestCard({ req }: { req: RequestItem }) {
           </div>
         </div>
       </div>
+
+      {cta && (
+        <div className="flex items-center justify-between gap-2 border-t border-icesi-blue/20 bg-icesi-blue/5 px-3.5 py-2 dark:bg-icesi-blue/10 group-hover:bg-icesi-blue/10 dark:group-hover:bg-icesi-blue/15 transition-colors">
+          <span className="text-[11px] font-bold text-icesi-blue">{cta}</span>
+          <ArrowRight className="h-3.5 w-3.5 text-icesi-blue" />
+        </div>
+      )}
     </Link>
   );
 }

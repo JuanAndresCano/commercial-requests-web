@@ -8,13 +8,11 @@
 > vigentes**, pero la persistencia en `localStorage` y el login simulado se van a reemplazar.
 > Reglas de código y de trabajo: [`AGENTS.md`](../AGENTS.md) y [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
-## ⚠️ Qué es (y qué NO es) este repositorio
+## ⚠️ Qué es (y qué NO es) esta documentación
 
-Este repositorio (`university-connect`) es **un prototipo de UX/UI**, construido en React + TypeScript + Vite + Tailwind + shadcn/ui, con **datos simulados (mock) y persistencia en `localStorage`** — no hay backend real, ni base de datos, ni autenticación real.
+Lo que sigue documenta **el prototipo de UX/UI** tal como se validó (React + TypeScript + Vite + Tailwind + shadcn/ui, con datos simulados y persistencia en `localStorage`) — es la referencia de **reglas de negocio y experiencia validadas**, no un esquema del backend final.
 
-Su único propósito es **explorar y validar la experiencia de usuario** (flujos, pantallas, jerarquía de información, interacciones) antes de construir la versión de producción.
-
-**El desarrollo real** (modelo de datos definitivo, backend, autenticación institucional, API) **se está construyendo en un entorno aislado y separado**, con su propia especificación. Esta documentación **no define esa arquitectura final** — documenta la lógica de negocio y la experiencia tal como existen hoy en el prototipo, para que quien continúe el trabajo de UX/UI (o quien diseñe el backend final) entienda:
+**El backend real** (modelo de datos definitivo, autenticación institucional, API) vive en `commercial-requests-backend` (NestJS) — ver `AGENTS.md` para el enlace y las decisiones de arquitectura cruzadas entre los dos repos. Esta documentación no define esa arquitectura final — documenta la lógica de negocio y la experiencia tal como existen hoy en el prototipo, para que quien construya el backend real entienda:
 
 1. Qué problema de negocio resuelve la herramienta.
 2. Cómo se comportan hoy los roles clave, especialmente **KAM** y **Líder de Producto** (los dos roles prioritarios a mejorar).
@@ -39,6 +37,7 @@ La aplicación se pondrá en producción en pocos días. El objetivo central de 
 | [`07-gaps-conocidos-y-deuda-tecnica.md`](./07-gaps-conocidos-y-deuda-tecnica.md) | Inventario de huecos funcionales, placeholders sin conectar y atajos de prototipo que **no deben replicarse en producción**. |
 | [`08-preguntas-abiertas-negocio.md`](./08-preguntas-abiertas-negocio.md) | Bitácora de preguntas de negocio que necesitaban decisión de la Líder de Producto (Dianis) — la mayoría ya respondidas e implementadas; quedan unas pocas pendientes de una siguiente ronda. |
 | [`09-guion-de-prueba-dianis.md`](./09-guion-de-prueba-dianis.md) | Guion corto, click a click, para que la Líder de Producto pruebe el prototipo de punta a punta y dé el aval para construir la versión real. |
+| [`10-decisiones-pendientes-equipo.md`](./10-decisiones-pendientes-equipo.md) | Decisiones de gobernanza del repositorio (no de negocio) que deben resolverse entre Tomás y Juan Andrés antes de ejecutarse. |
 
 ## Cómo correr el prototipo localmente
 

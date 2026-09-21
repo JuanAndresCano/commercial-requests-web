@@ -2303,7 +2303,7 @@ function Step4({
                               <span>
                                 Valor:{" "}
                                 <strong className="text-foreground font-mono">
-                                  {item.totalCostCop != null ? formatCop(item.totalCostCop) : "Pendiente de costeo"}
+                                  {formatCop(item.totalCostCop ?? 0)}
                                 </strong>
                               </span>
                               {item.deadline && (
@@ -2429,9 +2429,7 @@ function Step4({
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Valor de la Oferta</span>
                     <span className="font-bold text-foreground font-mono text-sm">
-                      {selectedProposalModal.totalCostCop != null
-                        ? formatCop(selectedProposalModal.totalCostCop)
-                        : "Pendiente de costeo"}
+                      {formatCop(selectedProposalModal.totalCostCop ?? 0)}
                     </span>
                   </div>
                 </div>

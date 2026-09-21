@@ -1,3 +1,4 @@
+import React from "react";
 import { Sun, Moon } from "@/components/icons";
 import { useTheme } from "@/context/ThemeContext";
 import { cn } from "@/lib/utils";
