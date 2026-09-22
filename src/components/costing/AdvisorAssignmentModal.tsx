@@ -12,55 +12,42 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PROFESSORS, RequestItem, ExternalProfessorData } from "@/lib/mock-data";
+import { RequestItem, ExternalProfessorData } from "@/lib/mock-data";
 import { GraduationCap, Briefcase, UserCheck, Check, Mail, Phone, Building, User } from "@/components/icons";
 import { toast } from "sonner";
-
-// Additional faculty members from Universidad Icesi for realistic selection
-const ICESI_FACULTY = [
-  { name: "Dr. Ricardo Mejía", dept: "Ingeniería de Sistemas y Computación", email: "ricardo.mejia@icesi.edu.co" },
-  {
-    name: "Dra. Paula Henao",
-    dept: "Facultad de Ciencias Administrativas y Económicas",
-    email: "paula.henao@icesi.edu.co",
-  },
-  {
-    name: "Dr. Andrés Lozano",
-    dept: "Departamento de Diseño de Medios Interactivos",
-    email: "andres.lozano@icesi.edu.co",
-  },
-  {
-    name: "Dra. Marcela Rodríguez",
-    dept: "Centro de Desarrollo del Espíritu Empresarial (CDEE)",
-    email: "marcela.rodriguez@icesi.edu.co",
-  },
-  {
-    name: "Dr. Juan Carlos González",
-    dept: "Departamento de Gestión Organizacional",
-    email: "jc.gonzalez@icesi.edu.co",
-  },
-  { name: "Mg. Diana Morales", dept: "Escuela de Ciencias de la Educación", email: "diana.morales@icesi.edu.co" },
-];
+import { ProfessorPicker } from "@/components/ProfessorPicker";
+import { useRegisterExternalProfessor } from "@/hooks/use-professor-search";
+import { ApiError } from "@/lib/api/client";
+import type { Professor } from "@/lib/api/professors";
 
 interface AdvisorAssignmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   request: RequestItem;
-  onSaveAssignment: (professorName: string, type: "planta" | "externo", externalData?: ExternalProfessorData) => void;
+  /**
+   * `professorId` is the id of the professor directory entry. The board still keeps
+   * the assignment locally (by name), so callers may ignore it until it talks to the API.
+   */
+  onSaveAssignment: (
+    professorName: string,
+    type: "planta" | "externo",
+    externalData?: ExternalProfessorData,
+    professorId?: string,
+  ) => void;
 }
 
 export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignment }: AdvisorAssignmentModalProps) {
   const [activeTab, setActiveTab] = useState<"planta" | "externo">(
     request.professorType === "externo" ? "externo" : "planta",
   );
+  const registerExternal = useRegisterExternalProfessor();
 
-  // Planta selection state
-  const [selectedPlantaProf, setSelectedPlantaProf] = useState(
-    request.professorType === "planta" ? (request.professor ?? PROFESSORS[0]) : PROFESSORS[0],
-  );
+  // Planta: the pick comes from the directory; the current assignment (if any) is only shown.
+  const [selectedStaff, setSelectedStaff] = useState<Professor | null>(null);
+  const currentPlantaProf = request.professorType === "planta" ? request.professor : undefined;
 
-  // Externo form state
+  // Externo: either a registered advisor picked from the directory (id set) or a new one typed by hand.
+  const [selectedExternalId, setSelectedExternalId] = useState<string | null>(null);
   const [externoNombre, setExternoNombre] = useState(
     request.externalProfessorData?.nombre ?? (request.professorType === "externo" ? (request.professor ?? "") : ""),
   );
@@ -75,6 +62,8 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
   // Sync state when request changes or modal opens
   useEffect(() => {
     if (isOpen) {
+      setSelectedStaff(null);
+      setSelectedExternalId(null);
       if (request.professorType === "externo") {
         setActiveTab("externo");
         setExternoNombre(request.externalProfessorData?.nombre ?? request.professor ?? "");
@@ -85,37 +74,67 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
         setExternoPerfil(request.externalProfessorData?.perfil ?? "");
       } else {
         setActiveTab("planta");
-        setSelectedPlantaProf(request.professor ?? PROFESSORS[0]);
       }
     }
   }, [isOpen, request]);
 
-  const handleSave = () => {
+  // Picking a registered advisor fills name and company; editing them afterwards makes it a new one.
+  const handleSelectExternal = (professor: Professor) => {
+    setSelectedExternalId(professor.id);
+    setExternoNombre(professor.fullName);
+    setExternoEmpresa(professor.company ?? "");
+  };
+
+  const handleSave = async () => {
     if (activeTab === "planta") {
-      if (!selectedPlantaProf) {
+      if (selectedStaff) {
+        onSaveAssignment(selectedStaff.fullName, "planta", undefined, selectedStaff.id);
+        toast.success(`Docente de planta ${selectedStaff.fullName} asignado con éxito`);
+        onClose();
+      } else if (currentPlantaProf) {
+        // Nothing new picked: keep the current assignment.
+        onClose();
+      } else {
         toast.error("Por favor selecciona un profesor de planta");
-        return;
       }
-      onSaveAssignment(selectedPlantaProf, "planta");
-      toast.success(`Docente de planta ${selectedPlantaProf} asignado con éxito`);
-      onClose();
-    } else {
-      if (!externoNombre.trim()) {
-        toast.error("Ingresa el nombre completo del consultor o docente externo");
-        return;
-      }
-      const extData: ExternalProfessorData = {
-        nombre: externoNombre.trim(),
-        identificacion: externoIdentificacion.trim() || undefined,
-        empresaConsultora: externoEmpresa.trim() || undefined,
-        correo: externoCorreo.trim() || undefined,
-        telefono: externoTelefono.trim() || undefined,
-        perfil: externoPerfil.trim() || undefined,
-      };
-      onSaveAssignment(externoNombre.trim(), "externo", extData);
-      toast.success(`Consultor externo ${externoNombre.trim()} registrado y asignado con éxito`);
-      onClose();
+      return;
     }
+
+    if (!externoNombre.trim()) {
+      toast.error("Ingresa el nombre completo del consultor o docente externo");
+      return;
+    }
+
+    // A new external advisor is registered once in the directory so it can be reused next time.
+    let professorId = selectedExternalId ?? undefined;
+    if (!professorId) {
+      try {
+        const created = await registerExternal.mutateAsync({
+          fullName: externoNombre.trim(),
+          company: externoEmpresa.trim() || undefined,
+        });
+        professorId = created.id;
+      } catch (error) {
+        toast.error(
+          error instanceof ApiError && error.status === 409
+            ? "Ese consultor ya está registrado en el directorio. Búscalo arriba para seleccionarlo."
+            : "No pudimos registrar al consultor en el directorio. Intenta de nuevo.",
+        );
+        return;
+      }
+    }
+
+    const extData: ExternalProfessorData = {
+      nombre: externoNombre.trim(),
+      identificacion: externoIdentificacion.trim() || undefined,
+      empresaConsultora: externoEmpresa.trim() || undefined,
+      correo: externoCorreo.trim() || undefined,
+      telefono: externoTelefono.trim() || undefined,
+      perfil: externoPerfil.trim() || undefined,
+    };
+    onSaveAssignment(externoNombre.trim(), "externo", extData, professorId);
+    toast.success(`Consultor externo ${externoNombre.trim()} registrado y asignado con éxito`);
+    onClose();
   };
 
   return (
@@ -154,37 +173,27 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="planta-prof-select" className="text-xs font-semibold">
-                  Profesor de Planta disponible *
-                </Label>
-                <Select value={selectedPlantaProf} onValueChange={setSelectedPlantaProf}>
-                  <SelectTrigger id="planta-prof-select" className="w-full">
-                    <SelectValue placeholder="Selecciona un profesor de planta" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-64">
-                    {ICESI_FACULTY.map((prof) => (
-                      <SelectItem key={prof.name} value={prof.name}>
-                        <div className="py-0.5">
-                          <p className="font-medium text-foreground">{prof.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{prof.dept}</p>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <ProfessorPicker
+                type="STAFF"
+                label="Profesor de Planta disponible *"
+                selectedId={selectedStaff?.id}
+                onSelect={setSelectedStaff}
+              />
 
-              {/* Selected prof preview card */}
-              {selectedPlantaProf && (
+              {/* Selected (or current) prof preview card */}
+              {(selectedStaff || currentPlantaProf) && (
                 <div className="rounded-md border border-accent/20 bg-accent/5 p-3 text-xs">
                   <div className="flex items-center gap-2 font-medium text-foreground">
                     <GraduationCap className="h-4 w-4 text-accent" />
                     <span>
-                      Docente seleccionado: <strong className="text-foreground">{selectedPlantaProf}</strong>
+                      {selectedStaff ? "Docente seleccionado" : "Docente asignado actualmente"}:{" "}
+                      <strong className="text-foreground">{selectedStaff?.fullName ?? currentPlantaProf}</strong>
                     </span>
                   </div>
-                  <p className="mt-1 text-muted-foreground">Institución: Universidad Icesi · Nodo: {request.node}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    Institución: Universidad Icesi
+                    {selectedStaff?.faculty ? ` · Facultad: ${selectedStaff.faculty}` : ""} · Nodo: {request.node}
+                  </p>
                 </div>
               )}
             </TabsContent>
@@ -199,6 +208,12 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
                 </p>
               </div>
 
+              <ProfessorPicker type="EXTERNAL" selectedId={selectedExternalId} onSelect={handleSelectExternal} />
+
+              <p className="text-[11px] text-muted-foreground">
+                ¿No aparece? Captura sus datos abajo y quedará registrado en el directorio para próximas asignaciones.
+              </p>
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2 space-y-1.5">
                   <Label htmlFor="ext-name" className="text-xs font-semibold">
@@ -211,7 +226,10 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
                       placeholder="Ej: Ing. Mauricio Restrepo Zuluaga"
                       className="pl-8 text-xs"
                       value={externoNombre}
-                      onChange={(e) => setExternoNombre(e.target.value)}
+                      onChange={(e) => {
+                        setExternoNombre(e.target.value);
+                        setSelectedExternalId(null);
+                      }}
                     />
                   </div>
                 </div>
@@ -240,7 +258,10 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
                       placeholder="Ej: McKinsey, Valora Consultoría, Independiente"
                       className="pl-8 text-xs"
                       value={externoEmpresa}
-                      onChange={(e) => setExternoEmpresa(e.target.value)}
+                      onChange={(e) => {
+                        setExternoEmpresa(e.target.value);
+                        setSelectedExternalId(null);
+                      }}
                     />
                   </div>
                 </div>
@@ -300,7 +321,7 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
           <Button variant="outline" size="sm" onClick={onClose}>
             Cancelar
           </Button>
-          <Button size="sm" onClick={handleSave}>
+          <Button size="sm" onClick={handleSave} disabled={registerExternal.isPending}>
             <Check className="h-4 w-4 mr-1" />
             Guardar asignación
           </Button>

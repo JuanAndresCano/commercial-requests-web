@@ -2,7 +2,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiRequest } from "@/lib/api/client";
 import { authApi, type SessionUser } from "@/lib/api/auth";
-import { AuthProvider, useAuth, type UserRole } from "./AuthContext";
+import { AuthProvider, useAuth } from "./AuthContext";
 
 vi.mock("@/lib/api/auth", () => ({
   authApi: { login: vi.fn(), getMe: vi.fn(), logout: vi.fn() },
@@ -15,7 +15,7 @@ const session = (overrides: Partial<SessionUser> = {}): SessionUser => ({
   email: "ana@icesi.edu.co",
   firstName: "Ana",
   lastName: "Pérez",
-  roles: ["KAM", "PRODUCT_LEADER"],
+  roles: ["KAM"],
   expiresAt: Date.now() + 60_000,
   ...overrides,
 });
@@ -51,6 +51,30 @@ describe("AuthProvider session handling", () => {
     expect(auth.current.user).toMatchObject({ role: "kam", name: "Ana Pérez", email: "ana@icesi.edu.co" });
   });
 
+  it("accepts a single role without warning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocked.getMe.mockResolvedValue(session({ roles: ["PRODUCT_LEADER"] }));
+    const auth = mountProvider();
+
+    await waitFor(() => expect(auth.current.status).toBe("authenticated"));
+    expect(auth.current.user.role).toBe("lider-producto");
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("warns with the user id and received roles when the session carries more than one", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocked.getMe.mockResolvedValue(session({ id: "u-42", roles: ["KAM", "PRODUCT_LEADER"] }));
+    const auth = mountProvider();
+
+    await waitFor(() => expect(auth.current.status).toBe("authenticated"));
+    expect(warn).toHaveBeenCalledTimes(1);
+    const message = String(warn.mock.calls[0][0]);
+    expect(message).toContain("u-42");
+    expect(message).toContain("KAM, PRODUCT_LEADER");
+    warn.mockRestore();
+  });
+
   it("does not assume the session is valid when the backend says it is already expired", async () => {
     mocked.getMe.mockResolvedValue(session({ expiresAt: Date.now() - 1_000 }));
     const auth = mountProvider();
@@ -71,14 +95,14 @@ describe("AuthProvider session handling", () => {
     await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
 
     mocked.login.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
-    mocked.getMe.mockResolvedValue(session({ roles: ["ADMIN"] }));
+    mocked.getMe.mockResolvedValue(session({ roles: ["ASSISTANT"] }));
     await act(async () => {
       await expect(auth.current.login("a@icesi.edu.co", "x")).rejects.toThrow();
     });
     expect(auth.current.status).toBe("unauthenticated");
   });
 
-  it("signs in and only allows switching to roles the account really has", async () => {
+  it("signs in and takes the role from the backend session", async () => {
     mocked.getMe.mockRejectedValueOnce(new ApiError(401, "no cookie"));
     const auth = mountProvider();
     await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
@@ -89,13 +113,7 @@ describe("AuthProvider session handling", () => {
       await auth.current.login("ana@icesi.edu.co", "secret");
     });
     expect(auth.current.status).toBe("authenticated");
-
-    const forbidden: UserRole = "profesor";
-    act(() => auth.current.switchRole(forbidden));
     expect(auth.current.user.role).toBe("kam");
-
-    act(() => auth.current.switchRole("lider-producto"));
-    expect(auth.current.user.role).toBe("lider-producto");
   });
 
   it("logout clears local state and revokes the session on the backend", async () => {

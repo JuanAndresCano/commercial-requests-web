@@ -11,7 +11,7 @@ import {
   ExternalProfessorData,
 } from "@/lib/mock-data";
 
-export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor";
+export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor" | "administrador";
 
 export interface User {
   role: UserRole;
@@ -21,32 +21,18 @@ export interface User {
   node?: string;
 }
 
-export const ROLE_CONFIGS: Record<
-  UserRole,
-  { label: string; defaultName: string; defaultEmail: string; node?: string }
-> = {
-  kam: {
-    label: "KAM",
-    defaultName: "Andrea Martínez",
-    defaultEmail: "andrea.martinez@icesi.edu.co",
-  },
+export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = {
+  kam: { label: "KAM" },
   "lider-producto": {
     label: "Líder de Producto",
-    defaultName: "Juan Pablo Corrales Arenas",
-    defaultEmail: "juanpablo.corrales@icesi.edu.co",
     node: "Inteligencia Artificial y Tecnologías Digitales",
   },
   "lider-nodo": {
     label: "Líder de Nodo",
-    defaultName: "Carlos Riveros",
-    defaultEmail: "carlos.riveros@icesi.edu.co",
     node: "Competitividad Organizacional, Economías Creativas",
   },
-  profesor: {
-    label: "Profesor",
-    defaultName: "Dr. Ricardo Mejía",
-    defaultEmail: "ricardo.mejia@icesi.edu.co",
-  },
+  profesor: { label: "Profesor" },
+  administrador: { label: "Administrador" },
 };
 
 // Legacy key of the mock login; the session now lives in an httpOnly cookie.
@@ -64,8 +50,6 @@ interface AuthContextType {
   status: AuthStatus;
   /** Signs in against the backend; rejects with ApiError (401 = bad credentials). */
   login: (email: string, password: string) => Promise<void>;
-  /** Switches between the roles the signed-in account really has. */
-  switchRole: (role: UserRole) => void;
   logout: () => void;
   requests: RequestItem[];
   addRequest: (item: Omit<RequestItem, "id" | "createdAt">) => RequestItem;
@@ -82,7 +66,6 @@ interface AuthContextType {
   addDocument: (id: string, doc: ProposalDocument) => void;
   removeDocument: (id: string, docId: string, category: "client_kam" | "internal_costing") => void;
   updateStatus: (id: string, status: RequestStatus) => void;
-  resetData: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -90,12 +73,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User>(ANONYMOUS_USER);
   const [status, setStatus] = useState<AuthStatus>("loading");
-  const [availableRoles, setAvailableRoles] = useState<UserRole[]>([]);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
 
   const clearSession = useCallback(() => {
     setUser(ANONYMOUS_USER);
-    setAvailableRoles([]);
     setExpiresAt(null);
     setStatus("unauthenticated");
   }, []);
@@ -109,6 +90,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearSession();
         return false;
       }
+      // An account has exactly one role. More than one means badly migrated data:
+      // say so loudly instead of silently picking one (the first is used so the
+      // user is not locked out, and the menu never mixes modules of several roles).
+      if (roles.length > 1) {
+        console.warn(
+          `[auth] Session for user ${session.id} arrived with ${roles.length} roles; expected exactly one. ` +
+            `Received: ${session.roles.join(", ")}. Using "${roles[0]}".`,
+        );
+      }
       const cfg = ROLE_CONFIGS[roles[0]];
       const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
       setUser({
@@ -118,7 +108,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: session.email,
         node: cfg.node,
       });
-      setAvailableRoles(roles);
       setExpiresAt(session.expiresAt);
       setStatus("authenticated");
       return true;
@@ -206,12 +195,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!applySession(session)) {
       throw new Error("La cuenta no tiene un rol habilitado en esta plataforma.");
     }
-  };
-
-  const switchRole = (role: UserRole) => {
-    if (!availableRoles.includes(role)) return;
-    const cfg = ROLE_CONFIGS[role];
-    setUser((prev) => ({ ...prev, role, roleLabel: cfg.label, node: cfg.node }));
   };
 
   const logout = () => {
@@ -332,27 +315,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateRequest(id, { status });
   };
 
-  const resetData = () => {
-    setRequests(MOCK_REQUESTS);
-    localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(MOCK_REQUESTS));
-
-    // También limpia los filtros/vistas persistidas de los tableros
-    // (usePersistentState) — si no, un filtro que quedó activo (ej. "Sin
-    // docente") sigue ocultando todo después del reset, sin ninguna pista de
-    // por qué, aunque los datos ya se hayan restablecido correctamente.
-    const uiStatePrefixes = ["icesi_kam_dashboard_", "icesi_lp_dashboard_"];
-    Object.keys(localStorage)
-      .filter((key) => uiStatePrefixes.some((prefix) => key.startsWith(prefix)))
-      .forEach((key) => localStorage.removeItem(key));
-  };
-
   return (
     <AuthContext.Provider
       value={{
         user,
         status,
         login,
-        switchRole,
         logout,
         requests,
         addRequest,
@@ -364,7 +332,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addDocument,
         removeDocument,
         updateStatus,
-        resetData,
       }}
     >
       {children}
