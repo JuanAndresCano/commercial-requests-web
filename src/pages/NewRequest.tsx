@@ -50,17 +50,18 @@ import {
   PRODUCT_LEADERS,
   NODE_DEFAULT_LEADERS,
   REQUEST_TYPES,
-  MOCK_COMPANIES,
   STATUS_META,
   URGENCY_META,
   formatCop,
   type RequestType,
   type Urgency,
   type RequestItem,
-  type CompanyRecord,
   type ClientContact,
   type ProposalDocument,
 } from "@/lib/mock-data";
+import type { Company } from "@/lib/api/companies";
+import { companyTypeLabel, formatNit } from "@/lib/company";
+import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
@@ -829,46 +830,18 @@ function Step1({
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
   errors: Record<string, string>;
 }) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [matchedCompany, setMatchedCompany] = useState<Company | null>(null);
 
-  const [matchedCompany, setMatchedCompany] = useState<CompanyRecord | null>(() => {
-    if (!data.nit && !data.empresaNombre) return null;
-    const cleanNit = data.nit ? data.nit.replace(/[^0-9]/g, "") : "";
-    return (
-      MOCK_COMPANIES.find(
-        (c) =>
-          (cleanNit && c.nit.replace(/[^0-9]/g, "") === cleanNit) ||
-          (data.empresaNombre && c.nombre.toLowerCase() === data.empresaNombre.toLowerCase()),
-      ) || null
-    );
-  });
-
-  const filteredCompanies = useMemo(() => {
-    if (!searchTerm.trim()) return [];
-    const q = searchTerm.toLowerCase().trim();
-    const qNum = q.replace(/[^0-9]/g, "");
-    return MOCK_COMPANIES.filter((c) => {
-      const nameMatch = c.nombre.toLowerCase().includes(q);
-      const nitMatch = qNum.length >= 3 && c.nit.replace(/[^0-9]/g, "").includes(qNum);
-      return nameMatch || nitMatch;
-    });
-  }, [searchTerm]);
-
-  const selectPredefinedCompany = (comp: CompanyRecord) => {
-    update("empresaNombre", comp.nombre);
-    update("nit", comp.nit);
-    update("direccion", comp.direccion);
-    update("telefonoEmpresa", comp.telefono);
-    update("correoEmpresa", comp.correo);
-    update("ciiuPrincipal", comp.ciiuPrincipal);
-    update("ciiuPrincipalDesc", comp.ciiuDescripcion || "");
-    if (comp.web) update("web", comp.web);
-    if (comp.tipoEmpresa) update("tipoEmpresa", comp.tipoEmpresa);
+  // El directorio del backend solo guarda nombre, NIT, sitio web y tipo: la
+  // dirección, el teléfono, el correo y el CIIU se siguen diligenciando a mano.
+  const selectCompany = (comp: Company) => {
+    update("empresaNombre", comp.name);
+    if (comp.nit) update("nit", formatNit(comp.nit));
+    if (comp.website) update("web", comp.website);
+    const tipoEmpresa = companyTypeLabel(comp.type);
+    if (tipoEmpresa) update("tipoEmpresa", tipoEmpresa);
     setMatchedCompany(comp);
-    setSearchTerm("");
-    setShowDropdown(false);
-    toast.success(`Datos de ${comp.nombre} cargados. Todos los campos continúan 100% editables.`);
+    toast.success(`Datos de ${comp.name} cargados. Todos los campos continúan 100% editables.`);
   };
 
   const addSecondaryCiiu = () => {
@@ -895,101 +868,7 @@ function Step1({
 
       {/* Búsqueda principal por Nombre de Empresa o NIT (Opcional) */}
       <div className="rounded-lg border-2 border-accent/20 bg-accent/5 p-4 sm:p-5">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label
-              htmlFor="company-search-input"
-              className="text-sm font-semibold text-foreground flex items-center gap-2"
-            >
-              <Search className="h-4 w-4 text-accent" />
-              Búsqueda de Empresa por Nombre / Razón Social
-            </Label>
-            <span className="text-xs font-normal text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded-full border border-border">
-              Opcional
-            </span>
-          </div>
-
-          <div className="relative">
-            <Input
-              id="company-search-input"
-              placeholder="Ej. Bancolombia, Argos, Manuelita, Carvajal o NIT..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setShowDropdown(true);
-              }}
-              onFocus={() => setShowDropdown(true)}
-              className="bg-card text-sm h-10 pr-8"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm("");
-                  setShowDropdown(false);
-                }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-
-            {/* Dropdown flotante con coincidencias automáticas */}
-            {showDropdown && filteredCompanies.length > 0 && (
-              <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-popover shadow-lg overflow-hidden max-h-60 overflow-y-auto">
-                <div className="p-1.5 text-[11px] font-semibold text-muted-foreground bg-secondary/50 px-3">
-                  Coincidencias encontradas en base de datos:
-                </div>
-                {filteredCompanies.map((c) => (
-                  <button
-                    key={c.nit}
-                    type="button"
-                    onClick={() => selectPredefinedCompany(c)}
-                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-accent/15 flex items-center justify-between border-b border-border/40 last:border-0 transition-colors"
-                  >
-                    <div>
-                      <span className="font-semibold text-foreground block text-sm">{c.nombre}</span>
-                      <span className="text-[11px] text-muted-foreground font-mono">
-                        NIT: {c.nit} · {c.direccion}
-                      </span>
-                    </div>
-                    <span className="text-[10px] bg-accent/15 text-accent font-semibold px-2 py-0.5 rounded">
-                      Seleccionar
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Escribe el nombre o razón social de la organización para autocompletar automáticamente los datos de
-            convenios. También puedes ingresar el NIT si lo conoces.
-          </p>
-        </div>
-
-        {/* Suggestions chips */}
-        <div className="mt-3 pt-3 border-t border-border/60">
-          <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
-            <Sparkles className="h-3 w-3 text-accent" /> Empresas frecuentes con convenio:
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {MOCK_COMPANIES.slice(0, 6).map((c) => (
-              <button
-                key={c.nit}
-                type="button"
-                onClick={() => selectPredefinedCompany(c)}
-                className={cn(
-                  "rounded-md border px-2.5 py-1 text-xs transition-colors",
-                  data.empresaNombre === c.nombre
-                    ? "border-accent bg-accent text-accent-foreground font-semibold"
-                    : "border-border bg-card text-muted-foreground hover:border-accent/40 hover:text-foreground",
-                )}
-              >
-                {c.nombre} <span className="font-mono text-[10px] opacity-75">({c.nit})</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <CompanyAutocomplete onSelect={selectCompany} />
 
         {/* Alerta de coincidencia */}
         {matchedCompany && (
@@ -998,9 +877,12 @@ function Step1({
             <div className="flex-1">
               <p className="font-semibold text-success">Empresa identificada en base de datos</p>
               <p className="text-muted-foreground mt-0.5">
-                Razón Social: <strong className="text-foreground">{matchedCompany.nombre}</strong> | NIT:{" "}
-                <span className="font-mono">{matchedCompany.nit}</span>. Todos los datos continúan{" "}
-                <strong className="text-foreground">100% editables</strong> para sobreescritura.
+                Razón Social: <strong className="text-foreground">{matchedCompany.name}</strong> | NIT:{" "}
+                <span className="font-mono">
+                  {matchedCompany.nit ? formatNit(matchedCompany.nit) : "sin registrar"}
+                </span>
+                . Todos los datos continúan <strong className="text-foreground">100% editables</strong> para
+                sobreescritura.
               </p>
             </div>
           </div>
@@ -1026,12 +908,7 @@ function Step1({
               id="empresa-nombre"
               placeholder="Ej. Bancolombia S.A."
               value={data.empresaNombre}
-              onChange={(e) => {
-                update("empresaNombre", e.target.value);
-                // Verificar coincidencia por nombre si escribe directamente
-                const m = MOCK_COMPANIES.find((c) => c.nombre.toLowerCase() === e.target.value.toLowerCase().trim());
-                if (m) setMatchedCompany(m);
-              }}
+              onChange={(e) => update("empresaNombre", e.target.value)}
             />
           </FieldErrorFrame>
           {errors.empresaNombre && <FieldErrorText>{errors.empresaNombre}</FieldErrorText>}
