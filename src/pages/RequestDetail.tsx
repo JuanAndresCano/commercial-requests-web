@@ -53,6 +53,8 @@ import {
   ExternalProfessorData,
   REQUEST_TYPES,
   URGENCY_META,
+  NODES,
+  NODE_DEFAULT_LEADERS,
   type RequestType,
   type Urgency,
   type NegotiationRound,
@@ -68,8 +70,18 @@ import { toast } from "sonner";
 import { useRequestDetail } from "@/hooks/use-request-detail";
 import { useUpdateRequestInfo } from "@/hooks/use-update-request-info";
 import { useDeleteRequest } from "@/hooks/use-delete-request";
+import { useNodes } from "@/hooks/use-nodes";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
-import type { UpdateProposalInfoPayload } from "@/lib/api/requests";
+import type { UpdateProposalInfoPayload, RequestType as ApiRequestType } from "@/lib/api/requests";
+
+const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
+  Capacitación: "CAPACITACION",
+  Consultoría: "CONSULTORIA",
+  Mentoría: "MENTORIA",
+  Investigación: "INVESTIGACION",
+  "Proyectos Especiales (Eventos)": "SPECIAL_PROJECTS",
+  Otro: "OTHER",
+};
 
 export default function RequestDetail() {
   const { id } = useParams();
@@ -89,6 +101,8 @@ export default function RequestDetail() {
   const { data: apiProposal } = useRequestDetail(id);
   const updateInfoMutation = useUpdateRequestInfo();
   const deleteRequestMutation = useDeleteRequest();
+  const { data: dbNodes } = useNodes();
+  const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
 
   const role = user.role;
   const isKam = role === "kam";
@@ -186,6 +200,12 @@ export default function RequestDetail() {
   const emptyFullInfoDraft = {
     title: "",
     urgency: "media" as Urgency,
+    type: "Capacitación" as RequestType,
+    tipoOtro: "",
+    node: "",
+    nodeId: "",
+    productLeader: "",
+    productLeaderId: "",
     companyNit: "",
     companyDireccion: "",
     companyTelefono: "",
@@ -222,9 +242,23 @@ export default function RequestDetail() {
   const isFullInfoDirty = JSON.stringify(fullInfoDraft) !== JSON.stringify(fullInfoSnapshot);
 
   const handleStartEditFullInfo = () => {
+    const rawNodeName = (apiProposal?.node?.name as string) || (req.node !== "Por definir" ? req.node : "");
+    const rawLeaderName =
+      req.productLeader && req.productLeader !== "Por definir"
+        ? req.productLeader
+        : rawNodeName && NODE_DEFAULT_LEADERS[rawNodeName]
+          ? NODE_DEFAULT_LEADERS[rawNodeName]
+          : "";
+
     const initial: typeof emptyFullInfoDraft = {
       title: req.title,
       urgency: req.urgency,
+      type: req.type,
+      tipoOtro: req.tipoOtro ?? "",
+      node: rawNodeName,
+      nodeId: (apiProposal?.nodeId || apiProposal?.node?.id) ?? "",
+      productLeader: rawLeaderName,
+      productLeaderId: (apiProposal?.productLeaderId || apiProposal?.productLeader?.id) ?? "",
       companyNit: req.companyNit ?? "",
       companyDireccion: req.companyDireccion ?? "",
       companyTelefono: req.companyTelefono ?? "",
@@ -298,9 +332,20 @@ export default function RequestDetail() {
       return;
     }
 
+    const matchedNode = dbNodes?.find(
+      (n) => n.name.toLowerCase() === (fullInfoDraft.node || "").toLowerCase() || n.id === fullInfoDraft.nodeId,
+    );
+    const resolvedNodeId =
+      matchedNode?.id ||
+      (fullInfoDraft.node && fullInfoDraft.node !== "Por definir" ? fullInfoDraft.nodeId : undefined);
+
     const payload: UpdateProposalInfoPayload = {
       programName: fullInfoDraft.title.trim(),
       priority: fullInfoDraft.urgency === "alta" ? "ALTA" : fullInfoDraft.urgency === "baja" ? "BAJA" : "MEDIA",
+      nodeId: resolvedNodeId,
+      productLeaderId: fullInfoDraft.productLeaderId || undefined,
+      requestType: REQUEST_TYPE_MAP[fullInfoDraft.type],
+      requestTypeOther: fullInfoDraft.type === "Otro" ? fullInfoDraft.tipoOtro.trim() || undefined : undefined,
       companyNit: fullInfoDraft.companyNit.trim() || undefined,
       companyDescription: fullInfoDraft.companyDescripcion.trim() || undefined,
       website: fullInfoDraft.companyWeb.trim() || undefined,
@@ -337,6 +382,10 @@ export default function RequestDetail() {
     updateRequest(req.id, {
       ...fullInfoDraft,
       title: fullInfoDraft.title.trim(),
+      node: fullInfoDraft.node || "Por definir",
+      productLeader: fullInfoDraft.productLeader || "Por definir",
+      type: fullInfoDraft.type,
+      tipoOtro: fullInfoDraft.tipoOtro.trim() || undefined,
       formacionPrevia: fullInfoDraft.formacionPrevia || undefined,
       fullInfoUpdatedAt: new Date().toISOString(),
       // Cuando lo edita el Líder (tras un rechazo, ver docs/03 B.7) puede
@@ -1480,12 +1529,14 @@ export default function RequestDetail() {
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, title: v }))}
               />
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Urgencia</Label>
+                <Label htmlFor="general-urgencia-select" className="text-[11px] text-muted-foreground">
+                  Urgencia
+                </Label>
                 <Select
                   value={fullInfoDraft.urgency}
                   onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, urgency: v as Urgency }))}
                 >
-                  <SelectTrigger className="h-8 text-xs">
+                  <SelectTrigger id="general-urgencia-select" className="h-8 text-xs">
                     <SelectValue placeholder="Seleccionar urgencia" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1496,6 +1547,88 @@ export default function RequestDetail() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="general-tipo-select" className="text-[11px] text-muted-foreground">
+                  Tipo de requerimiento
+                </Label>
+                <Select
+                  value={fullInfoDraft.type}
+                  onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, type: v as RequestType }))}
+                >
+                  <SelectTrigger id="general-tipo-select" className="h-8 text-xs">
+                    <SelectValue placeholder="Seleccionar tipo de requerimiento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REQUEST_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {fullInfoDraft.type === "Otro" && (
+                <EditableField
+                  label="Especificación del tipo de servicio"
+                  value={fullInfoDraft.tipoOtro}
+                  onChange={(v) => setFullInfoDraft((d) => ({ ...d, tipoOtro: v }))}
+                />
+              )}
+
+              <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-2.5 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-accent" />
+                  <span className="text-xs font-semibold text-foreground">Asignación Académica Institucional</span>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="general-nodo-select" className="text-[11px] text-muted-foreground">
+                    Nodo Asignado
+                  </Label>
+                  <Select
+                    value={fullInfoDraft.node || "none"}
+                    onValueChange={(v) => {
+                      const val = v === "none" ? "" : v;
+                      const matched = dbNodes?.find((n) => n.name === val || n.id === val);
+                      const leaderName = val && NODE_DEFAULT_LEADERS[val] ? NODE_DEFAULT_LEADERS[val] : "";
+                      setFullInfoDraft((d) => ({
+                        ...d,
+                        node: val,
+                        nodeId: matched?.id || (val ? d.nodeId : ""),
+                        productLeader: leaderName || d.productLeader,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id="general-nodo-select" className="h-8 text-xs">
+                      <SelectValue placeholder="Seleccionar nodo temático (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" className="text-muted-foreground italic">
+                        -- Por definir / Sin asignar --
+                      </SelectItem>
+                      {availableNodes.map((n) => (
+                        <SelectItem key={n} value={n}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <EditableField
+                    label="Líder de Producto"
+                    value={fullInfoDraft.productLeader}
+                    onChange={(v) => setFullInfoDraft((d) => ({ ...d, productLeader: v }))}
+                  />
+                  {fullInfoDraft.node && NODE_DEFAULT_LEADERS[fullInfoDraft.node] && (
+                    <p className="text-[10px] text-accent flex items-center gap-1 mt-0.5">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Sugerido por nodo: {NODE_DEFAULT_LEADERS[fullInfoDraft.node]}
+                    </p>
+                  )}
+                </div>
               </div>
             </TabsContent>
 

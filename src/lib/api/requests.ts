@@ -213,7 +213,8 @@ export interface CreateProposalPayload {
   companyType?: CompanyType;
   sector?: string;
   website?: string;
-  nodeId: string;
+  nodeId?: string;
+  productLeaderId?: string;
   deliveryDays?: string;
   priority?: ProposalPriority;
   contactName?: string;
@@ -270,6 +271,7 @@ export interface UpdateProposalInfoPayload {
   sector?: string;
   website?: string;
   nodeId?: string;
+  productLeaderId?: string;
   priority?: ProposalPriority;
   contactName?: string;
   contactEmail?: string;

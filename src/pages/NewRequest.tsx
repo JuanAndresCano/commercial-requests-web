@@ -496,12 +496,11 @@ export default function NewRequest() {
       uploadedBy: user.name,
     }));
 
-    // Resolve matching nodeId from backend catalogue or fallback to first available
+    // Resolve matching nodeId from backend catalogue if assigned
     const matchedNode = dbNodes?.find(
       (n) => n.name.toLowerCase() === (data.nodo || "").toLowerCase() || n.id === data.nodo,
     );
-    const resolvedNodeId =
-      matchedNode?.id || (dbNodes && dbNodes.length > 0 ? dbNodes[0].id : "00000000-0000-0000-0000-000000000001");
+    const resolvedNodeId = matchedNode?.id || undefined;
 
     const primaryContact = data.contactoNombre.trim()
       ? {
