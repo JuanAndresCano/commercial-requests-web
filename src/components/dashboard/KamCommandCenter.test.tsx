@@ -119,7 +119,7 @@ describe("KamCommandCenter (HU 3.1)", () => {
     const kanbanButton = screen.getByTitle("Vista kanban por estado");
 
     fireEvent.click(kanbanButton);
-    expect(kanbanButton).toHaveClass("bg-[#5454e9]");
+    expect(kanbanButton).toHaveClass("bg-icesi-blue");
   });
 
   it("filters the table when a KPI card is clicked", () => {
