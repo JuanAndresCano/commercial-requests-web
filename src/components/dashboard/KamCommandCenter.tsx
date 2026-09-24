@@ -3,14 +3,7 @@ import { Link } from "react-router-dom";
 import { Plus, Rocket, Search, ArrowRight, X, Building2, LayoutGrid, List } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  RequestItem,
-  RequestStatus,
-  formatCop,
-  formatCompactCop,
-  getRelativeTime,
-  isReadyForKamHandoff,
-} from "@/lib/mock-data";
+import { RequestItem, RequestStatus, formatCop, formatCompactCop, isReadyForKamHandoff } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { IcesiCenefa } from "@/components/IcesiLogo";
 import { UrgencyBadge } from "@/components/StatusBadge";
@@ -19,6 +12,9 @@ import { RequestCard } from "@/components/RequestCard";
 import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { usePersistentState } from "@/hooks/use-persistent-state";
+import { useRequests } from "@/hooks/use-requests";
+import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
+import { formatRelativeTime, mapProposalToRequestItem } from "@/lib/proposal-adapter";
 
 const BOARD_COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "entregada"];
 
@@ -34,7 +30,7 @@ const KAM_STAGE_LABELS: Record<RequestStatus, string> = {
 };
 
 interface KamCommandCenterProps {
-  requests: RequestItem[];
+  requests?: RequestItem[];
   userName: string;
 }
 
@@ -54,6 +50,9 @@ function kamStageOf(r: RequestItem): RequestStatus {
 }
 
 export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
+  const { data: apiProposals, isLoading, isError, refetch } = useRequests({ role: "KAM" });
+  const { data: apiMetrics } = useDashboardMetrics();
+
   // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
   // el KAM al volver del detalle de una propuesta — antes se reiniciaba porque
   // el dashboard se desmonta y remonta en cada navegación.
@@ -64,9 +63,16 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   const firstName = userName ? userName.split(" ")[0] : "Andrea";
 
   // El KAM es dueño de su propia cartera de clientes — solo ve sus propias
-  // solicitudes, sin acceso al pipeline comercial de sus compañeros.
-  const myRequests = requests.filter((r) => r.kam === userName);
-  const activeDataset = myRequests;
+  // solicitudes. Si la API responde datos reales, los adaptamos; de lo contrario
+  // se utiliza el dataset fallback.
+  const activeDataset = useMemo(() => {
+    if (apiProposals) {
+      return apiProposals.map((p) => mapProposalToRequestItem(p, userName));
+    }
+    return requests ? requests.filter((r) => r.kam === userName) : [];
+  }, [apiProposals, requests, userName]);
+
+  const myRequests = activeDataset;
 
   // Conteos por etapa percibida por el KAM (ver kamStageOf) — cada uno mapea
   // 1:1 a una columna del Kanban y a una tarjeta KPI, para que nunca se
@@ -90,7 +96,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
   // Métricas agregadas (no son una etapa del pipeline) — se muestran como
   // dato secundario, no como tarjeta-filtro principal.
-  const totalCount = activeDataset.length;
+  const totalCount = apiMetrics?.total ?? activeDataset.length;
   const pipelineTotal = activeDataset
     .filter((r) => r.status === "en-costeo" || r.status === "entregada")
     .reduce((sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0), 0);
@@ -408,7 +414,30 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border dark:divide-[#252838]">
-                  {filteredRequests.length === 0 ? (
+                  {isLoading && activeDataset.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-icesi-blue border-t-transparent" />
+                          <p className="font-medium text-foreground">Cargando solicitudes desde el servidor...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : isError && activeDataset.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                        <div className="mx-auto max-w-sm">
+                          <p className="font-medium text-destructive">No se pudieron cargar las solicitudes</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Ocurrió un error al consultar el servidor.
+                          </p>
+                          <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3 text-xs">
+                            Reintentar
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredRequests.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         <div className="mx-auto max-w-sm">
@@ -458,7 +487,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     filteredRequests.map((r) => {
                       const isReady = isReadyForKamHandoff(r);
                       const isBeingCosted = r.status === "en-costeo" && !isReady;
-                      const relativeTime = getRelativeTime(r.id);
+                      const relativeTime = formatRelativeTime(r.createdAt);
 
                       return (
                         <tr
@@ -605,7 +634,14 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
           {/* Vista Kanban por estado */}
           {viewMode === "kanban" &&
-            (kanbanRequests.length === 0 ? (
+            (isLoading && activeDataset.length === 0 ? (
+              <div className="px-4 py-16 text-center text-sm text-muted-foreground">
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-icesi-blue border-t-transparent" />
+                  <p className="font-medium text-foreground">Cargando tablero...</p>
+                </div>
+              </div>
+            ) : kanbanRequests.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                 <div className="mx-auto max-w-sm">
                   {!searchQuery && myRequests.length === 0 ? (

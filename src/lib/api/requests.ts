@@ -161,6 +161,13 @@ export interface ProposalListItem {
   company: Company;
   workflow: ProposalWorkflow | null;
   program: ProposalProgram | null;
+  economics?: {
+    grossValue: string | number | null;
+    readyForKam: boolean;
+    readyForKamAt: string | null;
+  }[];
+  productLeader?: ProposalUserSummary | null;
+  assignments?: ProposalAssignment[];
 }
 
 export interface ProposalDetail extends ProposalListItem {
