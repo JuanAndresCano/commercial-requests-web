@@ -11,6 +11,8 @@ import { RoleBadge } from "@/components/RoleBadge";
 import { STATUS_META, REQUEST_TYPES, type RequestStatus } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useRequests } from "@/hooks/use-requests";
+import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
 
 const COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "entregada"];
 
@@ -18,6 +20,14 @@ export default function RequestsBoard() {
   const [params] = useSearchParams();
   const { requests, user } = useAuth();
   const role = user.role;
+
+  const { data: apiProposals } = useRequests({ role: role === "kam" ? "KAM" : undefined });
+  const activeDataset = useMemo(() => {
+    if (apiProposals) {
+      return apiProposals.map((p) => mapProposalToRequestItem(p, user.name));
+    }
+    return requests;
+  }, [apiProposals, requests, user.name]);
 
   const [view, setView] = useState<"board" | "list">("board");
   const [q, setQ] = useState("");
@@ -39,7 +49,7 @@ export default function RequestsBoard() {
   }, [params]);
 
   const filtered = useMemo(() => {
-    return requests.filter((r) => {
+    return activeDataset.filter((r) => {
       if (q && !`${r.title} ${r.applicant} ${r.id} ${r.company}`.toLowerCase().includes(q.toLowerCase())) return false;
       if (status !== "all" && r.status !== status) return false;
       if (urgency !== "all" && r.urgency !== urgency) return false;
@@ -56,7 +66,7 @@ export default function RequestsBoard() {
 
       return true;
     });
-  }, [requests, q, status, urgency, type, roleFilter, role, user.name]);
+  }, [activeDataset, q, status, urgency, type, roleFilter, role, user.name]);
 
   const grouped = useMemo(() => {
     const g: Record<RequestStatus, typeof requests> = {
