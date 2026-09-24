@@ -64,6 +64,51 @@ import { companyTypeLabel, formatNit } from "@/lib/company";
 import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { useCreateProposal } from "@/hooks/use-create-proposal";
+import { useNodes } from "@/hooks/use-nodes";
+import type {
+  CreateProposalPayload,
+  CompanyType,
+  ProposalPriority,
+  RequestType as ApiRequestType,
+  ProgramModality,
+} from "@/lib/api/requests";
+
+const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
+  Pública: "PUBLICA",
+  Privada: "PRIVADA",
+  Mixta: "MIXTA",
+  "Sin ánimo de lucro": "SIN_ANIMO_LUCRO",
+  PUBLICA: "PUBLICA",
+  PRIVADA: "PRIVADA",
+  MIXTA: "MIXTA",
+  SIN_ANIMO_LUCRO: "SIN_ANIMO_LUCRO",
+};
+
+const PRIORITY_MAP: Record<string, ProposalPriority> = {
+  alta: "ALTA",
+  media: "MEDIA",
+  baja: "BAJA",
+  ALTA: "ALTA",
+  MEDIA: "MEDIA",
+  BAJA: "BAJA",
+};
+
+const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
+  Capacitación: "CAPACITACION",
+  Consultoría: "CONSULTORIA",
+  Mentoría: "MENTORIA",
+  Investigación: "INVESTIGACION",
+  "Proyectos Especiales (Eventos)": "SPECIAL_PROJECTS",
+  Otro: "OTHER",
+};
+
+const MODALITY_MAP: Record<string, ProgramModality> = {
+  "Presencial en campus Icesi": "PRESENCIAL_ICESI",
+  "Presencial en sede cliente": "PRESENCIAL_CLIENTE",
+  "Virtual sincrónica": "VIRTUAL",
+  Híbrida: "HIBRIDA",
+};
 
 const STEPS = [
   { id: 1, title: "Empresa", icon: Building2 },
@@ -148,6 +193,8 @@ function mapAttachedFileToDocumentType(fileName: string): ProposalDocument["type
 export default function NewRequest() {
   const navigate = useNavigate();
   const { addRequest, user } = useAuth();
+  const createProposal = useCreateProposal();
+  const { data: dbNodes } = useNodes();
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState<null | "draft" | "sent">(null);
   const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ company: string; timestamp: string } | null>(null);
@@ -369,7 +416,7 @@ export default function NewRequest() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
-  const handleFinish = (kind: "draft" | "sent") => {
+  const handleFinish = async (kind: "draft" | "sent") => {
     if (kind === "sent") {
       if (!data.empresaNombre.trim()) {
         toast.error("Por favor ingresa o busca la Razón Social de la empresa en el Paso 1.");
@@ -446,6 +493,76 @@ export default function NewRequest() {
       category: "client_kam",
       uploadedBy: user.name,
     }));
+
+    // Resolve matching nodeId from backend catalogue or fallback to first available
+    const matchedNode = dbNodes?.find(
+      (n) => n.name.toLowerCase() === (data.nodo || "").toLowerCase() || n.id === data.nodo,
+    );
+    const resolvedNodeId =
+      matchedNode?.id || (dbNodes && dbNodes.length > 0 ? dbNodes[0].id : "00000000-0000-0000-0000-000000000001");
+
+    const primaryContact = data.contactoNombre.trim()
+      ? {
+          name: data.contactoNombre.trim(),
+          email: data.correo.trim() || undefined,
+          phone: data.telefono.trim() || undefined,
+          role: data.cargo.trim() || undefined,
+          area: data.area.trim() || undefined,
+        }
+      : data.contactosAdicionales.length > 0 && data.contactosAdicionales[0].nombre.trim()
+        ? {
+            name: data.contactosAdicionales[0].nombre.trim(),
+            email: data.contactosAdicionales[0].correo?.trim() || undefined,
+            phone: data.contactosAdicionales[0].telefono?.trim() || undefined,
+            role: data.contactosAdicionales[0].cargo?.trim() || undefined,
+            area: data.contactosAdicionales[0].area?.trim() || undefined,
+          }
+        : undefined;
+
+    const payload: CreateProposalPayload = {
+      companyName: data.empresaNombre.trim() || "Empresa Aliada",
+      companyNit: data.nit.trim() || undefined,
+      companyDescription: data.descripcion.trim() || undefined,
+      companyType: data.tipoEmpresa ? COMPANY_TYPE_MAP[data.tipoEmpresa] : undefined,
+      sector: data.ciiuPrincipalDesc.trim() || undefined,
+      website: data.web.trim() || undefined,
+      nodeId: resolvedNodeId,
+      priority: data.urgencia ? PRIORITY_MAP[data.urgencia] : undefined,
+      contactName: primaryContact?.name,
+      contactEmail: primaryContact?.email,
+      contactPhone: primaryContact?.phone,
+      contactRole: primaryContact?.role,
+      contactArea: primaryContact?.area,
+      requestType: data.tipoReq ? REQUEST_TYPE_MAP[data.tipoReq] : undefined,
+      requestTypeOther: data.tipoReq === "Otro" ? data.tipoReqOtro.trim() || undefined : undefined,
+      participantRange: data.participantes.trim() || undefined,
+      programName: finalTitle,
+      needDescription: data.necesidad.trim() || undefined,
+      estimatedHours: data.horas ? parseInt(data.horas, 10) || undefined : undefined,
+      modality: data.modalidad ? MODALITY_MAP[data.modalidad] : undefined,
+      requiresCatering: Boolean(data.alimentacion?.trim()),
+      cateringNotes: data.alimentacion?.trim() || undefined,
+      expectedResults: data.resultados.trim() || undefined,
+      successMetrics: data.exito.trim() || undefined,
+      competencies: data.competencias.trim() || undefined,
+      participantArea: data.areaParticipantes.trim() || undefined,
+      hasPreviousTraining: data.formacionPrevia === "Sí",
+      previousTraining: data.formacionPrevia || undefined,
+      previousTrainingDescription: data.descFormacion.trim() || undefined,
+      previousTrainingCompany: data.empresaPrevia.trim() || undefined,
+      previousTrainingDate: data.fechaPrevia.trim() || undefined,
+      observations: data.observaciones.trim() || undefined,
+      attachments: data.archivos.map((f) => ({ fileName: f.name })),
+    };
+
+    try {
+      await createProposal.mutateAsync(payload);
+      toast.success("Solicitud comercial registrada exitosamente");
+    } catch (err: unknown) {
+      const errorMessage = (err as Error)?.message || "Error al registrar la propuesta en el servidor";
+      console.warn("Failed to create proposal on backend, falling back to local state:", err);
+      toast.error(errorMessage);
+    }
 
     addRequest({
       title: finalTitle,
@@ -684,10 +801,17 @@ export default function NewRequest() {
             ) : (
               <Button
                 onClick={() => handleFinish("sent")}
-                className="bg-[#4cb979] hover:bg-[#3ea569] text-white px-6 h-10 text-xs font-bold shadow-xs"
+                disabled={createProposal.isPending}
+                className="bg-[#4cb979] hover:bg-[#3ea569] text-white px-6 h-10 text-xs font-bold shadow-xs disabled:opacity-50"
               >
-                <Send className="h-4 w-4 mr-1.5" />
-                Enviar solicitud a Líder de Producto
+                {createProposal.isPending ? (
+                  <>Enviando solicitud...</>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-1.5" />
+                    Enviar solicitud a Líder de Producto
+                  </>
+                )}
               </Button>
             )}
           </div>
@@ -1344,6 +1468,9 @@ function Step3({
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
   errors: Record<string, string>;
 }) {
+  const { data: dbNodes } = useNodes();
+  const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
+
   // Autofoco + scroll suave al campo de texto al elegir "Otro", sin clics extra
   const otroInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -1419,7 +1546,7 @@ function Step3({
                       -- Por definir / Sin asignar --
                     </SelectItem>
                   )}
-                  {NODES.map((n) => (
+                  {availableNodes.map((n) => (
                     <SelectItem key={n} value={n}>
                       {n}
                     </SelectItem>

@@ -1,6 +1,8 @@
 import { apiRequest } from "./client";
 import type { Company, CompanyType } from "./companies";
 
+export type { Company, CompanyType };
+
 export type ProposalPriority = "ALTA" | "MEDIA" | "BAJA";
 
 export type RequestType = "CAPACITACION" | "CONSULTORIA" | "MENTORIA" | "INVESTIGACION" | "SPECIAL_PROJECTS" | "OTHER";
@@ -302,4 +304,7 @@ export const requestsApi = {
       method: "PATCH",
       body: data,
     }),
+
+  /** Retrieves list of knowledge nodes */
+  getNodes: () => apiRequest<ProposalNode[]>("/nodes"),
 };
