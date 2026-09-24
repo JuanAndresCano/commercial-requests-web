@@ -127,5 +127,32 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     horas: p.program?.totalHours ? `${p.program.totalHours} horas` : undefined,
     tipoOtro: p.program?.requestTypeOther ?? undefined,
     companyNit: p.company?.nit ?? undefined,
+    companyTipo: p.company?.type ?? undefined,
+    companyDescripcion: p.company?.description ?? undefined,
+    companyWeb: p.company?.website ?? undefined,
+    contactCargo: detail.contact?.role ?? undefined,
+    contactArea: detail.contact?.areaDependency ?? undefined,
+    contactTelefono: detail.contact?.phone ?? undefined,
+    contactCorreo: detail.contact?.email ?? undefined,
+    necesidad: p.program?.programDescription ?? p.generalDescription ?? undefined,
+    competencias: p.program?.competencies ?? undefined,
+    exito: p.program?.successMetrics ?? undefined,
+    resultados: p.program?.expectedResults ?? undefined,
+    areaParticipantes: p.program?.participantArea ?? undefined,
+    alimentacion: p.program?.requiresCatering
+      ? p.program?.cateringNotes
+        ? `Sí - ${p.program.cateringNotes}`
+        : "Sí"
+      : "No",
+    formacionPrevia:
+      p.program?.previousTraining === "Si" || p.program?.previousTraining === "Sí"
+        ? "Sí"
+        : p.program?.previousTraining === "No"
+          ? "No"
+          : undefined,
+    descFormacion: p.program?.previousTrainingDetail ?? undefined,
+    empresaPrevia: p.program?.previousTrainingCompany ?? undefined,
+    fechaPrevia: p.program?.previousTrainingDate ? p.program.previousTrainingDate.slice(0, 10) : undefined,
+    observaciones: p.comments ?? undefined,
   };
 }

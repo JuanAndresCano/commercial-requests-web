@@ -96,6 +96,32 @@ describe("requestsApi", () => {
     });
   });
 
+  it("updates proposal info via PATCH /requests/:id/info", async () => {
+    respond(200, { id: "req-1", title: "Updated Title" });
+    const payload = { programName: "Updated Title", priority: "ALTA" as const };
+    const updated = await requestsApi.updateInfo("req-1", payload);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/req-1\/info$/);
+    expect(init).toMatchObject({
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    expect(updated.title).toBe("Updated Title");
+  });
+
+  it("deletes/cancels proposal via DELETE /requests/:id", async () => {
+    respond(200, { success: true, id: "req-1", message: "Cancelled" });
+    const result = await requestsApi.delete("req-1");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/req-1$/);
+    expect(init).toMatchObject({
+      method: "DELETE",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("surfaces errors as ApiError instances", async () => {
     respond(403, { message: "Forbidden access" });
     await expect(requestsApi.getById("req-unauthorized")).rejects.toBeInstanceOf(ApiError);

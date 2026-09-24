@@ -262,6 +262,46 @@ export interface UpdateServiceSpecsPayload {
   deadline?: string;
 }
 
+export interface UpdateProposalInfoPayload {
+  companyName?: string;
+  companyNit?: string;
+  companyDescription?: string;
+  companyType?: CompanyType;
+  sector?: string;
+  website?: string;
+  nodeId?: string;
+  priority?: ProposalPriority;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  contactRole?: string;
+  contactArea?: string;
+  programName?: string;
+  requestType?: RequestType;
+  requestTypeOther?: string;
+  trainingSubtype?: ProgramType;
+  participantRange?: string;
+  participantExact?: string;
+  needDescription?: string;
+  estimatedHours?: number;
+  hoursAtProfessorDiscretion?: boolean;
+  modality?: ProgramModality;
+  modalityOtherPlace?: string;
+  requiresCatering?: boolean;
+  cateringNotes?: string;
+  expectedResults?: string;
+  successMetrics?: string;
+  competencies?: string;
+  participantArea?: string;
+  participantLocation?: string;
+  hasPreviousTraining?: boolean;
+  previousTraining?: string;
+  previousTrainingDescription?: string;
+  previousTrainingCompany?: string;
+  previousTrainingDate?: string;
+  observations?: string;
+}
+
 export const requestsApi = {
   /** Retrieves aggregated KPI metrics for the authenticated user based on role */
   getDashboardMetrics: () => apiRequest<ProposalDashboardMetrics>("/requests/dashboard/metrics"),
@@ -289,6 +329,19 @@ export const requestsApi = {
     apiRequest<ProposalDetail>("/proposals", {
       method: "POST",
       body: data,
+    }),
+
+  /** Updates proposal information (only allowed in NEW status by owner KAM or ADMIN) */
+  updateInfo: (id: string, data: UpdateProposalInfoPayload) =>
+    apiRequest<ProposalDetail>(`/requests/${id}/info`, {
+      method: "PATCH",
+      body: data,
+    }),
+
+  /** Soft deletes / cancels a proposal (allowed by owner KAM or ADMIN) */
+  delete: (id: string) =>
+    apiRequest<{ success: boolean; id: string; message: string }>(`/requests/${id}`, {
+      method: "DELETE",
     }),
 
   /** Updates the lifecycle status of a proposal */

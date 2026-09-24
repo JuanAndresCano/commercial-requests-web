@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -65,6 +65,11 @@ import { ReassignLeaderDialog } from "@/components/ReassignLeaderDialog";
 import { useReassignRequest } from "@/hooks/use-reassign-request";
 import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
 import { toast } from "sonner";
+import { useRequestDetail } from "@/hooks/use-request-detail";
+import { useUpdateRequestInfo } from "@/hooks/use-update-request-info";
+import { useDeleteRequest } from "@/hooks/use-delete-request";
+import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
+import type { UpdateProposalInfoPayload } from "@/lib/api/requests";
 
 export default function RequestDetail() {
   const { id } = useParams();
@@ -81,11 +86,21 @@ export default function RequestDetail() {
     deleteRequest,
   } = useAuth();
 
+  const { data: apiProposal } = useRequestDetail(id);
+  const updateInfoMutation = useUpdateRequestInfo();
+  const deleteRequestMutation = useDeleteRequest();
+
   const role = user.role;
   const isKam = role === "kam";
   const isLeader = role === "lider-producto" || role === "lider-nodo";
 
-  const req: RequestItem = requests.find((r) => r.id === id) ?? requests[0];
+  const fallbackReq = requests.find((r) => r.id === id);
+  const req: RequestItem = useMemo(() => {
+    if (apiProposal) {
+      return mapProposalToRequestItem(apiProposal, user.name);
+    }
+    return fallbackReq ?? requests[0];
+  }, [apiProposal, fallbackReq, requests, user.name]);
 
   // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
   // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
@@ -273,7 +288,7 @@ export default function RequestDetail() {
   }
   const hasFullInfoErrors = Object.keys(fullInfoErrors).length > 0;
 
-  const handleSaveFullInfo = () => {
+  const handleSaveFullInfo = async () => {
     if (!fullInfoDraft.title.trim()) {
       toast.error("El título de la propuesta no puede quedar vacío");
       return;
@@ -282,6 +297,43 @@ export default function RequestDetail() {
       toast.error("Corrige los campos marcados antes de guardar");
       return;
     }
+
+    const payload: UpdateProposalInfoPayload = {
+      programName: fullInfoDraft.title.trim(),
+      priority: fullInfoDraft.urgency === "alta" ? "ALTA" : fullInfoDraft.urgency === "baja" ? "BAJA" : "MEDIA",
+      companyNit: fullInfoDraft.companyNit.trim() || undefined,
+      companyDescription: fullInfoDraft.companyDescripcion.trim() || undefined,
+      website: fullInfoDraft.companyWeb.trim() || undefined,
+      contactName: fullInfoDraft.applicant.trim() || undefined,
+      contactRole: fullInfoDraft.contactCargo.trim() || undefined,
+      contactArea: fullInfoDraft.contactArea.trim() || undefined,
+      contactPhone: fullInfoDraft.contactTelefono.trim() || undefined,
+      contactEmail: fullInfoDraft.contactCorreo.trim() || undefined,
+      needDescription: fullInfoDraft.necesidad.trim() || undefined,
+      competencies: fullInfoDraft.competencias.trim() || undefined,
+      successMetrics: fullInfoDraft.exito.trim() || undefined,
+      expectedResults: fullInfoDraft.resultados.trim() || undefined,
+      participantArea: fullInfoDraft.areaParticipantes.trim() || undefined,
+      hasPreviousTraining: fullInfoDraft.formacionPrevia === "Sí",
+      previousTrainingDescription: fullInfoDraft.descFormacion.trim() || undefined,
+      previousTrainingCompany: fullInfoDraft.empresaPrevia.trim() || undefined,
+      previousTrainingDate: fullInfoDraft.fechaPrevia || undefined,
+      observations: fullInfoDraft.observaciones.trim() || undefined,
+    };
+
+    if (apiProposal || (id && (id.startsWith("REQ-") || id.length > 20))) {
+      try {
+        await updateInfoMutation.mutateAsync({
+          id: apiProposal?.id ?? req.id,
+          data: payload,
+        });
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al actualizar la solicitud";
+        toast.error(errorMsg);
+        return;
+      }
+    }
+
     updateRequest(req.id, {
       ...fullInfoDraft,
       title: fullInfoDraft.title.trim(),
@@ -415,7 +467,16 @@ export default function RequestDetail() {
 
   // El KAM puede cancelar su propia solicitud mientras nadie la haya
   // empezado a trabajar (docs/08, pregunta 14).
-  const handleCancelRequest = () => {
+  const handleCancelRequest = async () => {
+    if (apiProposal || (id && (id.startsWith("REQ-") || id.length > 20))) {
+      try {
+        await deleteRequestMutation.mutateAsync(apiProposal?.id ?? req.id);
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al cancelar la solicitud";
+        toast.error(errorMsg);
+        return;
+      }
+    }
     deleteRequest(req.id);
     toast.success(`Solicitud ${req.id} cancelada`);
     setIsCancelModalOpen(false);
@@ -2055,11 +2116,17 @@ function EditableField({
   block?: boolean;
   error?: string;
 }) {
+  const fieldId = label ? "field-" + label.toLowerCase().replace(/[^a-z0-9]/g, "-") : undefined;
   return (
     <div className="space-y-1">
-      {label && <Label className="text-[11px] text-muted-foreground">{label}</Label>}
+      {label && (
+        <Label htmlFor={fieldId} className="text-[11px] text-muted-foreground">
+          {label}
+        </Label>
+      )}
       {block ? (
         <Textarea
+          id={fieldId}
           rows={2}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -2067,6 +2134,7 @@ function EditableField({
         />
       ) : (
         <Input
+          id={fieldId}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn("h-8 text-xs", error && "border-red-400 focus-visible:ring-red-400")}
