@@ -66,6 +66,8 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { useCreateProposal } from "@/hooks/use-create-proposal";
 import { useNodes } from "@/hooks/use-nodes";
+import { useRequests } from "@/hooks/use-requests";
+import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
 import type {
   CreateProposalPayload,
   CompanyType,
@@ -1977,9 +1979,17 @@ function Step4({
   errors: Record<string, string>;
 }) {
   const { requests } = useAuth();
+  const { data: apiProposals } = useRequests();
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [proposalTab, setProposalTab] = useState<"todas" | "entregadas" | "en_proceso">("todas");
   const [selectedProposalModal, setSelectedProposalModal] = useState<RequestItem | null>(null);
+
+  const allRequests = useMemo(() => {
+    if (apiProposals && apiProposals.length > 0) {
+      return apiProposals.map((p) => mapProposalToRequestItem(p));
+    }
+    return requests;
+  }, [apiProposals, requests]);
 
   // Coincidencias de propuestas de la empresa activa o buscada
   const activeCompanyQuery = (historySearchTerm.trim() || data.empresaNombre.trim()).toLowerCase();
@@ -1988,14 +1998,14 @@ function Step4({
     if (!activeCompanyQuery || activeCompanyQuery.length < 2) return [];
     const tokens = activeCompanyQuery.split(/\s+/).filter((w) => w.length >= 2);
 
-    return requests.filter((r) => {
+    return allRequests.filter((r) => {
       const comp = (r.company || "").toLowerCase();
       if (comp.includes(activeCompanyQuery) || activeCompanyQuery.includes(comp)) return true;
       if (tokens.length > 1 && tokens.every((term) => comp.includes(term))) return true;
       if (tokens.some((term) => term.length >= 4 && comp.includes(term))) return true;
       return false;
     });
-  }, [requests, activeCompanyQuery]);
+  }, [allRequests, activeCompanyQuery]);
 
   const deliveredProposals = useMemo(
     () => companyProposals.filter((p) => p.status === "entregada"),

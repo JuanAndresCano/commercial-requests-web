@@ -356,6 +356,10 @@ export function calculateCosting(
   };
 }
 
+/**
+ * @deprecated Legacy mock dataset. Persona 2 (KAM) now consumes real proposals from
+ * the backend API (`useRequests` / `requestsApi`). Kept for compatibility with Persona 3 and 4.
+ */
 export const MOCK_REQUESTS: RequestItem[] = [
   {
     id: "REQ-2026-0142",
@@ -1654,6 +1658,10 @@ export function formatCompactCop(amount: number): string {
   return formatCop(amount);
 }
 
+/**
+ * @deprecated Replaced in KAM views with `formatRelativeTime(createdAt)` in `@/lib/proposal-adapter`.
+ * Hardcoded by proposal ID; maintained only for backwards compatibility.
+ */
 export function getRelativeTime(id: string): string {
   switch (id) {
     case "REQ-2026-0142":

@@ -44,7 +44,7 @@ vi.mock("@/lib/api/requests", () => ({
   requestsApi: {
     getNodes: vi.fn(),
     create: vi.fn(),
-    list: vi.fn(),
+    list: vi.fn().mockResolvedValue([]),
     getDashboardMetrics: vi.fn(),
     getPrioritized: vi.fn(),
     getById: vi.fn(),
