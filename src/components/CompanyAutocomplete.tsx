@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, X } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCompanySearch } from "@/hooks/use-company-search";
 import type { Company } from "@/lib/api/companies";
 import { formatNit } from "@/lib/company";
+import { fuzzyFilter } from "@/lib/fuzzy";
 
 interface CompanyAutocompleteProps {
   onSelect: (company: Company) => void;
@@ -15,6 +16,11 @@ export function CompanyAutocomplete({ onSelect }: CompanyAutocompleteProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const { companies, isSearching, isError, hasSearched } = useCompanySearch(searchTerm);
+
+  const displayedCompanies = useMemo(() => {
+    if (!searchTerm.trim()) return companies;
+    return fuzzyFilter(companies, searchTerm, (c) => [c.name, c.nit ?? ""]);
+  }, [companies, searchTerm]);
 
   const handleSelect = (company: Company) => {
     onSelect(company);
@@ -63,12 +69,12 @@ export function CompanyAutocomplete({ onSelect }: CompanyAutocompleteProps) {
 
         {showDropdown && searchTerm.trim().length >= 2 && (
           <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-popover shadow-lg overflow-hidden max-h-60 overflow-y-auto">
-            {companies.length > 0 && (
+            {displayedCompanies.length > 0 && (
               <>
                 <div className="p-1.5 text-[11px] font-semibold text-muted-foreground bg-secondary/50 px-3">
                   Coincidencias encontradas en el directorio:
                 </div>
-                {companies.map((c) => (
+                {displayedCompanies.map((c) => (
                   <button
                     key={c.id}
                     type="button"
@@ -88,15 +94,15 @@ export function CompanyAutocomplete({ onSelect }: CompanyAutocompleteProps) {
                 ))}
               </>
             )}
-            {companies.length === 0 && isSearching && (
+            {displayedCompanies.length === 0 && isSearching && (
               <p className="px-3 py-2.5 text-xs text-muted-foreground">Buscando…</p>
             )}
-            {companies.length === 0 && !isSearching && isError && (
+            {displayedCompanies.length === 0 && !isSearching && isError && (
               <p className="px-3 py-2.5 text-xs text-destructive">
                 No pudimos consultar el directorio. Puedes escribir los datos manualmente.
               </p>
             )}
-            {companies.length === 0 && !isSearching && !isError && hasSearched && (
+            {displayedCompanies.length === 0 && !isSearching && !isError && hasSearched && (
               <p className="px-3 py-2.5 text-xs text-muted-foreground">
                 Sin coincidencias. Puedes ingresar la empresa manualmente más abajo.
               </p>
