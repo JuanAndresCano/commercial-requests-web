@@ -183,6 +183,7 @@ export interface ProposalCosting {
 
 export interface RequestItem {
   id: string;
+  code?: string;
   title: string;
   applicant: string;
   type: RequestType;

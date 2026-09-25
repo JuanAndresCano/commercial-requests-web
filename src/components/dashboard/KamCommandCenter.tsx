@@ -109,6 +109,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
     if (!term) return true;
     if (
       req.id.toLowerCase().includes(term) ||
+      (req.code ? req.code.toLowerCase().includes(term) : false) ||
       req.company.toLowerCase().includes(term) ||
       req.title.toLowerCase().includes(term) ||
       req.type.toLowerCase().includes(term) ||
@@ -509,7 +510,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                           {/* 1. ID y Fecha */}
                           <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-xs font-semibold text-foreground">{r.id}</span>
+                              <span className="font-mono text-xs font-semibold text-foreground">{r.code ?? r.id}</span>
                               <span className="text-muted-foreground/60 text-xs">·</span>
                               <span className="text-xs text-muted-foreground">{relativeTime}</span>
                             </div>

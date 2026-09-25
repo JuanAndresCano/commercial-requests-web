@@ -341,6 +341,7 @@ export default function NewRequest() {
   const FIELD_SCROLL_TARGETS: Record<string, string> = {
     empresaNombre: "empresa-nombre",
     tipoEmpresa: "tipo-empresa-group",
+    nodo: "nodo-select",
     nombreReq: "nombre-req",
     tipoReq: "tipo-req",
     tipoReqOtro: "tipo-otro-input",
@@ -363,6 +364,9 @@ export default function NewRequest() {
       // Paso 2 (Contactos) es 100% opcional según directriz de Líder de Producto
       return true;
     } else if (currentStep === 3) {
+      if (!data.nodo) {
+        newErrors.nodo = "Selecciona un nodo temático para continuar.";
+      }
       if (!data.nombreReq.trim()) {
         newErrors.nombreReq = "Ingresa un título o nombre de la propuesta para continuar.";
       }
@@ -438,6 +442,15 @@ export default function NewRequest() {
         setStep(1);
         return;
       }
+      if (!data.nodo) {
+        toast.error("Por favor selecciona un nodo temático en el Paso 3.");
+        setFieldErrors((prev) => ({
+          ...prev,
+          nodo: "Selecciona un nodo temático para continuar.",
+        }));
+        setStep(3);
+        return;
+      }
       if (!data.nombreReq.trim()) {
         toast.error("Por favor ingresa el título de la propuesta en el Paso 3.");
         setFieldErrors((prev) => ({
@@ -500,7 +513,7 @@ export default function NewRequest() {
     const matchedNode = dbNodes?.find(
       (n) => n.name.toLowerCase() === (data.nodo || "").toLowerCase() || n.id === data.nodo,
     );
-    const resolvedNodeId = matchedNode?.id || (dbNodes && dbNodes.length > 0 ? dbNodes[0].id : undefined);
+    const resolvedNodeId = matchedNode?.id;
 
     const primaryContact = data.contactoNombre.trim()
       ? {
@@ -1523,37 +1536,34 @@ function Step3({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Nodo Asignado"
-              showOptionalBadge
-              hint="Nodo temático de la Universidad Icesi (opcional / por definir)"
+              required
+              hint={!errors.nodo ? "Nodo temático de la Universidad Icesi" : undefined}
               id="nodo-select"
             >
-              <Select
-                value={data.nodo}
-                onValueChange={(v) => {
-                  const val = v === "none" ? "" : v;
-                  update("nodo", val);
-                  // Asociación inteligente por Nodo: preselecciona automáticamente el líder sugerido para este nodo
-                  if (val && NODE_DEFAULT_LEADERS[val]) {
-                    update("ldp", NODE_DEFAULT_LEADERS[val]);
-                  }
-                }}
-              >
-                <SelectTrigger id="nodo-select" className="bg-card">
-                  <SelectValue placeholder="Selecciona un nodo (opcional / por definir)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {data.nodo && (
-                    <SelectItem value="none" className="text-muted-foreground italic">
-                      -- Por definir / Sin asignar --
-                    </SelectItem>
-                  )}
-                  {availableNodes.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FieldErrorFrame show={!!errors.nodo}>
+                <Select
+                  value={data.nodo}
+                  onValueChange={(v) => {
+                    update("nodo", v);
+                    // Asociación inteligente por Nodo: preselecciona automáticamente el líder sugerido para este nodo
+                    if (v && NODE_DEFAULT_LEADERS[v]) {
+                      update("ldp", NODE_DEFAULT_LEADERS[v]);
+                    }
+                  }}
+                >
+                  <SelectTrigger id="nodo-select" className="bg-card">
+                    <SelectValue placeholder="Selecciona un nodo temático" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableNodes.map((n) => (
+                      <SelectItem key={n} value={n}>
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldErrorFrame>
+              {errors.nodo && <FieldErrorText>{errors.nodo}</FieldErrorText>}
             </Field>
 
             {(() => {

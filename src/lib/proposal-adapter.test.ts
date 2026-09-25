@@ -174,7 +174,8 @@ describe("proposal-adapter", () => {
 
       const mapped = mapProposalToRequestItem(proposal, "Andrea Martínez");
 
-      expect(mapped.id).toBe("REQ-2026-0001");
+      expect(mapped.id).toBe("uuid-123");
+      expect(mapped.code).toBe("REQ-2026-0001");
       expect(mapped.company).toBe("Bancolombia");
       expect(mapped.status).toBe("en-costeo");
       expect(mapped.urgency).toBe("alta");

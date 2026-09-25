@@ -607,7 +607,7 @@ export default function RequestDetail() {
 
               {/* Fila de metadatos inline sutiles: Empresa, Contacto, Código REQ y Badges discretos */}
               <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-muted-foreground">
-                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.id}</span>
+                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.code ?? req.id}</span>
 
                 <span className="text-border dark:text-[#252838]">·</span>
 
@@ -1966,7 +1966,8 @@ export default function RequestDetail() {
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-foreground">¿Cancelar esta solicitud?</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Se eliminará permanentemente la solicitud {req.id} ({req.company}). Esta acción no se puede deshacer.
+              Se eliminará permanentemente la solicitud {req.code ?? req.id} ({req.company}). Esta acción no se puede
+              deshacer.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

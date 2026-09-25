@@ -169,7 +169,10 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
     expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
 
-    // Step 3: Fill title and select type
+    // Step 3: Select nodo, fill title and select type
+    const nodeOption = await screen.findByRole("option", { name: /Gestión de Innovación/i });
+    fireEvent.click(nodeOption);
+
     const titleInput = screen.getByLabelText(/Título o nombre de la propuesta/i);
     fireEvent.change(titleInput, { target: { value: "Capacitación en IA para Directivos" } });
 
@@ -204,6 +207,7 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     const callPayload = mockedRequestsApi.create.mock.calls[0][0];
     expect(callPayload.companyName).toBe("Empresa Test S.A.S");
     expect(callPayload.companyType).toBe("PRIVADA");
+    expect(callPayload.nodeId).toBe("node-uuid-2");
     expect(callPayload.programName).toBe("Capacitación en IA para Directivos");
     expect(callPayload.requestType).toBe("CAPACITACION");
     expect(callPayload.priority).toBe("ALTA");

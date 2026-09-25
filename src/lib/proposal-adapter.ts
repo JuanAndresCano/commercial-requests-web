@@ -89,7 +89,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
   const lastRejectedRound = detail.negotiationRounds?.find((r) => r.clientResponse === "CHANGES_REQUESTED");
 
   return {
-    id: p.code ?? p.id,
+    id: p.id,
+    code: p.code ?? p.id,
     title: p.title ?? "Sin título",
     company: p.company?.name ?? "Empresa sin nombre",
     applicant: detail.contact?.name ?? "Contacto por definir",
