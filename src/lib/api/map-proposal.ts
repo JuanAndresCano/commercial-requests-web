@@ -137,7 +137,11 @@ export function mapProposalToRequestItem(p: BackendProposal): RequestItem | null
     professorType === "externo" && professorAssignment?.professor
       ? {
           nombre: professorAssignment.professor.fullName,
+          identificacion: professorAssignment.professor.identityDocument ?? undefined,
           empresaConsultora: professorAssignment.professor.company ?? undefined,
+          correo: professorAssignment.professor.email ?? undefined,
+          telefono: professorAssignment.professor.phone ?? undefined,
+          perfil: professorAssignment.professor.profile ?? undefined,
         }
       : undefined;
 

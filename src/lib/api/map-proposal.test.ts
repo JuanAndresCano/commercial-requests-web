@@ -46,7 +46,16 @@ function baseProposal(overrides: Partial<BackendProposal> = {}): BackendProposal
         role: "PROFESSOR",
         professorId: "prof-1",
         rawName: null,
-        professor: { id: "prof-1", fullName: "Dra. Paula Henao", type: "STAFF", company: null },
+        professor: {
+          id: "prof-1",
+          fullName: "Dra. Paula Henao",
+          type: "STAFF",
+          company: null,
+          identityDocument: null,
+          email: null,
+          phone: null,
+          profile: null,
+        },
       },
     ],
     negotiationRounds: [
@@ -123,7 +132,16 @@ describe("mapProposalToRequestItem", () => {
             role: "PROFESSOR",
             professorId: "prof-2",
             rawName: null,
-            professor: { id: "prof-2", fullName: "Carlos Vega", type: "EXTERNAL", company: "Vega Consultores" },
+            professor: {
+              id: "prof-2",
+              fullName: "Carlos Vega",
+              type: "EXTERNAL",
+              company: "Vega Consultores",
+              identityDocument: "CC 94.456.789",
+              email: "carlos.vega@consultores.com",
+              phone: "+57 315 123 4567",
+              profile: "Especialista en transformación digital.",
+            },
           },
         ],
       }),
@@ -131,7 +149,11 @@ describe("mapProposalToRequestItem", () => {
     expect(external.professorType).toBe("externo");
     expect(external.externalProfessorData).toMatchObject({
       nombre: "Carlos Vega",
+      identificacion: "CC 94.456.789",
       empresaConsultora: "Vega Consultores",
+      correo: "carlos.vega@consultores.com",
+      telefono: "+57 315 123 4567",
+      perfil: "Especialista en transformación digital.",
     });
   });
 

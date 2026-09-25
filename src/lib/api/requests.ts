@@ -63,6 +63,10 @@ export interface BackendProposal {
       fullName: string;
       type: BackendProfessorType;
       company: string | null;
+      identityDocument: string | null;
+      email: string | null;
+      phone: string | null;
+      profile: string | null;
     } | null;
   }>;
   negotiationRounds?: Array<{

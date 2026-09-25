@@ -19,6 +19,10 @@ const staff: Professor = {
   type: "STAFF",
   faculty: "Ingeniería",
   company: null,
+  identityDocument: null,
+  email: null,
+  phone: null,
+  profile: null,
   isActive: true,
 };
 const registered: Professor = {
@@ -27,6 +31,10 @@ const registered: Professor = {
   type: "EXTERNAL",
   faculty: null,
   company: "Consultores SAS",
+  identityDocument: "CC 94.456.789",
+  email: "ana.ruiz@consultores.com",
+  phone: "+57 315 123 4567",
+  profile: "Especialista en transformación digital.",
   isActive: true,
 };
 
@@ -86,6 +94,9 @@ describe("AdvisorAssignmentModal with the professor directory", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Ana Ruiz/ }));
     expect(screen.getByLabelText(/Nombre completo/)).toHaveValue("Ana Ruiz");
     expect(screen.getByLabelText(/Firma consultora/)).toHaveValue("Consultores SAS");
+    expect(screen.getByLabelText(/Cédula/)).toHaveValue("CC 94.456.789");
+    expect(screen.getByLabelText(/Correo electrónico/)).toHaveValue("ana.ruiz@consultores.com");
+    expect(screen.getByLabelText(/Teléfono/)).toHaveValue("+57 315 123 4567");
     save();
 
     await waitFor(() =>
@@ -99,21 +110,49 @@ describe("AdvisorAssignmentModal with the professor directory", () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
-  it("registers a new external advisor in the directory and then assigns it", async () => {
+  it("disables the contact fields of an already registered advisor — they aren't editable here", async () => {
+    renderModal(externoRequest);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Ana Ruiz/ }));
+
+    expect(screen.getByLabelText(/Cédula/)).toBeDisabled();
+    expect(screen.getByLabelText(/Correo electrónico/)).toBeDisabled();
+    expect(screen.getByLabelText(/Teléfono/)).toBeDisabled();
+    expect(screen.getByLabelText(/Especialidad/)).toBeDisabled();
+    expect(screen.getByText(/no se editan desde aquí/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Nombre completo/), { target: { value: "Ana Ruiz Otra" } });
+    expect(screen.getByLabelText(/Cédula/)).not.toBeDisabled();
+  });
+
+  it("registers a new external advisor with all contact fields and then assigns it", async () => {
     mockedCreate.mockResolvedValue({ ...registered, id: "e9", fullName: "Luis Mora", company: "Mora SAS" });
     const { onSaveAssignment } = renderModal(externoRequest);
 
     fireEvent.change(screen.getByLabelText(/Nombre completo/), { target: { value: "Luis Mora" } });
     fireEvent.change(screen.getByLabelText(/Firma consultora/), { target: { value: "Mora SAS" } });
+    fireEvent.change(screen.getByLabelText(/Cédula/), { target: { value: "CC 12.345.678" } });
+    fireEvent.change(screen.getByLabelText(/Correo electrónico/), { target: { value: "luis.mora@example.com" } });
+    fireEvent.change(screen.getByLabelText(/Teléfono/), { target: { value: "+57 300 111 2222" } });
+    fireEvent.change(screen.getByLabelText(/Especialidad/), { target: { value: "Consultor de innovación." } });
     save();
 
-    await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith({ fullName: "Luis Mora", company: "Mora SAS" }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith({
+        fullName: "Luis Mora",
+        company: "Mora SAS",
+        identityDocument: "CC 12.345.678",
+        email: "luis.mora@example.com",
+        phone: "+57 300 111 2222",
+        profile: "Consultor de innovación.",
+      }),
+    );
     await waitFor(() =>
       expect(onSaveAssignment).toHaveBeenCalledWith("Luis Mora", "externo", expect.any(Object), "e9"),
     );
   });
 
-  it("treats an edited registered advisor as a new one", async () => {
+  it("treats an edited registered advisor as a new one, carrying over its contact fields", async () => {
     mockedCreate.mockResolvedValue({ ...registered, id: "e10", fullName: "Ana Ruiz Otra" });
     renderModal(externoRequest);
 
@@ -122,7 +161,14 @@ describe("AdvisorAssignmentModal with the professor directory", () => {
     save();
 
     await waitFor(() =>
-      expect(mockedCreate).toHaveBeenCalledWith({ fullName: "Ana Ruiz Otra", company: "Consultores SAS" }),
+      expect(mockedCreate).toHaveBeenCalledWith({
+        fullName: "Ana Ruiz Otra",
+        company: "Consultores SAS",
+        identityDocument: "CC 94.456.789",
+        email: "ana.ruiz@consultores.com",
+        phone: "+57 315 123 4567",
+        profile: "Especialista en transformación digital.",
+      }),
     );
   });
 
