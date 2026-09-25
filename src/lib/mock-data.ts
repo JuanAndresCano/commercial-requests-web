@@ -135,6 +135,21 @@ export interface ExternalProfessorData {
   perfil?: string;
 }
 
+// Traza de cada cambio de docente/asesor asignado — a diferencia del costeo
+// (que sí abre una NegotiationRound por cada envío), antes ningún cambio de
+// profesor quedaba registrado: se sobrescribía en silencio. `previousX` queda
+// undefined en la primera asignación (no hay "antes" que registrar).
+export interface ProfessorAssignmentLogEntry {
+  id: string; // `${requestId}-doc${n}`
+  previousProfessor?: string;
+  previousProfessorType?: "planta" | "externo";
+  newProfessor: string;
+  newProfessorType: "planta" | "externo";
+  changedBy: string; // nombre de quien hizo el cambio (siempre el Líder de Producto)
+  changedAt: string; // ISO
+  statusAtChange: RequestStatus; // en qué estado estaba la solicitud al momento del cambio
+}
+
 export interface ProposalDocument {
   id: string;
   name: string;
@@ -243,6 +258,9 @@ export interface RequestItem {
   professor?: string;
   professorType?: "planta" | "externo";
   externalProfessorData?: ExternalProfessorData;
+  // Historial de cambios del docente/asesor asignado — ver
+  // `ProfessorAssignmentLogEntry` y `src/lib/professor-assignment.ts`.
+  professorHistory?: ProfessorAssignmentLogEntry[];
   totalCostCop?: number;
   costing?: ProposalCosting;
   clientKamDocuments?: ProposalDocument[];

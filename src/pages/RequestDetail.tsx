@@ -64,6 +64,7 @@ import { ProposalDocumentsSection } from "@/components/costing/ProposalDocuments
 import { ReassignLeaderDialog } from "@/components/ReassignLeaderDialog";
 import { useReassignRequest } from "@/hooks/use-reassign-request";
 import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
+import { canEditProfessor } from "@/lib/professor-assignment";
 import { toast } from "sonner";
 
 export default function RequestDetail() {
@@ -699,11 +700,7 @@ export default function RequestDetail() {
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
               req.status === "en-costeo" || req.status === "entregada" ? (
-                <ProposalCostingModule
-                  request={req}
-                  onUpdateCosting={handleUpdateCosting}
-                  onOpenAdvisorModal={() => setIsAssignModalOpen(true)}
-                />
+                <ProposalCostingModule request={req} onUpdateCosting={handleUpdateCosting} />
               ) : (
                 /* Antes se mostraba editable en cualquier estado — se podía
                    fijar un valor final desde "Nueva", antes de asignar
@@ -1173,15 +1170,23 @@ export default function RequestDetail() {
                 <div className="space-y-1.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Docente / Asesor</span>
-                    {role === "lider-producto" && (
-                      <button
-                        type="button"
-                        onClick={() => setIsAssignModalOpen(true)}
-                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
-                      >
-                        {req.professor ? "Cambiar" : "Asignar"}
-                      </button>
-                    )}
+                    {role === "lider-producto" &&
+                      (canEditProfessor(req.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsAssignModalOpen(true)}
+                          className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+                        >
+                          {req.professor ? "Cambiar" : "Asignar"}
+                        </button>
+                      ) : (
+                        <span
+                          className="text-[10px] text-muted-foreground italic"
+                          title='No editable: la solicitud ya pasó por "En proceso por experto"'
+                        >
+                          No editable
+                        </span>
+                      ))}
                   </div>
 
                   {req.professor ? (
@@ -1223,6 +1228,39 @@ export default function RequestDetail() {
                     </div>
                   ) : (
                     <p className="text-xs italic text-muted-foreground">Sin docente o asesor asignado</p>
+                  )}
+
+                  {/* Historial de cambios (hallazgo 2026-09-25): antes un
+                      cambio de docente no dejaba ningún rastro. Visible para
+                      ambos roles — no expone información financiera. */}
+                  {req.professorHistory && req.professorHistory.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Historial de asignación
+                      </span>
+                      <ul className="space-y-1">
+                        {[...req.professorHistory].reverse().map((entry) => (
+                          <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                            {entry.previousProfessor ? (
+                              <>
+                                <span className="line-through">{entry.previousProfessor}</span> →{" "}
+                                <span className="font-medium text-foreground">{entry.newProfessor}</span>
+                              </>
+                            ) : (
+                              <>
+                                Asignado: <span className="font-medium text-foreground">{entry.newProfessor}</span>
+                              </>
+                            )}{" "}
+                            · {entry.changedBy} ·{" "}
+                            {new Date(entry.changedAt).toLocaleDateString("es-CO", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1738,7 +1776,7 @@ export default function RequestDetail() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              {isLeader && (
+              {isLeader && canEditProfessor(req.status) && (
                 <Button
                   variant="outline"
                   size="sm"
