@@ -500,7 +500,7 @@ export default function NewRequest() {
     const matchedNode = dbNodes?.find(
       (n) => n.name.toLowerCase() === (data.nodo || "").toLowerCase() || n.id === data.nodo,
     );
-    const resolvedNodeId = matchedNode?.id || undefined;
+    const resolvedNodeId = matchedNode?.id || (dbNodes && dbNodes.length > 0 ? dbNodes[0].id : undefined);
 
     const primaryContact = data.contactoNombre.trim()
       ? {

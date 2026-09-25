@@ -73,7 +73,7 @@ export function formatRelativeTime(dateInput: string | Date | undefined | null):
 }
 
 export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, currentKamName?: string): RequestItem {
-  const currentEconomics = p.economics?.[0];
+  const currentEconomics = p.economics?.find((e) => e.isCurrent) ?? p.economics?.[0];
   const grossValueNum = currentEconomics ? Number(currentEconomics.grossValue ?? 0) : 0;
   const isReady = Boolean(currentEconomics?.readyForKam);
 

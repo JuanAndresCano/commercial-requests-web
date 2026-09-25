@@ -164,6 +164,7 @@ export interface ProposalListItem {
   workflow: ProposalWorkflow | null;
   program: ProposalProgram | null;
   economics?: {
+    isCurrent?: boolean;
     grossValue: string | number | null;
     readyForKam: boolean;
     readyForKamAt: string | null;
