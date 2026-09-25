@@ -135,6 +135,11 @@ export interface ProposalAssignment {
     type: "STAFF" | "EXTERNAL";
     faculty: string | null;
     company: string | null;
+    // HU 4.2 — only set for EXTERNAL advisors, optional at registration.
+    identityDocument: string | null;
+    email: string | null;
+    phone: string | null;
+    profile: string | null;
   } | null;
 }
 
@@ -305,6 +310,20 @@ export interface UpdateProposalInfoPayload {
   observations?: string;
 }
 
+// Every code ALLOWED_TRANSITIONS in commercial-requests-backend actually uses —
+// UpdateStatusPayload.status stays a loose `string` (#7's contract), this is only
+// for Líder de Producto call sites (HU 4.3) that want the stricter union.
+export type BackendStatusCode = "NEW" | "IN_PROGRESS" | "IN_COSTING" | "DELIVERED" | "REJECTED";
+
+// HU 4.4 — reassign to another Product Leader (and node), only while NEW or
+// IN_PROGRESS; the Líder de Producto's side, not part of #7's KAM contract.
+export interface ReassignProposalPayload {
+  newProductLeaderId: string;
+  newNodeId: string;
+  reason: string;
+  note?: string;
+}
+
 export const requestsApi = {
   /** Retrieves aggregated KPI metrics for the authenticated user based on role */
   getDashboardMetrics: () => apiRequest<ProposalDashboardMetrics>("/requests/dashboard/metrics"),
@@ -341,7 +360,8 @@ export const requestsApi = {
       body: data,
     }),
 
-  /** Soft deletes / cancels a proposal (allowed by owner KAM or ADMIN) */
+  /** Soft deletes / cancels a proposal (allowed by owner KAM or ADMIN) — a reason
+   * is required (HU 3.4, mandatory-reason cancellation). */
   delete: (id: string, payload?: { reason: string }) =>
     apiRequest<{ success: boolean; id: string; message: string }>(`/requests/${id}`, {
       method: "DELETE",
@@ -364,4 +384,32 @@ export const requestsApi = {
 
   /** Retrieves list of knowledge nodes */
   getNodes: () => apiRequest<ProposalNode[]>("/nodes"),
+
+  // --- HU 4.2/4.3/4.4/5.1(mínimo) — Líder de Producto side, not in #7's contract ---
+
+  /** Assigns a directory professor (staff or external) to the proposal (HU 4.2). */
+  assignProfessor: (id: string, professorId: string) =>
+    apiRequest<ProposalDetail>(`/requests/${id}/professor`, {
+      method: "PATCH",
+      body: { professorId },
+    }),
+
+  /** Product Leader confirms the current costing is ready for the KAM to deliver. */
+  markReadyForKam: (id: string, leaderNote?: string) =>
+    apiRequest<ProposalDetail>(`/requests/${id}/ready-for-kam`, {
+      method: "PATCH",
+      body: { ...(leaderNote ? { leaderNote } : {}) },
+    }),
+
+  /** HU 4.4 — reassign to another Product Leader (and node), only while NEW/IN_PROGRESS. */
+  reassign: (id: string, data: ReassignProposalPayload) =>
+    apiRequest<ProposalDetail>(`/requests/${id}/reassign`, { method: "PATCH", body: data }),
+
+  /** Minimal costing: only the offered value. Margin/Pro-Cultura stay client-side
+   * preview fields (docs/04) until HU 5.1 (Persona 4) builds the real costing UI. */
+  upsertCosting: (id: string, totalCost: number) =>
+    apiRequest<ProposalDetail>(`/requests/${id}/costing`, {
+      method: "PUT",
+      body: { totalCost },
+    }),
 };

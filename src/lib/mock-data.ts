@@ -183,6 +183,7 @@ export interface ProposalCosting {
 
 export interface RequestItem {
   id: string;
+  /** Human-readable business code (e.g. "REQ-2026-0042"), distinct from `id` (UUID). */
   code?: string;
   title: string;
   applicant: string;
@@ -1636,19 +1637,21 @@ export const STATUS_META: Record<
     headerBg: "bg-[#4cb979]/10",
     borderTone: "border-t-[#4cb979]",
   },
+  // Sin tablero propio todavía (HU 3.x, Persona 2) — placeholder mínimo para que
+  // RequestStatus (ampliado por #7) siga siendo exhaustivo en este lookup.
   rechazada: {
     label: "Rechazada",
-    tone: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
-    dot: "bg-red-500",
-    headerBg: "bg-red-500/10",
-    borderTone: "border-t-red-500",
+    tone: "bg-destructive/15 text-destructive border-destructive/30",
+    dot: "bg-destructive",
+    headerBg: "bg-destructive/10",
+    borderTone: "border-t-destructive",
   },
   cancelada: {
     label: "Cancelada",
-    tone: "bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-500/30",
-    dot: "bg-gray-500",
-    headerBg: "bg-gray-500/10",
-    borderTone: "border-t-gray-500",
+    tone: "bg-muted text-muted-foreground border-border",
+    dot: "bg-muted-foreground",
+    headerBg: "bg-muted",
+    borderTone: "border-t-muted-foreground",
   },
 };
 

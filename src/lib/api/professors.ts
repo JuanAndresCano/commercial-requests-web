@@ -12,6 +12,11 @@ export interface Professor {
   faculty: string | null;
   /** Only for EXTERNAL advisors (free text). */
   company: string | null;
+  /** Only for EXTERNAL advisors; all optional, captured at registration time. */
+  identityDocument: string | null;
+  email: string | null;
+  phone: string | null;
+  profile: string | null;
   isActive: boolean;
 }
 
@@ -26,6 +31,10 @@ export interface ProfessorSearchParams {
 export interface NewExternalProfessor {
   fullName: string;
   company?: string;
+  identityDocument?: string;
+  email?: string;
+  phone?: string;
+  profile?: string;
 }
 
 export const professorsApi = {
