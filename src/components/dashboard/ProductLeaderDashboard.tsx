@@ -23,7 +23,7 @@ import { RoleBadge } from "@/components/RoleBadge";
 import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { usePersistentState } from "@/hooks/use-persistent-state";
-import { useReassignRequest } from "@/hooks/use-reassign-request";
+import { useReassignProposal, useNodes, useProductLeaders } from "@/hooks/use-requests";
 import {
   formatCop,
   formatCompactCop,
@@ -39,7 +39,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ReassignLeaderDialog } from "@/components/ReassignLeaderDialog";
+import {
+  ReassignLeaderDialog,
+  REASSIGN_REASONS,
+  REASSIGN_REASON_TO_BACKEND,
+  type ReassignConfirmParams,
+} from "@/components/ReassignLeaderDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns";
@@ -98,7 +103,16 @@ const KANBAN_STAGES: {
   },
 ];
 
-export function ProductLeaderDashboard({ requests, user, updateRequest, updateStatus }: ProductLeaderDashboardProps) {
+// `updateRequest` stays in the public prop type (Dashboard.tsx still needs to pass
+// something matching it) but this component no longer calls it — reassignment now
+// always goes through the real backend (useReassignProposal), since every proposal
+// here comes from commercial-requests-backend.
+export function ProductLeaderDashboard({
+  requests,
+  user,
+  updateRequest: _updateRequest,
+  updateStatus,
+}: ProductLeaderDashboardProps) {
   // Filter states
   // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
   // el Líder de Producto al volver del detalle de una propuesta — antes se
@@ -136,19 +150,42 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
     }
   };
 
-  // Reassignment Modal State
+  // Reassignment Modal State — every proposal here comes from the real backend (this
+  // dashboard is only reachable already connected, see Dashboard.tsx), so unlike
+  // RequestDetail.tsx there is no mock fallback to branch on.
   const [reassigningRequest, setReassigningRequest] = useState<RequestItem | null>(null);
-  const reassignRequest = useReassignRequest(updateRequest);
+  const reassignProposalReal = useReassignProposal();
+  const nodesQuery = useNodes();
+  const productLeadersQuery = useProductLeaders();
+  const leaderOptions = productLeadersQuery.data?.map((u) => ({
+    id: u.id,
+    label: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+  }));
+  const nodeOptions = nodesQuery.data?.map((n) => ({ id: n.id, label: n.name }));
 
   const handleOpenReassign = (r: RequestItem) => {
     setReassigningRequest(r);
   };
 
-  const handleConfirmReassign = ({ newLeader, newNode }: { newLeader: string; newNode: string }) => {
+  const handleConfirmReassign = ({ newLeader, newNode, reason, notes }: ReassignConfirmParams) => {
     if (!reassigningRequest) return;
-    reassignRequest(reassigningRequest, { newLeader, newNode });
-    toast.success(`Solicitud ${reassigningRequest.id} transferida a ${newLeader}.`);
-    setReassigningRequest(null);
+    const backendReason = REASSIGN_REASON_TO_BACKEND[reason as (typeof REASSIGN_REASONS)[number]] ?? "OTHER";
+    reassignProposalReal.mutate(
+      {
+        id: reassigningRequest.id,
+        newProductLeaderId: newLeader,
+        newNodeId: newNode,
+        reason: backendReason,
+        note: notes.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Solicitud ${reassigningRequest.id} transferida exitosamente.`);
+          setReassigningRequest(null);
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo reasignar"),
+      },
+    );
   };
 
   // Avanzar de etapa es irreversible desde la UI (no hay botón para "devolver"
@@ -898,6 +935,8 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
           if (!open) setReassigningRequest(null);
         }}
         onConfirm={handleConfirmReassign}
+        leaderOptions={leaderOptions}
+        nodeOptions={nodeOptions}
       />
 
       {/* 6. Confirmación antes de avanzar de etapa desde el tablero — con los

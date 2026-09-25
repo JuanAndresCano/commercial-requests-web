@@ -21,6 +21,18 @@ export const REASSIGN_REASONS = [
   "Otro motivo",
 ] as const;
 
+// commercial-requests-backend's ReassignProposalDto.reason — same 5 options, English
+// codes. `reassignReason`/`reassignNotes` used to be captured here and never persisted
+// anywhere (see the module comment below); this is what lets RequestDetail.tsx send them
+// to PATCH /requests/:id/reassign for a real proposal.
+export const REASSIGN_REASON_TO_BACKEND: Record<(typeof REASSIGN_REASONS)[number], string> = {
+  "Temática no afín / Corresponde a otro nodo": "NOT_MATCHING_NODE",
+  "Asignada por error por el KAM": "KAM_ASSIGNMENT_ERROR",
+  "Redistribución por sobrecarga operativa": "WORKLOAD_REDISTRIBUTION",
+  "Especialidad técnica específica": "SPECIFIC_EXPERTISE_NEEDED",
+  "Otro motivo": "OTHER",
+};
+
 export interface ReassignConfirmParams {
   newLeader: string;
   newNode: string;
@@ -28,11 +40,20 @@ export interface ReassignConfirmParams {
   notes: string;
 }
 
+export interface SelectableOption {
+  id: string;
+  label: string;
+}
+
 interface ReassignLeaderDialogProps {
   /** Solicitud a reasignar. El diálogo está abierto mientras no sea null. */
   request: RequestItem | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (params: ReassignConfirmParams) => void;
+  /** Cuando se pasan (propuesta real conectada al backend, ver RequestDetail.tsx), los
+   * selects usan estas opciones — value = id real — en vez de las constantes de mock. */
+  leaderOptions?: SelectableOption[];
+  nodeOptions?: SelectableOption[];
 }
 
 /**
@@ -42,11 +63,18 @@ interface ReassignLeaderDialogProps {
  * compartido antes de habilitar la reasignación también desde "En Experto",
  * para no volver a duplicar la lógica una tercera vez.
  *
- * `reassignReason`/`reassignNotes` se capturan pero, igual que antes de esta
- * extracción, no se persisten en `RequestItem` — queda fuera de alcance
- * (docs/03).
+ * `reassignReason`/`reassignNotes` no se persisten en el `RequestItem` mock (queda fuera
+ * de alcance, docs/03) — pero para una propuesta real conectada, RequestDetail.tsx sí los
+ * manda al backend (`PATCH .../reassign`), que los audita en `proposalStatusHistory`.
  */
-export function ReassignLeaderDialog({ request, onOpenChange, onConfirm }: ReassignLeaderDialogProps) {
+export function ReassignLeaderDialog({
+  request,
+  onOpenChange,
+  onConfirm,
+  leaderOptions,
+  nodeOptions,
+}: ReassignLeaderDialogProps) {
+  const isConnected = !!leaderOptions && !!nodeOptions;
   const [selectedNewLeader, setSelectedNewLeader] = useState("");
   const [selectedNewNode, setSelectedNewNode] = useState("");
   const [reassignReason, setReassignReason] = useState<string>(REASSIGN_REASONS[0]);
@@ -56,11 +84,13 @@ export function ReassignLeaderDialog({ request, onOpenChange, onConfirm }: Reass
   useEffect(() => {
     if (request) {
       setSelectedNewLeader("");
-      setSelectedNewNode(request.node);
+      // En modo conectado, `request.node` es el nombre real (map-proposal.ts) — se
+      // busca el id que corresponde en las opciones reales en vez de usarlo tal cual.
+      setSelectedNewNode(isConnected ? (nodeOptions!.find((n) => n.label === request.node)?.id ?? "") : request.node);
       setReassignReason(REASSIGN_REASONS[0]);
       setReassignNotes("");
     }
-  }, [request]);
+  }, [request, isConnected, nodeOptions]);
 
   const handleConfirm = () => {
     if (!request || !selectedNewLeader) return;
@@ -116,6 +146,7 @@ export function ReassignLeaderDialog({ request, onOpenChange, onConfirm }: Reass
                 value={selectedNewLeader}
                 onValueChange={(val) => {
                   setSelectedNewLeader(val);
+                  if (isConnected) return; // sin nodo por defecto derivado en modo conectado
                   const foundNode = Object.entries(NODE_DEFAULT_LEADERS).find(([, leader]) => leader === val);
                   if (foundNode) {
                     setSelectedNewNode(foundNode[0]);
@@ -126,16 +157,22 @@ export function ReassignLeaderDialog({ request, onOpenChange, onConfirm }: Reass
                   <SelectValue placeholder="Seleccionar nuevo líder de producto" />
                 </SelectTrigger>
                 <SelectContent>
-                  {PRODUCT_LEADERS.map((leader) => {
-                    const isCurrent = leader === request.productLeader;
-                    const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(([, l]) => l === leader)?.[0];
-                    return (
-                      <SelectItem key={leader} value={leader} disabled={isCurrent}>
-                        {leader}{" "}
-                        {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
-                      </SelectItem>
-                    );
-                  })}
+                  {isConnected
+                    ? leaderOptions!.map((leader) => (
+                        <SelectItem key={leader.id} value={leader.id}>
+                          {leader.label}
+                        </SelectItem>
+                      ))
+                    : PRODUCT_LEADERS.map((leader) => {
+                        const isCurrent = leader === request.productLeader;
+                        const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(([, l]) => l === leader)?.[0];
+                        return (
+                          <SelectItem key={leader} value={leader} disabled={isCurrent}>
+                            {leader}{" "}
+                            {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
+                          </SelectItem>
+                        );
+                      })}
                 </SelectContent>
               </Select>
             </div>
@@ -149,11 +186,17 @@ export function ReassignLeaderDialog({ request, onOpenChange, onConfirm }: Reass
                   <SelectValue placeholder="Seleccionar nodo temático" />
                 </SelectTrigger>
                 <SelectContent>
-                  {NODES.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
+                  {isConnected
+                    ? nodeOptions!.map((n) => (
+                        <SelectItem key={n.id} value={n.id}>
+                          {n.label}
+                        </SelectItem>
+                      ))
+                    : NODES.map((n) => (
+                        <SelectItem key={n} value={n}>
+                          {n}
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
             </div>

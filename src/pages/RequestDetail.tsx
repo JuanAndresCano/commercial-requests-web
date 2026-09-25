@@ -61,16 +61,68 @@ import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
 import { ProposalCostingModule } from "@/components/costing/ProposalCostingModule";
 import { ProposalDocumentsSection } from "@/components/costing/ProposalDocumentsSection";
-import { ReassignLeaderDialog } from "@/components/ReassignLeaderDialog";
+import {
+  ReassignLeaderDialog,
+  REASSIGN_REASONS,
+  REASSIGN_REASON_TO_BACKEND,
+  type ReassignConfirmParams,
+} from "@/components/ReassignLeaderDialog";
 import { useReassignRequest } from "@/hooks/use-reassign-request";
 import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
 import { toast } from "sonner";
+import {
+  useProposal,
+  useUpdateProposalStatus,
+  useAssignProfessorMutation,
+  useMarkReadyForKam,
+  useReassignProposal,
+  useUpdateServiceSpecs,
+  useUpsertCostingMinimal,
+  useNodes,
+  useProductLeaders,
+} from "@/hooks/use-requests";
+import { parseParticipantsRange, requestTypeToBackend, modalityToBackend } from "@/lib/api/map-proposal";
+
+// A real backend id is a UUID; every mock id looks like "REQ-2026-XXXX" — never both, so
+// this alone decides which data source and which mutations a given detail page uses.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function RequestDetail() {
   const { id } = useParams();
+  const { requests } = useAuth();
+  const isRealProposal = !!id && UUID_RE.test(id);
+  const realProposalQuery = useProposal(isRealProposal ? id : undefined);
+
+  if (isRealProposal) {
+    if (realProposalQuery.isLoading) {
+      return (
+        <AppShell>
+          <div className="py-16 text-center text-sm text-muted-foreground">Cargando la solicitud...</div>
+        </AppShell>
+      );
+    }
+    if (realProposalQuery.isError || realProposalQuery.data == null) {
+      return (
+        <AppShell>
+          <div className="py-16 text-center text-sm text-destructive">No se pudo cargar esta solicitud.</div>
+        </AppShell>
+      );
+    }
+    return <RequestDetailBody req={realProposalQuery.data} isRealProposal />;
+  }
+
+  const mockReq = requests.find((r) => r.id === id) ?? requests[0];
+  return <RequestDetailBody req={mockReq} isRealProposal={false} />;
+}
+
+interface RequestDetailBodyProps {
+  req: RequestItem;
+  isRealProposal: boolean;
+}
+
+function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
   const navigate = useNavigate();
   const {
-    requests,
     user,
     assignProfessorDetailed,
     updateCosting,
@@ -85,7 +137,16 @@ export default function RequestDetail() {
   const isKam = role === "kam";
   const isLeader = role === "lider-producto" || role === "lider-nodo";
 
-  const req: RequestItem = requests.find((r) => r.id === id) ?? requests[0];
+  // Mutaciones reales (HU 4.1/4.3/4.4/4.5) — se llaman siempre (reglas de hooks), solo se
+  // usan cuando `isRealProposal` es true; ver cada handler más abajo.
+  const updateProposalStatus = useUpdateProposalStatus();
+  const assignProfessorReal = useAssignProfessorMutation();
+  const markReadyForKamReal = useMarkReadyForKam();
+  const reassignProposalReal = useReassignProposal();
+  const updateSpecsReal = useUpdateServiceSpecs();
+  const upsertCostingReal = useUpsertCostingMinimal();
+  const nodesQuery = useNodes();
+  const productLeadersQuery = useProductLeaders();
 
   // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
   // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
@@ -140,6 +201,28 @@ export default function RequestDetail() {
     req.costing?.readyForKam ? { costing: { ...req.costing, readyForKam: false, costingSentAt: undefined } } : {};
 
   const handleSaveSpecs = () => {
+    if (isRealProposal) {
+      const { min, max } = specsDraft.participantes ? parseParticipantsRange(specsDraft.participantes) : {};
+      const requestType = specsDraft.type ? requestTypeToBackend(specsDraft.type) : undefined;
+      updateSpecsReal.mutate(
+        {
+          id: req.id,
+          totalHours: specsDraft.horas ? Number(specsDraft.horas) : undefined,
+          programModality: specsDraft.modalidad ? modalityToBackend(specsDraft.modalidad) : undefined,
+          minParticipants: min,
+          maxParticipants: max,
+          requestType,
+          requestTypeOther: requestType === "OTHER" ? specsDraft.tipoOtro.trim() || undefined : undefined,
+          deadline: specsDraft.deadline || undefined,
+        },
+        {
+          onSuccess: () => toast.success("Especificaciones del servicio actualizadas"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudieron guardar los cambios"),
+        },
+      );
+      setIsEditingSpecs(false);
+      return;
+    }
     updateRequest(req.id, {
       horas: specsDraft.horas || undefined,
       modalidad: specsDraft.modalidad || undefined,
@@ -309,11 +392,37 @@ export default function RequestDetail() {
 
   const reassignRequest = useReassignRequest(updateRequest);
 
-  const handleConfirmReassign = ({ newLeader, newNode }: { newLeader: string; newNode: string }) => {
+  const handleConfirmReassign = ({ newLeader, newNode, reason, notes }: ReassignConfirmParams) => {
+    if (isRealProposal) {
+      const backendReason = REASSIGN_REASON_TO_BACKEND[reason as (typeof REASSIGN_REASONS)[number]] ?? "OTHER";
+      reassignProposalReal.mutate(
+        {
+          id: req.id,
+          newProductLeaderId: newLeader,
+          newNodeId: newNode,
+          reason: backendReason,
+          note: notes.trim() || undefined,
+        },
+        {
+          onSuccess: () => {
+            toast.success(`Solicitud ${req.id} reasignada exitosamente.`);
+            setIsReassignModalOpen(false);
+          },
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo reasignar"),
+        },
+      );
+      return;
+    }
     reassignRequest(req, { newLeader, newNode });
     toast.success(`Solicitud ${req.id} reasignada a ${newLeader} exitosamente.`);
     setIsReassignModalOpen(false);
   };
+
+  const leaderOptions = productLeadersQuery.data?.map((u) => ({
+    id: u.id,
+    label: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+  }));
+  const nodeOptions = nodesQuery.data?.map((n) => ({ id: n.id, label: n.name }));
 
   const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
   const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
@@ -333,7 +442,24 @@ export default function RequestDetail() {
     professorName: string,
     type: "planta" | "externo",
     externalData?: ExternalProfessorData,
+    professorId?: string,
   ) => {
+    if (isRealProposal) {
+      // `professorId` was already real (ProfessorPicker searches/registers against the
+      // backend directory, HU 2.2) — it just never reached the actual assignment call.
+      if (!professorId) {
+        toast.error("No se pudo identificar el profesor seleccionado");
+        return;
+      }
+      assignProfessorReal.mutate(
+        { id: req.id, professorId },
+        {
+          onSuccess: () => toast.success("Docente/asesor asignado"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo asignar"),
+        },
+      );
+      return;
+    }
     // El indicador de "asesor externo" del costeo ya no es un campo propio:
     // se deriva de `professorType`/`professor`/`externalProfessorData` (docs/04,
     // gap #11), así que asignar el docente/asesor aquí ya deja todo consistente
@@ -341,7 +467,20 @@ export default function RequestDetail() {
     assignProfessorDetailed(req.id, professorName, type, externalData);
   };
 
+  // Minimal wiring (HU 5.1 — costeo financiero — is Persona 4's, not built yet): only the
+  // offered value round-trips to the backend. Margin %/$ and Pro-Cultura stay client-side
+  // preview fields (docs/04 already treats them as informational, never persisted) — for
+  // a real proposal they will visually reset after this mutation refetches the detail,
+  // since there is nowhere on the backend to keep them yet.
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
+    if (isRealProposal) {
+      if (newCosting.totalOfferedCop === req.costing?.totalOfferedCop) return;
+      upsertCostingReal.mutate(
+        { id: req.id, totalCost: newCosting.totalOfferedCop },
+        { onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar el costeo") },
+      );
+      return;
+    }
     updateCosting(req.id, newCosting);
   };
 
@@ -360,12 +499,34 @@ export default function RequestDetail() {
   const [confirmingAction, setConfirmingAction] = useState<"experto" | "costeo" | "entregada" | null>(null);
 
   const handleMoveToExperto = () => {
+    if (isRealProposal) {
+      updateProposalStatus.mutate(
+        { id: req.id, status: "IN_PROGRESS" },
+        {
+          onSuccess: () => toast.success("Propuesta pasada a: En proceso por experto"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar"),
+        },
+      );
+      setConfirmingAction(null);
+      return;
+    }
     updateStatus(req.id, "en-experto");
     toast.success("Propuesta pasada a: En proceso por experto");
     setConfirmingAction(null);
   };
 
   const handleMoveToCosteo = () => {
+    if (isRealProposal) {
+      updateProposalStatus.mutate(
+        { id: req.id, status: "IN_COSTING" },
+        {
+          onSuccess: () => toast.success("Propuesta pasada a: En proceso de costeo"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar"),
+        },
+      );
+      setConfirmingAction(null);
+      return;
+    }
     updateStatus(req.id, "en-costeo");
     toast.success("Propuesta pasada a: En proceso de costeo");
     setConfirmingAction(null);
@@ -380,6 +541,16 @@ export default function RequestDetail() {
   // valida en la UI del diálogo dedicado antes de poder confirmar.
   const handleMarkReadyForKam = (leaderNote?: string) => {
     if (!req.costing) return;
+    if (isRealProposal) {
+      markReadyForKamReal.mutate(
+        { id: req.id, leaderNote },
+        {
+          onSuccess: () => toast.success("Costeo enviado al KAM"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo enviar al KAM"),
+        },
+      );
+      return;
+    }
     const { costing, negotiationRounds: updatedRounds } = openNegotiationRound(req, negotiationRounds, leaderNote);
     updateRequest(req.id, { costing, negotiationRounds: updatedRounds });
     toast.success("Costeo enviado al KAM");
@@ -395,6 +566,17 @@ export default function RequestDetail() {
     }
     if (!req.costing?.readyForKam) {
       toast.error("El Líder de Producto aún no ha confirmado el envío del costeo");
+      setConfirmingAction(null);
+      return;
+    }
+    if (isRealProposal) {
+      updateProposalStatus.mutate(
+        { id: req.id, status: "DELIVERED" },
+        {
+          onSuccess: () => toast.success("Propuesta enviada al cliente y marcada como Entregada"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo entregar"),
+        },
+      );
       setConfirmingAction(null);
       return;
     }
@@ -426,6 +608,24 @@ export default function RequestDetail() {
   // con una nota de observaciones para el Líder de Producto (docs/08, pregunta 13).
   const handleReturnWithObservations = () => {
     const trimmedObservations = returnObservations.trim() || undefined;
+    if (isRealProposal) {
+      if (!trimmedObservations) {
+        toast.error("Escribe la observación del cliente antes de devolver la propuesta");
+        return;
+      }
+      updateProposalStatus.mutate(
+        { id: req.id, status: "IN_COSTING", rejectionReason: trimmedObservations },
+        {
+          onSuccess: () => {
+            toast.success("Propuesta devuelta a costeo con las observaciones del cliente");
+            setIsReturnModalOpen(false);
+            setReturnObservations("");
+          },
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo devolver la propuesta"),
+        },
+      );
+      return;
+    }
     // Marca la ronda vigente como rechazada con la observación del cliente y
     // resetea el gate del Líder (docs/04) — ver `rejectRoundWithObservations`
     // sobre el bug que corrige ese reset.
@@ -1764,6 +1964,8 @@ export default function RequestDetail() {
         request={isReassignModalOpen ? req : null}
         onOpenChange={setIsReassignModalOpen}
         onConfirm={handleConfirmReassign}
+        leaderOptions={isRealProposal ? leaderOptions : undefined}
+        nodeOptions={isRealProposal ? nodeOptions : undefined}
       />
 
       {/* Modal: Cancelar solicitud (KAM, solo mientras está "Nueva") */}
