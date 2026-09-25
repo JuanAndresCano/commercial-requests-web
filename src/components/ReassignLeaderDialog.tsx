@@ -50,8 +50,13 @@ interface ReassignLeaderDialogProps {
   request: RequestItem | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (params: ReassignConfirmParams) => void;
-  /** Cuando se pasan (propuesta real conectada al backend, ver RequestDetail.tsx), los
-   * selects usan estas opciones — value = id real — en vez de las constantes de mock. */
+  /** True for a real proposal connected to the backend (ver RequestDetail.tsx). Decides
+   * the MODE independently of whether `leaderOptions`/`nodeOptions` have arrived yet —
+   * while they're still loading, `isConnected` stays true and the selects show a loading
+   * state instead of silently falling back to the mock name lists (a user could otherwise
+   * submit a mock display name as if it were a real backend id). */
+  isConnected?: boolean;
+  /** value = id real; solo tienen datos una vez la query resuelve. */
   leaderOptions?: SelectableOption[];
   nodeOptions?: SelectableOption[];
 }
@@ -71,10 +76,11 @@ export function ReassignLeaderDialog({
   request,
   onOpenChange,
   onConfirm,
+  isConnected = false,
   leaderOptions,
   nodeOptions,
 }: ReassignLeaderDialogProps) {
-  const isConnected = !!leaderOptions && !!nodeOptions;
+  const optionsReady = isConnected && !!leaderOptions && !!nodeOptions;
   const [selectedNewLeader, setSelectedNewLeader] = useState("");
   const [selectedNewNode, setSelectedNewNode] = useState("");
   const [reassignReason, setReassignReason] = useState<string>(REASSIGN_REASONS[0]);
@@ -86,7 +92,7 @@ export function ReassignLeaderDialog({
       setSelectedNewLeader("");
       // En modo conectado, `request.node` es el nombre real (map-proposal.ts) — se
       // busca el id que corresponde en las opciones reales en vez de usarlo tal cual.
-      setSelectedNewNode(isConnected ? (nodeOptions!.find((n) => n.label === request.node)?.id ?? "") : request.node);
+      setSelectedNewNode(isConnected ? (nodeOptions?.find((n) => n.label === request.node)?.id ?? "") : request.node);
       setReassignReason(REASSIGN_REASONS[0]);
       setReassignNotes("");
     }
@@ -144,6 +150,7 @@ export function ReassignLeaderDialog({
               </Label>
               <Select
                 value={selectedNewLeader}
+                disabled={isConnected && !optionsReady}
                 onValueChange={(val) => {
                   setSelectedNewLeader(val);
                   if (isConnected) return; // sin nodo por defecto derivado en modo conectado
@@ -154,11 +161,15 @@ export function ReassignLeaderDialog({
                 }}
               >
                 <SelectTrigger id="reassign-new-leader" className="text-xs h-9">
-                  <SelectValue placeholder="Seleccionar nuevo líder de producto" />
+                  <SelectValue
+                    placeholder={
+                      isConnected && !optionsReady ? "Cargando líderes..." : "Seleccionar nuevo líder de producto"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {isConnected
-                    ? leaderOptions!.map((leader) => (
+                    ? (leaderOptions ?? []).map((leader) => (
                         <SelectItem key={leader.id} value={leader.id}>
                           {leader.label}
                         </SelectItem>
@@ -181,13 +192,19 @@ export function ReassignLeaderDialog({
               <Label htmlFor="reassign-new-node" className="text-xs font-semibold text-foreground">
                 Nodo Temático sugerido
               </Label>
-              <Select value={selectedNewNode} onValueChange={setSelectedNewNode}>
+              <Select
+                value={selectedNewNode}
+                onValueChange={setSelectedNewNode}
+                disabled={isConnected && !optionsReady}
+              >
                 <SelectTrigger id="reassign-new-node" className="text-xs h-9">
-                  <SelectValue placeholder="Seleccionar nodo temático" />
+                  <SelectValue
+                    placeholder={isConnected && !optionsReady ? "Cargando nodos..." : "Seleccionar nodo temático"}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {isConnected
-                    ? nodeOptions!.map((n) => (
+                    ? (nodeOptions ?? []).map((n) => (
                         <SelectItem key={n.id} value={n.id}>
                           {n.label}
                         </SelectItem>
@@ -242,7 +259,9 @@ export function ReassignLeaderDialog({
           <Button
             type="button"
             size="sm"
-            disabled={!selectedNewLeader || selectedNewLeader === request?.productLeader}
+            disabled={
+              !selectedNewLeader || selectedNewLeader === request?.productLeader || (isConnected && !optionsReady)
+            }
             onClick={handleConfirm}
             className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white"
           >

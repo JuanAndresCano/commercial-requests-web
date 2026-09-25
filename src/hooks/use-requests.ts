@@ -110,15 +110,19 @@ export function useUpsertCostingMinimal() {
 }
 
 /** Reassignment target lists (HU 4.4) — real nodes and active Product Leaders, so the
- * dialog's dropdowns carry real ids instead of the mock name lists. */
-export function useNodes() {
-  return useQuery({ queryKey: ["nodes"], queryFn: () => nodesApi.list(), staleTime: 60_000 });
+ * dialog's dropdowns carry real ids instead of the mock name lists. `enabled` defaults
+ * to true but callers should pass `isRealProposal && isLeader`: `/users` is
+ * Product-Leader/Admin-only on the backend, so a KAM (or a mock proposal, which never
+ * needs these) would otherwise fire a request that's certain to 403. */
+export function useNodes(enabled = true) {
+  return useQuery({ queryKey: ["nodes"], queryFn: () => nodesApi.list(), staleTime: 60_000, enabled });
 }
 
-export function useProductLeaders() {
+export function useProductLeaders(enabled = true) {
   return useQuery({
     queryKey: ["users", "PRODUCT_LEADER"],
     queryFn: () => usersApi.findByRole("PRODUCT_LEADER"),
     staleTime: 60_000,
+    enabled,
   });
 }

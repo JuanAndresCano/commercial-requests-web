@@ -54,7 +54,7 @@ interface ProductLeaderDashboardProps {
   requests: RequestItem[];
   user: { name: string; email: string; roleLabel: string };
   updateRequest: (id: string, patch: Partial<RequestItem>) => void;
-  updateStatus: (id: string, status: RequestStatus) => void;
+  updateStatus: (id: string, status: RequestStatus, onSuccess?: () => void) => void;
 }
 
 // Fecha límite en la tarjeta del Kanban: además de la fecha, el color avisa
@@ -219,13 +219,18 @@ export function ProductLeaderDashboard({
   const handleConfirmAdvance = () => {
     if (!confirmingAdvance) return;
     const meta = ADVANCE_META[confirmingAdvance.from];
-    updateStatus(confirmingAdvance.reqId, meta.nextStatus);
-    toast.success(meta.successMsg);
+    // El toast de éxito se dispara solo si el backend confirma — updateStatus (Dashboard.tsx)
+    // llama este callback desde el onSuccess de la mutación real, no antes.
+    updateStatus(confirmingAdvance.reqId, meta.nextStatus, () => toast.success(meta.successMsg));
     setConfirmingAdvance(null);
   };
 
   // El Líder de Producto solo trabaja sus propias solicitudes — sin toggle a "Todas".
-  const activeDataset = requests.filter((r) => r.productLeader === user.name);
+  // `requests` ya viene escopeado por el backend (useProductLeaderQueue → role:
+  // PRODUCT_LEADER); filtrar aquí también por nombre era redundante y frágil, porque
+  // `productLeader` es opcional en el mapper (payload liviano) y cae en "—" si falta,
+  // lo que descartaría en silencio propuestas legítimas del propio Líder.
+  const activeDataset = requests;
 
   const countNuevas = activeDataset.filter((r) => r.status === "nueva").length;
   const countEnExperto = activeDataset.filter((r) => r.status === "en-experto").length;
@@ -935,6 +940,7 @@ export function ProductLeaderDashboard({
           if (!open) setReassigningRequest(null);
         }}
         onConfirm={handleConfirmReassign}
+        isConnected
         leaderOptions={leaderOptions}
         nodeOptions={nodeOptions}
       />

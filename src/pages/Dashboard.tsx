@@ -94,12 +94,15 @@ function ProductLeaderDashboardConnected({ user, updateRequest }: ProductLeaderD
     );
   }
 
-  const handleUpdateStatus = (id: string, status: RequestStatus) => {
+  const handleUpdateStatus = (id: string, status: RequestStatus, onSuccess?: () => void) => {
     const backendStatus = KANBAN_TARGET_STATUS[status];
     if (!backendStatus) return; // only "en-experto"/"en-costeo" are triggered from here
     updateProposalStatus.mutate(
       { id, status: backendStatus },
-      { onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar la propuesta") },
+      {
+        onSuccess,
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar la propuesta"),
+      },
     );
   };
 

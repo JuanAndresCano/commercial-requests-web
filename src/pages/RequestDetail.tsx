@@ -145,8 +145,11 @@ function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
   const reassignProposalReal = useReassignProposal();
   const updateSpecsReal = useUpdateServiceSpecs();
   const upsertCostingReal = useUpsertCostingMinimal();
-  const nodesQuery = useNodes();
-  const productLeadersQuery = useProductLeaders();
+  // Only a connected Product Leader can reassign, so only fetch these directories for
+  // that case — /users is Product-Leader/Admin-only on the backend, and a KAM (or a
+  // mock proposal) opening this page would otherwise fire a request that's certain to 403.
+  const nodesQuery = useNodes(isRealProposal && isLeader);
+  const productLeadersQuery = useProductLeaders(isRealProposal && isLeader);
 
   // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
   // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
@@ -1232,6 +1235,7 @@ function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
                       <SelectContent>
                         <SelectItem value="Presencial en campus Icesi">Presencial en campus Icesi</SelectItem>
                         <SelectItem value="Presencial en sede cliente">Presencial en sede cliente</SelectItem>
+                        <SelectItem value="Presencial en otra sede">Presencial en otra sede</SelectItem>
                         <SelectItem value="Virtual sincrónica">Virtual sincrónica</SelectItem>
                         <SelectItem value="Híbrida">Híbrida</SelectItem>
                       </SelectContent>
@@ -1964,6 +1968,7 @@ function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
         request={isReassignModalOpen ? req : null}
         onOpenChange={setIsReassignModalOpen}
         onConfirm={handleConfirmReassign}
+        isConnected={isRealProposal}
         leaderOptions={isRealProposal ? leaderOptions : undefined}
         nodeOptions={isRealProposal ? nodeOptions : undefined}
       />

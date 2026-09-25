@@ -35,7 +35,7 @@ const MODALITY_MAP: Record<string, string> = {
   VIRTUAL: "Virtual sincrónica",
   PRESENCIAL_ICESI: "Presencial en campus Icesi",
   PRESENCIAL_CLIENTE: "Presencial en sede cliente",
-  PRESENCIAL_OTRO: "Presencial en sede cliente",
+  PRESENCIAL_OTRO: "Presencial en otra sede",
   HIBRIDA: "Híbrida",
 };
 
@@ -52,6 +52,7 @@ const MODALITY_TO_BACKEND: Record<string, BackendProgramModality> = {
   "Virtual sincrónica": "VIRTUAL",
   "Presencial en campus Icesi": "PRESENCIAL_ICESI",
   "Presencial en sede cliente": "PRESENCIAL_CLIENTE",
+  "Presencial en otra sede": "PRESENCIAL_OTRO",
   Híbrida: "HIBRIDA",
 };
 
