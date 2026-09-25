@@ -536,6 +536,20 @@ Nodo' son el mismo cargo?"
 
 ---
 
+## 17. ¿El docente/asesor debe bloquearse tras "En proceso por experto", o solo auditarse el cambio?
+
+**Estado:** 🔴 Abierta — implementado con una decisión provisional de Tomás, sin validar con Dianis
+
+**Contexto:** Probando en vivo (2026-09-25) el flujo de "Devolver con observaciones" (pregunta 13: una propuesta `entregada` que el cliente devuelve vuelve a `en-costeo`), se encontró que el Líder de Producto podía cambiar el docente/asesor asignado **en cualquier estado de la solicitud**, sin dejar ningún registro — a diferencia del costeo, que abre una ronda de negociación por cada cambio (pregunta 13/B.4). Es decir: una propuesta ya devuelta al Líder para ajustar precio también permitía, sin que nadie se enterara, cambiar de quién iba a dictar el servicio.
+
+**Decisión provisional implementada:** el campo solo es editable mientras la solicitud está en **"Nueva" o "En Experto"** — una vez pasa a "En Costeo" o "Entregada" (incluyendo tras un "Devolver con observaciones", que regresa a "En Costeo", no a "En Experto") queda bloqueado. Todo cambio, en cualquier momento en que fue posible, queda en un historial visible (docente anterior, nuevo, quién y cuándo).
+
+**Pregunta para la Líder de Producto:** ¿el bloqueo total es correcto, o hay un caso real donde necesite cambiar el docente ya avanzado el proceso (ej. el docente asignado se enferma o queda indisponible)? Si existe ese caso, la alternativa sería permitir el cambio en cualquier estado pero exigiendo un motivo obligatorio (igual que el motivo de ajuste desde la 2ª ronda de negociación, pregunta 13), en vez de prohibirlo.
+
+**Por qué importa:** sin esta decisión, el modelo real no sabe si debe rechazar la petición de cambio en el backend (bloqueo duro) o solo aceptarla y registrarla (auditoría). Es la misma pregunta de fondo que la 6 y la 16: bloquear vs. permitir-con-motivo.
+
+---
+
 ## Confirmado e implementado en este ciclo
 
 _(Feedback de la Líder de Producto que ya se validó contra el código y quedó
@@ -649,6 +663,9 @@ ronda del 2026-09-15, o son decisiones nuevas tomadas sin ella (ver ronda
 2026-09-19/20 arriba) — repreguntar con ejemplos concretos, no descripciones
 abstractas.)_
 
+- **Pregunta 17 (nueva):** ¿el docente/asesor debe bloquearse tras "En
+  proceso por experto", o solo auditarse el cambio? Hoy implementado
+  provisionalmente como bloqueo total + historial, sin confirmar con ella.
 - **Pregunta 16 (nueva):** ¿quién debe corregir el alcance de la solicitud
   (`necesidad` y afines) cuando el cliente rechaza por un tema distinto al
   precio — el Líder, el KAM, o ambos? Hoy implementado provisionalmente como
