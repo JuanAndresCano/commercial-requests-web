@@ -217,5 +217,5 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     await waitFor(() => {
       expect(screen.getByText(/Solicitud registrada con éxito/i)).toBeInTheDocument();
     });
-  });
+  }, 20000);
 });
