@@ -74,6 +74,8 @@ export default function RequestsBoard() {
       "en-experto": [],
       "en-costeo": [],
       entregada: [],
+      rechazada: [],
+      cancelada: [],
     };
     filtered.forEach((r) => {
       if (g[r.status]) {
@@ -137,7 +139,7 @@ export default function RequestsBoard() {
                 : "bg-secondary dark:bg-[#1a1c28] text-muted-foreground hover:text-foreground",
             )}
           >
-            Todas ({requests.length})
+            Todas ({activeDataset.length})
           </button>
           <button
             type="button"
@@ -151,7 +153,7 @@ export default function RequestsBoard() {
           >
             Asignadas a mi rol (
             {
-              requests.filter((r) => {
+              activeDataset.filter((r) => {
                 if (role === "lider-producto") return r.productLeader === user.name;
                 if (role === "kam") return r.kam === user.name;
                 if (role === "profesor") return r.professor === user.name;
@@ -170,7 +172,7 @@ export default function RequestsBoard() {
                 : "bg-secondary dark:bg-[#1a1c28] text-muted-foreground hover:text-foreground",
             )}
           >
-            Sin profesor asignado ({requests.filter((r) => !r.professor && r.status !== "entregada").length})
+            Sin profesor asignado ({activeDataset.filter((r) => !r.professor && r.status !== "entregada").length})
           </button>
         </div>
 

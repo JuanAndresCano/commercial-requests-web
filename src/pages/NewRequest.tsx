@@ -57,7 +57,6 @@ import {
   type Urgency,
   type RequestItem,
   type ClientContact,
-  type ProposalDocument,
 } from "@/lib/mock-data";
 import type { Company } from "@/lib/api/companies";
 import { companyTypeLabel, formatNit } from "@/lib/company";
@@ -182,19 +181,9 @@ export interface RequestFormData {
 
 const DRAFT_STORAGE_KEY = "icesi_kam_new_request_draft_v1";
 
-function mapAttachedFileToDocumentType(fileName: string): ProposalDocument["type"] {
-  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "pdf") return "pdf";
-  if (["doc", "docx"].includes(ext)) return "doc";
-  if (["xls", "xlsx"].includes(ext)) return "excel";
-  if (["csv"].includes(ext)) return "sheet";
-  if (["zip", "rar", "7z"].includes(ext)) return "archive";
-  return "doc";
-}
-
 export default function NewRequest() {
   const navigate = useNavigate();
-  const { addRequest, user } = useAuth();
+  const { user } = useAuth();
   const createProposal = useCreateProposal();
   const { data: dbNodes } = useNodes();
   const [step, setStep] = useState(1);
@@ -493,22 +482,6 @@ export default function NewRequest() {
       ? data.nombreReq.trim()
       : `${data.tipoReq === "Otro" && data.tipoReqOtro ? data.tipoReqOtro : data.tipoReq || "Solicitud"} - ${data.empresaNombre || "Empresa Aliada"}`;
 
-    const contactName =
-      data.contactoNombre.trim() ||
-      (data.contactosAdicionales.length > 0 && data.contactosAdicionales[0].nombre.trim()
-        ? data.contactosAdicionales[0].nombre.trim()
-        : "Contacto de la Empresa");
-
-    const clientKamDocuments: ProposalDocument[] = data.archivos.map((f) => ({
-      id: f.id,
-      name: f.name,
-      size: f.size,
-      date: new Date().toISOString().split("T")[0],
-      type: mapAttachedFileToDocumentType(f.name),
-      category: "client_kam",
-      uploadedBy: user.name,
-    }));
-
     // Resolve matching nodeId from backend catalogue if assigned
     const matchedNode = dbNodes?.find(
       (n) => n.name.toLowerCase() === (data.nodo || "").toLowerCase() || n.id === data.nodo,
@@ -572,77 +545,19 @@ export default function NewRequest() {
     try {
       await createProposal.mutateAsync(payload);
       toast.success("Solicitud comercial registrada exitosamente");
+      // Limpiar borrador local tras envío exitoso
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+      setSubmitted(kind);
     } catch (err: unknown) {
       const errorMessage = (err as Error)?.message || "Error al registrar la propuesta en el servidor";
-      console.warn("Failed to create proposal on backend, falling back to local state:", err);
+      console.error("Failed to create proposal on backend:", err);
       toast.error(errorMessage);
+      return;
     }
-
-    addRequest({
-      title: finalTitle,
-      applicant: contactName,
-      type: (data.tipoReq || "Otro") as RequestType,
-      status: "nueva", // Siempre ingresa formalmente en estado nueva para asignación
-      urgency: (data.urgencia || "media") as Urgency,
-      company: data.empresaNombre.trim() || "Empresa Aliada",
-      node: data.nodo || "Por definir",
-      productLeader: data.ldp || (data.nodo ? NODE_DEFAULT_LEADERS[data.nodo] : "") || "Por definir",
-      kam: user.name, // Siempre el remitente real de la solicitud, nunca un KAM distinto
-      participantes: data.participantes || undefined,
-      modalidad: data.modalidad || undefined,
-      horas: data.horas || undefined,
-      tipoOtro: data.tipoReq === "Otro" ? data.tipoReqOtro.trim() || undefined : undefined,
-      // Sin costing/totalCostCop: el precio lo define el Líder de Producto,
-      // nunca llega ya definido desde el KAM.
-
-      // Empresa (paso 1)
-      companyNit: data.nit || undefined,
-      companyDireccion: data.direccion || undefined,
-      companyTelefono: data.telefonoEmpresa || undefined,
-      companyCorreo: data.correoEmpresa || undefined,
-      companyCiiuPrincipal: data.ciiuPrincipal || undefined,
-      companyCiiuPrincipalDesc: data.ciiuPrincipalDesc || undefined,
-      companyCiiusSecundarios: data.ciiusSecundarios.length > 0 ? data.ciiusSecundarios : undefined,
-      companyTipo: data.tipoEmpresa || undefined,
-      companyDescripcion: data.descripcion || undefined,
-      companyWeb: data.web || undefined,
-
-      // Contacto (paso 2)
-      contactTelefono: data.telefono || undefined,
-      contactTelefonoSecundario: data.telefonoSecundario || undefined,
-      contactCorreo: data.correo || undefined,
-      contactCorreoAlternativo: data.correoAlternativo || undefined,
-      contactCargo: data.cargo || undefined,
-      contactArea: data.area || undefined,
-      additionalContacts: data.contactosAdicionales.length > 0 ? data.contactosAdicionales : undefined,
-
-      // Diagnóstico del requerimiento (paso 3)
-      alimentacion: data.alimentacion || undefined,
-      necesidad: data.necesidad || undefined,
-      competencias: data.competencias || undefined,
-      exito: data.exito || undefined,
-      resultados: data.resultados || undefined,
-      areaParticipantes: data.areaParticipantes || undefined,
-
-      // Formación previa (paso 4)
-      formacionPrevia: data.formacionPrevia || undefined,
-      descFormacion: data.descFormacion || undefined,
-      empresaPrevia: data.empresaPrevia || undefined,
-      fechaPrevia: data.fechaPrevia || undefined,
-
-      // Observaciones y documentos (paso 5)
-      observaciones: data.observaciones || undefined,
-      clientKamDocuments: clientKamDocuments.length > 0 ? clientKamDocuments : undefined,
-    });
-
-    // Limpiar borrador local tras envío exitoso
-    try {
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-
-    setSubmitted(kind);
   };
 
   if (submitted)

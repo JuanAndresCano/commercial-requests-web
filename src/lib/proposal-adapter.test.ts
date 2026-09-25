@@ -22,6 +22,12 @@ describe("proposal-adapter", () => {
     it("maps DELIVERED to entregada", () => {
       expect(mapBackendStatusToFrontend("DELIVERED")).toBe("entregada");
     });
+    it("maps REJECTED to rechazada", () => {
+      expect(mapBackendStatusToFrontend("REJECTED")).toBe("rechazada");
+    });
+    it("maps CANCELLED to cancelada", () => {
+      expect(mapBackendStatusToFrontend("CANCELLED")).toBe("cancelada");
+    });
     it("defaults unknown status to nueva", () => {
       expect(mapBackendStatusToFrontend("UNKNOWN")).toBe("nueva");
     });

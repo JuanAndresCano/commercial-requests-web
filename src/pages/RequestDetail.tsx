@@ -71,8 +71,10 @@ import { useRequestDetail } from "@/hooks/use-request-detail";
 import { useUpdateRequestInfo } from "@/hooks/use-update-request-info";
 import { useDeleteRequest } from "@/hooks/use-delete-request";
 import { useNodes } from "@/hooks/use-nodes";
+import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
-import type { UpdateProposalInfoPayload, RequestType as ApiRequestType } from "@/lib/api/requests";
+import { canEditProfessor } from "@/lib/professor-assignment";
+import type { UpdateProposalInfoPayload, RequestType as ApiRequestType, CompanyType } from "@/lib/api/requests";
 
 const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
   Capacitación: "CAPACITACION",
@@ -81,6 +83,13 @@ const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
   Investigación: "INVESTIGACION",
   "Proyectos Especiales (Eventos)": "SPECIAL_PROJECTS",
   Otro: "OTHER",
+};
+
+const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
+  Privada: "PRIVADA",
+  Pública: "PUBLICA",
+  Mixta: "MIXTA",
+  "Sin Ánimo de Lucro": "SIN_ANIMO_LUCRO",
 };
 
 export default function RequestDetail() {
@@ -101,6 +110,7 @@ export default function RequestDetail() {
   const { data: apiProposal } = useRequestDetail(id);
   const updateInfoMutation = useUpdateRequestInfo();
   const deleteRequestMutation = useDeleteRequest();
+  const updateStatusMutation = useUpdateRequestStatus();
   const { data: dbNodes } = useNodes();
   const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
 
@@ -191,7 +201,9 @@ export default function RequestDetail() {
   // alcance (sobre todo `necesidad`) mientras está re-costeando, porque ahí
   // sí hay un motivo de negocio concreto para tocarlo (docs/08, pregunta 16
   // — sin validar todavía con Dianis).
-  const wasRejectedByClient = (req.negotiationRounds ?? []).some((r) => r.clientResponse === "rechazada");
+  const wasRejectedByClient = (req.negotiationRounds ?? []).some(
+    (r) => r.clientResponse === "rechazada" || (r.clientResponse as string) === "CHANGES_REQUESTED",
+  );
   const canEditFullInfo =
     (isKam && req.kam === user.name && req.status === "nueva") ||
     (role === "lider-producto" && req.productLeader === user.name && req.status === "en-costeo" && wasRejectedByClient);
@@ -348,6 +360,8 @@ export default function RequestDetail() {
       requestTypeOther: fullInfoDraft.type === "Otro" ? fullInfoDraft.tipoOtro.trim() || undefined : undefined,
       companyNit: fullInfoDraft.companyNit.trim() || undefined,
       companyDescription: fullInfoDraft.companyDescripcion.trim() || undefined,
+      companyType: fullInfoDraft.companyTipo ? COMPANY_TYPE_MAP[fullInfoDraft.companyTipo] : undefined,
+      sector: fullInfoDraft.companyCiiuPrincipalDesc.trim() || undefined,
       website: fullInfoDraft.companyWeb.trim() || undefined,
       contactName: fullInfoDraft.applicant.trim() || undefined,
       contactRole: fullInfoDraft.contactCargo.trim() || undefined,
@@ -359,19 +373,25 @@ export default function RequestDetail() {
       successMetrics: fullInfoDraft.exito.trim() || undefined,
       expectedResults: fullInfoDraft.resultados.trim() || undefined,
       participantArea: fullInfoDraft.areaParticipantes.trim() || undefined,
+      requiresCatering: Boolean(fullInfoDraft.alimentacion.trim()),
+      cateringNotes: fullInfoDraft.alimentacion.trim() || undefined,
       hasPreviousTraining: fullInfoDraft.formacionPrevia === "Sí",
+      previousTraining: fullInfoDraft.formacionPrevia || undefined,
       previousTrainingDescription: fullInfoDraft.descFormacion.trim() || undefined,
       previousTrainingCompany: fullInfoDraft.empresaPrevia.trim() || undefined,
       previousTrainingDate: fullInfoDraft.fechaPrevia || undefined,
       observations: fullInfoDraft.observaciones.trim() || undefined,
     };
 
-    if (apiProposal || (id && (id.startsWith("REQ-") || id.length > 20))) {
+    if (apiProposal) {
       try {
         await updateInfoMutation.mutateAsync({
-          id: apiProposal?.id ?? req.id,
+          id: apiProposal.id,
           data: payload,
         });
+        toast.success("Información de la solicitud actualizada");
+        setIsEditingFullInfo(false);
+        return;
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "Error al actualizar la solicitud";
         toast.error(errorMsg);
@@ -486,7 +506,7 @@ export default function RequestDetail() {
     toast.success("Costeo enviado al KAM");
   };
 
-  const handleSendToClient = () => {
+  const handleSendToClient = async () => {
     // Defensa adicional además del `disabled` del botón — por si el estado
     // cambia entre que se abre el diálogo de confirmación y se confirma.
     if (!hasValidCosting) {
@@ -499,6 +519,24 @@ export default function RequestDetail() {
       setConfirmingAction(null);
       return;
     }
+
+    if (apiProposal) {
+      try {
+        await updateStatusMutation.mutateAsync({
+          id: apiProposal.id,
+          data: { status: "DELIVERED" },
+        });
+        toast.success("Propuesta enviada al cliente y marcada como Entregada");
+        setConfirmingAction(null);
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al enviar la propuesta al cliente";
+        toast.error(errorMsg);
+        setConfirmingAction(null);
+        return;
+      }
+    }
+
     // Cierra el envío de la ronda vigente con la fecha de entrega efectiva
     // al cliente (docs/04) — ver `closeRoundForClientDelivery` sobre por qué
     // no basta filtrar solo por `clientResponse`.
@@ -517,9 +555,13 @@ export default function RequestDetail() {
   // El KAM puede cancelar su propia solicitud mientras nadie la haya
   // empezado a trabajar (docs/08, pregunta 14).
   const handleCancelRequest = async () => {
-    if (apiProposal || (id && (id.startsWith("REQ-") || id.length > 20))) {
+    if (apiProposal) {
       try {
-        await deleteRequestMutation.mutateAsync(apiProposal?.id ?? req.id);
+        await deleteRequestMutation.mutateAsync(apiProposal.id);
+        toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
+        setIsCancelModalOpen(false);
+        navigate("/dashboard");
+        return;
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "Error al cancelar la solicitud";
         toast.error(errorMsg);
@@ -527,15 +569,40 @@ export default function RequestDetail() {
       }
     }
     deleteRequest(req.id);
-    toast.success(`Solicitud ${req.id} cancelada`);
+    toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
     setIsCancelModalOpen(false);
     navigate("/dashboard");
   };
 
   // Si el cliente pide ajustes tras la entrega, el KAM la devuelve a costeo
   // con una nota de observaciones para el Líder de Producto (docs/08, pregunta 13).
-  const handleReturnWithObservations = () => {
+  const handleReturnWithObservations = async () => {
     const trimmedObservations = returnObservations.trim() || undefined;
+    if (!trimmedObservations) {
+      toast.error("Por favor ingresa las observaciones del cliente para devolver la propuesta");
+      return;
+    }
+
+    if (apiProposal) {
+      try {
+        await updateStatusMutation.mutateAsync({
+          id: apiProposal.id,
+          data: {
+            status: "IN_COSTING",
+            rejectionReason: trimmedObservations,
+          },
+        });
+        toast.success("Propuesta devuelta a costeo con las observaciones del cliente");
+        setIsReturnModalOpen(false);
+        setReturnObservations("");
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al devolver la propuesta a costeo";
+        toast.error(errorMsg);
+        return;
+      }
+    }
+
     // Marca la ronda vigente como rechazada con la observación del cliente y
     // resetea el gate del Líder (docs/04) — ver `rejectRoundWithObservations`
     // sobre el bug que corrige ese reset.
@@ -809,11 +876,7 @@ export default function RequestDetail() {
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
               req.status === "en-costeo" || req.status === "entregada" ? (
-                <ProposalCostingModule
-                  request={req}
-                  onUpdateCosting={handleUpdateCosting}
-                  onOpenAdvisorModal={() => setIsAssignModalOpen(true)}
-                />
+                <ProposalCostingModule request={req} onUpdateCosting={handleUpdateCosting} />
               ) : (
                 /* Antes se mostraba editable en cualquier estado — se podía
                    fijar un valor final desde "Nueva", antes de asignar
@@ -944,7 +1007,11 @@ export default function RequestDetail() {
 
                 <div className="space-y-3">
                   {negotiationRounds.map((round, idx) => {
-                    const isCurrentRound = round.clientResponse === "pendiente" && idx === negotiationRounds.length - 1;
+                    const isPending =
+                      round.clientResponse === "pendiente" || (round.clientResponse as string) === "PENDING";
+                    const isRejected =
+                      round.clientResponse === "rechazada" || (round.clientResponse as string) === "CHANGES_REQUESTED";
+                    const isCurrentRound = isPending && idx === negotiationRounds.length - 1;
                     const scopeDiffs = getScopeDiffs(round, negotiationRounds[idx - 1]);
                     return (
                       <div
@@ -985,13 +1052,13 @@ export default function RequestDetail() {
                             la reemplazó con un envío más reciente antes de que
                             el KAM alcanzara a entregarla — no quedó rechazada
                             por el cliente, simplemente se abandonó. */}
-                        {round.clientResponse === "pendiente" && !isCurrentRound && (
+                        {isPending && !isCurrentRound && (
                           <p className="text-muted-foreground italic">
                             Reemplazada por una ronda posterior antes de llegar a entregarse al cliente.
                           </p>
                         )}
 
-                        {round.clientResponse === "rechazada" && (
+                        {isRejected && (
                           <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-2.5 space-y-1">
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
                               <RotateCcw className="h-3 w-3" /> Devuelta por el cliente
@@ -1283,15 +1350,23 @@ export default function RequestDetail() {
                 <div className="space-y-1.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Docente / Asesor</span>
-                    {role === "lider-producto" && (
-                      <button
-                        type="button"
-                        onClick={() => setIsAssignModalOpen(true)}
-                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
-                      >
-                        {req.professor ? "Cambiar" : "Asignar"}
-                      </button>
-                    )}
+                    {role === "lider-producto" &&
+                      (canEditProfessor(req.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsAssignModalOpen(true)}
+                          className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+                        >
+                          {req.professor ? "Cambiar" : "Asignar"}
+                        </button>
+                      ) : (
+                        <span
+                          className="text-[10px] text-muted-foreground italic"
+                          title='No editable: la solicitud ya pasó por "En proceso por experto"'
+                        >
+                          No editable
+                        </span>
+                      ))}
                   </div>
 
                   {req.professor ? (
@@ -1333,6 +1408,37 @@ export default function RequestDetail() {
                     </div>
                   ) : (
                     <p className="text-xs italic text-muted-foreground">Sin docente o asesor asignado</p>
+                  )}
+
+                  {/* Historial de cambios de asignación */}
+                  {req.professorHistory && req.professorHistory.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Historial de asignación
+                      </span>
+                      <ul className="space-y-1">
+                        {[...req.professorHistory].reverse().map((entry) => (
+                          <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                            {entry.previousProfessor ? (
+                              <>
+                                <span className="line-through">{entry.previousProfessor}</span> →{" "}
+                                <span className="font-medium text-foreground">{entry.newProfessor}</span>
+                              </>
+                            ) : (
+                              <>
+                                Asignado: <span className="font-medium text-foreground">{entry.newProfessor}</span>
+                              </>
+                            )}{" "}
+                            · {entry.changedBy} ·{" "}
+                            {new Date(entry.changedAt).toLocaleDateString("es-CO", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1932,7 +2038,7 @@ export default function RequestDetail() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              {isLeader && (
+              {isLeader && canEditProfessor(req.status) && (
                 <Button
                   variant="outline"
                   size="sm"

@@ -15,9 +15,13 @@ export function mapBackendStatusToFrontend(statusCode: string | undefined): Requ
     case "IN_COSTING":
       return "en-costeo";
     case "DELIVERED":
-    case "REJECTED":
       return "entregada";
+    case "REJECTED":
+      return "rechazada";
+    case "CANCELLED":
+      return "cancelada";
     default:
+      console.warn(`[proposal-adapter] Unknown status code: ${statusCode}`);
       return "nueva";
   }
 }
@@ -150,10 +154,28 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
         ? "Sí"
         : p.program?.previousTraining === "No"
           ? "No"
-          : undefined,
+          : p.program?.previousTraining === "No sé" || p.program?.previousTraining === "No se"
+            ? "No sé"
+            : undefined,
     descFormacion: p.program?.previousTrainingDetail ?? undefined,
     empresaPrevia: p.program?.previousTrainingCompany ?? undefined,
     fechaPrevia: p.program?.previousTrainingDate ? p.program.previousTrainingDate.slice(0, 10) : undefined,
     observaciones: p.comments ?? undefined,
+    negotiationRounds: detail.negotiationRounds?.map((nr) => {
+      const isRejected = nr.clientResponse === "CHANGES_REQUESTED";
+      return {
+        id: nr.id,
+        roundNumber: nr.roundNumber,
+        totalOfferedCop: Number(nr.offeredValue ?? 0),
+        marginAmountCop: nr.marginAmount != null ? Number(nr.marginAmount) : 0,
+        expectedMarginPercent: nr.marginPercentage != null ? Number(nr.marginPercentage) : 0,
+        leaderNote: nr.leaderNote ?? undefined,
+        sentToKamAt: nr.sentToKamAt,
+        sentToClientAt: nr.sentToClientAt ?? undefined,
+        clientResponse: isRejected ? "rechazada" : "pendiente",
+        clientObservation: nr.clientNote ?? undefined,
+        clientRespondedAt: undefined,
+      };
+    }),
   };
 }

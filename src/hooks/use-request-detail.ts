@@ -10,5 +10,6 @@ export function useRequestDetail(id: string | undefined) {
     },
     enabled: Boolean(id),
     staleTime: 10_000,
+    retry: false,
   });
 }

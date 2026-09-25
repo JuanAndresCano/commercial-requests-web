@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RequestDetail from "./RequestDetail";
 import type { RequestItem } from "@/lib/mock-data";
-import { requestsApi } from "@/lib/api/requests";
+import { requestsApi, type ProposalDetail } from "@/lib/api/requests";
 
 const mockRequests: RequestItem[] = [
   {
@@ -47,6 +47,40 @@ const mockRequests: RequestItem[] = [
       proCulturaTaxPercent: 1.5,
       proCulturaTaxAmount: 375000,
     },
+  },
+  {
+    id: "REQ-2026-0003",
+    title: "Programa de Innovación Digital",
+    company: "Ingenio Manuelita",
+    applicant: "Pedro Gómez",
+    type: "Capacitación",
+    createdAt: "2026-03-10T10:00:00.000Z",
+    status: "entregada",
+    urgency: "media",
+    productLeader: "Juan Pablo Corrales",
+    kam: "Andrea Martínez",
+    node: "Inteligencia Artificial",
+    costing: {
+      readyForKam: true,
+      costingSentAt: "2026-03-20T10:00:00.000Z",
+      totalOfferedCop: 18000000,
+      expectedMarginPercent: 30,
+      marginAmountCop: 5400000,
+      proCulturaTaxPercent: 1.5,
+      proCulturaTaxAmount: 270000,
+    },
+    negotiationRounds: [
+      {
+        id: "REQ-2026-0003-r1",
+        roundNumber: 1,
+        totalOfferedCop: 18000000,
+        marginAmountCop: 5400000,
+        expectedMarginPercent: 30,
+        sentToKamAt: "2026-03-20T10:00:00.000Z",
+        sentToClientAt: "2026-03-21T10:00:00.000Z",
+        clientResponse: "pendiente",
+      },
+    ],
   },
 ];
 
@@ -96,7 +130,18 @@ vi.mock("@/lib/api/requests", async (importOriginal) => {
           title: found.title,
           priority: "ALTA",
           company: { id: "comp-1", name: found.company, nit: found.companyNit },
-          workflow: { currentStatus: { code: found.status === "nueva" ? "NEW" : "IN_COSTING" } },
+          workflow: {
+            currentStatus: {
+              code:
+                found.status === "nueva"
+                  ? "NEW"
+                  : found.status === "en-costeo"
+                    ? "IN_COSTING"
+                    : found.status === "entregada"
+                      ? "DELIVERED"
+                      : "NEW",
+            },
+          },
           program: { requestType: "CAPACITACION" },
           creator: { id: "u-1", firstName: "Andrea", lastName: "Martínez", email: "andrea@icesi.edu.co" },
           economics: found.costing
@@ -115,6 +160,7 @@ vi.mock("@/lib/api/requests", async (importOriginal) => {
       }),
       updateInfo: vi.fn().mockResolvedValue({ id: "REQ-2026-0001", title: "Capacitación Modificada" }),
       delete: vi.fn().mockResolvedValue({ success: true, id: "REQ-2026-0001", message: "Deleted" }),
+      updateStatus: vi.fn().mockResolvedValue({ id: "REQ-2026-0002" }),
     },
   };
 });
@@ -183,12 +229,31 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
         );
       });
 
+      // No dual-write: real API should not write to mock AuthContext
+      expect(authMock.updateRequest).not.toHaveBeenCalled();
+    });
+
+    it("falls back to local updateRequest when apiProposal is null (pure mock)", async () => {
+      // Return null from API so it behaves as local mock
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
+      renderPage("REQ-2026-0001");
+
+      const editBtn = await screen.findByRole("button", { name: /Editar información/i });
+      fireEvent.click(editBtn);
+
+      const titleInput = screen.getByLabelText(/Título de la propuesta/i);
+      fireEvent.change(titleInput, { target: { value: "Edición Local Mock" } });
+
+      const saveBtn = screen.getByRole("button", { name: /Guardar información/i });
+      fireEvent.click(saveBtn);
+
       expect(authMock.updateRequest).toHaveBeenCalledWith(
         "REQ-2026-0001",
         expect.objectContaining({
-          title: "Capacitación Liderazgo Ejecutivo Actualizada",
+          title: "Edición Local Mock",
         }),
       );
+      expect(requestsApi.updateInfo).not.toHaveBeenCalled();
     });
   });
 
@@ -200,7 +265,7 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(cancelBtn).toBeInTheDocument();
     });
 
-    it("opens confirmation dialog and executes cancellation and redirect", async () => {
+    it("opens confirmation dialog and executes cancellation and redirect without dual delete", async () => {
       renderPage("REQ-2026-0001");
 
       const cancelBtn = await screen.findByRole("button", { name: /Cancelar solicitud/i });
@@ -215,7 +280,23 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
         expect(requestsApi.delete).toHaveBeenCalledWith("REQ-2026-0001");
       });
 
+      // No dual delete: real API should not call mock deleteRequest
+      expect(authMock.deleteRequest).not.toHaveBeenCalled();
+      expect(await screen.findByText("Tablero Dashboard")).toBeInTheDocument();
+    });
+
+    it("falls back to local deleteRequest when apiProposal is null (pure mock)", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
+      renderPage("REQ-2026-0001");
+
+      const cancelBtn = await screen.findByRole("button", { name: /Cancelar solicitud/i });
+      fireEvent.click(cancelBtn);
+
+      const confirmBtn = screen.getByRole("button", { name: /Sí, cancelar solicitud/i });
+      fireEvent.click(confirmBtn);
+
       expect(authMock.deleteRequest).toHaveBeenCalledWith("REQ-2026-0001");
+      expect(requestsApi.delete).not.toHaveBeenCalled();
       expect(await screen.findByText("Tablero Dashboard")).toBeInTheDocument();
     });
   });
@@ -234,6 +315,94 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(screen.queryByText(/32%/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Honorarios docente/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/Costo base/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("HU 3.6: Proposal delivery to client (Enviar a cliente)", () => {
+    it("delivers proposal via updateStatus mutation when apiProposal is present", async () => {
+      renderPage("REQ-2026-0002");
+
+      const sendBtn = await screen.findByRole("button", { name: /Enviar a cliente/i });
+      expect(sendBtn).toBeInTheDocument();
+      fireEvent.click(sendBtn);
+
+      const confirmBtn = screen.getByRole("button", { name: /Sí, marcar entregada/i });
+      fireEvent.click(confirmBtn);
+
+      await waitFor(() => {
+        expect(requestsApi.updateStatus).toHaveBeenCalledWith("REQ-2026-0002", {
+          status: "DELIVERED",
+        });
+      });
+
+      expect(authMock.updateRequest).not.toHaveBeenCalled();
+    });
+
+    it("falls back to local updateRequest when apiProposal is null", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
+      renderPage("REQ-2026-0002");
+
+      const sendBtn = await screen.findByRole("button", { name: /Enviar a cliente/i });
+      fireEvent.click(sendBtn);
+
+      const confirmBtn = screen.getByRole("button", { name: /Sí, marcar entregada/i });
+      fireEvent.click(confirmBtn);
+
+      expect(authMock.updateRequest).toHaveBeenCalledWith(
+        "REQ-2026-0002",
+        expect.objectContaining({
+          status: "entregada",
+        }),
+      );
+      expect(requestsApi.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("HU 3.7: Proposal return with observations (Devolver con observaciones)", () => {
+    it("returns proposal to costing via updateStatus mutation when apiProposal is present", async () => {
+      renderPage("REQ-2026-0003");
+
+      const returnBtn = await screen.findByRole("button", { name: /Devolver con observaciones/i });
+      expect(returnBtn).toBeInTheDocument();
+      fireEvent.click(returnBtn);
+
+      const textarea = screen.getByLabelText(/Observaciones del cliente/i);
+      fireEvent.change(textarea, { target: { value: "El cliente solicita ajustar número de horas a 40" } });
+
+      const confirmBtn = screen.getByRole("button", { name: /Devolver a costeo/i });
+      fireEvent.click(confirmBtn);
+
+      await waitFor(() => {
+        expect(requestsApi.updateStatus).toHaveBeenCalledWith("REQ-2026-0003", {
+          status: "IN_COSTING",
+          rejectionReason: "El cliente solicita ajustar número de horas a 40",
+        });
+      });
+
+      expect(authMock.updateRequest).not.toHaveBeenCalled();
+    });
+
+    it("falls back to local updateRequest when apiProposal is null", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
+      renderPage("REQ-2026-0003");
+
+      const returnBtn = await screen.findByRole("button", { name: /Devolver con observaciones/i });
+      fireEvent.click(returnBtn);
+
+      const textarea = screen.getByLabelText(/Observaciones del cliente/i);
+      fireEvent.change(textarea, { target: { value: "Ajuste local mock" } });
+
+      const confirmBtn = screen.getByRole("button", { name: /Devolver a costeo/i });
+      fireEvent.click(confirmBtn);
+
+      expect(authMock.updateRequest).toHaveBeenCalledWith(
+        "REQ-2026-0003",
+        expect.objectContaining({
+          status: "en-costeo",
+          clientObservations: "Ajuste local mock",
+        }),
+      );
+      expect(requestsApi.updateStatus).not.toHaveBeenCalled();
     });
   });
 });
