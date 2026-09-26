@@ -2,7 +2,9 @@ import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import { KamCommandCenter } from "@/components/dashboard/KamCommandCenter";
 import { ProductLeaderDashboard } from "@/components/dashboard/ProductLeaderDashboard";
-import { useProductLeaderQueue, useUpdateProposalStatus } from "@/hooks/use-requests";
+import { useRequests } from "@/hooks/use-requests";
+import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
+import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
 import type { BackendStatusCode } from "@/lib/api/requests";
 import type { RequestStatus } from "@/lib/mock-data";
 import { toast } from "sonner";
@@ -68,8 +70,9 @@ interface ProductLeaderDashboardConnectedProps {
 }
 
 function ProductLeaderDashboardConnected({ user, updateRequest }: ProductLeaderDashboardConnectedProps) {
-  const { data: requests, isLoading, isError, refetch } = useProductLeaderQueue();
-  const updateProposalStatus = useUpdateProposalStatus();
+  const { data: proposals, isLoading, isError, refetch } = useRequests({ role: "PRODUCT_LEADER" });
+  const requests = proposals?.map((p) => mapProposalToRequestItem(p));
+  const updateProposalStatus = useUpdateRequestStatus();
 
   if (isLoading) {
     return (
@@ -98,7 +101,7 @@ function ProductLeaderDashboardConnected({ user, updateRequest }: ProductLeaderD
     const backendStatus = KANBAN_TARGET_STATUS[status];
     if (!backendStatus) return; // only "en-experto"/"en-costeo" are triggered from here
     updateProposalStatus.mutate(
-      { id, status: backendStatus },
+      { id, data: { status: backendStatus } },
       {
         onSuccess,
         onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar la propuesta"),

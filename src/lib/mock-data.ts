@@ -1,4 +1,4 @@
-export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada";
+export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada" | "rechazada" | "cancelada";
 export type RequestType =
   "Capacitación" | "Consultoría" | "Mentoría" | "Investigación" | "Proyectos Especiales (Eventos)" | "Otro";
 export type Urgency = "alta" | "media" | "baja";
@@ -183,6 +183,8 @@ export interface ProposalCosting {
 
 export interface RequestItem {
   id: string;
+  /** Human-readable business code (e.g. "REQ-2026-0042"), distinct from `id` (UUID). */
+  code?: string;
   title: string;
   applicant: string;
   type: RequestType;
@@ -1618,6 +1620,22 @@ export const STATUS_META: Record<
     dot: "bg-[#4cb979]",
     headerBg: "bg-[#4cb979]/10",
     borderTone: "border-t-[#4cb979]",
+  },
+  // Sin tablero propio todavía (HU 3.x, Persona 2) — placeholder mínimo para que
+  // RequestStatus (ampliado por #7) siga siendo exhaustivo en este lookup.
+  rechazada: {
+    label: "Rechazada",
+    tone: "bg-destructive/15 text-destructive border-destructive/30",
+    dot: "bg-destructive",
+    headerBg: "bg-destructive/10",
+    borderTone: "border-t-destructive",
+  },
+  cancelada: {
+    label: "Cancelada",
+    tone: "bg-muted text-muted-foreground border-border",
+    dot: "bg-muted-foreground",
+    headerBg: "bg-muted",
+    borderTone: "border-t-muted-foreground",
   },
 };
 

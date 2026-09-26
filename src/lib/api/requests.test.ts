@@ -29,17 +29,25 @@ describe("requestsApi", () => {
 
   it("advances a status with an optional rejectionReason", async () => {
     respond(200, {});
-    await requestsApi.updateStatus("p1", "IN_COSTING");
+    await requestsApi.updateStatus("p1", { status: "IN_COSTING" });
     expect(fetchMock.mock.calls[0][1]).toMatchObject({
       method: "PATCH",
       body: JSON.stringify({ status: "IN_COSTING" }),
     });
 
-    await requestsApi.updateStatus("p1", "IN_COSTING", "Client wants a smaller scope");
+    await requestsApi.updateStatus("p1", { status: "IN_COSTING", rejectionReason: "Client wants a smaller scope" });
     expect(fetchMock.mock.calls[1][1]).toMatchObject({
       method: "PATCH",
       body: JSON.stringify({ status: "IN_COSTING", rejectionReason: "Client wants a smaller scope" }),
     });
+  });
+
+  it("assigns a directory professor with a PATCH to /professor", async () => {
+    respond(200, {});
+    await requestsApi.assignProfessor("p1", "prof-1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/professor$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ professorId: "prof-1" }) });
   });
 
   it("reassigns with a PATCH to /reassign", async () => {

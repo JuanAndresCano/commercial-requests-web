@@ -70,18 +70,21 @@ import {
 import { useReassignRequest } from "@/hooks/use-reassign-request";
 import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
 import { toast } from "sonner";
+import { useRequestDetail } from "@/hooks/use-request-detail";
+import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
+import { useAssignProfessor } from "@/hooks/use-assign-professor";
+import { useMarkReadyForKam } from "@/hooks/use-mark-ready-for-kam";
+import { useReassignProposal } from "@/hooks/use-reassign-proposal";
+import { useUpdateServiceSpecs } from "@/hooks/use-update-service-specs";
+import { useUpsertCosting } from "@/hooks/use-upsert-costing";
+import { useNodes } from "@/hooks/use-nodes";
+import { useProductLeaders } from "@/hooks/use-product-leaders";
 import {
-  useProposal,
-  useUpdateProposalStatus,
-  useAssignProfessorMutation,
-  useMarkReadyForKam,
-  useReassignProposal,
-  useUpdateServiceSpecs,
-  useUpsertCostingMinimal,
-  useNodes,
-  useProductLeaders,
-} from "@/hooks/use-requests";
-import { parseParticipantsRange, requestTypeToBackend, modalityToBackend } from "@/lib/api/map-proposal";
+  parseParticipantsRange,
+  requestTypeToBackend,
+  modalityToBackend,
+  mapProposalToRequestItem,
+} from "@/lib/proposal-adapter";
 
 // A real backend id is a UUID; every mock id looks like "REQ-2026-XXXX" — never both, so
 // this alone decides which data source and which mutations a given detail page uses.
@@ -91,7 +94,7 @@ export default function RequestDetail() {
   const { id } = useParams();
   const { requests } = useAuth();
   const isRealProposal = !!id && UUID_RE.test(id);
-  const realProposalQuery = useProposal(isRealProposal ? id : undefined);
+  const realProposalQuery = useRequestDetail(isRealProposal ? id : undefined);
 
   if (isRealProposal) {
     if (realProposalQuery.isLoading) {
@@ -108,7 +111,7 @@ export default function RequestDetail() {
         </AppShell>
       );
     }
-    return <RequestDetailBody req={realProposalQuery.data} isRealProposal />;
+    return <RequestDetailBody req={mapProposalToRequestItem(realProposalQuery.data)} isRealProposal />;
   }
 
   const mockReq = requests.find((r) => r.id === id) ?? requests[0];
@@ -139,12 +142,12 @@ function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
 
   // Mutaciones reales (HU 4.1/4.3/4.4/4.5) — se llaman siempre (reglas de hooks), solo se
   // usan cuando `isRealProposal` es true; ver cada handler más abajo.
-  const updateProposalStatus = useUpdateProposalStatus();
-  const assignProfessorReal = useAssignProfessorMutation();
+  const updateProposalStatus = useUpdateRequestStatus();
+  const assignProfessorReal = useAssignProfessor();
   const markReadyForKamReal = useMarkReadyForKam();
   const reassignProposalReal = useReassignProposal();
   const updateSpecsReal = useUpdateServiceSpecs();
-  const upsertCostingReal = useUpsertCostingMinimal();
+  const upsertCostingReal = useUpsertCosting();
   // Only a connected Product Leader can reassign, so only fetch these directories for
   // that case — /users is Product-Leader/Admin-only on the backend, and a KAM (or a
   // mock proposal) opening this page would otherwise fire a request that's certain to 403.
@@ -504,7 +507,7 @@ function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
   const handleMoveToExperto = () => {
     if (isRealProposal) {
       updateProposalStatus.mutate(
-        { id: req.id, status: "IN_PROGRESS" },
+        { id: req.id, data: { status: "IN_PROGRESS" } },
         {
           onSuccess: () => toast.success("Propuesta pasada a: En proceso por experto"),
           onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar"),
@@ -521,7 +524,7 @@ function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
   const handleMoveToCosteo = () => {
     if (isRealProposal) {
       updateProposalStatus.mutate(
-        { id: req.id, status: "IN_COSTING" },
+        { id: req.id, data: { status: "IN_COSTING" } },
         {
           onSuccess: () => toast.success("Propuesta pasada a: En proceso de costeo"),
           onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar"),
@@ -574,7 +577,7 @@ function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
     }
     if (isRealProposal) {
       updateProposalStatus.mutate(
-        { id: req.id, status: "DELIVERED" },
+        { id: req.id, data: { status: "DELIVERED" } },
         {
           onSuccess: () => toast.success("Propuesta enviada al cliente y marcada como Entregada"),
           onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo entregar"),
@@ -617,7 +620,7 @@ function RequestDetailBody({ req, isRealProposal }: RequestDetailBodyProps) {
         return;
       }
       updateProposalStatus.mutate(
-        { id: req.id, status: "IN_COSTING", rejectionReason: trimmedObservations },
+        { id: req.id, data: { status: "IN_COSTING", rejectionReason: trimmedObservations } },
         {
           onSuccess: () => {
             toast.success("Propuesta devuelta a costeo con las observaciones del cliente");

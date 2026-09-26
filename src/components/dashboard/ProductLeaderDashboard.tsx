@@ -23,7 +23,9 @@ import { RoleBadge } from "@/components/RoleBadge";
 import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { usePersistentState } from "@/hooks/use-persistent-state";
-import { useReassignProposal, useNodes, useProductLeaders } from "@/hooks/use-requests";
+import { useReassignProposal } from "@/hooks/use-reassign-proposal";
+import { useNodes } from "@/hooks/use-nodes";
+import { useProductLeaders } from "@/hooks/use-product-leaders";
 import {
   formatCop,
   formatCompactCop,
@@ -340,6 +342,8 @@ export function ProductLeaderDashboard({
       "en-experto": [],
       "en-costeo": [],
       entregada: [],
+      rechazada: [],
+      cancelada: [],
     };
     kanbanRequests.forEach((req) => {
       if (grouped[req.status]) {

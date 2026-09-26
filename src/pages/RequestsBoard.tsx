@@ -64,6 +64,8 @@ export default function RequestsBoard() {
       "en-experto": [],
       "en-costeo": [],
       entregada: [],
+      rechazada: [],
+      cancelada: [],
     };
     filtered.forEach((r) => {
       if (g[r.status]) {
