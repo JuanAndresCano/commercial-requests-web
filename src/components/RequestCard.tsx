@@ -45,7 +45,7 @@ export function RequestCard({ req, cta }: RequestCardProps) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="font-mono text-[11px] font-semibold text-muted-foreground">{req.id}</span>
+              <span className="font-mono text-[11px] font-semibold text-muted-foreground">{req.code ?? req.id}</span>
               <span className="text-[10px] text-muted-foreground/60">•</span>
               <span className="text-[11px] font-medium text-foreground truncate max-w-[130px]">{req.company}</span>
             </div>

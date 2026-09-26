@@ -57,13 +57,59 @@ import {
   type Urgency,
   type RequestItem,
   type ClientContact,
-  type ProposalDocument,
 } from "@/lib/mock-data";
 import type { Company } from "@/lib/api/companies";
 import { companyTypeLabel, formatNit } from "@/lib/company";
 import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { useCreateProposal } from "@/hooks/use-create-proposal";
+import { useNodes } from "@/hooks/use-nodes";
+import { useRequests } from "@/hooks/use-requests";
+import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
+import type {
+  CreateProposalPayload,
+  CompanyType,
+  ProposalPriority,
+  RequestType as ApiRequestType,
+  ProgramModality,
+} from "@/lib/api/requests";
+
+const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
+  Pública: "PUBLICA",
+  Privada: "PRIVADA",
+  Mixta: "MIXTA",
+  "Sin ánimo de lucro": "SIN_ANIMO_LUCRO",
+  PUBLICA: "PUBLICA",
+  PRIVADA: "PRIVADA",
+  MIXTA: "MIXTA",
+  SIN_ANIMO_LUCRO: "SIN_ANIMO_LUCRO",
+};
+
+const PRIORITY_MAP: Record<string, ProposalPriority> = {
+  alta: "ALTA",
+  media: "MEDIA",
+  baja: "BAJA",
+  ALTA: "ALTA",
+  MEDIA: "MEDIA",
+  BAJA: "BAJA",
+};
+
+const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
+  Capacitación: "CAPACITACION",
+  Consultoría: "CONSULTORIA",
+  Mentoría: "MENTORIA",
+  Investigación: "INVESTIGACION",
+  "Proyectos Especiales (Eventos)": "SPECIAL_PROJECTS",
+  Otro: "OTHER",
+};
+
+const MODALITY_MAP: Record<string, ProgramModality> = {
+  "Presencial en campus Icesi": "PRESENCIAL_ICESI",
+  "Presencial en sede cliente": "PRESENCIAL_CLIENTE",
+  "Virtual sincrónica": "VIRTUAL",
+  Híbrida: "HIBRIDA",
+};
 
 const STEPS = [
   { id: 1, title: "Empresa", icon: Building2 },
@@ -135,19 +181,11 @@ export interface RequestFormData {
 
 const DRAFT_STORAGE_KEY = "icesi_kam_new_request_draft_v1";
 
-function mapAttachedFileToDocumentType(fileName: string): ProposalDocument["type"] {
-  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "pdf") return "pdf";
-  if (["doc", "docx"].includes(ext)) return "doc";
-  if (["xls", "xlsx"].includes(ext)) return "excel";
-  if (["csv"].includes(ext)) return "sheet";
-  if (["zip", "rar", "7z"].includes(ext)) return "archive";
-  return "doc";
-}
-
 export default function NewRequest() {
   const navigate = useNavigate();
-  const { addRequest, user } = useAuth();
+  const { user } = useAuth();
+  const createProposal = useCreateProposal();
+  const { data: dbNodes } = useNodes();
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState<null | "draft" | "sent">(null);
   const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ company: string; timestamp: string } | null>(null);
@@ -292,6 +330,7 @@ export default function NewRequest() {
   const FIELD_SCROLL_TARGETS: Record<string, string> = {
     empresaNombre: "empresa-nombre",
     tipoEmpresa: "tipo-empresa-group",
+    nodo: "nodo-select",
     nombreReq: "nombre-req",
     tipoReq: "tipo-req",
     tipoReqOtro: "tipo-otro-input",
@@ -314,6 +353,9 @@ export default function NewRequest() {
       // Paso 2 (Contactos) es 100% opcional según directriz de Líder de Producto
       return true;
     } else if (currentStep === 3) {
+      if (!data.nodo) {
+        newErrors.nodo = "Selecciona un nodo temático para continuar.";
+      }
       if (!data.nombreReq.trim()) {
         newErrors.nombreReq = "Ingresa un título o nombre de la propuesta para continuar.";
       }
@@ -369,7 +411,7 @@ export default function NewRequest() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
-  const handleFinish = (kind: "draft" | "sent") => {
+  const handleFinish = async (kind: "draft" | "sent") => {
     if (kind === "sent") {
       if (!data.empresaNombre.trim()) {
         toast.error("Por favor ingresa o busca la Razón Social de la empresa en el Paso 1.");
@@ -387,6 +429,15 @@ export default function NewRequest() {
           tipoEmpresa: "Selecciona la naturaleza jurídica de la empresa para continuar.",
         }));
         setStep(1);
+        return;
+      }
+      if (!data.nodo) {
+        toast.error("Por favor selecciona un nodo temático en el Paso 3.");
+        setFieldErrors((prev) => ({
+          ...prev,
+          nodo: "Selecciona un nodo temático para continuar.",
+        }));
+        setStep(3);
         return;
       }
       if (!data.nombreReq.trim()) {
@@ -431,87 +482,82 @@ export default function NewRequest() {
       ? data.nombreReq.trim()
       : `${data.tipoReq === "Otro" && data.tipoReqOtro ? data.tipoReqOtro : data.tipoReq || "Solicitud"} - ${data.empresaNombre || "Empresa Aliada"}`;
 
-    const contactName =
-      data.contactoNombre.trim() ||
-      (data.contactosAdicionales.length > 0 && data.contactosAdicionales[0].nombre.trim()
-        ? data.contactosAdicionales[0].nombre.trim()
-        : "Contacto de la Empresa");
+    // Resolve matching nodeId from backend catalogue if assigned
+    const matchedNode = dbNodes?.find(
+      (n) => n.name.toLowerCase() === (data.nodo || "").toLowerCase() || n.id === data.nodo,
+    );
+    const resolvedNodeId = matchedNode?.id;
 
-    const clientKamDocuments: ProposalDocument[] = data.archivos.map((f) => ({
-      id: f.id,
-      name: f.name,
-      size: f.size,
-      date: new Date().toISOString().split("T")[0],
-      type: mapAttachedFileToDocumentType(f.name),
-      category: "client_kam",
-      uploadedBy: user.name,
-    }));
+    const primaryContact = data.contactoNombre.trim()
+      ? {
+          name: data.contactoNombre.trim(),
+          email: data.correo.trim() || undefined,
+          phone: data.telefono.trim() || undefined,
+          role: data.cargo.trim() || undefined,
+          area: data.area.trim() || undefined,
+        }
+      : data.contactosAdicionales.length > 0 && data.contactosAdicionales[0].nombre.trim()
+        ? {
+            name: data.contactosAdicionales[0].nombre.trim(),
+            email: data.contactosAdicionales[0].correo?.trim() || undefined,
+            phone: data.contactosAdicionales[0].telefono?.trim() || undefined,
+            role: data.contactosAdicionales[0].cargo?.trim() || undefined,
+            area: data.contactosAdicionales[0].area?.trim() || undefined,
+          }
+        : undefined;
 
-    addRequest({
-      title: finalTitle,
-      applicant: contactName,
-      type: (data.tipoReq || "Otro") as RequestType,
-      status: "nueva", // Siempre ingresa formalmente en estado nueva para asignación
-      urgency: (data.urgencia || "media") as Urgency,
-      company: data.empresaNombre.trim() || "Empresa Aliada",
-      node: data.nodo || "Por definir",
-      productLeader: data.ldp || (data.nodo ? NODE_DEFAULT_LEADERS[data.nodo] : "") || "Por definir",
-      kam: user.name, // Siempre el remitente real de la solicitud, nunca un KAM distinto
-      participantes: data.participantes || undefined,
-      modalidad: data.modalidad || undefined,
-      horas: data.horas || undefined,
-      tipoOtro: data.tipoReq === "Otro" ? data.tipoReqOtro.trim() || undefined : undefined,
-      // Sin costing/totalCostCop: el precio lo define el Líder de Producto,
-      // nunca llega ya definido desde el KAM.
+    const payload: CreateProposalPayload = {
+      companyName: data.empresaNombre.trim() || "Empresa Aliada",
+      companyNit: data.nit.trim() || undefined,
+      companyDescription: data.descripcion.trim() || undefined,
+      companyType: data.tipoEmpresa ? COMPANY_TYPE_MAP[data.tipoEmpresa] : undefined,
+      sector: data.ciiuPrincipalDesc.trim() || undefined,
+      website: data.web.trim() || undefined,
+      nodeId: resolvedNodeId,
+      priority: data.urgencia ? PRIORITY_MAP[data.urgencia] : undefined,
+      contactName: primaryContact?.name,
+      contactEmail: primaryContact?.email,
+      contactPhone: primaryContact?.phone,
+      contactRole: primaryContact?.role,
+      contactArea: primaryContact?.area,
+      requestType: data.tipoReq ? REQUEST_TYPE_MAP[data.tipoReq] : undefined,
+      requestTypeOther: data.tipoReq === "Otro" ? data.tipoReqOtro.trim() || undefined : undefined,
+      participantRange: data.participantes.trim() || undefined,
+      programName: finalTitle,
+      needDescription: data.necesidad.trim() || undefined,
+      estimatedHours: data.horas ? parseInt(data.horas, 10) || undefined : undefined,
+      modality: data.modalidad ? MODALITY_MAP[data.modalidad] : undefined,
+      requiresCatering: Boolean(data.alimentacion?.trim()),
+      cateringNotes: data.alimentacion?.trim() || undefined,
+      expectedResults: data.resultados.trim() || undefined,
+      successMetrics: data.exito.trim() || undefined,
+      competencies: data.competencias.trim() || undefined,
+      participantArea: data.areaParticipantes.trim() || undefined,
+      hasPreviousTraining: data.formacionPrevia === "Sí",
+      previousTraining: data.formacionPrevia || undefined,
+      previousTrainingDescription: data.descFormacion.trim() || undefined,
+      previousTrainingCompany: data.empresaPrevia.trim() || undefined,
+      previousTrainingDate: data.fechaPrevia.trim() || undefined,
+      observations: data.observaciones.trim() || undefined,
+      attachments: data.archivos.map((f) => ({ fileName: f.name })),
+    };
 
-      // Empresa (paso 1)
-      companyNit: data.nit || undefined,
-      companyDireccion: data.direccion || undefined,
-      companyTelefono: data.telefonoEmpresa || undefined,
-      companyCorreo: data.correoEmpresa || undefined,
-      companyCiiuPrincipal: data.ciiuPrincipal || undefined,
-      companyCiiuPrincipalDesc: data.ciiuPrincipalDesc || undefined,
-      companyCiiusSecundarios: data.ciiusSecundarios.length > 0 ? data.ciiusSecundarios : undefined,
-      companyTipo: data.tipoEmpresa || undefined,
-      companyDescripcion: data.descripcion || undefined,
-      companyWeb: data.web || undefined,
-
-      // Contacto (paso 2)
-      contactTelefono: data.telefono || undefined,
-      contactTelefonoSecundario: data.telefonoSecundario || undefined,
-      contactCorreo: data.correo || undefined,
-      contactCorreoAlternativo: data.correoAlternativo || undefined,
-      contactCargo: data.cargo || undefined,
-      contactArea: data.area || undefined,
-      additionalContacts: data.contactosAdicionales.length > 0 ? data.contactosAdicionales : undefined,
-
-      // Diagnóstico del requerimiento (paso 3)
-      alimentacion: data.alimentacion || undefined,
-      necesidad: data.necesidad || undefined,
-      competencias: data.competencias || undefined,
-      exito: data.exito || undefined,
-      resultados: data.resultados || undefined,
-      areaParticipantes: data.areaParticipantes || undefined,
-
-      // Formación previa (paso 4)
-      formacionPrevia: data.formacionPrevia || undefined,
-      descFormacion: data.descFormacion || undefined,
-      empresaPrevia: data.empresaPrevia || undefined,
-      fechaPrevia: data.fechaPrevia || undefined,
-
-      // Observaciones y documentos (paso 5)
-      observaciones: data.observaciones || undefined,
-      clientKamDocuments: clientKamDocuments.length > 0 ? clientKamDocuments : undefined,
-    });
-
-    // Limpiar borrador local tras envío exitoso
     try {
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
-    } catch {
-      // ignore
+      await createProposal.mutateAsync(payload);
+      toast.success("Solicitud comercial registrada exitosamente");
+      // Limpiar borrador local tras envío exitoso
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+      setSubmitted(kind);
+    } catch (err: unknown) {
+      const errorMessage = (err as Error)?.message || "Error al registrar la propuesta en el servidor";
+      console.error("Failed to create proposal on backend:", err);
+      toast.error(errorMessage);
+      return;
     }
-
-    setSubmitted(kind);
   };
 
   if (submitted)
@@ -684,10 +730,17 @@ export default function NewRequest() {
             ) : (
               <Button
                 onClick={() => handleFinish("sent")}
-                className="bg-[#4cb979] hover:bg-[#3ea569] text-white px-6 h-10 text-xs font-bold shadow-xs"
+                disabled={createProposal.isPending}
+                className="bg-[#4cb979] hover:bg-[#3ea569] text-white px-6 h-10 text-xs font-bold shadow-xs disabled:opacity-50"
               >
-                <Send className="h-4 w-4 mr-1.5" />
-                Enviar solicitud a Líder de Producto
+                {createProposal.isPending ? (
+                  <>Enviando solicitud...</>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-1.5" />
+                    Enviar solicitud a Líder de Producto
+                  </>
+                )}
               </Button>
             )}
           </div>
@@ -1344,6 +1397,9 @@ function Step3({
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
   errors: Record<string, string>;
 }) {
+  const { data: dbNodes } = useNodes();
+  const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
+
   // Autofoco + scroll suave al campo de texto al elegir "Otro", sin clics extra
   const otroInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -1395,37 +1451,34 @@ function Step3({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Nodo Asignado"
-              showOptionalBadge
-              hint="Nodo temático de la Universidad Icesi (opcional / por definir)"
+              required
+              hint={!errors.nodo ? "Nodo temático de la Universidad Icesi" : undefined}
               id="nodo-select"
             >
-              <Select
-                value={data.nodo}
-                onValueChange={(v) => {
-                  const val = v === "none" ? "" : v;
-                  update("nodo", val);
-                  // Asociación inteligente por Nodo: preselecciona automáticamente el líder sugerido para este nodo
-                  if (val && NODE_DEFAULT_LEADERS[val]) {
-                    update("ldp", NODE_DEFAULT_LEADERS[val]);
-                  }
-                }}
-              >
-                <SelectTrigger id="nodo-select" className="bg-card">
-                  <SelectValue placeholder="Selecciona un nodo (opcional / por definir)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {data.nodo && (
-                    <SelectItem value="none" className="text-muted-foreground italic">
-                      -- Por definir / Sin asignar --
-                    </SelectItem>
-                  )}
-                  {NODES.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FieldErrorFrame show={!!errors.nodo}>
+                <Select
+                  value={data.nodo}
+                  onValueChange={(v) => {
+                    update("nodo", v);
+                    // Asociación inteligente por Nodo: preselecciona automáticamente el líder sugerido para este nodo
+                    if (v && NODE_DEFAULT_LEADERS[v]) {
+                      update("ldp", NODE_DEFAULT_LEADERS[v]);
+                    }
+                  }}
+                >
+                  <SelectTrigger id="nodo-select" className="bg-card">
+                    <SelectValue placeholder="Selecciona un nodo temático" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableNodes.map((n) => (
+                      <SelectItem key={n} value={n}>
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldErrorFrame>
+              {errors.nodo && <FieldErrorText>{errors.nodo}</FieldErrorText>}
             </Field>
 
             {(() => {
@@ -1850,9 +1903,17 @@ function Step4({
   errors: Record<string, string>;
 }) {
   const { requests } = useAuth();
+  const { data: apiProposals } = useRequests();
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [proposalTab, setProposalTab] = useState<"todas" | "entregadas" | "en_proceso">("todas");
   const [selectedProposalModal, setSelectedProposalModal] = useState<RequestItem | null>(null);
+
+  const allRequests = useMemo(() => {
+    if (apiProposals && apiProposals.length > 0) {
+      return apiProposals.map((p) => mapProposalToRequestItem(p));
+    }
+    return requests;
+  }, [apiProposals, requests]);
 
   // Coincidencias de propuestas de la empresa activa o buscada
   const activeCompanyQuery = (historySearchTerm.trim() || data.empresaNombre.trim()).toLowerCase();
@@ -1861,14 +1922,14 @@ function Step4({
     if (!activeCompanyQuery || activeCompanyQuery.length < 2) return [];
     const tokens = activeCompanyQuery.split(/\s+/).filter((w) => w.length >= 2);
 
-    return requests.filter((r) => {
+    return allRequests.filter((r) => {
       const comp = (r.company || "").toLowerCase();
       if (comp.includes(activeCompanyQuery) || activeCompanyQuery.includes(comp)) return true;
       if (tokens.length > 1 && tokens.every((term) => comp.includes(term))) return true;
       if (tokens.some((term) => term.length >= 4 && comp.includes(term))) return true;
       return false;
     });
-  }, [requests, activeCompanyQuery]);
+  }, [allRequests, activeCompanyQuery]);
 
   const deliveredProposals = useMemo(
     () => companyProposals.filter((p) => p.status === "entregada"),
