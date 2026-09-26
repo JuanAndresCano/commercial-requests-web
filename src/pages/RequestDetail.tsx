@@ -92,6 +92,13 @@ const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
   "Sin Ánimo de Lucro": "SIN_ANIMO_LUCRO",
 };
 
+const CANCEL_REASON_PRESETS = [
+  "Creada por error / prueba",
+  "Cliente desistió de la propuesta",
+  "Solicitud duplicada",
+  "Cambio en requerimientos del cliente",
+] as const;
+
 export default function RequestDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -137,6 +144,7 @@ export default function RequestDetail() {
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnObservations, setReturnObservations] = useState("");
   // Diálogo dedicado para "Enviar a KAM" (docs/03): a partir de la ronda 2
@@ -555,11 +563,21 @@ export default function RequestDetail() {
   // El KAM puede cancelar su propia solicitud mientras nadie la haya
   // empezado a trabajar (docs/08, pregunta 14).
   const handleCancelRequest = async () => {
+    const trimmedReason = cancelReason.trim();
+    if (!trimmedReason) {
+      toast.error("Por favor ingresa o selecciona un motivo de cancelación");
+      return;
+    }
+
     if (apiProposal) {
       try {
-        await deleteRequestMutation.mutateAsync(apiProposal.id);
+        await deleteRequestMutation.mutateAsync({
+          id: apiProposal.id,
+          reason: trimmedReason,
+        });
         toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
         setIsCancelModalOpen(false);
+        setCancelReason("");
         navigate("/dashboard");
         return;
       } catch (err: unknown) {
@@ -571,6 +589,7 @@ export default function RequestDetail() {
     deleteRequest(req.id);
     toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
     setIsCancelModalOpen(false);
+    setCancelReason("");
     navigate("/dashboard");
   };
 
@@ -2067,21 +2086,69 @@ export default function RequestDetail() {
       />
 
       {/* Modal: Cancelar solicitud (KAM, solo mientras está "Nueva") */}
-      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
-        <DialogContent className="max-w-sm">
+      <Dialog
+        open={isCancelModalOpen}
+        onOpenChange={(open) => {
+          setIsCancelModalOpen(open);
+          if (!open) setCancelReason("");
+        }}
+      >
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-foreground">¿Cancelar esta solicitud?</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Se eliminará permanentemente la solicitud {req.code ?? req.id} ({req.company}). Esta acción no se puede
-              deshacer.
+              Se cancelará la solicitud {req.code ?? req.id} ({req.company}). Por trazabilidad y control de gestión, es
+              obligatorio ingresar el motivo de cancelación.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-xs font-semibold text-foreground mb-1.5 block">
+                Selecciona un motivo común o escribe uno:
+              </Label>
+              <div className="flex flex-wrap gap-1.5 mb-2.5">
+                {CANCEL_REASON_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setCancelReason(preset)}
+                    className={`px-2.5 py-1 text-[11px] rounded-full font-medium transition-colors border ${
+                      cancelReason === preset
+                        ? "bg-[#5454e9] text-white border-[#5454e9]"
+                        : "bg-secondary/40 hover:bg-secondary border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="cancel-reason-input" className="text-xs font-semibold text-foreground mb-1 block">
+                Motivo de cancelación <span className="text-red-500">*</span>
+              </Label>
+              <textarea
+                id="cancel-reason-input"
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Escribe la justificación o selecciona una de las opciones sugeridas..."
+                className="w-full text-xs rounded-lg border border-border dark:border-[#2b2d3d] bg-background dark:bg-[#151620] p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-[#5454e9]"
+              />
+            </div>
+          </div>
+
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setIsCancelModalOpen(false)}
+              onClick={() => {
+                setIsCancelModalOpen(false);
+                setCancelReason("");
+              }}
               className="text-xs"
             >
               Volver
@@ -2089,8 +2156,9 @@ export default function RequestDetail() {
             <Button
               type="button"
               size="sm"
+              disabled={!cancelReason.trim()}
               onClick={handleCancelRequest}
-              className="text-xs bg-red-600 hover:bg-red-700 text-white"
+              className="text-xs bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Sí, cancelar solicitud
             </Button>

@@ -273,11 +273,18 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
 
       expect(screen.getByText(/¿Cancelar esta solicitud\?/i)).toBeInTheDocument();
 
+      // Click quick chip preset to fill reason
+      const chipPreset = screen.getByRole("button", { name: /Creada por error \/ prueba/i });
+      fireEvent.click(chipPreset);
+
       const confirmBtn = screen.getByRole("button", { name: /Sí, cancelar solicitud/i });
+      expect(confirmBtn).not.toBeDisabled();
       fireEvent.click(confirmBtn);
 
       await waitFor(() => {
-        expect(requestsApi.delete).toHaveBeenCalledWith("REQ-2026-0001");
+        expect(requestsApi.delete).toHaveBeenCalledWith("REQ-2026-0001", {
+          reason: "Creada por error / prueba",
+        });
       });
 
       // No dual delete: real API should not call mock deleteRequest
@@ -291,6 +298,10 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
 
       const cancelBtn = await screen.findByRole("button", { name: /Cancelar solicitud/i });
       fireEvent.click(cancelBtn);
+
+      // Select preset
+      const chipPreset = screen.getByRole("button", { name: /Cliente desistió de la propuesta/i });
+      fireEvent.click(chipPreset);
 
       const confirmBtn = screen.getByRole("button", { name: /Sí, cancelar solicitud/i });
       fireEvent.click(confirmBtn);

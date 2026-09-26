@@ -342,9 +342,10 @@ export const requestsApi = {
     }),
 
   /** Soft deletes / cancels a proposal (allowed by owner KAM or ADMIN) */
-  delete: (id: string) =>
+  delete: (id: string, payload?: { reason: string }) =>
     apiRequest<{ success: boolean; id: string; message: string }>(`/requests/${id}`, {
       method: "DELETE",
+      body: payload,
     }),
 
   /** Updates the lifecycle status of a proposal */

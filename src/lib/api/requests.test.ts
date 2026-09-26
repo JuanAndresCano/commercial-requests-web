@@ -110,14 +110,15 @@ describe("requestsApi", () => {
     expect(updated.title).toBe("Updated Title");
   });
 
-  it("deletes/cancels proposal via DELETE /requests/:id", async () => {
+  it("deletes/cancels proposal via DELETE /requests/:id with reason", async () => {
     respond(200, { success: true, id: "req-1", message: "Cancelled" });
-    const result = await requestsApi.delete("req-1");
+    const result = await requestsApi.delete("req-1", { reason: "Cliente desistió de la propuesta" });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/requests\/req-1$/);
     expect(init).toMatchObject({
       method: "DELETE",
+      body: JSON.stringify({ reason: "Cliente desistió de la propuesta" }),
     });
     expect(result.success).toBe(true);
   });
