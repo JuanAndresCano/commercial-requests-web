@@ -114,7 +114,7 @@ export default function RequestDetail() {
     deleteRequest,
   } = useAuth();
 
-  const { data: apiProposal } = useRequestDetail(id);
+  const { data: apiProposal, isLoading: isLoadingProposal, isError: isProposalError } = useRequestDetail(id);
   const updateInfoMutation = useUpdateRequestInfo();
   const deleteRequestMutation = useDeleteRequest();
   const updateStatusMutation = useUpdateRequestStatus();
@@ -125,19 +125,41 @@ export default function RequestDetail() {
   const isKam = role === "kam";
   const isLeader = role === "lider-producto" || role === "lider-nodo";
 
+  // Cuando hay un id en la URL, esperamos la respuesta del backend antes de
+  // resolver la solicitud. Solo como respaldo (desarrollo sin backend) se
+  // acepta un item del contexto mock que coincida exactamente con el id.
+  // Si el backend devuelve 404 (solicitud cancelada, enlace viejo, etc.) se
+  // muestra un estado explícito de "no encontrada" — no un fallback silencioso
+  // que haría que cualquier acción (cancelar, editar) operara sobre el mock
+  // local sin tocar el backend.
   const fallbackReq = requests.find((r) => r.id === id);
-  const req: RequestItem = useMemo(() => {
+  // The result is typed as `RequestItem | undefined` because useMemo can
+  // return undefined when neither the API response nor a matching mock is
+  // available yet. The two early returns in the render section (isLoadingProposal
+  // and !req) ensure that the rest of the hook body — and all of the JSX below
+  // them — can only ever run when req is a concrete RequestItem.
+  // We assert non-null here so that the 200+ downstream usages of `req`
+  // don't require optional-chaining rewrites. The runtime guarantee is
+  // enforced by the guards, not by this assertion.
+  const req = useMemo((): RequestItem => {
     if (apiProposal) {
       return mapProposalToRequestItem(apiProposal, user.name);
     }
-    return fallbackReq ?? requests[0];
-  }, [apiProposal, fallbackReq, requests, user.name]);
+    // Solo usar el mock si todavía no llegó respuesta del backend (puede ser
+    // que el backend no esté levantado en dev y el item vive en el contexto).
+    if (!isLoadingProposal && !isProposalError && fallbackReq) {
+      return fallbackReq;
+    }
+    // This branch is only reachable while loading or on error; the early
+    // returns in the render will exit before this value is ever used.
+    return undefined as unknown as RequestItem;
+  }, [apiProposal, fallbackReq, isLoadingProposal, isProposalError, user.name]);
 
   // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
   // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
   // "Enviar a cliente" validaban que hubiera un valor real antes de cerrar
   // el ciclo comercial. Este es el único punto de verdad para esa regla.
-  const hasValidCosting = !!req.costing && req.costing.totalOfferedCop > 0;
+  const hasValidCosting = !!req?.costing && req.costing.totalOfferedCop > 0;
 
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -209,13 +231,16 @@ export default function RequestDetail() {
   // alcance (sobre todo `necesidad`) mientras está re-costeando, porque ahí
   // sí hay un motivo de negocio concreto para tocarlo (docs/08, pregunta 16
   // — sin validar todavía con Dianis).
-  const wasRejectedByClient = (req.negotiationRounds ?? []).some(
+  const wasRejectedByClient = (req?.negotiationRounds ?? []).some(
     (r) => r.clientResponse === "rechazada" || (r.clientResponse as string) === "CHANGES_REQUESTED",
   );
   const canEditFullInfo =
-    (isKam && req.kam === user.name && req.status === "nueva") ||
-    (role === "lider-producto" && req.productLeader === user.name && req.status === "en-costeo" && wasRejectedByClient);
-  const fullInfoCompleteness = getFullInfoCompleteness(req);
+    (isKam && req?.kam === user.name && req?.status === "nueva") ||
+    (role === "lider-producto" &&
+      req?.productLeader === user.name &&
+      req?.status === "en-costeo" &&
+      wasRejectedByClient);
+  const fullInfoCompleteness = getFullInfoCompleteness(req ?? ({} as RequestItem));
   const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
   const emptyFullInfoDraft = {
     title: "",
@@ -444,8 +469,8 @@ export default function RequestDetail() {
     setIsReassignModalOpen(false);
   };
 
-  const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
-  const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
+  const clientKamDocs: ProposalDocument[] = req?.clientKamDocuments ?? [];
+  const internalCostingDocs: ProposalDocument[] = req?.internalCostingDocuments ?? [];
 
   // Historial de negociación (docs/03/04): cada confirmación de "Enviar a
   // KAM" abre una ronda nueva, sin excepción — aunque la anterior nunca haya
@@ -454,7 +479,7 @@ export default function RequestDetail() {
   // (Tomás) quedó claro que el Líder espera ver un número de ronda por cada
   // vez que confirma un envío, no solo por cada rechazo real del cliente —
   // es la trazabilidad de cada intento, no solo de los que el cliente vio.
-  const negotiationRounds: NegotiationRound[] = req.negotiationRounds ?? [];
+  const negotiationRounds: NegotiationRound[] = req?.negotiationRounds ?? [];
   const nextRoundNumber = negotiationRounds.length + 1;
   const lastRejectedRound = [...negotiationRounds].reverse().find((round) => round.clientResponse === "rechazada");
 
@@ -667,6 +692,54 @@ export default function RequestDetail() {
   const formattedDeadline = req?.deadline
     ? format(new Date(req.deadline), "d 'de' MMMM, yyyy", { locale: es })
     : "Sin fecha definida";
+
+  // Mientras el backend responde, mostramos un estado de carga explícito.
+  // Evita que la UI intente renderizar req (undefined) con accesos a .title,
+  // .costing, etc., lanzando un error o, peor aún, usando el primer item del
+  // array mock como fallback fantasma (bug F-2 de la auditoría).
+  if (isLoadingProposal) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground text-sm gap-2">
+          <span className="animate-spin rounded-full h-4 w-4 border-2 border-border border-t-primary" />
+          Cargando solicitud…
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Si el backend devuelve 404 y no hay ningún item mock con ese id (solicitud
+  // cancelada, enlace viejo, o timing de carga), mostramos un estado real de
+  // "no encontrada" en vez de un fallback silencioso que haría que cualquier
+  // acción (cancelar, editar) operara sobre el mock local sin tocar el backend.
+  if (!req) {
+    return (
+      <AppShell>
+        <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <Link
+              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
+            </Link>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-10 text-center space-y-3 shadow-xs">
+            <p className="text-lg font-semibold text-foreground">Solicitud no encontrada</p>
+            <p className="text-sm text-muted-foreground">
+              Esta solicitud no existe, fue cancelada, o el enlace es incorrecto.
+            </p>
+            <Link
+              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline mt-2"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Ir al tablero
+            </Link>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
