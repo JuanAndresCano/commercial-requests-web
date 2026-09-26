@@ -31,6 +31,8 @@ const KAM_STAGE_LABELS: Record<RequestStatus, string> = {
   "en-experto": "En Proceso",
   "en-costeo": "Lista para Entregar",
   entregada: "Entregada",
+  rechazada: "Rechazada",
+  cancelada: "Cancelada",
 };
 
 interface KamCommandCenterProps {
@@ -86,6 +88,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
     "en-experto": enProcesoCount,
     "en-costeo": listasParaEntregarCount,
     entregada: entregadasCount,
+    rechazada: activeDataset.filter((r) => r.status === "rechazada").length,
+    cancelada: activeDataset.filter((r) => r.status === "cancelada").length,
   };
 
   // Métricas agregadas (no son una etapa del pipeline) — se muestran como
@@ -137,6 +141,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
       "en-experto": [],
       "en-costeo": [],
       entregada: [],
+      rechazada: [],
+      cancelada: [],
     };
     kanbanRequests.forEach((r) => {
       const stage = kamStageOf(r);
