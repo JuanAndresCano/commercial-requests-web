@@ -78,11 +78,17 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
     }
   }, [isOpen, request]);
 
-  // Picking a registered advisor fills name and company; editing them afterwards makes it a new one.
+  // Picking a registered advisor fills its contact fields; the 4 contact inputs are then
+  // disabled (see below) since `createExternal` has no update path — editing them here
+  // would look saved (toast) but never reach the backend.
   const handleSelectExternal = (professor: Professor) => {
     setSelectedExternalId(professor.id);
     setExternoNombre(professor.fullName);
     setExternoEmpresa(professor.company ?? "");
+    setExternoIdentificacion(professor.identityDocument ?? "");
+    setExternoCorreo(professor.email ?? "");
+    setExternoTelefono(professor.phone ?? "");
+    setExternoPerfil(professor.profile ?? "");
   };
 
   const handleSave = async () => {
@@ -112,6 +118,10 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
         const created = await registerExternal.mutateAsync({
           fullName: externoNombre.trim(),
           company: externoEmpresa.trim() || undefined,
+          identityDocument: externoIdentificacion.trim() || undefined,
+          email: externoCorreo.trim() || undefined,
+          phone: externoTelefono.trim() || undefined,
+          profile: externoPerfil.trim() || undefined,
         });
         professorId = created.id;
       } catch (error) {
@@ -244,6 +254,7 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
                     className="text-xs"
                     value={externoIdentificacion}
                     onChange={(e) => setExternoIdentificacion(e.target.value)}
+                    disabled={!!selectedExternalId}
                   />
                 </div>
 
@@ -279,6 +290,7 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
                       className="pl-8 text-xs"
                       value={externoCorreo}
                       onChange={(e) => setExternoCorreo(e.target.value)}
+                      disabled={!!selectedExternalId}
                     />
                   </div>
                 </div>
@@ -295,6 +307,7 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
                       className="pl-8 text-xs"
                       value={externoTelefono}
                       onChange={(e) => setExternoTelefono(e.target.value)}
+                      disabled={!!selectedExternalId}
                     />
                   </div>
                 </div>
@@ -310,8 +323,15 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
                     className="text-xs resize-none"
                     value={externoPerfil}
                     onChange={(e) => setExternoPerfil(e.target.value)}
+                    disabled={!!selectedExternalId}
                   />
                 </div>
+
+                {selectedExternalId && (
+                  <p className="sm:col-span-2 text-[11px] text-muted-foreground">
+                    Estos datos pertenecen al registro existente del directorio; no se editan desde aquí.
+                  </p>
+                )}
               </div>
             </TabsContent>
           </Tabs>

@@ -14,6 +14,10 @@ const staff: Professor = {
   type: "STAFF",
   faculty: "Ingeniería",
   company: null,
+  identityDocument: null,
+  email: null,
+  phone: null,
+  profile: null,
   isActive: true,
 };
 const noFaculty: Professor = { ...staff, id: "s2", fullName: "Lina Ayala", faculty: null };

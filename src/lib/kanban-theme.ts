@@ -38,17 +38,19 @@ export const STAGE_THEME: Record<RequestStatus, StageTheme> = {
     activeCardClass: "border-[#4cb979] ring-2 ring-[#4cb979]/30 bg-[#4cb979]/5 dark:bg-[#4cb979]/10",
     inactiveHoverClass: "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#4cb979]/50",
   },
+  // No son fases del Kanban (ver STAGE_ORDER) — placeholder mínimo para que
+  // RequestStatus (ampliado por #7) siga siendo exhaustivo en este lookup.
   rechazada: {
-    colorHex: "#ef4444",
-    borderTopClass: "border-t-4 border-t-[#ef4444]",
-    activeCardClass: "border-[#ef4444] ring-2 ring-[#ef4444]/30 bg-[#ef4444]/5 dark:bg-[#ef4444]/10",
-    inactiveHoverClass: "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#ef4444]/50",
+    colorHex: "",
+    borderTopClass: "border-t-4 border-t-destructive",
+    activeCardClass: "border-destructive ring-2 ring-destructive/30 bg-destructive/5",
+    inactiveHoverClass: "border-border bg-card hover:border-destructive/50",
   },
   cancelada: {
-    colorHex: "#6b7280",
-    borderTopClass: "border-t-4 border-t-[#6b7280]",
-    activeCardClass: "border-[#6b7280] ring-2 ring-[#6b7280]/30 bg-[#6b7280]/5 dark:bg-[#6b7280]/10",
-    inactiveHoverClass: "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#6b7280]/50",
+    colorHex: "",
+    borderTopClass: "border-t-4 border-t-muted-foreground",
+    activeCardClass: "border-muted-foreground ring-2 ring-muted-foreground/30 bg-muted",
+    inactiveHoverClass: "border-border bg-card hover:border-muted-foreground/50",
   },
 };
 

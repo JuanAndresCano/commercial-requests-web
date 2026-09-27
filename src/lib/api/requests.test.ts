@@ -58,6 +58,12 @@ describe("requestsApi", () => {
     expect(init).toMatchObject({ method: "GET", credentials: "include" });
   });
 
+  it("lists with role and status filters url-encoded", async () => {
+    respond(200, []);
+    await requestsApi.list({ role: "PRODUCT_LEADER", status: "nueva" });
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\?role=PRODUCT_LEADER&status=nueva$/);
+  });
+
   it("gets proposal by ID", async () => {
     respond(200, { id: "req-123", title: "Test" });
     const proposal = await requestsApi.getById("req-123");
@@ -84,15 +90,18 @@ describe("requestsApi", () => {
     expect(created.id).toBe("req-new");
   });
 
-  it("updates proposal status", async () => {
-    respond(200, { id: "req-1", status: "DELIVERED" });
-    await requestsApi.updateStatus("req-1", { status: "DELIVERED" });
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/requests\/req-1\/status$/);
-    expect(init).toMatchObject({
+  it("advances a status with an optional rejectionReason", async () => {
+    respond(200, {});
+    await requestsApi.updateStatus("p1", { status: "IN_COSTING" });
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
       method: "PATCH",
-      body: JSON.stringify({ status: "DELIVERED" }),
+      body: JSON.stringify({ status: "IN_COSTING" }),
+    });
+
+    await requestsApi.updateStatus("p1", { status: "IN_COSTING", rejectionReason: "Client wants a smaller scope" });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: "PATCH",
+      body: JSON.stringify({ status: "IN_COSTING", rejectionReason: "Client wants a smaller scope" }),
     });
   });
 
@@ -121,6 +130,35 @@ describe("requestsApi", () => {
       body: JSON.stringify({ reason: "Cliente desistió de la propuesta" }),
     });
     expect(result.success).toBe(true);
+  });
+
+  it("assigns a directory professor with a PATCH to /professor", async () => {
+    respond(200, {});
+    await requestsApi.assignProfessor("p1", "prof-1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/professor$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ professorId: "prof-1" }) });
+  });
+
+  it("reassigns with a PATCH to /reassign", async () => {
+    respond(200, {});
+    await requestsApi.reassign("p1", {
+      newProductLeaderId: "ldp-2",
+      newNodeId: "node-2",
+      reason: "WORKLOAD_REDISTRIBUTION",
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/reassign$/);
+    expect(init).toMatchObject({ method: "PATCH" });
+  });
+
+  it("sends only the offered value for minimal costing", async () => {
+    respond(200, {});
+    await requestsApi.upsertCosting("p1", 30000000);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: "PUT",
+      body: JSON.stringify({ totalCost: 30000000 }),
+    });
   });
 
   it("surfaces errors as ApiError instances", async () => {
