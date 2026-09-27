@@ -675,18 +675,16 @@ ronda del 2026-09-15, o son decisiones nuevas tomadas sin ella (ver ronda
 2026-09-19/20 arriba) — repreguntar con ejemplos concretos, no descripciones
 abstractas.)_
 
+- **Pregunta 17 (nueva):** ¿una empresa histórica del mismo nombre y sin NIT
+  debe fusionarse con la que llega con NIT, o quedan separadas? Hoy quedan
+  separadas; el código no decide por nombre.
 - **Pregunta 18 (nueva):** ¿el docente/asesor debe bloquearse tras "En
   proceso por experto", o solo auditarse el cambio? Hoy implementado
   provisionalmente como bloqueo total + historial, sin confirmar con ella.
-- **Pregunta 17 (nueva):** empresas duplicadas por NIT — si ya existe una
-  empresa histórica con el mismo nombre y sin NIT, ¿el backend debe fusionarlas
-  automáticamente, con confirmación, o dejarlas separadas? No se ha preguntado
-  todavía.
 - **Pregunta 16 (nueva):** ¿quién debe corregir el alcance de la solicitud
   (`necesidad` y afines) cuando el cliente rechaza por un tema distinto al
   precio — el Líder, el KAM, o ambos? Hoy implementado provisionalmente como
   "el Líder, en En Costeo", sin confirmar con ella.
-
 - **Pregunta 6 (actualizada):** ¿reasignar desde "En Experto" (no solo
   "Nueva") es correcto? Implementado con un caso concreto en mano esta vez
   (el experto determina que el tema no corresponde a su nodo) — a diferencia
