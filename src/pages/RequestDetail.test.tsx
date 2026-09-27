@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RequestDetail from "./RequestDetail";
 import type { RequestItem } from "@/lib/mock-data";
 import { requestsApi, type ProposalDetail } from "@/lib/api/requests";
+import { ApiError } from "@/lib/api/client";
 
 const mockRequests: RequestItem[] = [
   {
@@ -415,5 +416,80 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       );
       expect(requestsApi.updateStatus).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("RequestDetail - loading and not-found states", () => {
+  // Any button that acts on a request; none may exist without a resolved request.
+  const ACTION_BUTTONS =
+    /Editar información|Cancelar solicitud|Devolver con observaciones|Enviar a cliente|Marcar Entregada|Avanzar|Reasignar/i;
+
+  const expectNoMutations = () => {
+    expect(requestsApi.delete).not.toHaveBeenCalled();
+    expect(requestsApi.updateInfo).not.toHaveBeenCalled();
+    expect(requestsApi.updateStatus).not.toHaveBeenCalled();
+    expect(authMock.deleteRequest).not.toHaveBeenCalled();
+    expect(authMock.updateRequest).not.toHaveBeenCalled();
+    expect(authMock.updateStatus).not.toHaveBeenCalled();
+    expect(authMock.assignProfessorDetailed).not.toHaveBeenCalled();
+    expect(authMock.updateCosting).not.toHaveBeenCalled();
+    expect(authMock.addDocument).not.toHaveBeenCalled();
+    expect(authMock.removeDocument).not.toHaveBeenCalled();
+  };
+
+  beforeEach(() => {
+    authMock.requests = [...mockRequests];
+    vi.clearAllMocks();
+  });
+
+  it("shows the loading state with no action buttons while the backend has not answered", async () => {
+    vi.mocked(requestsApi.getById).mockReturnValueOnce(new Promise(() => {}));
+    renderPage("REQ-2026-0001");
+
+    expect(await screen.findByText(/Cargando solicitud/i)).toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: ACTION_BUTTONS })).toHaveLength(0);
+    expectNoMutations();
+  });
+
+  it("shows 'not found' with no action buttons for a real id the backend answers with 404", async () => {
+    vi.mocked(requestsApi.getById).mockRejectedValueOnce(new ApiError(404, "Not Found"));
+    renderPage("REQ-2026-9999");
+
+    expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
+    expect(screen.queryByText(/No se pudo cargar/i)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: ACTION_BUTTONS })).toHaveLength(0);
+    expectNoMutations();
+  });
+
+  it("does not fall back to the mock context when the backend 404s on an id that exists in the mock", async () => {
+    vi.mocked(requestsApi.getById).mockRejectedValueOnce(new ApiError(404, "Not Found"));
+    renderPage("REQ-2026-0001");
+
+    expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: ACTION_BUTTONS })).toHaveLength(0);
+    expectNoMutations();
+  });
+
+  it.each([
+    ["a server error (500)", new ApiError(500, "Internal Server Error")],
+    ["a network failure", new TypeError("Failed to fetch")],
+  ])("shows a retry message, not 'not found', on %s", async (_label, error) => {
+    vi.mocked(requestsApi.getById).mockRejectedValueOnce(error);
+    renderPage("REQ-2026-0001");
+
+    expect(await screen.findByText("No se pudo cargar la solicitud")).toBeInTheDocument();
+    expect(screen.queryByText("Solicitud no encontrada")).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: ACTION_BUTTONS })).toHaveLength(0);
+    expectNoMutations();
+  });
+
+  it("renders the undefined-request states without throwing or firing any non-cancel handler", async () => {
+    // With req undefined, the render returns early so no handler is reachable
+    // from the UI; the `if (!req) return;` guards are the second line of
+    // defense. This asserts the observable contract: no throw, no side effects.
+    vi.mocked(requestsApi.getById).mockRejectedValueOnce(new ApiError(404, "Not Found"));
+    expect(() => renderPage("REQ-2026-9999")).not.toThrow();
+    await screen.findByText("Solicitud no encontrada");
+    expectNoMutations();
   });
 });

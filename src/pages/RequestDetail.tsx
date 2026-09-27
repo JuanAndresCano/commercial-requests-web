@@ -74,6 +74,7 @@ import { useNodes } from "@/hooks/use-nodes";
 import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
 import { canEditProfessor } from "@/lib/professor-assignment";
+import { ApiError } from "@/lib/api/client";
 import type { UpdateProposalInfoPayload, RequestType as ApiRequestType, CompanyType } from "@/lib/api/requests";
 
 const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
@@ -114,7 +115,12 @@ export default function RequestDetail() {
     deleteRequest,
   } = useAuth();
 
-  const { data: apiProposal, isLoading: isLoadingProposal, isError: isProposalError } = useRequestDetail(id);
+  const {
+    data: apiProposal,
+    isLoading: isLoadingProposal,
+    isError: isProposalError,
+    error: proposalError,
+  } = useRequestDetail(id);
   const updateInfoMutation = useUpdateRequestInfo();
   const deleteRequestMutation = useDeleteRequest();
   const updateStatusMutation = useUpdateRequestStatus();
@@ -189,6 +195,7 @@ export default function RequestDetail() {
   });
 
   const handleStartEditSpecs = () => {
+    if (!req) return;
     setSpecsDraft({
       horas: req.horas ?? "",
       modalidad: req.modalidad ?? "",
@@ -209,6 +216,7 @@ export default function RequestDetail() {
     req.costing?.readyForKam ? { costing: { ...req.costing, readyForKam: false, costingSentAt: undefined } } : {};
 
   const handleSaveSpecs = () => {
+    if (!req) return;
     updateRequest(req.id, {
       horas: specsDraft.horas || undefined,
       modalidad: specsDraft.modalidad || undefined,
@@ -287,6 +295,7 @@ export default function RequestDetail() {
   const isFullInfoDirty = JSON.stringify(fullInfoDraft) !== JSON.stringify(fullInfoSnapshot);
 
   const handleStartEditFullInfo = () => {
+    if (!req) return;
     const rawNodeName = (apiProposal?.node?.name as string) || (req.node !== "Por definir" ? req.node : "");
     const rawLeaderName =
       req.productLeader && req.productLeader !== "Por definir"
@@ -368,6 +377,7 @@ export default function RequestDetail() {
   const hasFullInfoErrors = Object.keys(fullInfoErrors).length > 0;
 
   const handleSaveFullInfo = async () => {
+    if (!req) return;
     if (!fullInfoDraft.title.trim()) {
       toast.error("El título de la propuesta no puede quedar vacío");
       return;
@@ -464,6 +474,7 @@ export default function RequestDetail() {
   const reassignRequest = useReassignRequest(updateRequest);
 
   const handleConfirmReassign = ({ newLeader, newNode }: { newLeader: string; newNode: string }) => {
+    if (!req) return;
     reassignRequest(req, { newLeader, newNode });
     toast.success(`Solicitud ${req.id} reasignada a ${newLeader} exitosamente.`);
     setIsReassignModalOpen(false);
@@ -488,6 +499,7 @@ export default function RequestDetail() {
     type: "planta" | "externo",
     externalData?: ExternalProfessorData,
   ) => {
+    if (!req) return;
     // El indicador de "asesor externo" del costeo ya no es un campo propio:
     // se deriva de `professorType`/`professor`/`externalProfessorData` (docs/04,
     // gap #11), así que asignar el docente/asesor aquí ya deja todo consistente
@@ -496,14 +508,17 @@ export default function RequestDetail() {
   };
 
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
+    if (!req) return;
     updateCosting(req.id, newCosting);
   };
 
   const handleAddDocument = (doc: ProposalDocument) => {
+    if (!req) return;
     addDocument(req.id, doc);
   };
 
   const handleRemoveDocument = (docId: string, category: "client_kam" | "internal_costing") => {
+    if (!req) return;
     removeDocument(req.id, docId, category);
   };
 
@@ -514,12 +529,14 @@ export default function RequestDetail() {
   const [confirmingAction, setConfirmingAction] = useState<"experto" | "costeo" | "entregada" | null>(null);
 
   const handleMoveToExperto = () => {
+    if (!req) return;
     updateStatus(req.id, "en-experto");
     toast.success("Propuesta pasada a: En proceso por experto");
     setConfirmingAction(null);
   };
 
   const handleMoveToCosteo = () => {
+    if (!req) return;
     updateStatus(req.id, "en-costeo");
     toast.success("Propuesta pasada a: En proceso de costeo");
     setConfirmingAction(null);
@@ -533,6 +550,7 @@ export default function RequestDetail() {
   // valor final vigente — `leaderNote` es obligatoria desde la ronda 2 y se
   // valida en la UI del diálogo dedicado antes de poder confirmar.
   const handleMarkReadyForKam = (leaderNote?: string) => {
+    if (!req) return;
     if (!req.costing) return;
     const { costing, negotiationRounds: updatedRounds } = openNegotiationRound(req, negotiationRounds, leaderNote);
     updateRequest(req.id, { costing, negotiationRounds: updatedRounds });
@@ -540,6 +558,7 @@ export default function RequestDetail() {
   };
 
   const handleSendToClient = async () => {
+    if (!req) return;
     // Defensa adicional además del `disabled` del botón — por si el estado
     // cambia entre que se abre el diálogo de confirmación y se confirma.
     if (!hasValidCosting) {
@@ -621,6 +640,7 @@ export default function RequestDetail() {
   // Si el cliente pide ajustes tras la entrega, el KAM la devuelve a costeo
   // con una nota de observaciones para el Líder de Producto (docs/08, pregunta 13).
   const handleReturnWithObservations = async () => {
+    if (!req) return;
     const trimmedObservations = returnObservations.trim() || undefined;
     if (!trimmedObservations) {
       toast.error("Por favor ingresa las observaciones del cliente para devolver la propuesta");
@@ -713,6 +733,11 @@ export default function RequestDetail() {
   // "no encontrada" en vez de un fallback silencioso que haría que cualquier
   // acción (cancelar, editar) operara sobre el mock local sin tocar el backend.
   if (!req) {
+    // `retry: false` en el hook: cualquier fallo llega aquí de inmediato. Solo
+    // un 404 real significa "no existe"; un fallo de red o un 5xx no dice nada
+    // sobre la solicitud, así que se muestra un mensaje de "reintentar".
+    const isNotFound = proposalError instanceof ApiError && proposalError.status === 404;
+    const showLoadFailure = isProposalError && !isNotFound;
     return (
       <AppShell>
         <div className="space-y-6 max-w-7xl mx-auto">
@@ -725,9 +750,13 @@ export default function RequestDetail() {
             </Link>
           </div>
           <div className="rounded-xl border border-border bg-card p-10 text-center space-y-3 shadow-xs">
-            <p className="text-lg font-semibold text-foreground">Solicitud no encontrada</p>
+            <p className="text-lg font-semibold text-foreground">
+              {showLoadFailure ? "No se pudo cargar la solicitud" : "Solicitud no encontrada"}
+            </p>
             <p className="text-sm text-muted-foreground">
-              Esta solicitud no existe, fue cancelada, o el enlace es incorrecto.
+              {showLoadFailure
+                ? "Hubo un problema de conexión o del servidor. Intenta de nuevo en unos momentos."
+                : "Esta solicitud no existe, fue cancelada, o el enlace es incorrecto."}
             </p>
             <Link
               to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
