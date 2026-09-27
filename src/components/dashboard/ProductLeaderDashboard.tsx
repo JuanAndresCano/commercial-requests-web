@@ -638,13 +638,9 @@ export function ProductLeaderDashboard({
                           {/* Top: ID, Company & Urgency */}
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono text-[11px] font-bold text-foreground">{req.id}</span>
-                                <span className="text-muted-foreground/60 text-[10px]">•</span>
-                                <span className="text-[11px] font-medium text-foreground truncate max-w-[120px]">
-                                  {req.company}
-                                </span>
-                              </div>
+                              <span className="text-[11px] font-medium text-foreground truncate block max-w-full">
+                                {req.company}
+                              </span>
                               <p className="mt-1 font-sans font-bold text-xs leading-snug text-foreground group-hover:text-[#5454e9] transition-colors line-clamp-2">
                                 {req.title}
                               </p>

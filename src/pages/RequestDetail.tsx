@@ -540,6 +540,12 @@ export default function RequestDetail() {
           onSuccess: () => {
             toast.success(`Solicitud ${req.id} reasignada exitosamente.`);
             setIsReassignModalOpen(false);
+            // Tras reasignar, el visor deja de ser el Líder dueño de la solicitud —
+            // el refetch de este mismo detalle puede fallar por permisos (ya no es
+            // suyo) y dejar la UI mostrando al líder anterior indefinidamente. Salir
+            // al dashboard evita ese estado inconsistente sin depender de que el
+            // refetch tenga éxito.
+            navigate("/dashboard");
           },
           onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo reasignar"),
         },
