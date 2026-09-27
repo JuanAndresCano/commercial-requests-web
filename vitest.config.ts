@@ -7,6 +7,19 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // EXCEPCIÓN DOCUMENTADA (ver AGENTS.md: "never weaken a check without
+    // documenting why"): el default de vitest es 5 000 ms y aquí se sube a
+    // 15 000 ms. Ojo con la justificación:
+    //  - NO protege al wizard de NewRequest: ese test ya declara su propio
+    //    timeout (20 000 ms), que manda por encima de este valor global.
+    //  - Hoy el valor parece estar enmascarando otra cosa: al bajar el global
+    //    a 5 000 ms aparece un fallo intermitente en RequestDetail.test.tsx
+    //    bajo carga de la máquina (no relacionado con el wizard). Es decir,
+    //    RequestDetail.test.tsx es frágil y 15 000 ms lo oculta por accidente.
+    //  - Bajar o quitar este valor requiere ANTES arreglar esa fragilidad por
+    //    separado (causa raíz aún sin diagnosticar). No cambiar el número hasta
+    //    entonces.
+    testTimeout: 15000,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {

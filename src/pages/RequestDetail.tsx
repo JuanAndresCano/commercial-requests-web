@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -53,6 +53,8 @@ import {
   ExternalProfessorData,
   REQUEST_TYPES,
   URGENCY_META,
+  NODES,
+  NODE_DEFAULT_LEADERS,
   type RequestType,
   type Urgency,
   type NegotiationRound,
@@ -65,6 +67,38 @@ import { ReassignLeaderDialog } from "@/components/ReassignLeaderDialog";
 import { useReassignRequest } from "@/hooks/use-reassign-request";
 import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
 import { toast } from "sonner";
+import { useRequestDetail } from "@/hooks/use-request-detail";
+import { useUpdateRequestInfo } from "@/hooks/use-update-request-info";
+import { useDeleteRequest } from "@/hooks/use-delete-request";
+import { useNodes } from "@/hooks/use-nodes";
+import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
+import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
+import { canEditProfessor } from "@/lib/professor-assignment";
+import { ApiError } from "@/lib/api/client";
+import type { UpdateProposalInfoPayload, RequestType as ApiRequestType, CompanyType } from "@/lib/api/requests";
+
+const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
+  Capacitación: "CAPACITACION",
+  Consultoría: "CONSULTORIA",
+  Mentoría: "MENTORIA",
+  Investigación: "INVESTIGACION",
+  "Proyectos Especiales (Eventos)": "SPECIAL_PROJECTS",
+  Otro: "OTHER",
+};
+
+const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
+  Privada: "PRIVADA",
+  Pública: "PUBLICA",
+  Mixta: "MIXTA",
+  "Sin Ánimo de Lucro": "SIN_ANIMO_LUCRO",
+};
+
+const CANCEL_REASON_PRESETS = [
+  "Creada por error / prueba",
+  "Cliente desistió de la propuesta",
+  "Solicitud duplicada",
+  "Cambio en requerimientos del cliente",
+] as const;
 
 export default function RequestDetail() {
   const { id } = useParams();
@@ -81,23 +115,64 @@ export default function RequestDetail() {
     deleteRequest,
   } = useAuth();
 
+  const {
+    data: apiProposal,
+    isLoading: isLoadingProposal,
+    isError: isProposalError,
+    error: proposalError,
+  } = useRequestDetail(id);
+  const updateInfoMutation = useUpdateRequestInfo();
+  const deleteRequestMutation = useDeleteRequest();
+  const updateStatusMutation = useUpdateRequestStatus();
+  const { data: dbNodes } = useNodes();
+  const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
+
   const role = user.role;
   const isKam = role === "kam";
   const isLeader = role === "lider-producto" || role === "lider-nodo";
 
-  const req: RequestItem = requests.find((r) => r.id === id) ?? requests[0];
+  // Cuando hay un id en la URL, esperamos la respuesta del backend antes de
+  // resolver la solicitud. Solo como respaldo (desarrollo sin backend) se
+  // acepta un item del contexto mock que coincida exactamente con el id.
+  // Si el backend devuelve 404 (solicitud cancelada, enlace viejo, etc.) se
+  // muestra un estado explícito de "no encontrada" — no un fallback silencioso
+  // que haría que cualquier acción (cancelar, editar) operara sobre el mock
+  // local sin tocar el backend.
+  const fallbackReq = requests.find((r) => r.id === id);
+  // The result is typed as `RequestItem | undefined` because useMemo can
+  // return undefined when neither the API response nor a matching mock is
+  // available yet. The two early returns in the render section (isLoadingProposal
+  // and !req) ensure that the rest of the hook body — and all of the JSX below
+  // them — can only ever run when req is a concrete RequestItem.
+  // We assert non-null here so that the 200+ downstream usages of `req`
+  // don't require optional-chaining rewrites. The runtime guarantee is
+  // enforced by the guards, not by this assertion.
+  const req = useMemo((): RequestItem => {
+    if (apiProposal) {
+      return mapProposalToRequestItem(apiProposal, user.name);
+    }
+    // Solo usar el mock si todavía no llegó respuesta del backend (puede ser
+    // que el backend no esté levantado en dev y el item vive en el contexto).
+    if (!isLoadingProposal && !isProposalError && fallbackReq) {
+      return fallbackReq;
+    }
+    // This branch is only reachable while loading or on error; the early
+    // returns in the render will exit before this value is ever used.
+    return undefined as unknown as RequestItem;
+  }, [apiProposal, fallbackReq, isLoadingProposal, isProposalError, user.name]);
 
   // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
   // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
   // "Enviar a cliente" validaban que hubiera un valor real antes de cerrar
   // el ciclo comercial. Este es el único punto de verdad para esa regla.
-  const hasValidCosting = !!req.costing && req.costing.totalOfferedCop > 0;
+  const hasValidCosting = !!req?.costing && req.costing.totalOfferedCop > 0;
 
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnObservations, setReturnObservations] = useState("");
   // Diálogo dedicado para "Enviar a KAM" (docs/03): a partir de la ronda 2
@@ -120,6 +195,7 @@ export default function RequestDetail() {
   });
 
   const handleStartEditSpecs = () => {
+    if (!req) return;
     setSpecsDraft({
       horas: req.horas ?? "",
       modalidad: req.modalidad ?? "",
@@ -140,6 +216,7 @@ export default function RequestDetail() {
     req.costing?.readyForKam ? { costing: { ...req.costing, readyForKam: false, costingSentAt: undefined } } : {};
 
   const handleSaveSpecs = () => {
+    if (!req) return;
     updateRequest(req.id, {
       horas: specsDraft.horas || undefined,
       modalidad: specsDraft.modalidad || undefined,
@@ -162,15 +239,26 @@ export default function RequestDetail() {
   // alcance (sobre todo `necesidad`) mientras está re-costeando, porque ahí
   // sí hay un motivo de negocio concreto para tocarlo (docs/08, pregunta 16
   // — sin validar todavía con Dianis).
-  const wasRejectedByClient = (req.negotiationRounds ?? []).some((r) => r.clientResponse === "rechazada");
+  const wasRejectedByClient = (req?.negotiationRounds ?? []).some(
+    (r) => r.clientResponse === "rechazada" || (r.clientResponse as string) === "CHANGES_REQUESTED",
+  );
   const canEditFullInfo =
-    (isKam && req.kam === user.name && req.status === "nueva") ||
-    (role === "lider-producto" && req.productLeader === user.name && req.status === "en-costeo" && wasRejectedByClient);
-  const fullInfoCompleteness = getFullInfoCompleteness(req);
+    (isKam && req?.kam === user.name && req?.status === "nueva") ||
+    (role === "lider-producto" &&
+      req?.productLeader === user.name &&
+      req?.status === "en-costeo" &&
+      wasRejectedByClient);
+  const fullInfoCompleteness = getFullInfoCompleteness(req ?? ({} as RequestItem));
   const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
   const emptyFullInfoDraft = {
     title: "",
     urgency: "media" as Urgency,
+    type: "Capacitación" as RequestType,
+    tipoOtro: "",
+    node: "",
+    nodeId: "",
+    productLeader: "",
+    productLeaderId: "",
     companyNit: "",
     companyDireccion: "",
     companyTelefono: "",
@@ -207,9 +295,24 @@ export default function RequestDetail() {
   const isFullInfoDirty = JSON.stringify(fullInfoDraft) !== JSON.stringify(fullInfoSnapshot);
 
   const handleStartEditFullInfo = () => {
+    if (!req) return;
+    const rawNodeName = (apiProposal?.node?.name as string) || (req.node !== "Por definir" ? req.node : "");
+    const rawLeaderName =
+      req.productLeader && req.productLeader !== "Por definir"
+        ? req.productLeader
+        : rawNodeName && NODE_DEFAULT_LEADERS[rawNodeName]
+          ? NODE_DEFAULT_LEADERS[rawNodeName]
+          : "";
+
     const initial: typeof emptyFullInfoDraft = {
       title: req.title,
       urgency: req.urgency,
+      type: req.type,
+      tipoOtro: req.tipoOtro ?? "",
+      node: rawNodeName,
+      nodeId: (apiProposal?.nodeId || apiProposal?.node?.id) ?? "",
+      productLeader: rawLeaderName,
+      productLeaderId: (apiProposal?.productLeaderId || apiProposal?.productLeader?.id) ?? "",
       companyNit: req.companyNit ?? "",
       companyDireccion: req.companyDireccion ?? "",
       companyTelefono: req.companyTelefono ?? "",
@@ -273,7 +376,8 @@ export default function RequestDetail() {
   }
   const hasFullInfoErrors = Object.keys(fullInfoErrors).length > 0;
 
-  const handleSaveFullInfo = () => {
+  const handleSaveFullInfo = async () => {
+    if (!req) return;
     if (!fullInfoDraft.title.trim()) {
       toast.error("El título de la propuesta no puede quedar vacío");
       return;
@@ -282,9 +386,69 @@ export default function RequestDetail() {
       toast.error("Corrige los campos marcados antes de guardar");
       return;
     }
+
+    const matchedNode = dbNodes?.find(
+      (n) => n.name.toLowerCase() === (fullInfoDraft.node || "").toLowerCase() || n.id === fullInfoDraft.nodeId,
+    );
+    const resolvedNodeId =
+      matchedNode?.id ||
+      (fullInfoDraft.node && fullInfoDraft.node !== "Por definir" ? fullInfoDraft.nodeId : undefined);
+
+    const payload: UpdateProposalInfoPayload = {
+      programName: fullInfoDraft.title.trim(),
+      priority: fullInfoDraft.urgency === "alta" ? "ALTA" : fullInfoDraft.urgency === "baja" ? "BAJA" : "MEDIA",
+      nodeId: resolvedNodeId,
+      productLeaderId: fullInfoDraft.productLeaderId || undefined,
+      requestType: REQUEST_TYPE_MAP[fullInfoDraft.type],
+      requestTypeOther: fullInfoDraft.type === "Otro" ? fullInfoDraft.tipoOtro.trim() || undefined : undefined,
+      companyNit: fullInfoDraft.companyNit.trim() || undefined,
+      companyDescription: fullInfoDraft.companyDescripcion.trim() || undefined,
+      companyType: fullInfoDraft.companyTipo ? COMPANY_TYPE_MAP[fullInfoDraft.companyTipo] : undefined,
+      sector: fullInfoDraft.companyCiiuPrincipalDesc.trim() || undefined,
+      website: fullInfoDraft.companyWeb.trim() || undefined,
+      contactName: fullInfoDraft.applicant.trim() || undefined,
+      contactRole: fullInfoDraft.contactCargo.trim() || undefined,
+      contactArea: fullInfoDraft.contactArea.trim() || undefined,
+      contactPhone: fullInfoDraft.contactTelefono.trim() || undefined,
+      contactEmail: fullInfoDraft.contactCorreo.trim() || undefined,
+      needDescription: fullInfoDraft.necesidad.trim() || undefined,
+      competencies: fullInfoDraft.competencias.trim() || undefined,
+      successMetrics: fullInfoDraft.exito.trim() || undefined,
+      expectedResults: fullInfoDraft.resultados.trim() || undefined,
+      participantArea: fullInfoDraft.areaParticipantes.trim() || undefined,
+      requiresCatering: Boolean(fullInfoDraft.alimentacion.trim()),
+      cateringNotes: fullInfoDraft.alimentacion.trim() || undefined,
+      hasPreviousTraining: fullInfoDraft.formacionPrevia === "Sí",
+      previousTraining: fullInfoDraft.formacionPrevia || undefined,
+      previousTrainingDescription: fullInfoDraft.descFormacion.trim() || undefined,
+      previousTrainingCompany: fullInfoDraft.empresaPrevia.trim() || undefined,
+      previousTrainingDate: fullInfoDraft.fechaPrevia || undefined,
+      observations: fullInfoDraft.observaciones.trim() || undefined,
+    };
+
+    if (apiProposal) {
+      try {
+        await updateInfoMutation.mutateAsync({
+          id: apiProposal.id,
+          data: payload,
+        });
+        toast.success("Información de la solicitud actualizada");
+        setIsEditingFullInfo(false);
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al actualizar la solicitud";
+        toast.error(errorMsg);
+        return;
+      }
+    }
+
     updateRequest(req.id, {
       ...fullInfoDraft,
       title: fullInfoDraft.title.trim(),
+      node: fullInfoDraft.node || "Por definir",
+      productLeader: fullInfoDraft.productLeader || "Por definir",
+      type: fullInfoDraft.type,
+      tipoOtro: fullInfoDraft.tipoOtro.trim() || undefined,
       formacionPrevia: fullInfoDraft.formacionPrevia || undefined,
       fullInfoUpdatedAt: new Date().toISOString(),
       // Cuando lo edita el Líder (tras un rechazo, ver docs/03 B.7) puede
@@ -310,13 +474,14 @@ export default function RequestDetail() {
   const reassignRequest = useReassignRequest(updateRequest);
 
   const handleConfirmReassign = ({ newLeader, newNode }: { newLeader: string; newNode: string }) => {
+    if (!req) return;
     reassignRequest(req, { newLeader, newNode });
     toast.success(`Solicitud ${req.id} reasignada a ${newLeader} exitosamente.`);
     setIsReassignModalOpen(false);
   };
 
-  const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
-  const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
+  const clientKamDocs: ProposalDocument[] = req?.clientKamDocuments ?? [];
+  const internalCostingDocs: ProposalDocument[] = req?.internalCostingDocuments ?? [];
 
   // Historial de negociación (docs/03/04): cada confirmación de "Enviar a
   // KAM" abre una ronda nueva, sin excepción — aunque la anterior nunca haya
@@ -325,7 +490,7 @@ export default function RequestDetail() {
   // (Tomás) quedó claro que el Líder espera ver un número de ronda por cada
   // vez que confirma un envío, no solo por cada rechazo real del cliente —
   // es la trazabilidad de cada intento, no solo de los que el cliente vio.
-  const negotiationRounds: NegotiationRound[] = req.negotiationRounds ?? [];
+  const negotiationRounds: NegotiationRound[] = req?.negotiationRounds ?? [];
   const nextRoundNumber = negotiationRounds.length + 1;
   const lastRejectedRound = [...negotiationRounds].reverse().find((round) => round.clientResponse === "rechazada");
 
@@ -334,6 +499,7 @@ export default function RequestDetail() {
     type: "planta" | "externo",
     externalData?: ExternalProfessorData,
   ) => {
+    if (!req) return;
     // El indicador de "asesor externo" del costeo ya no es un campo propio:
     // se deriva de `professorType`/`professor`/`externalProfessorData` (docs/04,
     // gap #11), así que asignar el docente/asesor aquí ya deja todo consistente
@@ -342,14 +508,17 @@ export default function RequestDetail() {
   };
 
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
+    if (!req) return;
     updateCosting(req.id, newCosting);
   };
 
   const handleAddDocument = (doc: ProposalDocument) => {
+    if (!req) return;
     addDocument(req.id, doc);
   };
 
   const handleRemoveDocument = (docId: string, category: "client_kam" | "internal_costing") => {
+    if (!req) return;
     removeDocument(req.id, docId, category);
   };
 
@@ -360,12 +529,14 @@ export default function RequestDetail() {
   const [confirmingAction, setConfirmingAction] = useState<"experto" | "costeo" | "entregada" | null>(null);
 
   const handleMoveToExperto = () => {
+    if (!req) return;
     updateStatus(req.id, "en-experto");
     toast.success("Propuesta pasada a: En proceso por experto");
     setConfirmingAction(null);
   };
 
   const handleMoveToCosteo = () => {
+    if (!req) return;
     updateStatus(req.id, "en-costeo");
     toast.success("Propuesta pasada a: En proceso de costeo");
     setConfirmingAction(null);
@@ -379,13 +550,15 @@ export default function RequestDetail() {
   // valor final vigente — `leaderNote` es obligatoria desde la ronda 2 y se
   // valida en la UI del diálogo dedicado antes de poder confirmar.
   const handleMarkReadyForKam = (leaderNote?: string) => {
+    if (!req) return;
     if (!req.costing) return;
     const { costing, negotiationRounds: updatedRounds } = openNegotiationRound(req, negotiationRounds, leaderNote);
     updateRequest(req.id, { costing, negotiationRounds: updatedRounds });
     toast.success("Costeo enviado al KAM");
   };
 
-  const handleSendToClient = () => {
+  const handleSendToClient = async () => {
+    if (!req) return;
     // Defensa adicional además del `disabled` del botón — por si el estado
     // cambia entre que se abre el diálogo de confirmación y se confirma.
     if (!hasValidCosting) {
@@ -398,6 +571,24 @@ export default function RequestDetail() {
       setConfirmingAction(null);
       return;
     }
+
+    if (apiProposal) {
+      try {
+        await updateStatusMutation.mutateAsync({
+          id: apiProposal.id,
+          data: { status: "DELIVERED" },
+        });
+        toast.success("Propuesta enviada al cliente y marcada como Entregada");
+        setConfirmingAction(null);
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al enviar la propuesta al cliente";
+        toast.error(errorMsg);
+        setConfirmingAction(null);
+        return;
+      }
+    }
+
     // Cierra el envío de la ronda vigente con la fecha de entrega efectiva
     // al cliente (docs/04) — ver `closeRoundForClientDelivery` sobre por qué
     // no basta filtrar solo por `clientResponse`.
@@ -415,17 +606,67 @@ export default function RequestDetail() {
 
   // El KAM puede cancelar su propia solicitud mientras nadie la haya
   // empezado a trabajar (docs/08, pregunta 14).
-  const handleCancelRequest = () => {
+  const handleCancelRequest = async () => {
+    const trimmedReason = cancelReason.trim();
+    if (!trimmedReason) {
+      toast.error("Por favor ingresa o selecciona un motivo de cancelación");
+      return;
+    }
+
+    if (apiProposal) {
+      try {
+        await deleteRequestMutation.mutateAsync({
+          id: apiProposal.id,
+          reason: trimmedReason,
+        });
+        toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
+        setIsCancelModalOpen(false);
+        setCancelReason("");
+        navigate("/dashboard");
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al cancelar la solicitud";
+        toast.error(errorMsg);
+        return;
+      }
+    }
     deleteRequest(req.id);
-    toast.success(`Solicitud ${req.id} cancelada`);
+    toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
     setIsCancelModalOpen(false);
+    setCancelReason("");
     navigate("/dashboard");
   };
 
   // Si el cliente pide ajustes tras la entrega, el KAM la devuelve a costeo
   // con una nota de observaciones para el Líder de Producto (docs/08, pregunta 13).
-  const handleReturnWithObservations = () => {
+  const handleReturnWithObservations = async () => {
+    if (!req) return;
     const trimmedObservations = returnObservations.trim() || undefined;
+    if (!trimmedObservations) {
+      toast.error("Por favor ingresa las observaciones del cliente para devolver la propuesta");
+      return;
+    }
+
+    if (apiProposal) {
+      try {
+        await updateStatusMutation.mutateAsync({
+          id: apiProposal.id,
+          data: {
+            status: "IN_COSTING",
+            rejectionReason: trimmedObservations,
+          },
+        });
+        toast.success("Propuesta devuelta a costeo con las observaciones del cliente");
+        setIsReturnModalOpen(false);
+        setReturnObservations("");
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al devolver la propuesta a costeo";
+        toast.error(errorMsg);
+        return;
+      }
+    }
+
     // Marca la ronda vigente como rechazada con la observación del cliente y
     // resetea el gate del Líder (docs/04) — ver `rejectRoundWithObservations`
     // sobre el bug que corrige ese reset.
@@ -472,6 +713,63 @@ export default function RequestDetail() {
     ? format(new Date(req.deadline), "d 'de' MMMM, yyyy", { locale: es })
     : "Sin fecha definida";
 
+  // Mientras el backend responde, mostramos un estado de carga explícito.
+  // Evita que la UI intente renderizar req (undefined) con accesos a .title,
+  // .costing, etc., lanzando un error o, peor aún, usando el primer item del
+  // array mock como fallback fantasma (bug F-2 de la auditoría).
+  if (isLoadingProposal) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground text-sm gap-2">
+          <span className="animate-spin rounded-full h-4 w-4 border-2 border-border border-t-primary" />
+          Cargando solicitud…
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Si el backend devuelve 404 y no hay ningún item mock con ese id (solicitud
+  // cancelada, enlace viejo, o timing de carga), mostramos un estado real de
+  // "no encontrada" en vez de un fallback silencioso que haría que cualquier
+  // acción (cancelar, editar) operara sobre el mock local sin tocar el backend.
+  if (!req) {
+    // `retry: false` en el hook: cualquier fallo llega aquí de inmediato. Solo
+    // un 404 real significa "no existe"; un fallo de red o un 5xx no dice nada
+    // sobre la solicitud, así que se muestra un mensaje de "reintentar".
+    const isNotFound = proposalError instanceof ApiError && proposalError.status === 404;
+    const showLoadFailure = isProposalError && !isNotFound;
+    return (
+      <AppShell>
+        <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <Link
+              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
+            </Link>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-10 text-center space-y-3 shadow-xs">
+            <p className="text-lg font-semibold text-foreground">
+              {showLoadFailure ? "No se pudo cargar la solicitud" : "Solicitud no encontrada"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {showLoadFailure
+                ? "Hubo un problema de conexión o del servidor. Intenta de nuevo en unos momentos."
+                : "Esta solicitud no existe, fue cancelada, o el enlace es incorrecto."}
+            </p>
+            <Link
+              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline mt-2"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Ir al tablero
+            </Link>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -497,7 +795,7 @@ export default function RequestDetail() {
 
               {/* Fila de metadatos inline sutiles: Empresa, Contacto, Código REQ y Badges discretos */}
               <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-muted-foreground">
-                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.id}</span>
+                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.code ?? req.id}</span>
 
                 <span className="text-border dark:text-[#252838]">·</span>
 
@@ -699,11 +997,7 @@ export default function RequestDetail() {
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
               req.status === "en-costeo" || req.status === "entregada" ? (
-                <ProposalCostingModule
-                  request={req}
-                  onUpdateCosting={handleUpdateCosting}
-                  onOpenAdvisorModal={() => setIsAssignModalOpen(true)}
-                />
+                <ProposalCostingModule request={req} onUpdateCosting={handleUpdateCosting} />
               ) : (
                 /* Antes se mostraba editable en cualquier estado — se podía
                    fijar un valor final desde "Nueva", antes de asignar
@@ -834,7 +1128,11 @@ export default function RequestDetail() {
 
                 <div className="space-y-3">
                   {negotiationRounds.map((round, idx) => {
-                    const isCurrentRound = round.clientResponse === "pendiente" && idx === negotiationRounds.length - 1;
+                    const isPending =
+                      round.clientResponse === "pendiente" || (round.clientResponse as string) === "PENDING";
+                    const isRejected =
+                      round.clientResponse === "rechazada" || (round.clientResponse as string) === "CHANGES_REQUESTED";
+                    const isCurrentRound = isPending && idx === negotiationRounds.length - 1;
                     const scopeDiffs = getScopeDiffs(round, negotiationRounds[idx - 1]);
                     return (
                       <div
@@ -875,13 +1173,13 @@ export default function RequestDetail() {
                             la reemplazó con un envío más reciente antes de que
                             el KAM alcanzara a entregarla — no quedó rechazada
                             por el cliente, simplemente se abandonó. */}
-                        {round.clientResponse === "pendiente" && !isCurrentRound && (
+                        {isPending && !isCurrentRound && (
                           <p className="text-muted-foreground italic">
                             Reemplazada por una ronda posterior antes de llegar a entregarse al cliente.
                           </p>
                         )}
 
-                        {round.clientResponse === "rechazada" && (
+                        {isRejected && (
                           <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-2.5 space-y-1">
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
                               <RotateCcw className="h-3 w-3" /> Devuelta por el cliente
@@ -1173,15 +1471,23 @@ export default function RequestDetail() {
                 <div className="space-y-1.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Docente / Asesor</span>
-                    {role === "lider-producto" && (
-                      <button
-                        type="button"
-                        onClick={() => setIsAssignModalOpen(true)}
-                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
-                      >
-                        {req.professor ? "Cambiar" : "Asignar"}
-                      </button>
-                    )}
+                    {role === "lider-producto" &&
+                      (canEditProfessor(req.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsAssignModalOpen(true)}
+                          className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+                        >
+                          {req.professor ? "Cambiar" : "Asignar"}
+                        </button>
+                      ) : (
+                        <span
+                          className="text-[10px] text-muted-foreground italic"
+                          title='No editable: la solicitud ya pasó por "En proceso por experto"'
+                        >
+                          No editable
+                        </span>
+                      ))}
                   </div>
 
                   {req.professor ? (
@@ -1223,6 +1529,37 @@ export default function RequestDetail() {
                     </div>
                   ) : (
                     <p className="text-xs italic text-muted-foreground">Sin docente o asesor asignado</p>
+                  )}
+
+                  {/* Historial de cambios de asignación */}
+                  {req.professorHistory && req.professorHistory.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Historial de asignación
+                      </span>
+                      <ul className="space-y-1">
+                        {[...req.professorHistory].reverse().map((entry) => (
+                          <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                            {entry.previousProfessor ? (
+                              <>
+                                <span className="line-through">{entry.previousProfessor}</span> →{" "}
+                                <span className="font-medium text-foreground">{entry.newProfessor}</span>
+                              </>
+                            ) : (
+                              <>
+                                Asignado: <span className="font-medium text-foreground">{entry.newProfessor}</span>
+                              </>
+                            )}{" "}
+                            · {entry.changedBy} ·{" "}
+                            {new Date(entry.changedAt).toLocaleDateString("es-CO", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1419,12 +1756,14 @@ export default function RequestDetail() {
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, title: v }))}
               />
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Urgencia</Label>
+                <Label htmlFor="general-urgencia-select" className="text-[11px] text-muted-foreground">
+                  Urgencia
+                </Label>
                 <Select
                   value={fullInfoDraft.urgency}
                   onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, urgency: v as Urgency }))}
                 >
-                  <SelectTrigger className="h-8 text-xs">
+                  <SelectTrigger id="general-urgencia-select" className="h-8 text-xs">
                     <SelectValue placeholder="Seleccionar urgencia" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1435,6 +1774,88 @@ export default function RequestDetail() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="general-tipo-select" className="text-[11px] text-muted-foreground">
+                  Tipo de requerimiento
+                </Label>
+                <Select
+                  value={fullInfoDraft.type}
+                  onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, type: v as RequestType }))}
+                >
+                  <SelectTrigger id="general-tipo-select" className="h-8 text-xs">
+                    <SelectValue placeholder="Seleccionar tipo de requerimiento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REQUEST_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {fullInfoDraft.type === "Otro" && (
+                <EditableField
+                  label="Especificación del tipo de servicio"
+                  value={fullInfoDraft.tipoOtro}
+                  onChange={(v) => setFullInfoDraft((d) => ({ ...d, tipoOtro: v }))}
+                />
+              )}
+
+              <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-2.5 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-accent" />
+                  <span className="text-xs font-semibold text-foreground">Asignación Académica Institucional</span>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="general-nodo-select" className="text-[11px] text-muted-foreground">
+                    Nodo Asignado
+                  </Label>
+                  <Select
+                    value={fullInfoDraft.node || "none"}
+                    onValueChange={(v) => {
+                      const val = v === "none" ? "" : v;
+                      const matched = dbNodes?.find((n) => n.name === val || n.id === val);
+                      const leaderName = val && NODE_DEFAULT_LEADERS[val] ? NODE_DEFAULT_LEADERS[val] : "";
+                      setFullInfoDraft((d) => ({
+                        ...d,
+                        node: val,
+                        nodeId: matched?.id || (val ? d.nodeId : ""),
+                        productLeader: leaderName || d.productLeader,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id="general-nodo-select" className="h-8 text-xs">
+                      <SelectValue placeholder="Seleccionar nodo temático (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" className="text-muted-foreground italic">
+                        -- Por definir / Sin asignar --
+                      </SelectItem>
+                      {availableNodes.map((n) => (
+                        <SelectItem key={n} value={n}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <EditableField
+                    label="Líder de Producto"
+                    value={fullInfoDraft.productLeader}
+                    onChange={(v) => setFullInfoDraft((d) => ({ ...d, productLeader: v }))}
+                  />
+                  {fullInfoDraft.node && NODE_DEFAULT_LEADERS[fullInfoDraft.node] && (
+                    <p className="text-[10px] text-accent flex items-center gap-1 mt-0.5">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Sugerido por nodo: {NODE_DEFAULT_LEADERS[fullInfoDraft.node]}
+                    </p>
+                  )}
+                </div>
               </div>
             </TabsContent>
 
@@ -1738,7 +2159,7 @@ export default function RequestDetail() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              {isLeader && (
+              {isLeader && canEditProfessor(req.status) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1767,20 +2188,69 @@ export default function RequestDetail() {
       />
 
       {/* Modal: Cancelar solicitud (KAM, solo mientras está "Nueva") */}
-      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
-        <DialogContent className="max-w-sm">
+      <Dialog
+        open={isCancelModalOpen}
+        onOpenChange={(open) => {
+          setIsCancelModalOpen(open);
+          if (!open) setCancelReason("");
+        }}
+      >
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-foreground">¿Cancelar esta solicitud?</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Se eliminará permanentemente la solicitud {req.id} ({req.company}). Esta acción no se puede deshacer.
+              Se cancelará la solicitud {req.code ?? req.id} ({req.company}). Por trazabilidad y control de gestión, es
+              obligatorio ingresar el motivo de cancelación.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-xs font-semibold text-foreground mb-1.5 block">
+                Selecciona un motivo común o escribe uno:
+              </Label>
+              <div className="flex flex-wrap gap-1.5 mb-2.5">
+                {CANCEL_REASON_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setCancelReason(preset)}
+                    className={`px-2.5 py-1 text-[11px] rounded-full font-medium transition-colors border ${
+                      cancelReason === preset
+                        ? "bg-[#5454e9] text-white border-[#5454e9]"
+                        : "bg-secondary/40 hover:bg-secondary border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="cancel-reason-input" className="text-xs font-semibold text-foreground mb-1 block">
+                Motivo de cancelación <span className="text-red-500">*</span>
+              </Label>
+              <textarea
+                id="cancel-reason-input"
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Escribe la justificación o selecciona una de las opciones sugeridas..."
+                className="w-full text-xs rounded-lg border border-border dark:border-[#2b2d3d] bg-background dark:bg-[#151620] p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-[#5454e9]"
+              />
+            </div>
+          </div>
+
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setIsCancelModalOpen(false)}
+              onClick={() => {
+                setIsCancelModalOpen(false);
+                setCancelReason("");
+              }}
               className="text-xs"
             >
               Volver
@@ -1788,8 +2258,9 @@ export default function RequestDetail() {
             <Button
               type="button"
               size="sm"
+              disabled={!cancelReason.trim()}
               onClick={handleCancelRequest}
-              className="text-xs bg-red-600 hover:bg-red-700 text-white"
+              className="text-xs bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Sí, cancelar solicitud
             </Button>
@@ -2055,11 +2526,17 @@ function EditableField({
   block?: boolean;
   error?: string;
 }) {
+  const fieldId = label ? "field-" + label.toLowerCase().replace(/[^a-z0-9]/g, "-") : undefined;
   return (
     <div className="space-y-1">
-      {label && <Label className="text-[11px] text-muted-foreground">{label}</Label>}
+      {label && (
+        <Label htmlFor={fieldId} className="text-[11px] text-muted-foreground">
+          {label}
+        </Label>
+      )}
       {block ? (
         <Textarea
+          id={fieldId}
           rows={2}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -2067,6 +2544,7 @@ function EditableField({
         />
       ) : (
         <Input
+          id={fieldId}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn("h-8 text-xs", error && "border-red-400 focus-visible:ring-red-400")}

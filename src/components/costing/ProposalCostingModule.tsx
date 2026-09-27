@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ShieldCheck, MessageSquare, ExternalLink, ChevronUp, GraduationCap, Calculator } from "@/components/icons";
+import { ShieldCheck, MessageSquare, ChevronUp, GraduationCap, Calculator } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -9,16 +9,10 @@ import { formatCop, RequestItem, ProposalCosting, calculateCosting } from "@/lib
 interface ProposalCostingModuleProps {
   request: RequestItem;
   onUpdateCosting: (newCosting: ProposalCosting) => void;
-  onOpenAdvisorModal: () => void;
   isReadOnly?: boolean;
 }
 
-export function ProposalCostingModule({
-  request,
-  onUpdateCosting,
-  onOpenAdvisorModal,
-  isReadOnly = false,
-}: ProposalCostingModuleProps) {
+export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = false }: ProposalCostingModuleProps) {
   const reqType = request.type;
   const isCapacitacion = reqType === "Capacitación";
 
@@ -222,13 +216,17 @@ export function ProposalCostingModule({
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={onOpenAdvisorModal}
-                className="text-primary hover:underline font-medium text-[11px] inline-flex items-center gap-0.5 shrink-0"
+              {/* Ya no es editable desde acá (hallazgo 2026-09-25): este módulo solo
+                  se muestra en "en-costeo"/"entregada", es decir, siempre después
+                  de que el proceso pasó por "En proceso por experto" — cambiar el
+                  docente en ese punto sin dejar rastro fue el bug encontrado. El
+                  historial completo vive en la tarjeta "Docente / Asesor". */}
+              <span
+                className="text-muted-foreground text-[11px] inline-flex items-center gap-0.5 shrink-0 italic"
+                title='No editable desde el costeo: la solicitud ya pasó por "En proceso por experto"'
               >
-                {request.professor ? "Cambiar" : "Asignar"} <ExternalLink className="h-2.5 w-2.5" />
-              </button>
+                No editable
+              </span>
             </div>
             <p className="text-[11px] text-slate-400">
               Derivado del docente/asesor asignado en "Equipo Asignado" — ya no es un campo independiente del costeo.

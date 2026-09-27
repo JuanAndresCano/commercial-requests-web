@@ -31,29 +31,21 @@ describe("ThemeProvider", () => {
     window.matchMedia = realMatchMedia;
   });
 
-  it("follows a dark OS preference when nothing is stored", () => {
+  it("defaults to light mode when nothing is stored", () => {
     setSystemDark(true);
-    const theme = mountProvider();
-    expect(theme.current.theme).toBe("dark");
-    expect(document.documentElement).toHaveClass("dark");
-  });
-
-  it("follows a light OS preference when nothing is stored", () => {
-    setSystemDark(false);
     const theme = mountProvider();
     expect(theme.current.theme).toBe("light");
     expect(document.documentElement).not.toHaveClass("dark");
   });
 
-  it("prefers the stored choice over the OS preference", () => {
-    setSystemDark(true);
-    window.localStorage.setItem("icesi_theme_mode", "light");
-    expect(mountProvider().current.theme).toBe("light");
+  it("prefers the stored choice from localStorage", () => {
+    window.localStorage.setItem("icesi_theme_mode", "dark");
+    expect(mountProvider().current.theme).toBe("dark");
   });
 
   it("toggles and persists the selected mode", () => {
-    setSystemDark(false);
     const theme = mountProvider();
+    expect(theme.current.theme).toBe("light");
     act(() => theme.current.toggleTheme());
     expect(theme.current.theme).toBe("dark");
     expect(window.localStorage.getItem("icesi_theme_mode")).toBe("dark");

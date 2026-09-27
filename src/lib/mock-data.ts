@@ -1,4 +1,4 @@
-export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada";
+export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada" | "rechazada" | "cancelada";
 export type RequestType =
   "Capacitación" | "Consultoría" | "Mentoría" | "Investigación" | "Proyectos Especiales (Eventos)" | "Otro";
 export type Urgency = "alta" | "media" | "baja";
@@ -183,6 +183,7 @@ export interface ProposalCosting {
 
 export interface RequestItem {
   id: string;
+  code?: string;
   title: string;
   applicant: string;
   type: RequestType;
@@ -243,6 +244,7 @@ export interface RequestItem {
   professor?: string;
   professorType?: "planta" | "externo";
   externalProfessorData?: ExternalProfessorData;
+  professorHistory?: ProfessorAssignmentLogEntry[];
   totalCostCop?: number;
   costing?: ProposalCosting;
   clientKamDocuments?: ProposalDocument[];
@@ -269,11 +271,22 @@ export interface RequestItem {
   negotiationRounds?: NegotiationRound[];
 }
 
+export interface ProfessorAssignmentLogEntry {
+  id: string; // `${requestId}-doc${n}`
+  previousProfessor?: string;
+  previousProfessorType?: "planta" | "externo";
+  newProfessor: string;
+  newProfessorType: "planta" | "externo";
+  changedBy: string;
+  changedAt: string;
+  statusAtChange: RequestStatus;
+}
+
 // No existe "aceptada" explícita: el sistema no tiene hoy un evento real de
 // "el cliente aceptó" — solo "fue entregada" (vigente mientras nadie la
 // devuelva). Inventar un estado "aceptada" sería fabricar un dato que nadie
 // confirma.
-export type ClientResponse = "pendiente" | "rechazada";
+export type ClientResponse = "pendiente" | "rechazada" | "PENDING" | "CHANGES_REQUESTED";
 
 export interface NegotiationRound {
   id: string; // `${requestId}-r${roundNumber}`
@@ -356,6 +369,10 @@ export function calculateCosting(
   };
 }
 
+/**
+ * @deprecated Legacy mock dataset. Persona 2 (KAM) now consumes real proposals from
+ * the backend API (`useRequests` / `requestsApi`). Kept for compatibility with Persona 3 and 4.
+ */
 export const MOCK_REQUESTS: RequestItem[] = [
   {
     id: "REQ-2026-0142",
@@ -1619,6 +1636,20 @@ export const STATUS_META: Record<
     headerBg: "bg-[#4cb979]/10",
     borderTone: "border-t-[#4cb979]",
   },
+  rechazada: {
+    label: "Rechazada",
+    tone: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
+    dot: "bg-red-500",
+    headerBg: "bg-red-500/10",
+    borderTone: "border-t-red-500",
+  },
+  cancelada: {
+    label: "Cancelada",
+    tone: "bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-500/30",
+    dot: "bg-gray-500",
+    headerBg: "bg-gray-500/10",
+    borderTone: "border-t-gray-500",
+  },
 };
 
 export const URGENCY_META: Record<Urgency, { label: string; tone: string }> = {
@@ -1654,6 +1685,10 @@ export function formatCompactCop(amount: number): string {
   return formatCop(amount);
 }
 
+/**
+ * @deprecated Replaced in KAM views with `formatRelativeTime(createdAt)` in `@/lib/proposal-adapter`.
+ * Hardcoded by proposal ID; maintained only for backwards compatibility.
+ */
 export function getRelativeTime(id: string): string {
   switch (id) {
     case "REQ-2026-0142":

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { companiesApi, type Company } from "@/lib/api/companies";
@@ -61,7 +61,9 @@ describe("CompanyAutocomplete", () => {
   it("does not hit the backend for a single character", async () => {
     renderAutocomplete();
     type("b");
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
     expect(mockedSearch).not.toHaveBeenCalled();
   });
 

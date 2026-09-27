@@ -298,6 +298,8 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
       "en-experto": [],
       "en-costeo": [],
       entregada: [],
+      rechazada: [],
+      cancelada: [],
     };
     kanbanRequests.forEach((req) => {
       if (grouped[req.status]) {

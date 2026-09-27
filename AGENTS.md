@@ -40,6 +40,43 @@ TanStack Query · Vitest + Testing Library. **This is not Next.js.**
 | Types              | `npm run typecheck`                                  |
 | Tests / coverage   | `npm test` / `npm run test:coverage`                 |
 
+## Source of truth
+
+**The branch `fix/professor-reassignment-audit` (repo `commercial-requests-web`) is
+the validated UX and business-logic reference.** It was tested with real users and
+validated with the product lead. When connecting to the real backend, every rule,
+animation, and component in that branch must be preserved exactly. The fact that
+it runs on mocks is irrelevant — the BEHAVIOR is what matters.
+
+Work TDD: write tests that encode that branch's behavior, then implement the
+backend integration so those tests pass. Never break a behavior that exists in
+that branch without explicit product-lead sign-off.
+
+## Backend integration contract
+
+This project is being migrated from a mock-only prototype to a real backend
+(`commercial-requests-backend`, NestJS + Prisma + PostgreSQL). The following
+rules govern the integration:
+
+- **No dual writes.** A mutation goes to either the real API or the local mock
+  (`AuthContext`) — never both in the same code path. Once the API call for an
+  action is implemented, remove the mock write for that action.
+- **No silent fallback.** If the API call fails, show an error toast and stop —
+  do not silently fall back to writing the local state. The user must know the
+  operation failed.
+- **Do not use `startsWith("REQ-")` to detect "real" vs "mock" requests.**
+  Mock IDs also start with `REQ-2026-`. Use `Boolean(apiProposal)` (i.e., whether
+  `useRequestDetail` returned a non-null API object) to decide which code path to
+  take. If `apiProposal` is null, the request is a local mock.
+- **State mapping is authoritative.** Backend status codes (`NEW`, `IN_PROGRESS`,
+  `IN_COSTING`, `DELIVERED`, `REJECTED`) must all map to distinct frontend states.
+  `REJECTED` must NOT map to `"entregada"`. Any unknown backend code must produce
+  a visible warning — never silently default to `"nueva"`.
+- **`NegotiationRound.clientResponse` is uppercase English from the backend**
+  (`"PENDING"`, `"CHANGES_REQUESTED"`). All comparisons in `RequestDetail.tsx`
+  and related components must use the backend casing, not the Spanish lowercase
+  mock values (`"pendiente"`, `"rechazada"`).
+
 ## Non-negotiable business rules
 
 1. **The KAM never receives the base cost or the contribution margin.** Only the
@@ -49,13 +86,32 @@ TanStack Query · Vitest + Testing Library. **This is not Next.js.**
 3. Pipeline: `nueva` → `en-experto` → `en-costeo` → `entregada`.
    - Advancing to `en-experto` requires an assigned professor.
    - **Only the KAM marks `entregada`**, and only if the offered value is > 0.
+   - The LP does NOT have a button to mark `entregada` — that action belongs
+     exclusively to the KAM (see `docs/02-roles-y-permisos.md`, confirmed with
+     the product lead; the LP only does "Enviar a KAM").
    - The KAM may return an `entregada` request to `en-costeo` with client observations.
 4. The KAM edits or cancels their own request only while it is `nueva`.
-   The LP reassigns only while `nueva`, with a structured reason.
+   The LP reassigns only while `nueva` or `en-experto`, with a structured reason.
+   Reassigning from `en-experto` resets the request to `nueva` and clears the
+   assigned professor (the new LP restarts the flow).
 5. Money is never negative; margin is 0–100. The costing formula lives only in
    `src/lib/costing.ts` (client-side preview); the backend is the authority.
    Do **not** change the Pro-Cultura rate: it is an open question (docs/08, Q12).
 6. Professors have no account; the LP records their progress.
+7. **Professor/advisor assignment is locked after `en-experto`.** The field is
+   editable only while the request is `nueva` or `en-experto`. Once it reaches
+   `en-costeo` or `entregada` (including after a "Devolver con observaciones"
+   which returns to `en-costeo`), the field is read-only. Use `canEditProfessor()`
+   from `src/lib/professor-assignment.ts` — do not re-implement this check inline.
+   Every assignment change (while it was allowed) must be recorded in
+   `req.professorHistory` via `assignProfessorWithHistory()`.
+8. **The LP can edit "Información completa" only in `en-costeo` AND only after
+   at least one client rejection** (`wasRejectedByClient === true`). Before any
+   rejection, that section is read-only for the LP (it belongs to the KAM).
+   See `docs/03-flujos-de-usuario.md`, section B.7.
+9. The node field (`nodeId`) is mandatory when creating a request. It belongs in
+   Step 3 of the wizard (Requerimiento del Servicio), not Step 1. Do not assign
+   `dbNodes[0]` as a silent default — require explicit selection.
 
 ## Code rules
 

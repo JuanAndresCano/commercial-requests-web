@@ -10,6 +10,7 @@ import {
   ProposalDocument,
   ExternalProfessorData,
 } from "@/lib/mock-data";
+import { assignProfessorWithHistory } from "@/lib/professor-assignment";
 
 export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor" | "administrador";
 
@@ -259,11 +260,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     type: "planta" | "externo",
     externalData?: ExternalProfessorData,
   ) => {
-    updateRequest(id, {
-      professor: professorName,
-      professorType: type,
-      externalProfessorData: externalData,
-    });
+    const current = requests.find((r) => r.id === id);
+    if (!current) return;
+    updateRequest(id, assignProfessorWithHistory(current, professorName, type, externalData, user.name));
   };
 
   const updateCosting = (id: string, costing: ProposalCosting) => {

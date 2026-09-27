@@ -33,7 +33,7 @@ describe("ProposalCostingModule", () => {
     const onUpdateCosting = vi.fn();
     const request = makeRequest({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
 
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} onOpenAdvisorModal={() => {}} />);
+    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
 
     fireEvent.change(screen.getByLabelText(/Valor Final de la Propuesta/i), { target: { value: "1500000" } });
 
@@ -46,7 +46,7 @@ describe("ProposalCostingModule", () => {
     const onUpdateCosting = vi.fn();
     const request = makeRequest({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
 
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} onOpenAdvisorModal={() => {}} />);
+    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
 
     fireEvent.click(screen.getByRole("button", { name: "35%" }));
 
@@ -59,7 +59,7 @@ describe("ProposalCostingModule", () => {
     const onUpdateCosting = vi.fn();
     const request = makeRequest({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
 
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} onOpenAdvisorModal={() => {}} />);
+    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
 
     fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
     fireEvent.change(screen.getByLabelText(/Nota de alcance comercial/i), {
@@ -73,7 +73,7 @@ describe("ProposalCostingModule", () => {
     const onUpdateCosting = vi.fn();
     const request = makeRequest({ totalOfferedCop: 500_000 });
 
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} onOpenAdvisorModal={() => {}} />);
+    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
 
     fireEvent.change(screen.getByLabelText(/Valor Final de la Propuesta/i), { target: { value: "-1000" } });
 
@@ -84,7 +84,7 @@ describe("ProposalCostingModule", () => {
     const onUpdateCosting = vi.fn();
     const request = makeRequest({});
 
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} onOpenAdvisorModal={() => {}} />);
+    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
 
     const marginPercentInput = document.getElementById("margin-percent-input") as HTMLInputElement;
     fireEvent.change(marginPercentInput, { target: { value: "150" } });
