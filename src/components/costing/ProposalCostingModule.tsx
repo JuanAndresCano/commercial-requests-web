@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { calculateProCulturaReference, PRO_CULTURA_PERCENT } from "@/lib/currency";
+import { useCostingDraft } from "@/hooks/use-costing-draft";
+import { calculateProCulturaReference, formatCopPreview, isLikelyFraction, PRO_CULTURA_PERCENT } from "@/lib/currency";
 import { formatCop, RequestItem, ProposalCosting, calculateCosting } from "@/lib/mock-data";
 
 interface ProposalCostingModuleProps {
@@ -24,12 +25,19 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
 
   // El campo que antes era "Costo Base Directo" ahora captura directamente
   // el Valor Final de la Propuesta — ya no hay un cálculo hacia adelante de
-  // base → total (docs/04).
-  const [totalOfferedCop, setTotalOfferedCop] = useState<number>(initialCosting.totalOfferedCop);
-  const [marginPercent, setMarginPercent] = useState<number | undefined>(initialCosting.expectedMarginPercent);
-  // Margen en plata: input manual e independiente, ya no derivado de
-  // baseCostCop * marginPercent.
-  const [marginAmountCop, setMarginAmountCop] = useState<number | undefined>(initialCosting.marginAmountCop);
+  // base → total (docs/04). Margen en plata: input manual e independiente, ya
+  // no derivado de baseCostCop * marginPercent. Los tres campos son texto en
+  // formato es-CO ("$32.000.000", "30%"): el hook los interpreta y guarda solo
+  // tras una pausa al escribir o al salir del campo (no una vez por tecla).
+  const draft = useCostingDraft(
+    {
+      total: initialCosting.totalOfferedCop,
+      percent: initialCosting.expectedMarginPercent,
+      amount: initialCosting.marginAmountCop,
+    },
+    (saved) => triggerSave(saved.total, saved.percent, saved.amount, negotiationNotes, true),
+  );
+  const { total: totalOfferedCop, percent: marginPercent, amount: marginAmountCop } = draft.values;
   const [negotiationNotes, setNegotiationNotes] = useState<string>(initialCosting.negotiationNotes ?? "");
   // Gate de envío al KAM (docs/04) — se preserva tal cual al
   // guardar cambios que no afectan el valor final ni el margen, y se
@@ -45,9 +53,6 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
   // Sync state when request prop changes
   useEffect(() => {
     if (request.costing) {
-      setTotalOfferedCop(request.costing.totalOfferedCop);
-      setMarginPercent(request.costing.expectedMarginPercent);
-      setMarginAmountCop(request.costing.marginAmountCop);
       setNegotiationNotes(request.costing.negotiationNotes ?? "");
       setReadyForKam(request.costing.readyForKam ?? false);
       setCostingSentAt(request.costing.costingSentAt);
@@ -94,26 +99,12 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
     onUpdateCosting(updatedCosting);
   };
 
-  // `min`/`max` en el <Input> solo afectan las flechitas del navegador — si
-  // se escribe o pega un valor directamente, no bloquean nada. Sin este
-  // clamp se podía guardar un valor final o margen negativo sin ningún aviso.
-  const handleTotalOfferedChange = (rawVal: number) => {
-    const val = Math.max(0, rawVal);
-    setTotalOfferedCop(val);
-    triggerSave(val, marginPercent, marginAmountCop, negotiationNotes, true);
-  };
-
-  const handleMarginPercentChange = (rawVal: number) => {
-    const val = Math.min(100, Math.max(0, rawVal));
-    setMarginPercent(val);
-    triggerSave(totalOfferedCop, val, marginAmountCop, negotiationNotes, true);
-  };
-
-  const handleMarginAmountChange = (rawVal: number) => {
-    const val = Math.max(0, rawVal);
-    setMarginAmountCop(val);
-    triggerSave(totalOfferedCop, marginPercent, val, negotiationNotes, true);
-  };
+  // Un valor negativo, no numérico o un % fuera de 0–100 no se guarda ni se
+  // corrige en silencio: el campo lo avisa y conserva lo último guardado.
+  const percentSuggestion =
+    marginPercent !== undefined && isLikelyFraction(marginPercent)
+      ? String(Math.round(marginPercent * 10000) / 100).replace(".", ",")
+      : null;
 
   // Indicador de solo lectura del asesor del servicio (docs/07, gap #11):
   // ya no es un switch independiente — se deriva directamente del
@@ -166,19 +157,25 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
               <span className="absolute left-3 top-2.5 text-xs font-mono text-slate-400">$</span>
               <Input
                 id="total-offered-input"
-                type="number"
-                step="500000"
-                min="0"
-                value={totalOfferedCop || ""}
-                onChange={(e) => handleTotalOfferedChange(Number(e.target.value) || 0)}
+                type="text"
+                inputMode="decimal"
+                value={draft.texts.total}
+                onChange={(e) => draft.setText("total", e.target.value)}
+                onBlur={() => draft.blur("total")}
                 placeholder="0"
                 className="pl-7 font-mono text-sm h-9 bg-slate-50/50 border-slate-200 focus-visible:ring-1 focus-visible:ring-primary dark:bg-background dark:border-border"
                 disabled={isReadOnly}
               />
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">
-              Equivale a {formatCop(totalOfferedCop)} COP — valor oficial para presentación al cliente
-            </p>
+            {draft.invalid.total ? (
+              <p className="text-[11px] text-destructive font-mono">
+                Valor no válido, no se guardó. Escribe solo números, por ejemplo $32.000.000
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-400 font-mono">
+                Equivale a {formatCopPreview(totalOfferedCop)} COP — valor oficial para presentación al cliente
+              </p>
+            )}
           </div>
 
           {/* Indicador de solo lectura del asesor del servicio (5 cols) —
@@ -246,16 +243,25 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
             <div className="relative w-full sm:w-32">
               <Input
                 id="margin-percent-input"
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={marginPercent || ""}
-                onChange={(e) => handleMarginPercentChange(Number(e.target.value) || 0)}
+                type="text"
+                inputMode="decimal"
+                value={draft.texts.percent}
+                onChange={(e) => draft.setText("percent", e.target.value)}
+                onBlur={() => draft.blur("percent")}
                 className="pr-7 font-mono text-sm h-9 bg-slate-50/50 border-slate-200 focus-visible:ring-1 focus-visible:ring-primary dark:bg-background dark:border-border"
                 disabled={isReadOnly}
               />
               <span className="absolute right-3 top-2.5 text-xs font-mono text-slate-400">%</span>
+              {draft.invalid.percent && (
+                <p className="mt-1 text-[11px] text-destructive leading-snug">
+                  El % debe estar entre 0 y 100, no se guardó
+                </p>
+              )}
+              {percentSuggestion && (
+                <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
+                  ¿quisiste decir {percentSuggestion} %?
+                </p>
+              )}
             </div>
 
             {/* Input de margen en plata (manual, independiente del %) */}
@@ -264,16 +270,19 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                 <span className="absolute left-3 top-2.5 text-xs font-mono text-slate-400">$</span>
                 <Input
                   id="margin-amount-input"
-                  type="number"
-                  step="100000"
-                  min="0"
-                  value={marginAmountCop || ""}
-                  onChange={(e) => handleMarginAmountChange(Number(e.target.value) || 0)}
+                  type="text"
+                  inputMode="decimal"
+                  value={draft.texts.amount}
+                  onChange={(e) => draft.setText("amount", e.target.value)}
+                  onBlur={() => draft.blur("amount")}
                   placeholder="0"
                   className="pl-7 font-mono text-sm h-9 bg-slate-50/50 border-slate-200 focus-visible:ring-1 focus-visible:ring-primary dark:bg-background dark:border-border"
                   disabled={isReadOnly}
                 />
               </div>
+              {draft.invalid.amount && (
+                <p className="text-[11px] text-destructive leading-snug">Valor no válido, no se guardó</p>
+              )}
               {/* Referencia calculada, no editable y no guardada (docs/04):
                   el margen manual y el valor final siguen siendo campos
                   independientes — esto es solo para detectar de un vistazo
@@ -298,7 +307,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                   <button
                     key={preset}
                     type="button"
-                    onClick={() => handleMarginPercentChange(preset)}
+                    onClick={() => draft.applyValue("percent", preset)}
                     disabled={isReadOnly}
                     className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium transition-all ${
                       isActive
@@ -412,7 +421,9 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
               value={negotiationNotes}
               onChange={(e) => {
                 setNegotiationNotes(e.target.value);
-                triggerSave(totalOfferedCop, marginPercent, marginAmountCop, e.target.value);
+                // Solo lo ya guardado: un valor a medio escribir no debe adelantarse al autoguardado.
+                const saved = draft.committed();
+                triggerSave(saved.total, saved.percent, saved.amount, e.target.value);
               }}
               placeholder="Ej: Se incluye ajuste de alcance en 2 módulos presenciales acordado con el cliente..."
               className="text-xs resize-none bg-white dark:bg-background border-slate-200 dark:border-border"

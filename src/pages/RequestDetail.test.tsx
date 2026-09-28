@@ -116,6 +116,9 @@ vi.mock("@/context/AuthContext", () => ({
   }),
 }));
 
+const toastMock = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock("sonner", () => ({ toast: toastMock }));
+
 vi.mock("@/lib/api/requests", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/requests")>();
   return {
@@ -595,6 +598,61 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
 
     expect(requestsApi.upsertCosting).not.toHaveBeenCalled();
     expect(authMock.updateCosting).not.toHaveBeenCalled();
+  });
+
+  it("refetches the detail after saving so readyForKam and the current row refresh", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({ readyForKam: true }));
+    renderPage("REQ-2026-0002");
+
+    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+
+    await waitFor(() => expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(requestsApi.getById).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows a generic Spanish message for a 400 and refetches to show what the backend holds", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({}));
+    vi.mocked(requestsApi.upsertCosting).mockRejectedValueOnce(
+      new ApiError(400, "marginPercentage must not be greater than 100"),
+    );
+    renderPage("REQ-2026-0002");
+
+    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        "Revisa el valor y los márgenes: no pueden ser negativos y el % debe estar entre 0 y 100",
+      ),
+    );
+    expect(toastMock.error).not.toHaveBeenCalledWith(expect.stringContaining("must not be"));
+    await waitFor(() => expect(requestsApi.getById).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps the server message for errors that are not a 400", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({}));
+    vi.mocked(requestsApi.upsertCosting).mockRejectedValueOnce(new ApiError(403, "Forbidden resource"));
+    renderPage("REQ-2026-0002");
+
+    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Forbidden resource"));
+  });
+
+  it("does not send a second PUT for the same values while the first one is still in flight", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({}));
+    vi.mocked(requestsApi.upsertCosting).mockReturnValueOnce(new Promise(() => {}));
+    renderPage("REQ-2026-0002");
+
+    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+    await waitFor(() => expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+    fireEvent.change(screen.getByLabelText(/Nota de alcance comercial/i), { target: { value: "Ajuste" } });
+    fireEvent.change(screen.getByLabelText(/Nota de alcance comercial/i), { target: { value: "Ajuste acordado" } });
+
+    // mutate() reaches the API on a later tick: give a duplicate the chance to show up.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a mock proposal on the local path: no request to the backend", async () => {

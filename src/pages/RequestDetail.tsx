@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useRef, type ReactNode } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -185,6 +185,7 @@ export default function RequestDetail() {
   const reassignProposalReal = useReassignProposal();
   const updateSpecsReal = useUpdateServiceSpecs();
   const upsertCostingReal = useUpsertCosting();
+  const lastSentCosting = useRef<ProposalCosting | null>(null);
   // Only a connected Product Leader can reassign, so only fetch this directory for
   // that case — /users is Product-Leader/Admin-only on the backend, and a KAM (or a
   // mock proposal) opening this page would otherwise fire a request that's certain to 403.
@@ -611,14 +612,18 @@ export default function RequestDetail() {
   // (Pro-Cultura stays a client-side reference). Each save creates a new economics row,
   // so nothing is sent unless the total or a margin actually changed (the scope note is
   // not persisted). A margin the form holds empty is sent as null so it clears; 0 stays 0.
+  // While a save is in flight `req.costing` is still the old row, so it is compared with what
+  // that save sent instead: an edit of the note must not send the same values again.
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
     if (!req) return;
     if (apiProposal) {
+      const current = upsertCostingReal.isPending && lastSentCosting.current ? lastSentCosting.current : req.costing;
       const unchanged =
-        newCosting.totalOfferedCop === req.costing?.totalOfferedCop &&
-        newCosting.expectedMarginPercent === req.costing?.expectedMarginPercent &&
-        newCosting.marginAmountCop === req.costing?.marginAmountCop;
+        newCosting.totalOfferedCop === current?.totalOfferedCop &&
+        newCosting.expectedMarginPercent === current?.expectedMarginPercent &&
+        newCosting.marginAmountCop === current?.marginAmountCop;
       if (unchanged) return;
+      lastSentCosting.current = newCosting;
       upsertCostingReal.mutate(
         {
           id: apiProposal.id,
@@ -626,7 +631,17 @@ export default function RequestDetail() {
           marginPercentage: newCosting.expectedMarginPercent ?? null,
           marginAmount: newCosting.marginAmountCop ?? null,
         },
-        { onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar el costeo") },
+        {
+          // The backend's 400 messages are English validator output: show one generic Spanish text.
+          onError: (err) =>
+            toast.error(
+              err instanceof ApiError && err.status === 400
+                ? "Revisa el valor y los márgenes: no pueden ser negativos y el % debe estar entre 0 y 100"
+                : err instanceof Error
+                  ? err.message
+                  : "No se pudo guardar el costeo",
+            ),
+        },
       );
       return;
     }
