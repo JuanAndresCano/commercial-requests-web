@@ -62,7 +62,7 @@ Más abajo, la sección colapsable **"Información completa de la solicitud"** (
 
 **Acciones disponibles según el estado, todas arriba a la derecha:**
 - `en-costeo`: botón **"Enviar a cliente"** → cambia el estado a `entregada`. **Deshabilitado si el costeo aún no tiene un valor mayor a $0, o si el Líder de Producto todavía no confirmó explícitamente el envío** (ver B.4 — ya no basta con que exista un valor, el Líder debe darle "Enviar a KAM" primero).
-- `nueva` (y la solicitud es suya): botón **"Cancelar solicitud"** → la elimina por completo, con confirmación.
+- `nueva` (y la solicitud es suya): botón **"Cancelar solicitud"** → abre un diálogo que exige un **motivo obligatorio** (chips predefinidos o texto libre; el botón de confirmar queda deshabilitado sin motivo) y la marca como cancelada (cancelación lógica, no se elimina físicamente). (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
 - `entregada`: insignia sólida **"Propuesta Entregada"** + botón **"Devolver con observaciones"** (ver A.7).
 
 ### A.6 — Editar su propia solicitud (solo mientras "Nueva")
