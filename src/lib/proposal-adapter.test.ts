@@ -422,6 +422,60 @@ describe("mapProposalToRequestItem (HU 4.1-4.5, Líder de Producto)", () => {
     expect(item.costing).toMatchObject({ totalOfferedCop: 30000000, readyForKam: true });
   });
 
+  describe("contribution margin of the current economics row (HU 5.1)", () => {
+    const economicsRow = (overrides: Record<string, unknown>) => {
+      const base = baseProposal();
+      return baseProposal({ economics: [{ ...base.economics[0], ...overrides }] as ProposalDetail["economics"] });
+    };
+
+    it("converts the Decimal strings of the JSON into numbers", () => {
+      const item = mapProposalToRequestItem(baseProposal());
+      expect(item.costing?.expectedMarginPercent).toBe(20);
+      expect(item.costing?.marginAmountCop).toBe(5_000_000);
+    });
+
+    it("keeps decimals of a Decimal string", () => {
+      const item = mapProposalToRequestItem(economicsRow({ marginPercentage: "12.5000", estimatedMargin: "999.99" }));
+      expect(item.costing?.expectedMarginPercent).toBe(12.5);
+      expect(item.costing?.marginAmountCop).toBe(999.99);
+    });
+
+    it("accepts a margin that already arrives as a number", () => {
+      const item = mapProposalToRequestItem(economicsRow({ marginPercentage: 30, estimatedMargin: 9_000_000 }));
+      expect(item.costing?.expectedMarginPercent).toBe(30);
+      expect(item.costing?.marginAmountCop).toBe(9_000_000);
+    });
+
+    it("keeps null as undefined, never 0: the margin was cleared or never set", () => {
+      const item = mapProposalToRequestItem(economicsRow({ marginPercentage: null, estimatedMargin: null }));
+      expect(item.costing?.expectedMarginPercent).toBeUndefined();
+      expect(item.costing?.marginAmountCop).toBeUndefined();
+    });
+
+    it("keeps a stored 0 as 0, distinct from null", () => {
+      const item = mapProposalToRequestItem(economicsRow({ marginPercentage: "0", estimatedMargin: "0.00" }));
+      expect(item.costing?.expectedMarginPercent).toBe(0);
+      expect(item.costing?.marginAmountCop).toBe(0);
+    });
+
+    it("tolerates the KAM payload, where the backend removes both margin fields", () => {
+      const { marginPercentage: _p, estimatedMargin: _m, estimatedCost: _c, ...kamRow } = baseProposal().economics[0];
+      const item = mapProposalToRequestItem(baseProposal({ economics: [kamRow] }));
+      expect(item.costing?.expectedMarginPercent).toBeUndefined();
+      expect(item.costing?.marginAmountCop).toBeUndefined();
+      expect(item.costing?.totalOfferedCop).toBe(30000000);
+    });
+
+    it("reads the margin from the current row, not from a previous one", () => {
+      const base = baseProposal();
+      const stale = { ...base.economics[0], id: "e0", isCurrent: false, marginPercentage: "50", estimatedMargin: "1" };
+      const current = { ...base.economics[0], id: "e1", isCurrent: true, marginPercentage: "10", estimatedMargin: "2" };
+      const item = mapProposalToRequestItem(baseProposal({ economics: [stale, current] }));
+      expect(item.costing?.expectedMarginPercent).toBe(10);
+      expect(item.costing?.marginAmountCop).toBe(2);
+    });
+  });
+
   it("gives the Pro-Cultura stamp only to the exact CAPACITACION code, not to a missing type", () => {
     const base = baseProposal();
     expect(mapProposalToRequestItem(base).costing).toMatchObject({

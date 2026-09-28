@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { ProposalCostingModule } from "@/components/costing/ProposalCostingModule";
 import type { ProposalCosting, RequestItem } from "@/lib/mock-data";
+
+const AUTOSAVE_MS = 800;
 
 function makeRequest(costing?: Partial<ProposalCosting>): RequestItem {
   return {
@@ -28,67 +30,565 @@ function makeRequest(costing?: Partial<ProposalCosting>): RequestItem {
   };
 }
 
+const totalInput = () => screen.getByLabelText(/Valor Final de la Propuesta/i) as HTMLInputElement;
+const percentInput = () => document.getElementById("margin-percent-input") as HTMLInputElement;
+const amountInput = () => document.getElementById("margin-amount-input") as HTMLInputElement;
+const typeInto = (input: HTMLElement, value: string) => fireEvent.change(input, { target: { value } });
+const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+
+function setup(costing?: Partial<ProposalCosting>) {
+  const onUpdateCosting = vi.fn();
+  const view = render(<ProposalCostingModule request={makeRequest(costing)} onUpdateCosting={onUpdateCosting} />);
+  const rerenderWith = (next?: Partial<ProposalCosting>) =>
+    view.rerender(<ProposalCostingModule request={makeRequest(next)} onUpdateCosting={onUpdateCosting} />);
+  return { onUpdateCosting, rerenderWith };
+}
+
 describe("ProposalCostingModule", () => {
-  it("invalida readyForKam al editar el Valor Final después de haberlo marcado", () => {
-    const onUpdateCosting = vi.fn();
-    const request = makeRequest({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
-
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
-
-    fireEvent.change(screen.getByLabelText(/Valor Final de la Propuesta/i), { target: { value: "1500000" } });
-
-    expect(onUpdateCosting).toHaveBeenCalledWith(
-      expect.objectContaining({ totalOfferedCop: 1_500_000, readyForKam: false, costingSentAt: undefined }),
-    );
+  beforeEach(() => {
+    vi.useFakeTimers();
   });
 
-  it("invalida readyForKam al editar el % de margen después de haberlo marcado", () => {
-    const onUpdateCosting = vi.fn();
-    const request = makeRequest({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
-
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "35%" }));
-
-    expect(onUpdateCosting).toHaveBeenCalledWith(
-      expect.objectContaining({ expectedMarginPercent: 35, readyForKam: false }),
-    );
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it("NO invalida readyForKam al editar solo la nota de alcance", () => {
-    const onUpdateCosting = vi.fn();
-    const request = makeRequest({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
-
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
-
-    fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
-    fireEvent.change(screen.getByLabelText(/Nota de alcance comercial/i), {
-      target: { value: "Ajuste acordado con el cliente" },
+  describe("pasted formats (es-CO)", () => {
+    it('reads "$32.000.000" in the total as 32000000', () => {
+      const { onUpdateCosting } = setup({ readyForKam: false });
+      typeInto(totalInput(), "$32.000.000");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 32_000_000 }));
     });
 
-    expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ readyForKam: true }));
+    it('reads "30%" in the margin percentage as 30', () => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), "35%");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 35 }));
+    });
+
+    it('reads "$9.000.000" in the margin amount as 9000000', () => {
+      const { onUpdateCosting } = setup();
+      typeInto(amountInput(), "$9.000.000");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ marginAmountCop: 9_000_000 }));
+    });
+
+    it("sends any number of decimals unrounded and previews them rounded", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(totalInput(), "32.000.000,456");
+      expect(screen.getByText(/Equivale a \$\s?32\.000\.000 COP/)).toBeInTheDocument();
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 32_000_000.456 }));
+    });
+
+    it("shows the preview line for what was typed before it is saved", () => {
+      setup();
+      typeInto(totalInput(), "$1.500.000");
+      expect(screen.getByText(/Equivale a \$\s?1\.500\.000 COP/)).toBeInTheDocument();
+    });
+
+    it("renders text inputs, not number inputs", () => {
+      setup();
+      for (const input of [totalInput(), percentInput(), amountInput()]) {
+        expect(input.type).toBe("text");
+      }
+    });
   });
 
-  it("no deja bajar el Valor Final por debajo de 0", () => {
-    const onUpdateCosting = vi.fn();
-    const request = makeRequest({ totalOfferedCop: 500_000 });
+  describe("invalid values", () => {
+    it.each(["abc", "1.5", "-1000", "1,2,3"])("does not save %j in the total and says so", (raw) => {
+      const { onUpdateCosting } = setup();
+      typeInto(totalInput(), raw);
+      wait(AUTOSAVE_MS);
+      fireEvent.blur(totalInput());
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      expect(screen.getByText(/Valor no válido/i)).toBeInTheDocument();
+    });
 
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
+    it("does not clamp a negative total to 0 anymore: it refuses it", () => {
+      const { onUpdateCosting } = setup({ totalOfferedCop: 500_000 });
+      typeInto(totalInput(), "-1000");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
 
-    fireEvent.change(screen.getByLabelText(/Valor Final de la Propuesta/i), { target: { value: "-1000" } });
+    it.each(["150", "100,5", "-5", "abc"])("does not save %j as margin percentage", (raw) => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), raw);
+      wait(AUTOSAVE_MS);
+      fireEvent.blur(percentInput());
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      expect(screen.getByText(/entre 0 y 100/i)).toBeInTheDocument();
+    });
 
-    expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 0 }));
+    it("does not save a margin amount that is not a valid amount", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(amountInput(), "$abc");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      expect(screen.getByText(/Valor no válido/i)).toBeInTheDocument();
+    });
+
+    it("does not save a valid field while another one is still invalid", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(totalInput(), "xyz");
+      typeInto(percentInput(), "40");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it("saves once the invalid value is corrected", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(totalInput(), "xyz");
+      wait(AUTOSAVE_MS);
+      typeInto(totalInput(), "2.000.000");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 2_000_000 }));
+    });
   });
 
-  it("clampa el % de margen entre 0 y 100", () => {
-    const onUpdateCosting = vi.fn();
-    const request = makeRequest({});
+  describe("fraction warning", () => {
+    it.each([
+      ["0,3", "30"],
+      ["0.3", "30"],
+      ["0,075", "7,5"],
+    ])("warns that %j may mean %s %%", (raw, suggestion) => {
+      setup();
+      typeInto(percentInput(), raw);
+      expect(screen.getByText(`¿quisiste decir ${suggestion} %?`)).toBeInTheDocument();
+    });
 
-    render(<ProposalCostingModule request={request} onUpdateCosting={onUpdateCosting} />);
+    it("does not block: 0,3 is still saved literally", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), "0,3");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 0.3 }));
+    });
 
-    const marginPercentInput = document.getElementById("margin-percent-input") as HTMLInputElement;
-    fireEvent.change(marginPercentInput, { target: { value: "150" } });
+    it.each(["0", "1", "30", "30%", ""])("does not warn for %j", (raw) => {
+      setup();
+      typeInto(percentInput(), raw);
+      expect(screen.queryByText(/quisiste decir/i)).not.toBeInTheDocument();
+    });
+  });
 
-    expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 100 }));
+  describe("incomplete numbers while typing", () => {
+    const RANGE_ERROR = /entre 0 y 100/i;
+    const INVALID_AMOUNT = /Valor no válido/i;
+
+    it.each(["0.", "0,", "12.", "12,"])("%j in the percentage shows no error and does not save", (raw) => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), raw);
+      wait(AUTOSAVE_MS * 2);
+      expect(screen.queryByText(RANGE_ERROR)).not.toBeInTheDocument();
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it('typing "0." then "3" sends no request for the prefix and exactly one for 0.3', () => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), "0.");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      typeInto(percentInput(), "0.3");
+      expect(screen.queryByText(RANGE_ERROR)).not.toBeInTheDocument();
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 0.3 }));
+    });
+
+    it.each([
+      ["12,", 12],
+      ["12.", 12],
+      ["0.", 0],
+    ])("%j saves %d on blur, and the field drops the trailing separator", (raw, expected) => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), raw);
+      fireEvent.blur(percentInput());
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: expected }));
+      expect(percentInput().value).toBe(String(expected));
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves nothing on blur when the stripped value equals the saved one", () => {
+      const { onUpdateCosting } = setup({ expectedMarginPercent: 12 });
+      typeInto(percentInput(), "12,");
+      fireEvent.blur(percentInput());
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it.each(["150", "150,", "100,5", "-5", "abc", "0.3."])(
+      "%j in the percentage is still an error and saves nothing",
+      (raw) => {
+        const { onUpdateCosting } = setup();
+        typeInto(percentInput(), raw);
+        wait(AUTOSAVE_MS);
+        fireEvent.blur(percentInput());
+        expect(screen.getByText(RANGE_ERROR)).toBeInTheDocument();
+        expect(onUpdateCosting).not.toHaveBeenCalled();
+      },
+    );
+
+    it("shows no error and does not save a total with a trailing separator, then saves it on blur", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(totalInput(), "32.000,");
+      wait(AUTOSAVE_MS * 2);
+      expect(screen.queryByText(INVALID_AMOUNT)).not.toBeInTheDocument();
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      fireEvent.blur(totalInput());
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 32_000 }));
+      expect(totalInput().value).toBe("32.000");
+    });
+
+    it("shows no error and does not save a peso amount with a trailing separator, then saves it on blur", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(amountInput(), "5,");
+      wait(AUTOSAVE_MS * 2);
+      expect(screen.queryByText(INVALID_AMOUNT)).not.toBeInTheDocument();
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      fireEvent.blur(amountInput());
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ marginAmountCop: 5 }));
+    });
+
+    it.each(["1.5", "0.3", "1,2,", "abc,"])("%j in the peso amount is still invalid", (raw) => {
+      const { onUpdateCosting } = setup();
+      typeInto(amountInput(), raw);
+      wait(AUTOSAVE_MS);
+      fireEvent.blur(amountInput());
+      expect(screen.getByText(INVALID_AMOUNT)).toBeInTheDocument();
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it("a pending field blocks the autosave of the others until it is left", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), "12,");
+      typeInto(totalInput(), "2.000.000");
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      fireEvent.blur(percentInput());
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(
+        expect.objectContaining({ totalOfferedCop: 2_000_000, expectedMarginPercent: 12 }),
+      );
+    });
+  });
+
+  describe("one message at a time", () => {
+    const messages = () => [...screen.queryAllByText(/entre 0 y 100|quisiste decir/i)];
+
+    it("hides the amber hint while the red error shows, even when the saved value is a fraction", () => {
+      setup({ expectedMarginPercent: 0.3 });
+      expect(screen.getByText(/quisiste decir 30 %/)).toBeInTheDocument();
+      typeInto(percentInput(), "150");
+      expect(screen.getByText(/entre 0 y 100/i)).toBeInTheDocument();
+      expect(screen.queryByText(/quisiste decir/i)).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ["0.3", "-1", "0."],
+      ["0", "0,3", "150"],
+      ["abc", "0,075", "12,"],
+    ])("never shows two messages while typing %j -> %j -> %j", (...steps) => {
+      setup({ expectedMarginPercent: 0.3 });
+      expect(messages().length).toBeLessThanOrEqual(1);
+      for (const step of steps) {
+        typeInto(percentInput(), step);
+        expect(messages().length).toBeLessThanOrEqual(1);
+        wait(AUTOSAVE_MS);
+        expect(messages().length).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it("keeps the hint for a valid fraction when there is no error", () => {
+      setup();
+      typeInto(percentInput(), "0,3");
+      expect(screen.getByText(/quisiste decir 30 %/)).toBeInTheDocument();
+    });
+  });
+
+  describe("reserved message slots", () => {
+    it("renders the percentage slot empty when there is nothing to say", () => {
+      setup({ expectedMarginPercent: 30 });
+      expect(screen.getByTestId("margin-percent-message")).toBeInTheDocument();
+      expect(screen.getByTestId("margin-percent-message")).toBeEmptyDOMElement();
+    });
+
+    it("shows the messages inside the same slot element, which stays in the DOM afterwards", () => {
+      setup();
+      const slot = screen.getByTestId("margin-percent-message");
+      typeInto(percentInput(), "150");
+      expect(slot).toHaveTextContent(/entre 0 y 100/i);
+      typeInto(percentInput(), "30");
+      expect(screen.getByTestId("margin-percent-message")).toBe(slot);
+      expect(slot).toBeEmptyDOMElement();
+    });
+
+    it("reserves two lines for the percentage messages (min-height of 2 x leading-snug 11px)", () => {
+      setup();
+      expect(screen.getByTestId("margin-percent-message").className).toContain("min-h-[2.75em]");
+    });
+  });
+
+  describe("preview never contradicts the field", () => {
+    const preview = () => screen.getByText(/% de /);
+
+    it("shows the committed value when the field holds it", () => {
+      setup({ expectedMarginPercent: 30, totalOfferedCop: 32_000_000 });
+      expect(preview()).toHaveTextContent(/^30% de \$\s?32\.000\.000 = \$\s?9\.600\.000$/);
+    });
+
+    it('follows "0." as 0, never a previously saved 0.3', () => {
+      const { onUpdateCosting } = setup({ expectedMarginPercent: 30, totalOfferedCop: 32_000_000 });
+      typeInto(percentInput(), "0.3");
+      wait(AUTOSAVE_MS);
+      expect(preview()).toHaveTextContent(/^0\.3% de/);
+      typeInto(percentInput(), "0.");
+      expect(percentInput().value).toBe("0.");
+      expect(preview()).toHaveTextContent(/^0% de \$\s?32\.000\.000 = \$\s?0$/);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the preview on the value the prefix reads as while typing 12,", () => {
+      setup({ expectedMarginPercent: 30 });
+      typeInto(percentInput(), "12");
+      typeInto(percentInput(), "12,");
+      expect(preview()).toHaveTextContent(/^12% de/);
+    });
+
+    it("falls back to the saved value, with the error showing, for a definitively invalid text", () => {
+      setup({ expectedMarginPercent: 30 });
+      typeInto(percentInput(), "150");
+      expect(preview()).toHaveTextContent(/^30% de/);
+      expect(screen.getByText(/entre 0 y 100/i)).toBeInTheDocument();
+    });
+
+    it("previews the total with a trailing separator as the number before it", () => {
+      setup();
+      typeInto(totalInput(), "2.000.000,");
+      expect(screen.getByText(/Equivale a \$\s?2\.000\.000 COP/)).toBeInTheDocument();
+    });
+  });
+
+  describe("autosave", () => {
+    it("waits for the debounce: nothing before ~800 ms, one call at 800 ms", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(totalInput(), "2000000");
+      wait(AUTOSAVE_MS - 1);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      wait(1);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not send one request per keystroke: a burst of edits saves once, with the last value", () => {
+      const { onUpdateCosting } = setup();
+      for (const partial of ["2", "20", "200", "2.000", "2.000.0", "2.000.00", "2.000.000"]) {
+        typeInto(totalInput(), partial);
+        wait(100);
+      }
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 2_000_000 }));
+    });
+
+    it("saves every field in one call when several change inside the same window", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(totalInput(), "2.000.000");
+      wait(300);
+      typeInto(percentInput(), "35");
+      wait(300);
+      typeInto(amountInput(), "700.000");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(
+        expect.objectContaining({ totalOfferedCop: 2_000_000, expectedMarginPercent: 35, marginAmountCop: 700_000 }),
+      );
+    });
+
+    it("saves on blur without waiting for the debounce, and does not save again afterwards", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), "40");
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      fireEvent.blur(percentInput());
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 40 }));
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+    });
+
+    it("does nothing on blur when the field was not edited", () => {
+      const { onUpdateCosting } = setup();
+      fireEvent.blur(totalInput());
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["total", totalInput],
+      ["margin percentage", percentInput],
+      ["margin amount", amountInput],
+    ])(
+      "focusing and blurring the %s without changing it saves nothing, so readyForKam is not reset",
+      (_name, field) => {
+        const { onUpdateCosting } = setup({
+          readyForKam: true,
+          costingSentAt: "2026-01-10T00:00:00.000Z",
+          expectedMarginPercent: 30,
+          marginAmountCop: 5_000,
+        });
+        fireEvent.focus(field());
+        fireEvent.blur(field());
+        wait(AUTOSAVE_MS * 2);
+        expect(onUpdateCosting).not.toHaveBeenCalled();
+      },
+    );
+
+    it("tabbing through every field without typing saves nothing", () => {
+      const { onUpdateCosting } = setup({ readyForKam: true, expectedMarginPercent: 30, marginAmountCop: 5_000 });
+      for (const field of [totalInput, percentInput, amountInput]) {
+        fireEvent.focus(field());
+        fireEvent.blur(field());
+      }
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it("retyping the same number in another format and leaving the field saves nothing", () => {
+      const { onUpdateCosting } = setup({ totalOfferedCop: 32_000_000, expectedMarginPercent: 30 });
+      typeInto(totalInput(), "$32.000.000");
+      fireEvent.blur(totalInput());
+      typeInto(percentInput(), "30%");
+      fireEvent.blur(percentInput());
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it("does not save when the edit ends up equal to what is already saved", () => {
+      const { onUpdateCosting } = setup({ totalOfferedCop: 1_000_000 });
+      typeInto(totalInput(), "2.000.000");
+      typeInto(totalInput(), "$1.000.000");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it("has no Save button: saving is automatic", () => {
+      setup();
+      expect(screen.queryByRole("button", { name: /guardar/i })).not.toBeInTheDocument();
+    });
+
+    it("saves the preset chips right away", () => {
+      const { onUpdateCosting } = setup();
+      fireEvent.click(screen.getByRole("button", { name: "35%" }));
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 35 }));
+      expect(percentInput().value).toBe("35");
+    });
+  });
+
+  describe("empty and zero margins", () => {
+    it("sends an emptied margin as undefined (no margin), not as 0", () => {
+      const { onUpdateCosting } = setup({ expectedMarginPercent: 30, marginAmountCop: 5_000 });
+      typeInto(percentInput(), "");
+      typeInto(amountInput(), "");
+      wait(AUTOSAVE_MS);
+      const saved = onUpdateCosting.mock.calls[0][0] as ProposalCosting;
+      expect(saved.expectedMarginPercent).toBeUndefined();
+      expect(saved.marginAmountCop).toBeUndefined();
+    });
+
+    it("sends an explicit 0 as 0", () => {
+      const { onUpdateCosting } = setup({ expectedMarginPercent: 30, marginAmountCop: 5_000 });
+      typeInto(percentInput(), "0");
+      typeInto(amountInput(), "0");
+      wait(AUTOSAVE_MS);
+      const saved = onUpdateCosting.mock.calls[0][0] as ProposalCosting;
+      expect(saved.expectedMarginPercent).toBe(0);
+      expect(saved.marginAmountCop).toBe(0);
+    });
+
+    it("shows a margin the backend does not have as empty fields, not as 30 %", () => {
+      setup({ expectedMarginPercent: undefined, marginAmountCop: undefined });
+      expect(percentInput().value).toBe("");
+      expect(amountInput().value).toBe("");
+    });
+
+    it("shows a stored 0 as 0", () => {
+      setup({ expectedMarginPercent: 0, marginAmountCop: 0 });
+      expect(percentInput().value).toBe("0");
+      expect(amountInput().value).toBe("0");
+    });
+
+    it("keeps an empty total as 0", () => {
+      const { onUpdateCosting } = setup({ totalOfferedCop: 500_000 });
+      typeInto(totalInput(), "");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 0 }));
+    });
+  });
+
+  describe("syncing with the saved costing", () => {
+    it("shows the new saved values when the costing changes and nothing is being edited", () => {
+      const { rerenderWith } = setup({ totalOfferedCop: 1_000_000, expectedMarginPercent: 30 });
+      rerenderWith({ totalOfferedCop: 2_500_000, expectedMarginPercent: 12.5 });
+      expect(totalInput().value).toBe("2500000");
+      expect(percentInput().value).toBe("12,5");
+    });
+
+    it("does not overwrite what the user typed with an older save coming back", () => {
+      const { rerenderWith } = setup({ totalOfferedCop: 1_000_000 });
+      typeInto(amountInput(), "$9.000.000");
+      rerenderWith({ totalOfferedCop: 1_000_000, marginAmountCop: 0, readyForKam: false });
+      expect(amountInput().value).toBe("$9.000.000");
+    });
+
+    it("keeps the text as typed when the saved value echoes back the same number", () => {
+      const { rerenderWith } = setup({ totalOfferedCop: 1_000_000 });
+      typeInto(totalInput(), "$32.000.000");
+      wait(AUTOSAVE_MS);
+      rerenderWith({ totalOfferedCop: 32_000_000 });
+      expect(totalInput().value).toBe("$32.000.000");
+    });
+  });
+
+  describe("gate to the KAM", () => {
+    it("invalida readyForKam al editar el Valor Final después de haberlo marcado", () => {
+      const { onUpdateCosting } = setup({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
+      typeInto(totalInput(), "1500000");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledWith(
+        expect.objectContaining({ totalOfferedCop: 1_500_000, readyForKam: false, costingSentAt: undefined }),
+      );
+    });
+
+    it("invalida readyForKam al editar el % de margen después de haberlo marcado", () => {
+      const { onUpdateCosting } = setup({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
+      fireEvent.click(screen.getByRole("button", { name: "35%" }));
+      expect(onUpdateCosting).toHaveBeenCalledWith(
+        expect.objectContaining({ expectedMarginPercent: 35, readyForKam: false }),
+      );
+    });
+
+    it("NO invalida readyForKam al editar solo la nota de alcance", () => {
+      const { onUpdateCosting } = setup({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
+      fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+      typeInto(screen.getByLabelText(/Nota de alcance comercial/i), "Ajuste acordado con el cliente");
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ readyForKam: true }));
+    });
+
+    it("editing the note does not push a value still being typed", () => {
+      const { onUpdateCosting } = setup({ totalOfferedCop: 1_000_000 });
+      typeInto(totalInput(), "9.000.000");
+      fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+      typeInto(screen.getByLabelText(/Nota de alcance comercial/i), "Ajuste");
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 1_000_000 }));
+      expect(onUpdateCosting).not.toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 9_000_000 }));
+    });
   });
 });

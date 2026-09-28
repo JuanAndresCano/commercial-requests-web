@@ -152,13 +152,32 @@ describe("requestsApi", () => {
     expect(init).toMatchObject({ method: "PATCH" });
   });
 
-  it("sends only the offered value for minimal costing", async () => {
+  it("sends the total and both margins to PUT /requests/:id/costing", async () => {
     respond(200, {});
-    await requestsApi.upsertCosting("p1", 30000000);
+    await requestsApi.upsertCosting("p1", { totalCost: 30000000, marginPercentage: 30, marginAmount: 9000000 });
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\/p1\/costing$/);
     expect(fetchMock.mock.calls[0][1]).toMatchObject({
       method: "PUT",
-      body: JSON.stringify({ totalCost: 30000000 }),
+      body: JSON.stringify({ totalCost: 30000000, marginPercentage: 30, marginAmount: 9000000 }),
     });
+  });
+
+  it("sends an empty margin as null (clears it) and a zero margin as 0 (stores it)", async () => {
+    respond(200, {});
+    await requestsApi.upsertCosting("p1", { totalCost: 1000, marginPercentage: null, marginAmount: 0 });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({ totalCost: 1000, marginPercentage: null, marginAmount: 0 });
+    expect(body.marginPercentage).toBeNull();
+    expect(body.marginAmount).toBe(0);
+  });
+
+  it("omits a margin left undefined so the backend keeps the previous value", async () => {
+    respond(200, {});
+    await requestsApi.upsertCosting("p1", { totalCost: 1000 });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({ totalCost: 1000 });
+    expect("marginPercentage" in body).toBe(false);
+    expect("marginAmount" in body).toBe(false);
   });
 
   it("surfaces errors as ApiError instances", async () => {

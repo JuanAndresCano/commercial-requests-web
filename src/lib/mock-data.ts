@@ -161,8 +161,9 @@ export interface ProposalCosting {
   // Margen de Contribución en pesos — input manual e independiente (docs/04,
   // Requisito 1). Es informativo: no tiene que cuadrar matemáticamente con
   // `expectedMarginPercent` ni con `totalOfferedCop`.
-  marginAmountCop: number;
-  expectedMarginPercent: number; // e.g. 30 (%) — manual, informativo
+  // undefined = sin margen registrado (el backend lo guarda como null); 0 es un valor real.
+  marginAmountCop?: number;
+  expectedMarginPercent?: number; // e.g. 30 (%) — manual, informativo
   proCulturaTaxPercent: number; // 1.5% if Capacitación, 0% otherwise
   // Estampilla Pro-Cultura: fila de referencia calculada sobre el valor
   // final ya digitado. Nunca se suma ni se resta de `totalOfferedCop` — el
