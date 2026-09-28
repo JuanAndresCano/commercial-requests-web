@@ -126,6 +126,10 @@ export interface NegotiationRound {
   clientNote: string | null;
 }
 
+/** What the list endpoints return per proposal: only the latest round, three fields
+ * (backend `LATEST_ROUND_FOR_LIST`). No margins, no snapshot. */
+export type ListNegotiationRound = Pick<NegotiationRound, "roundNumber" | "clientResponse" | "clientNote">;
+
 export interface ProposalAssignment {
   id: string;
   proposalId: string;
@@ -148,6 +152,22 @@ export interface ProposalAssignment {
     phone: string | null;
     profile: string | null;
   } | null;
+}
+
+/** One change of the assigned professor/advisor (backend `ProfessorAssignmentLog`, HU 4.2). The first
+ * assignment has no `previous*`. Names and types are snapshots, so they survive a deleted directory
+ * entry (then the id is null). `changedBy` carries no e-mail. */
+export interface ProfessorAssignmentLog {
+  id: string;
+  previousProfessorId: string | null;
+  previousProfessorName: string | null;
+  previousProfessorType: "STAFF" | "EXTERNAL" | null;
+  newProfessorId: string | null;
+  newProfessorName: string;
+  newProfessorType: "STAFF" | "EXTERNAL";
+  changedAt: string;
+  statusAtChange: { code: string };
+  changedBy: { id: string; firstName: string | null; lastName: string | null };
 }
 
 export interface ProposalAttachment {
@@ -186,6 +206,8 @@ export interface ProposalListItem {
   }[];
   productLeader?: ProposalUserSummary | null;
   assignments?: ProposalAssignment[];
+  // Optional: a backend without the list contract (PR #26) does not send it.
+  negotiationRounds?: ListNegotiationRound[];
 }
 
 export interface ProposalDetail extends ProposalListItem {
@@ -198,6 +220,8 @@ export interface ProposalDetail extends ProposalListItem {
   attachments: ProposalAttachment[];
   assignments: ProposalAssignment[];
   negotiationRounds: NegotiationRound[];
+  // Oldest first. Optional: a backend without the assignment audit (PR #25) does not send it.
+  professorAssignmentLogs?: ProfessorAssignmentLog[];
 }
 
 export interface ProposalDashboardMetrics {

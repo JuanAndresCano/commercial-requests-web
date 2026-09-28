@@ -2,12 +2,15 @@ import { calculateProCulturaReference, PRO_CULTURA_PERCENT } from "./currency";
 import type {
   ProposalListItem,
   ProposalDetail,
+  NegotiationRound,
+  ProfessorAssignmentLog,
   RequestType as BackendRequestType,
   ProposalPriority,
   ProgramModality as BackendProgramModality,
 } from "./api/requests";
 import type {
   ExternalProfessorData,
+  ProfessorAssignmentLogEntry,
   RequestItem,
   RequestStatus,
   Urgency,
@@ -140,6 +143,28 @@ function decimalToNumber(value: string | number | null | undefined): number | un
   return Number.isFinite(num) ? num : undefined;
 }
 
+const toFrontendProfessorType = (type: "STAFF" | "EXTERNAL"): "planta" | "externo" =>
+  type === "EXTERNAL" ? "externo" : "planta";
+
+/** Same entry the mock path builds with `assignProfessorWithHistory`. The block that shows it
+ * reverses the list itself, so it goes in oldest first (the backend order is not trusted). */
+function mapProfessorHistory(logs: ProfessorAssignmentLog[] | undefined): ProfessorAssignmentLogEntry[] | undefined {
+  if (!logs || logs.length === 0) return undefined;
+  return logs
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => Date.parse(a.entry.changedAt) - Date.parse(b.entry.changedAt) || a.index - b.index)
+    .map(({ entry: l }) => ({
+      id: l.id,
+      previousProfessor: l.previousProfessorName ?? undefined,
+      previousProfessorType: l.previousProfessorType ? toFrontendProfessorType(l.previousProfessorType) : undefined,
+      newProfessor: l.newProfessorName,
+      newProfessorType: toFrontendProfessorType(l.newProfessorType),
+      changedBy: `${l.changedBy.firstName ?? ""} ${l.changedBy.lastName ?? ""}`.trim() || "Usuario sin nombre",
+      changedAt: l.changedAt,
+      statusAtChange: mapBackendStatusToFrontend(l.statusAtChange.code),
+    }));
+}
+
 export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, currentKamName?: string): RequestItem {
   const currentEconomics = p.economics?.find((e) => e.isCurrent) ?? p.economics?.[0];
   const grossValueNum = currentEconomics ? Number(currentEconomics.grossValue ?? 0) : 0;
@@ -174,7 +199,21 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
   );
 
   const detail = p as Partial<ProposalDetail>;
-  const lastRejectedRound = detail.negotiationRounds?.find((r) => r.clientResponse === "CHANGES_REQUESTED");
+  const status = mapBackendStatusToFrontend(p.workflow?.currentStatus?.code);
+
+  // The API order is not a contract: the detail sends every round, the list only the
+  // latest. Ascending by roundNumber, so "the last one" is always the current round.
+  const rounds = [...(p.negotiationRounds ?? [])].sort((a, b) => a.roundNumber - b.roundNumber);
+  const latestRound = rounds[rounds.length - 1];
+  // The notice only lives while the proposal is back in costing with the client's latest
+  // answer being "changes requested": a redelivery (new PENDING round, DELIVERED) or a
+  // REJECTED closes it, even though the old round keeps its CHANGES_REQUESTED forever.
+  const returnedNote =
+    status === "en-costeo" && latestRound?.clientResponse === "CHANGES_REQUESTED"
+      ? (latestRound.clientNote ?? undefined)
+      : undefined;
+  // List rounds carry three fields; only the detail's full rounds feed the history panel.
+  const fullRounds = p.negotiationRounds && rounds.every((r): r is NegotiationRound => "id" in r) ? rounds : undefined;
 
   return {
     id: p.id,
@@ -183,7 +222,7 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     company: p.company?.name ?? "Empresa sin nombre",
     applicant: detail.contact?.name ?? "Contacto por definir",
     type: mapBackendTypeToFrontend(p.program?.requestType),
-    status: mapBackendStatusToFrontend(p.workflow?.currentStatus?.code),
+    status,
     urgency: mapBackendPriorityToFrontend(p.priority),
     createdAt: p.createdAt,
     deadline: p.workflow?.deadline ?? undefined,
@@ -195,6 +234,7 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     professor: professorName,
     professorType,
     externalProfessorData,
+    professorHistory: mapProfessorHistory(detail.professorAssignmentLogs),
     totalCostCop: grossValueNum,
     costing: {
       totalOfferedCop: grossValueNum,
@@ -205,7 +245,7 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
       readyForKam: isReady,
       costingSentAt: currentEconomics?.readyForKamAt ?? undefined,
     },
-    clientObservations: lastRejectedRound?.clientNote ?? undefined,
+    clientObservations: returnedNote,
     // "N - M" only when both ends are known (HU 4.5's specs Select is a closed set of
     // fixed ranges, e.g. "Más de 25" — this mapper doesn't guess an open-ended one).
     participantes:
@@ -249,7 +289,7 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     empresaPrevia: p.program?.previousTrainingCompany ?? undefined,
     fechaPrevia: p.program?.previousTrainingDate ? p.program.previousTrainingDate.slice(0, 10) : undefined,
     observaciones: p.comments ?? undefined,
-    negotiationRounds: detail.negotiationRounds?.map((nr) => {
+    negotiationRounds: fullRounds?.map((nr) => {
       const isRejected = nr.clientResponse === "CHANGES_REQUESTED";
       return {
         id: nr.id,
