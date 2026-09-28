@@ -17,7 +17,7 @@ En la pantalla de entrada, clic en la tarjeta **"KAM"** (bajo "Cuentas de prueba
 - [ ] Clic en **"Nueva Solicitud"** → llena Empresa y avanza sin llenar el título → debe avisarte que falta.
 - [ ] Completa el resto rápido y **envía** → aparece en tu tablero como "Nueva".
 - [ ] Ábrela → clic **"Editar información"** → cambia algo (ej. el teléfono) → **Guardar**.
-- [ ] En esa misma solicitud → clic **"Cancelar solicitud"** → confirma → desaparece de tu lista.
+- [ ] En esa misma solicitud → clic **"Cancelar solicitud"** → elige un motivo (chip predefinido) o escribe uno propio (es obligatorio; sin motivo no deja confirmar) → confirma → la solicitud queda cancelada (cancelación lógica, no se borra) y vuelves al tablero. (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
 - [ ] Cambia a vista **Kanban** (ícono junto al buscador) → clic en la tarjeta "Lista para Entregar" → esa columna se agranda.
 - [ ] Abre una solicitud que ya esté "Lista para Entregar" → mira la propuesta: solo ves el **valor total**, no el costo interno del Líder.
 - [ ] Clic **"Enviar a cliente"** → confirma → pasa a "Entregada".
