@@ -422,6 +422,24 @@ describe("mapProposalToRequestItem (HU 4.1-4.5, Líder de Producto)", () => {
     expect(item.costing).toMatchObject({ totalOfferedCop: 30000000, readyForKam: true });
   });
 
+  it("gives the Pro-Cultura stamp only to the exact CAPACITACION code, not to a missing type", () => {
+    const base = baseProposal();
+    expect(mapProposalToRequestItem(base).costing).toMatchObject({
+      proCulturaTaxPercent: 1.5,
+      proCulturaTaxAmount: 450000,
+    });
+
+    const consulting = baseProposal({ program: { ...base.program!, requestType: "CONSULTORIA" } });
+    expect(mapProposalToRequestItem(consulting).costing).toMatchObject({
+      proCulturaTaxPercent: 0,
+      proCulturaTaxAmount: 0,
+    });
+
+    const noProgram = mapProposalToRequestItem(baseProposal({ program: undefined as never }));
+    expect(noProgram.type).toBe("Capacitación");
+    expect(noProgram.costing).toMatchObject({ proCulturaTaxPercent: 0, proCulturaTaxAmount: 0 });
+  });
+
   it("maps modalidad/horas/participantes to the Spanish labels HU 4.5's form round-trips on", () => {
     const item = mapProposalToRequestItem(baseProposal());
     expect(item.modalidad).toBe("Virtual sincrónica");

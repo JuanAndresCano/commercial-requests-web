@@ -1,3 +1,5 @@
+import { calculateProCulturaReference, PRO_CULTURA_PERCENT } from "@/lib/currency";
+
 export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada" | "rechazada" | "cancelada";
 export type RequestType =
   "Capacitación" | "Consultoría" | "Mentoría" | "Investigación" | "Proyectos Especiales (Eventos)" | "Otro";
@@ -355,9 +357,9 @@ export function calculateCosting(
   negotiationNotes?: string,
   readyForKam: boolean = false,
 ): ProposalCosting {
-  const isCapacitacion = type === "Capacitación";
-  const proCulturaTaxPercent = isCapacitacion ? 1.5 : 0;
-  const proCulturaTaxAmount = isCapacitacion ? Math.round(totalOfferedCop * 0.015) : 0;
+  const proCultura = calculateProCulturaReference(totalOfferedCop, type);
+  const proCulturaTaxPercent = proCultura.applies ? PRO_CULTURA_PERCENT : 0;
+  const proCulturaTaxAmount = proCultura.amount;
 
   return {
     marginAmountCop,
