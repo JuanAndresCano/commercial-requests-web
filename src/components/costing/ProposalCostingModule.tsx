@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { calculateProCulturaReference, PRO_CULTURA_PERCENT } from "@/lib/currency";
 import { formatCop, RequestItem, ProposalCosting, calculateCosting } from "@/lib/mock-data";
 
 interface ProposalCostingModuleProps {
@@ -60,7 +61,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
   // valor final ya digitado. Nunca se suma ni se resta de `totalOfferedCop`
   // — el equipo ya la contempla en el Excel externo del que sale ese valor
   // (docs/04).
-  const proCulturaTaxAmount = isCapacitacion ? Math.round(totalOfferedCop * 0.015) : 0;
+  const proCulturaTaxAmount = calculateProCulturaReference(totalOfferedCop, reqType).amount;
 
   const triggerSave = (
     newTotalOffered: number,
@@ -71,7 +72,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
     // al KAM" previo — el Líder debe volver a confirmarlo explícitamente.
     invalidateReadyForKam: boolean = false,
   ) => {
-    const updatedTaxAmount = isCapacitacion ? Math.round(newTotalOffered * 0.015) : 0;
+    const updatedTaxAmount = calculateProCulturaReference(newTotalOffered, reqType).amount;
     const nextReadyForKam = invalidateReadyForKam ? false : readyForKam;
     const nextCostingSentAt = invalidateReadyForKam ? undefined : costingSentAt;
     if (invalidateReadyForKam && readyForKam) {
@@ -82,7 +83,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
     const updatedCosting: ProposalCosting = {
       marginAmountCop: newMarginAmountCop,
       expectedMarginPercent: newMarginPercent,
-      proCulturaTaxPercent: isCapacitacion ? 1.5 : 0,
+      proCulturaTaxPercent: isCapacitacion ? PRO_CULTURA_PERCENT : 0,
       proCulturaTaxAmount: updatedTaxAmount,
       totalOfferedCop: newTotalOffered,
       negotiationNotes: newNotes,

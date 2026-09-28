@@ -1,3 +1,4 @@
+import { calculateProCulturaReference, PRO_CULTURA_PERCENT } from "./currency";
 import type {
   ProposalListItem,
   ProposalDetail,
@@ -157,6 +158,13 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     ? `${p.productLeader.firstName ?? ""} ${p.productLeader.lastName ?? ""}`.trim()
     : "Por definir";
 
+  // Only the exact backend code gets the stamp; mapBackendTypeToFrontend falls back to
+  // "Capacitación" for null/unknown types, which must not.
+  const proCultura = calculateProCulturaReference(
+    grossValueNum,
+    p.program?.requestType === "CAPACITACION" ? "Capacitación" : "",
+  );
+
   const detail = p as Partial<ProposalDetail>;
   const lastRejectedRound = detail.negotiationRounds?.find((r) => r.clientResponse === "CHANGES_REQUESTED");
 
@@ -190,8 +198,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
         currentEconomics && "estimatedMargin" in currentEconomics
           ? Number((currentEconomics as { estimatedMargin?: string | number | null }).estimatedMargin ?? 0)
           : 0,
-      proCulturaTaxPercent: p.program?.requestType === "CAPACITACION" ? 1.5 : 0,
-      proCulturaTaxAmount: p.program?.requestType === "CAPACITACION" ? Math.round(grossValueNum * 0.015) : 0,
+      proCulturaTaxPercent: proCultura.applies ? PRO_CULTURA_PERCENT : 0,
+      proCulturaTaxAmount: proCultura.amount,
       readyForKam: isReady,
       costingSentAt: currentEconomics?.readyForKamAt ?? undefined,
     },
