@@ -589,6 +589,26 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     });
   });
 
+  it("does not call the backend when a field is focused and left without changing it (readyForKam stays)", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({ readyForKam: true }));
+    renderPage("REQ-2026-0002");
+
+    const total = await screen.findByLabelText(/Valor Final de la Propuesta/i);
+    for (const field of [
+      total,
+      document.getElementById("margin-percent-input")!,
+      document.getElementById("margin-amount-input")!,
+    ]) {
+      fireEvent.focus(field);
+      fireEvent.blur(field);
+    }
+
+    // mutate() reaches the API on a later tick: give a spurious call the chance to show up.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(requestsApi.upsertCosting).not.toHaveBeenCalled();
+    expect(authMock.updateCosting).not.toHaveBeenCalled();
+  });
+
   it("does not call the backend when only the scope note changes", async () => {
     vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({}));
     renderPage("REQ-2026-0002");

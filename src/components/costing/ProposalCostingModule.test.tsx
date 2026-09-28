@@ -230,6 +230,46 @@ describe("ProposalCostingModule", () => {
       expect(onUpdateCosting).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ["total", totalInput],
+      ["margin percentage", percentInput],
+      ["margin amount", amountInput],
+    ])(
+      "focusing and blurring the %s without changing it saves nothing, so readyForKam is not reset",
+      (_name, field) => {
+        const { onUpdateCosting } = setup({
+          readyForKam: true,
+          costingSentAt: "2026-01-10T00:00:00.000Z",
+          expectedMarginPercent: 30,
+          marginAmountCop: 5_000,
+        });
+        fireEvent.focus(field());
+        fireEvent.blur(field());
+        wait(AUTOSAVE_MS * 2);
+        expect(onUpdateCosting).not.toHaveBeenCalled();
+      },
+    );
+
+    it("tabbing through every field without typing saves nothing", () => {
+      const { onUpdateCosting } = setup({ readyForKam: true, expectedMarginPercent: 30, marginAmountCop: 5_000 });
+      for (const field of [totalInput, percentInput, amountInput]) {
+        fireEvent.focus(field());
+        fireEvent.blur(field());
+      }
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it("retyping the same number in another format and leaving the field saves nothing", () => {
+      const { onUpdateCosting } = setup({ totalOfferedCop: 32_000_000, expectedMarginPercent: 30 });
+      typeInto(totalInput(), "$32.000.000");
+      fireEvent.blur(totalInput());
+      typeInto(percentInput(), "30%");
+      fireEvent.blur(percentInput());
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
     it("does not save when the edit ends up equal to what is already saved", () => {
       const { onUpdateCosting } = setup({ totalOfferedCop: 1_000_000 });
       typeInto(totalInput(), "2.000.000");
