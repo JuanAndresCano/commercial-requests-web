@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -686,5 +686,117 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
       expect.objectContaining({ expectedMarginPercent: 35 }),
     );
     expect(requestsApi.upsertCosting).not.toHaveBeenCalled();
+  });
+});
+
+describe("RequestDetail - negotiation history and returned notice (HU 5.4)", () => {
+  const PROPOSAL_UUID = "9c858901-8a57-4791-81fe-4c455b099bc9";
+  const BANNER = "El cliente pidió ajustes — propuesta devuelta a costeo";
+
+  const round = (roundNumber: number, clientResponse: "PENDING" | "CHANGES_REQUESTED", clientNote: string | null) => ({
+    id: `r${roundNumber}`,
+    proposalId: PROPOSAL_UUID,
+    roundNumber,
+    offeredValue: "25000000",
+    marginAmount: "8000000",
+    marginPercentage: "32",
+    scopeSnapshot: null,
+    leaderNote: null,
+    sentToKamAt: "2026-09-21T00:00:00.000Z",
+    sentToClientAt: null,
+    clientResponse,
+    clientNote,
+  });
+
+  const proposalWith = (rounds: ReturnType<typeof round>[], statusCode = "IN_COSTING") =>
+    ({
+      id: PROPOSAL_UUID,
+      code: "REQ-2026-0002",
+      title: "Taller de Inteligencia Artificial",
+      priority: "MEDIA",
+      company: { id: "comp-1", name: "Carvajal S.A." },
+      workflow: { currentStatus: { code: statusCode } },
+      program: { requestType: "CAPACITACION" },
+      creator: { id: "u-1", firstName: "Andrea", lastName: "Martínez", email: "andrea@icesi.edu.co" },
+      economics: [{ id: "e1", isCurrent: true, grossValue: "25000000", readyForKam: true, readyForKamAt: null }],
+      assignments: [],
+      attachments: [],
+      negotiationRounds: rounds,
+    }) as unknown as ProposalDetail;
+
+  const roundCard = (n: number) => screen.getByText(`Ronda ${n}`).closest("div.rounded-lg") as HTMLElement;
+
+  beforeEach(() => {
+    authMock.requests = [...mockRequests];
+    vi.clearAllMocks();
+    authMock.user = {
+      role: "lider-producto",
+      roleLabel: "Líder de Producto",
+      name: "Juan Pablo Corrales",
+      email: "lp@icesi.edu.co",
+    };
+  });
+
+  afterEach(() => {
+    authMock.user = { role: "kam", roleLabel: "KAM", name: "Andrea Martínez", email: "andrea@icesi.edu.co" };
+  });
+
+  const threeRounds = [
+    round(1, "CHANGES_REQUESTED", "Bajar el precio"),
+    round(2, "PENDING", null),
+    round(3, "PENDING", null),
+  ];
+
+  it.each([
+    ["ascending", threeRounds],
+    ["descending", [...threeRounds].reverse()],
+  ])("marks 'Ronda vigente' on round 3 and 'Reemplazada' on round 2 with 3 rounds sent %s", async (_order, rounds) => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith(rounds));
+    renderPage("REQ-2026-0002");
+
+    await screen.findByText("Historial de Negociación");
+    expect(screen.getAllByText("Ronda vigente")).toHaveLength(1);
+    expect(within(roundCard(3)).getByText("Ronda vigente")).toBeInTheDocument();
+    expect(screen.getAllByText(/Reemplazada por una ronda posterior/)).toHaveLength(1);
+    expect(within(roundCard(2)).getByText(/Reemplazada por una ronda posterior/)).toBeInTheDocument();
+    expect(within(roundCard(1)).getByText("Devuelta por el cliente")).toBeInTheDocument();
+    expect(within(roundCard(1)).queryByText("Ronda vigente")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["ascending", [round(1, "CHANGES_REQUESTED", "Bajar el precio"), round(2, "PENDING", null)]],
+    ["descending", [round(2, "PENDING", null), round(1, "CHANGES_REQUESTED", "Bajar el precio")]],
+  ])("marks 'Ronda vigente' on round 2 and nothing is 'Reemplazada' with 2 rounds sent %s", async (_order, rounds) => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith(rounds));
+    renderPage("REQ-2026-0002");
+
+    await screen.findByText("Historial de Negociación");
+    expect(within(roundCard(2)).getByText("Ronda vigente")).toBeInTheDocument();
+    expect(screen.queryByText(/Reemplazada por una ronda posterior/)).not.toBeInTheDocument();
+  });
+
+  it("shows the banner while the latest round came back with changes", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+      proposalWith([round(2, "CHANGES_REQUESTED", "Bajar el precio"), round(1, "PENDING", null)]),
+    );
+    renderPage("REQ-2026-0002");
+
+    expect(await screen.findByText(BANNER)).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      "a new PENDING round",
+      [round(1, "CHANGES_REQUESTED", "Bajar el precio"), round(2, "PENDING", null)],
+      "IN_COSTING",
+    ],
+    ["the redelivery", [round(1, "CHANGES_REQUESTED", "Bajar el precio")], "DELIVERED"],
+    ["a rejection", [round(1, "PENDING", null), round(2, "CHANGES_REQUESTED", "No")], "REJECTED"],
+  ])("clears the banner after %s", async (_case, rounds, statusCode) => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith(rounds, statusCode));
+    renderPage("REQ-2026-0002");
+
+    await screen.findByText("Historial de Negociación");
+    expect(screen.queryByText(BANNER)).not.toBeInTheDocument();
   });
 });
