@@ -176,6 +176,150 @@ describe("ProposalCostingModule", () => {
     });
   });
 
+  describe("incomplete numbers while typing", () => {
+    const RANGE_ERROR = /entre 0 y 100/i;
+    const INVALID_AMOUNT = /Valor no válido/i;
+
+    it.each(["0.", "0,", "12.", "12,"])("%j in the percentage shows no error and does not save", (raw) => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), raw);
+      wait(AUTOSAVE_MS * 2);
+      expect(screen.queryByText(RANGE_ERROR)).not.toBeInTheDocument();
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it('typing "0." then "3" sends no request for the prefix and exactly one for 0.3', () => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), "0.");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      typeInto(percentInput(), "0.3");
+      expect(screen.queryByText(RANGE_ERROR)).not.toBeInTheDocument();
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 0.3 }));
+    });
+
+    it.each([
+      ["12,", 12],
+      ["12.", 12],
+      ["0.", 0],
+    ])("%j saves %d on blur, and the field drops the trailing separator", (raw, expected) => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), raw);
+      fireEvent.blur(percentInput());
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: expected }));
+      expect(percentInput().value).toBe(String(expected));
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves nothing on blur when the stripped value equals the saved one", () => {
+      const { onUpdateCosting } = setup({ expectedMarginPercent: 12 });
+      typeInto(percentInput(), "12,");
+      fireEvent.blur(percentInput());
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it.each(["150", "150,", "100,5", "-5", "abc", "0.3."])(
+      "%j in the percentage is still an error and saves nothing",
+      (raw) => {
+        const { onUpdateCosting } = setup();
+        typeInto(percentInput(), raw);
+        wait(AUTOSAVE_MS);
+        fireEvent.blur(percentInput());
+        expect(screen.getByText(RANGE_ERROR)).toBeInTheDocument();
+        expect(onUpdateCosting).not.toHaveBeenCalled();
+      },
+    );
+
+    it("shows no error and does not save a total with a trailing separator, then saves it on blur", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(totalInput(), "32.000,");
+      wait(AUTOSAVE_MS * 2);
+      expect(screen.queryByText(INVALID_AMOUNT)).not.toBeInTheDocument();
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      fireEvent.blur(totalInput());
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 32_000 }));
+      expect(totalInput().value).toBe("32.000");
+    });
+
+    it("shows no error and does not save a peso amount with a trailing separator, then saves it on blur", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(amountInput(), "5,");
+      wait(AUTOSAVE_MS * 2);
+      expect(screen.queryByText(INVALID_AMOUNT)).not.toBeInTheDocument();
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      fireEvent.blur(amountInput());
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ marginAmountCop: 5 }));
+    });
+
+    it.each(["1.5", "0.3", "1,2,", "abc,"])("%j in the peso amount is still invalid", (raw) => {
+      const { onUpdateCosting } = setup();
+      typeInto(amountInput(), raw);
+      wait(AUTOSAVE_MS);
+      fireEvent.blur(amountInput());
+      expect(screen.getByText(INVALID_AMOUNT)).toBeInTheDocument();
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+    });
+
+    it("a pending field blocks the autosave of the others until it is left", () => {
+      const { onUpdateCosting } = setup();
+      typeInto(percentInput(), "12,");
+      typeInto(totalInput(), "2.000.000");
+      wait(AUTOSAVE_MS * 2);
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      fireEvent.blur(percentInput());
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(
+        expect.objectContaining({ totalOfferedCop: 2_000_000, expectedMarginPercent: 12 }),
+      );
+    });
+  });
+
+  describe("preview never contradicts the field", () => {
+    const preview = () => screen.getByText(/% de /);
+
+    it("shows the committed value when the field holds it", () => {
+      setup({ expectedMarginPercent: 30, totalOfferedCop: 32_000_000 });
+      expect(preview()).toHaveTextContent(/^30% de \$\s?32\.000\.000 = \$\s?9\.600\.000$/);
+    });
+
+    it('follows "0." as 0, never a previously saved 0.3', () => {
+      const { onUpdateCosting } = setup({ expectedMarginPercent: 30, totalOfferedCop: 32_000_000 });
+      typeInto(percentInput(), "0.3");
+      wait(AUTOSAVE_MS);
+      expect(preview()).toHaveTextContent(/^0\.3% de/);
+      typeInto(percentInput(), "0.");
+      expect(percentInput().value).toBe("0.");
+      expect(preview()).toHaveTextContent(/^0% de \$\s?32\.000\.000 = \$\s?0$/);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the preview on the value the prefix reads as while typing 12,", () => {
+      setup({ expectedMarginPercent: 30 });
+      typeInto(percentInput(), "12");
+      typeInto(percentInput(), "12,");
+      expect(preview()).toHaveTextContent(/^12% de/);
+    });
+
+    it("falls back to the saved value, with the error showing, for a definitively invalid text", () => {
+      setup({ expectedMarginPercent: 30 });
+      typeInto(percentInput(), "150");
+      expect(preview()).toHaveTextContent(/^30% de/);
+      expect(screen.getByText(/entre 0 y 100/i)).toBeInTheDocument();
+    });
+
+    it("previews the total with a trailing separator as the number before it", () => {
+      setup();
+      typeInto(totalInput(), "2.000.000,");
+      expect(screen.getByText(/Equivale a \$\s?2\.000\.000 COP/)).toBeInTheDocument();
+    });
+  });
+
   describe("autosave", () => {
     it("waits for the debounce: nothing before ~800 ms, one call at 800 ms", () => {
       const { onUpdateCosting } = setup();

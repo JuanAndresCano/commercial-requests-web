@@ -18,9 +18,15 @@ export interface CostingDraftValues {
 
 const FIELDS: CostingField[] = ["total", "percent", "amount"];
 
-type Parsed = { valid: true; value: number | undefined } | { valid: false };
+/**
+ * `pending` marks text that ends in a decimal separator ("0.", "12,"): the number so far, which is
+ * not an error and is not saved until the field is left. Its `value` is what leaving it would save.
+ */
+type Parsed = { valid: true; value: number | undefined; pending?: boolean } | { valid: false };
 
 const invalid: Parsed = { valid: false };
+
+const TRAILING_SEPARATOR = /^(.*\d)[.,]$/;
 
 function parseAmount(text: string, emptyValue: number | undefined): Parsed {
   if (text.trim() === "") return { valid: true, value: emptyValue };
@@ -28,15 +34,32 @@ function parseAmount(text: string, emptyValue: number | undefined): Parsed {
   return value === null || value > MAX_AMOUNT ? invalid : { valid: true, value };
 }
 
+function parsePercent(text: string): Parsed {
+  if (text.trim() === "") return { valid: true, value: undefined };
+  const value = parsePercentInput(text);
+  return value === null || value > 100 ? invalid : { valid: true, value };
+}
+
+/**
+ * A trailing separator is a valid prefix of a number, not a wrong value, but only while nothing
+ * before it is a decimal part already: "0." and "12," are, "1,2," and "0.3." are not.
+ */
+function withPendingSeparator(parse: (text: string) => Parsed, decimalSeparators: RegExp) {
+  return (text: string): Parsed => {
+    const whole = parse(text);
+    if (whole.valid) return whole;
+    const stripped = TRAILING_SEPARATOR.exec(text.trim())?.[1];
+    if (stripped === undefined || decimalSeparators.test(stripped)) return whole;
+    const prefix = parse(stripped);
+    return prefix.valid ? { ...prefix, pending: true } : whole;
+  };
+}
+
 const PARSERS: Record<CostingField, (text: string) => Parsed> = {
   // The total is required by the backend: an empty field means 0, as it always did.
-  total: (text) => parseAmount(text, 0),
-  amount: (text) => parseAmount(text, undefined),
-  percent: (text) => {
-    if (text.trim() === "") return { valid: true, value: undefined };
-    const value = parsePercentInput(text);
-    return value === null || value > 100 ? invalid : { valid: true, value };
-  },
+  total: withPendingSeparator((text) => parseAmount(text, 0), /,/),
+  amount: withPendingSeparator((text) => parseAmount(text, undefined), /,/),
+  percent: withPendingSeparator(parsePercent, /[.,]/),
 };
 
 /** Text the field shows for a saved value: plain digits with "," as the decimal separator. */
@@ -79,8 +102,10 @@ export function useCostingDraft(source: CostingDraftValues, onCommit: (values: C
     const total = PARSERS.total(textsRef.current.total);
     const percent = PARSERS.percent(textsRef.current.percent);
     const amount = PARSERS.amount(textsRef.current.amount);
-    // An invalid field blocks the whole save and stays dirty, so the next valid edit saves everything.
+    // An invalid or half-typed field blocks the whole save and stays dirty, so the next valid edit
+    // (or leaving the half-typed field) saves everything.
     if (!total.valid || !percent.valid || !amount.valid) return;
+    if (total.pending || percent.pending || amount.pending) return;
 
     dirtyRef.current.clear();
     const values: CostingDraftValues = { total: total.value ?? 0, percent: percent.value, amount: amount.value };
@@ -114,7 +139,14 @@ export function useCostingDraft(source: CostingDraftValues, onCommit: (values: C
 
   const blur = useCallback(
     (field: CostingField) => {
-      if (dirtyRef.current.has(field)) commit();
+      if (!dirtyRef.current.has(field)) return;
+      // Leaving the field settles a half-typed number: "12," becomes 12.
+      const current = PARSERS[field](textsRef.current[field]);
+      if (current.valid && current.pending) {
+        textsRef.current = { ...textsRef.current, [field]: textsRef.current[field].trim().slice(0, -1) };
+        setTexts(textsRef.current);
+      }
+      commit();
     },
     [commit],
   );
@@ -147,7 +179,8 @@ export function useCostingDraft(source: CostingDraftValues, onCommit: (values: C
     percent: PARSERS.percent(texts.percent),
     amount: PARSERS.amount(texts.amount),
   };
-  // What to display and preview: the typed value while it is valid, the saved one otherwise.
+  // What to display and preview: the typed value while it is valid (a half-typed number counts as
+  // the number so far, so the preview never contradicts the field), the saved one otherwise.
   const values: CostingDraftValues = {
     total: (parsed.total.valid ? parsed.total.value : source.total) ?? 0,
     percent: parsed.percent.valid ? parsed.percent.value : source.percent,
