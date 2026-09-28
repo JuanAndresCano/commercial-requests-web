@@ -3,12 +3,14 @@ import type {
   ProposalListItem,
   ProposalDetail,
   NegotiationRound,
+  ProfessorAssignmentLog,
   RequestType as BackendRequestType,
   ProposalPriority,
   ProgramModality as BackendProgramModality,
 } from "./api/requests";
 import type {
   ExternalProfessorData,
+  ProfessorAssignmentLogEntry,
   RequestItem,
   RequestStatus,
   Urgency,
@@ -141,6 +143,28 @@ function decimalToNumber(value: string | number | null | undefined): number | un
   return Number.isFinite(num) ? num : undefined;
 }
 
+const toFrontendProfessorType = (type: "STAFF" | "EXTERNAL"): "planta" | "externo" =>
+  type === "EXTERNAL" ? "externo" : "planta";
+
+/** Same entry the mock path builds with `assignProfessorWithHistory`. The block that shows it
+ * reverses the list itself, so it goes in oldest first (the backend order is not trusted). */
+function mapProfessorHistory(logs: ProfessorAssignmentLog[] | undefined): ProfessorAssignmentLogEntry[] | undefined {
+  if (!logs || logs.length === 0) return undefined;
+  return logs
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => Date.parse(a.entry.changedAt) - Date.parse(b.entry.changedAt) || a.index - b.index)
+    .map(({ entry: l }) => ({
+      id: l.id,
+      previousProfessor: l.previousProfessorName ?? undefined,
+      previousProfessorType: l.previousProfessorType ? toFrontendProfessorType(l.previousProfessorType) : undefined,
+      newProfessor: l.newProfessorName,
+      newProfessorType: toFrontendProfessorType(l.newProfessorType),
+      changedBy: `${l.changedBy.firstName ?? ""} ${l.changedBy.lastName ?? ""}`.trim() || "Usuario sin nombre",
+      changedAt: l.changedAt,
+      statusAtChange: mapBackendStatusToFrontend(l.statusAtChange.code),
+    }));
+}
+
 export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, currentKamName?: string): RequestItem {
   const currentEconomics = p.economics?.find((e) => e.isCurrent) ?? p.economics?.[0];
   const grossValueNum = currentEconomics ? Number(currentEconomics.grossValue ?? 0) : 0;
@@ -210,6 +234,7 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     professor: professorName,
     professorType,
     externalProfessorData,
+    professorHistory: mapProfessorHistory(detail.professorAssignmentLogs),
     totalCostCop: grossValueNum,
     costing: {
       totalOfferedCop: grossValueNum,

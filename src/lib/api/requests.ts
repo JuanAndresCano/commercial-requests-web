@@ -154,6 +154,22 @@ export interface ProposalAssignment {
   } | null;
 }
 
+/** One change of the assigned professor/advisor (backend `ProfessorAssignmentLog`, HU 4.2). The first
+ * assignment has no `previous*`. Names and types are snapshots, so they survive a deleted directory
+ * entry (then the id is null). `changedBy` carries no e-mail. */
+export interface ProfessorAssignmentLog {
+  id: string;
+  previousProfessorId: string | null;
+  previousProfessorName: string | null;
+  previousProfessorType: "STAFF" | "EXTERNAL" | null;
+  newProfessorId: string | null;
+  newProfessorName: string;
+  newProfessorType: "STAFF" | "EXTERNAL";
+  changedAt: string;
+  statusAtChange: { code: string };
+  changedBy: { id: string; firstName: string | null; lastName: string | null };
+}
+
 export interface ProposalAttachment {
   id: string;
   proposalId: string;
@@ -204,6 +220,8 @@ export interface ProposalDetail extends ProposalListItem {
   attachments: ProposalAttachment[];
   assignments: ProposalAssignment[];
   negotiationRounds: NegotiationRound[];
+  // Oldest first. Optional: a backend without the assignment audit (PR #25) does not send it.
+  professorAssignmentLogs?: ProfessorAssignmentLog[];
 }
 
 export interface ProposalDashboardMetrics {

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { assignProfessorWithHistory } from "./professor-assignment";
 import {
   mapBackendStatusToFrontend,
   mapBackendTypeToFrontend,
@@ -663,6 +664,183 @@ describe("mapProposalToRequestItem - returned-with-observations notice (HU 5.4)"
         expect(item.clientObservations).toBeUndefined();
       }
     });
+  });
+});
+
+describe("mapProposalToRequestItem - professor assignment history (HU 4.2)", () => {
+  type Log = NonNullable<ProposalDetail["professorAssignmentLogs"]>[number];
+  const NAME = { A: "Dra. Paula Henao", B: "Ing. Carlos Vega" };
+  const log = (n: number, overrides: Partial<Log> = {}): Log => ({
+    id: `log-${n}`,
+    previousProfessorId: null,
+    previousProfessorName: null,
+    previousProfessorType: null,
+    newProfessorId: "prof-a",
+    newProfessorName: NAME.A,
+    newProfessorType: "STAFF",
+    changedAt: `2026-09-2${n}T15:00:00.000Z`,
+    statusAtChange: { code: "NEW" },
+    changedBy: { id: "ldp-1", firstName: "Laura", lastName: "Diaz" },
+    ...overrides,
+  });
+  const aToB = (n: number, statusCode = "IN_PROGRESS"): Log =>
+    log(n, {
+      previousProfessorId: "prof-a",
+      previousProfessorName: NAME.A,
+      previousProfessorType: "STAFF",
+      newProfessorId: "prof-b",
+      newProfessorName: NAME.B,
+      statusAtChange: { code: statusCode },
+    });
+  const bToA = (n: number): Log =>
+    log(n, {
+      previousProfessorId: "prof-b",
+      previousProfessorName: NAME.B,
+      previousProfessorType: "STAFF",
+      statusAtChange: { code: "IN_PROGRESS" },
+    });
+  const withLogs = (logs: Log[] | undefined) => baseProposal({ professorAssignmentLogs: logs });
+
+  it("maps the first assignment: no previous professor, type and status in the prototype's vocabulary", () => {
+    const [entry] = mapProposalToRequestItem(withLogs([log(1)])).professorHistory ?? [];
+    expect(entry).toEqual({
+      id: "log-1",
+      previousProfessor: undefined,
+      previousProfessorType: undefined,
+      newProfessor: NAME.A,
+      newProfessorType: "planta",
+      changedBy: "Laura Diaz",
+      changedAt: "2026-09-21T15:00:00.000Z",
+      statusAtChange: "nueva",
+    });
+  });
+
+  it("maps a reassignment with the previous professor and en-experto", () => {
+    const [entry] = mapProposalToRequestItem(withLogs([aToB(2)])).professorHistory ?? [];
+    expect(entry).toMatchObject({
+      previousProfessor: NAME.A,
+      previousProfessorType: "planta",
+      newProfessor: NAME.B,
+      newProfessorType: "planta",
+      statusAtChange: "en-experto",
+    });
+  });
+
+  it("keeps A, A->B, B->A as three entries, oldest first (the block reverses them itself)", () => {
+    const item = mapProposalToRequestItem(withLogs([log(1), aToB(2), bToA(3)]));
+    expect(item.professorHistory?.map((e) => [e.previousProfessor, e.newProfessor])).toEqual([
+      [undefined, NAME.A],
+      [NAME.A, NAME.B],
+      [NAME.B, NAME.A],
+    ]);
+    expect(item.professorHistory?.map((e) => e.id)).toEqual(["log-1", "log-2", "log-3"]);
+  });
+
+  it("orders oldest first whatever order the API sends them in, without mutating its input", () => {
+    const input = [bToA(3), log(1), aToB(2)];
+    const item = mapProposalToRequestItem(withLogs(input));
+    expect(item.professorHistory?.map((e) => e.id)).toEqual(["log-1", "log-2", "log-3"]);
+    expect(input.map((l) => l.id)).toEqual(["log-3", "log-1", "log-2"]);
+  });
+
+  it("maps a change made while the request was still NEW to nueva", () => {
+    const [entry] = mapProposalToRequestItem(withLogs([aToB(2, "NEW")])).professorHistory ?? [];
+    expect(entry.statusAtChange).toBe("nueva");
+  });
+
+  it("maps EXTERNAL advisors to externo, on both sides of a change", () => {
+    const external = log(4, {
+      previousProfessorId: "prof-b",
+      previousProfessorName: "Asesora Externa",
+      previousProfessorType: "EXTERNAL",
+      newProfessorId: "prof-c",
+      newProfessorName: "Otra Asesora",
+      newProfessorType: "EXTERNAL",
+      statusAtChange: { code: "IN_PROGRESS" },
+    });
+    const [ext] = mapProposalToRequestItem(withLogs([external])).professorHistory ?? [];
+    expect(ext).toMatchObject({ previousProfessorType: "externo", newProfessorType: "externo" });
+  });
+
+  it("keeps a legacy previous assignment that only had a name (no id, no type)", () => {
+    const legacy = log(2, { previousProfessorName: "Nombre heredado", newProfessorId: null });
+    const [entry] = mapProposalToRequestItem(withLogs([legacy])).professorHistory ?? [];
+    expect(entry.previousProfessor).toBe("Nombre heredado");
+    expect(entry.previousProfessorType).toBeUndefined();
+    expect(entry.newProfessor).toBe(NAME.A);
+  });
+
+  it("keeps the entry and warns on an unknown status code", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const item = mapProposalToRequestItem(withLogs([log(1, { statusAtChange: { code: "SOMETHING_NEW" } })]));
+    expect(item.professorHistory).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("SOMETHING_NEW"));
+    warn.mockRestore();
+  });
+
+  it("has no history for a proposal without logs, an empty list, or a backend without the field", () => {
+    expect(mapProposalToRequestItem(withLogs([])).professorHistory).toBeUndefined();
+    expect(mapProposalToRequestItem(withLogs(undefined)).professorHistory).toBeUndefined();
+    const { professorAssignmentLogs: _omit, ...withoutField } = baseProposal();
+    expect(() => mapProposalToRequestItem(withoutField as ProposalDetail)).not.toThrow();
+  });
+
+  it("does not add a history to list items (the list does not send the logs)", () => {
+    const { professorAssignmentLogs: _omit, ...rest } = baseProposal();
+    expect(mapProposalToRequestItem(rest as ProposalListItem).professorHistory).toBeUndefined();
+  });
+
+  it("maps the same way for a KAM payload (margins stripped)", () => {
+    const kam = baseProposal({
+      professorAssignmentLogs: [log(1), aToB(2)],
+      economics: [
+        {
+          id: "e1",
+          proposalId: "9c858901-8a57-4791-81fe-4c455b099bc9",
+          isCurrent: true,
+          date: null,
+          grossValue: "30000000",
+          participantCount: null,
+          valuePerParticipant: null,
+          readyForKam: true,
+          readyForKamAt: null,
+        },
+      ],
+    });
+    const item = mapProposalToRequestItem(kam);
+    expect(item.professorHistory).toHaveLength(2);
+    expect(item.costing?.marginAmountCop).toBeUndefined();
+  });
+
+  it("shows a fallback name when the author has no name, and never 'undefined'", () => {
+    const names = [
+      { id: "u1", firstName: null, lastName: null },
+      { id: "u2", firstName: "Laura", lastName: null },
+    ];
+    const [none, first] = names.map(
+      (changedBy) => mapProposalToRequestItem(withLogs([log(1, { changedBy })])).professorHistory?.[0].changedBy,
+    );
+    expect(none).toBe("Usuario sin nombre");
+    expect(first).toBe("Laura");
+  });
+
+  it("has the same shape as an entry the mock path builds with assignProfessorWithHistory", () => {
+    const mock = assignProfessorWithHistory(
+      { id: "req", status: "en-experto", professor: NAME.A, professorType: "planta", professorHistory: [] },
+      NAME.B,
+      "planta",
+      undefined,
+      "Laura Diaz",
+      "2026-09-22T15:00:00.000Z",
+    ).professorHistory[0];
+    const [api] = mapProposalToRequestItem(withLogs([aToB(2)])).professorHistory ?? [];
+    expect(Object.keys(api).sort()).toEqual(Object.keys(mock).sort());
+    expect({ ...api, id: mock.id }).toEqual(mock);
+  });
+
+  it("does not touch the professor currently assigned", () => {
+    const item = mapProposalToRequestItem(withLogs([log(1), aToB(2)]));
+    expect(item.professor).toBe("Dra. Paula Henao");
   });
 });
 
