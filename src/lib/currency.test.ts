@@ -38,9 +38,12 @@ describe("parseCopInput", () => {
     expect(parseCopInput("30")).toBe(30);
   });
 
-  it("returns null for more than 2 decimals instead of rounding silently", () => {
-    expect(parseCopInput("1,234")).toBeNull();
-    expect(parseCopInput("1.000,999")).toBeNull();
+  it("accepts any number of decimals and returns them unrounded", () => {
+    expect(parseCopInput("32.000.000,456")).toBe(32_000_000.456);
+    expect(parseCopInput("1.234,5678")).toBe(1_234.5678);
+    expect(parseCopInput("1,234")).toBe(1.234);
+    expect(parseCopInput("1.000,999")).toBe(1_000.999);
+    expect(parseCopInput("$0,005")).toBe(0.005);
   });
 
   it("returns null when the dot is not a valid thousands separator", () => {
@@ -173,6 +176,13 @@ describe("isLikelyFraction", () => {
 describe("formatCopPreview", () => {
   it.each([0, 5_000, 32_000_000, 1_234_567.89, -1_500])("matches formatCop for %d", (value) => {
     expect(formatCopPreview(value)).toBe(formatCop(value));
+  });
+
+  it("shows a rounded value for an unrounded parsed amount, without altering the parsed number", () => {
+    const parsed = parseCopInput("32.000.000,456") as number;
+    expect(parsed).toBe(32_000_000.456);
+    expect(formatCopPreview(parsed)).toBe(formatCopPreview(32_000_000));
+    expect(formatCopPreview(parseCopInput("1.234,5678") as number)).toBe(formatCopPreview(1_235));
   });
 });
 

@@ -3,14 +3,15 @@ export const PRO_CULTURA_PERCENT = 1.5;
 const PRO_CULTURA_CATEGORY = "Capacitación";
 
 const THOUSANDS_GROUPED = /^\d{1,3}(\.\d{3})+$/;
-const COP_INPUT = /^\$?(\d[\d.]*)(?:,(\d{1,2}))?%?$/;
+const COP_INPUT = /^\$?(\d[\d.]*)(?:,(\d+))?%?$/;
 const PERCENT_INPUT = /^(\d+)(?:[.,](\d+))?%?$/;
 
 /**
  * Parses money typed in es-CO format: "." groups thousands, "," is the decimal
- * separator, at most 2 decimals. Ignores whitespace, one leading "$" and one
- * trailing "%". Returns null for anything else (negatives, letters, "1.5",
- * "1,234", empty) instead of guessing.
+ * separator with any number of digits, returned unrounded (the backend rounds
+ * half-up to 2 decimals). Ignores whitespace, one leading "$" and one trailing
+ * "%". Returns null for anything else (negatives, letters, "1.5", empty)
+ * instead of guessing.
  */
 export function parseCopInput(raw: string): number | null {
   const match = COP_INPUT.exec(raw.replace(/\s/g, ""));
