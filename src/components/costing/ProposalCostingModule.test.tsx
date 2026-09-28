@@ -280,6 +280,62 @@ describe("ProposalCostingModule", () => {
     });
   });
 
+  describe("one message at a time", () => {
+    const messages = () => [...screen.queryAllByText(/entre 0 y 100|quisiste decir/i)];
+
+    it("hides the amber hint while the red error shows, even when the saved value is a fraction", () => {
+      setup({ expectedMarginPercent: 0.3 });
+      expect(screen.getByText(/quisiste decir 30 %/)).toBeInTheDocument();
+      typeInto(percentInput(), "150");
+      expect(screen.getByText(/entre 0 y 100/i)).toBeInTheDocument();
+      expect(screen.queryByText(/quisiste decir/i)).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ["0.3", "-1", "0."],
+      ["0", "0,3", "150"],
+      ["abc", "0,075", "12,"],
+    ])("never shows two messages while typing %j -> %j -> %j", (...steps) => {
+      setup({ expectedMarginPercent: 0.3 });
+      expect(messages().length).toBeLessThanOrEqual(1);
+      for (const step of steps) {
+        typeInto(percentInput(), step);
+        expect(messages().length).toBeLessThanOrEqual(1);
+        wait(AUTOSAVE_MS);
+        expect(messages().length).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it("keeps the hint for a valid fraction when there is no error", () => {
+      setup();
+      typeInto(percentInput(), "0,3");
+      expect(screen.getByText(/quisiste decir 30 %/)).toBeInTheDocument();
+    });
+  });
+
+  describe("reserved message slots", () => {
+    it("renders the percentage slot empty when there is nothing to say", () => {
+      setup({ expectedMarginPercent: 30 });
+      expect(screen.getByTestId("margin-percent-message")).toBeInTheDocument();
+      expect(screen.getByTestId("margin-percent-message")).toBeEmptyDOMElement();
+    });
+
+    it("shows the messages inside the same slot element, which stays in the DOM afterwards", () => {
+      setup();
+      const slot = screen.getByTestId("margin-percent-message");
+      typeInto(percentInput(), "150");
+      expect(slot).toHaveTextContent(/entre 0 y 100/i);
+      typeInto(percentInput(), "30");
+      expect(screen.getByTestId("margin-percent-message")).toBe(slot);
+      expect(slot).toBeEmptyDOMElement();
+    });
+
+    it("reserves two lines for the percentage messages (min-height of 2 x leading-snug 11px)", () => {
+      setup();
+      expect(screen.getByTestId("margin-percent-message").className).toContain("min-h-[2.75em]");
+    });
+  });
+
   describe("preview never contradicts the field", () => {
     const preview = () => screen.getByText(/% de /);
 

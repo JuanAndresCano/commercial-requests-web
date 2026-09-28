@@ -252,16 +252,20 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                 disabled={isReadOnly}
               />
               <span className="absolute right-3 top-2.5 text-xs font-mono text-slate-400">%</span>
-              {draft.invalid.percent && (
-                <p className="mt-1 text-[11px] text-destructive leading-snug">
-                  El % debe estar entre 0 y 100, no se guardó
-                </p>
-              )}
-              {percentSuggestion && (
-                <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
-                  ¿quisiste decir {percentSuggestion} %?
-                </p>
-              )}
+              {/* Espacio fijo de dos líneas (el error de rango se parte en dos en esta columna
+                  angosta) y un solo mensaje a la vez, el error antes que la sugerencia: así al
+                  aparecer o desaparecer un mensaje nada de alrededor se mueve. */}
+              <div
+                data-testid="margin-percent-message"
+                aria-live="polite"
+                className="mt-1 min-h-[2.75em] text-[11px] leading-snug"
+              >
+                {draft.invalid.percent ? (
+                  <p className="text-destructive">El % debe estar entre 0 y 100, no se guardó</p>
+                ) : percentSuggestion ? (
+                  <p className="text-amber-700 dark:text-amber-400">¿quisiste decir {percentSuggestion} %?</p>
+                ) : null}
+              </div>
             </div>
 
             {/* Input de margen en plata (manual, independiente del %) */}
