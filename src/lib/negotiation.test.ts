@@ -30,6 +30,23 @@ function makeRound(overrides: Partial<NegotiationRound> = {}): NegotiationRound 
 }
 
 describe("openNegotiationRound", () => {
+  it("congela el margen como 0 en la ronda cuando el costeo no tiene margen registrado", () => {
+    const req = {
+      id: "req-1",
+      costing: makeCosting({ marginAmountCop: undefined, expectedMarginPercent: undefined }),
+      participantes: undefined,
+      modalidad: undefined,
+      horas: undefined,
+      type: "Capacitación" as const,
+      necesidad: undefined,
+    };
+
+    const result = openNegotiationRound(req, [], undefined, NOW);
+
+    expect(result.negotiationRounds[0]).toMatchObject({ marginAmountCop: 0, expectedMarginPercent: 0 });
+    expect(result.costing.marginAmountCop).toBeUndefined();
+  });
+
   it("abre la ronda 1 cuando no hay historial previo", () => {
     const req = {
       id: "req-1",

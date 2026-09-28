@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RequestDetail from "./RequestDetail";
 import type { RequestItem } from "@/lib/mock-data";
@@ -162,6 +162,7 @@ vi.mock("@/lib/api/requests", async (importOriginal) => {
       updateInfo: vi.fn().mockResolvedValue({ id: "REQ-2026-0001", title: "Capacitación Modificada" }),
       delete: vi.fn().mockResolvedValue({ success: true, id: "REQ-2026-0001", message: "Deleted" }),
       updateStatus: vi.fn().mockResolvedValue({ id: "REQ-2026-0002" }),
+      upsertCosting: vi.fn().mockResolvedValue({ id: "REQ-2026-0002" }),
     },
   };
 });
@@ -491,5 +492,121 @@ describe("RequestDetail - loading and not-found states", () => {
     expect(() => renderPage("REQ-2026-9999")).not.toThrow();
     await screen.findByText("Solicitud no encontrada");
     expectNoMutations();
+  });
+});
+
+describe("RequestDetail - costing wiring (HU 5.1)", () => {
+  const PROPOSAL_UUID = "9c858901-8a57-4791-81fe-4c455b099bc9";
+
+  // A Product Leader's payload: the current economics row carries both margins as Decimal strings.
+  const leaderProposal = (economics: Record<string, unknown>) =>
+    ({
+      id: PROPOSAL_UUID,
+      code: "REQ-2026-0002",
+      title: "Taller de Inteligencia Artificial",
+      priority: "MEDIA",
+      company: { id: "comp-1", name: "Carvajal S.A." },
+      workflow: { currentStatus: { code: "IN_COSTING" } },
+      program: { requestType: "CAPACITACION" },
+      creator: { id: "u-1", firstName: "Andrea", lastName: "Martínez", email: "andrea@icesi.edu.co" },
+      economics: [
+        {
+          id: "e1",
+          isCurrent: true,
+          grossValue: "25000000",
+          marginPercentage: "32",
+          estimatedMargin: "8000000",
+          readyForKam: false,
+          readyForKamAt: null,
+          ...economics,
+        },
+      ],
+      assignments: [],
+      attachments: [],
+      negotiationRounds: [],
+    }) as unknown as ProposalDetail;
+
+  beforeEach(() => {
+    authMock.requests = [...mockRequests];
+    vi.clearAllMocks();
+    authMock.user = {
+      role: "lider-producto",
+      roleLabel: "Líder de Producto",
+      name: "Juan Pablo Corrales",
+      email: "lp@icesi.edu.co",
+    };
+  });
+
+  afterEach(() => {
+    authMock.user = { role: "kam", roleLabel: "KAM", name: "Andrea Martínez", email: "andrea@icesi.edu.co" };
+  });
+
+  it("sends a margin-only change to the backend with the proposal uuid, not the code", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({}));
+    renderPage("REQ-2026-0002");
+
+    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+
+    await waitFor(() => expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1));
+    expect(requestsApi.upsertCosting).toHaveBeenCalledWith(PROPOSAL_UUID, {
+      totalCost: 25_000_000,
+      marginPercentage: 35,
+      marginAmount: 8_000_000,
+    });
+    expect(authMock.updateCosting).not.toHaveBeenCalled();
+  });
+
+  it("sends the margins the backend row holds when only the total changes", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({}));
+    renderPage("REQ-2026-0002");
+
+    fireEvent.change(await screen.findByLabelText(/Valor Final de la Propuesta/i), { target: { value: "26000000" } });
+
+    await waitFor(() => expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1));
+    expect(requestsApi.upsertCosting).toHaveBeenCalledWith(PROPOSAL_UUID, {
+      totalCost: 26_000_000,
+      marginPercentage: 32,
+      marginAmount: 8_000_000,
+    });
+  });
+
+  it("sends a margin the backend row does not have as null, never as 0", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+      leaderProposal({ marginPercentage: null, estimatedMargin: null }),
+    );
+    renderPage("REQ-2026-0002");
+
+    fireEvent.change(await screen.findByLabelText(/Valor Final de la Propuesta/i), { target: { value: "26000000" } });
+
+    await waitFor(() => expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1));
+    expect(requestsApi.upsertCosting).toHaveBeenCalledWith(PROPOSAL_UUID, {
+      totalCost: 26_000_000,
+      marginPercentage: null,
+      marginAmount: null,
+    });
+  });
+
+  it("does not call the backend when only the scope note changes", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({}));
+    renderPage("REQ-2026-0002");
+
+    fireEvent.click(await screen.findByText(/Agregar nota de alcance/i));
+    fireEvent.change(screen.getByLabelText(/Nota de alcance comercial/i), { target: { value: "Ajuste acordado" } });
+
+    expect(requestsApi.upsertCosting).not.toHaveBeenCalled();
+    expect(authMock.updateCosting).not.toHaveBeenCalled();
+  });
+
+  it("keeps a mock proposal on the local path: no request to the backend", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
+    renderPage("REQ-2026-0002");
+
+    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+
+    expect(authMock.updateCosting).toHaveBeenCalledWith(
+      "REQ-2026-0002",
+      expect.objectContaining({ expectedMarginPercent: 35 }),
+    );
+    expect(requestsApi.upsertCosting).not.toHaveBeenCalled();
   });
 });

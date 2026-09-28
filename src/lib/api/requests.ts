@@ -89,6 +89,13 @@ export interface ProposalWorkflow {
   currentStatus: ProposalWorkflowStatus;
 }
 
+/** Body of PUT /requests/:id/costing (UpsertCostingDto). Margin percentage is 0-100; amounts are COP. */
+export interface UpsertCostingPayload {
+  totalCost: number;
+  marginPercentage?: number | null;
+  marginAmount?: number | null;
+}
+
 export interface ProposalEconomics {
   id: string;
   proposalId: string;
@@ -171,6 +178,9 @@ export interface ProposalListItem {
   economics?: {
     isCurrent?: boolean;
     grossValue: string | number | null;
+    // Only for Product Leader / Admin: the backend strips both for the KAM.
+    estimatedMargin?: string | number | null;
+    marginPercentage?: string | number | null;
     readyForKam: boolean;
     readyForKamAt: string | null;
   }[];
@@ -405,11 +415,12 @@ export const requestsApi = {
   reassign: (id: string, data: ReassignProposalPayload) =>
     apiRequest<ProposalDetail>(`/requests/${id}/reassign`, { method: "PATCH", body: data }),
 
-  /** Minimal costing: only the offered value. Margin/Pro-Cultura stay client-side
-   * preview fields (docs/04) until HU 5.1 (Persona 4) builds the real costing UI. */
-  upsertCosting: (id: string, totalCost: number) =>
+  /** HU 5.1 — saves the costing as a new current economics row. `totalCost` is required.
+   * Each margin follows the backend: left undefined = keeps the previous value,
+   * null = clears it, 0 = stores 0. Pro-Cultura stays a client-side reference. */
+  upsertCosting: (id: string, payload: UpsertCostingPayload) =>
     apiRequest<ProposalDetail>(`/requests/${id}/costing`, {
       method: "PUT",
-      body: { totalCost },
+      body: payload,
     }),
 };

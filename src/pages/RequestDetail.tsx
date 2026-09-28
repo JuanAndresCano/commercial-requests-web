@@ -607,17 +607,25 @@ export default function RequestDetail() {
     assignProfessorDetailed(req.id, professorName, type, externalData);
   };
 
-  // Minimal wiring (HU 5.1 — costeo financiero — is Persona 4's, not built yet): only the
-  // offered value round-trips to the backend. Margin %/$ and Pro-Cultura stay client-side
-  // preview fields (docs/04 already treats them as informational, never persisted) — for
-  // a real proposal they will visually reset after this mutation refetches the detail,
-  // since there is nowhere on the backend to keep them yet.
+  // HU 5.1: the offered value and both contribution margins round-trip to the backend
+  // (Pro-Cultura stays a client-side reference). Each save creates a new economics row,
+  // so nothing is sent unless the total or a margin actually changed (the scope note is
+  // not persisted). A margin the form holds empty is sent as null so it clears; 0 stays 0.
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
     if (!req) return;
     if (apiProposal) {
-      if (newCosting.totalOfferedCop === req.costing?.totalOfferedCop) return;
+      const unchanged =
+        newCosting.totalOfferedCop === req.costing?.totalOfferedCop &&
+        newCosting.expectedMarginPercent === req.costing?.expectedMarginPercent &&
+        newCosting.marginAmountCop === req.costing?.marginAmountCop;
+      if (unchanged) return;
       upsertCostingReal.mutate(
-        { id: req.id, totalCost: newCosting.totalOfferedCop },
+        {
+          id: apiProposal.id,
+          totalCost: newCosting.totalOfferedCop,
+          marginPercentage: newCosting.expectedMarginPercent ?? null,
+          marginAmount: newCosting.marginAmountCop ?? null,
+        },
         { onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar el costeo") },
       );
       return;

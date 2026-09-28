@@ -26,10 +26,10 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
   // el Valor Final de la Propuesta — ya no hay un cálculo hacia adelante de
   // base → total (docs/04).
   const [totalOfferedCop, setTotalOfferedCop] = useState<number>(initialCosting.totalOfferedCop);
-  const [marginPercent, setMarginPercent] = useState<number>(initialCosting.expectedMarginPercent ?? 30);
+  const [marginPercent, setMarginPercent] = useState<number | undefined>(initialCosting.expectedMarginPercent);
   // Margen en plata: input manual e independiente, ya no derivado de
   // baseCostCop * marginPercent.
-  const [marginAmountCop, setMarginAmountCop] = useState<number>(initialCosting.marginAmountCop ?? 0);
+  const [marginAmountCop, setMarginAmountCop] = useState<number | undefined>(initialCosting.marginAmountCop);
   const [negotiationNotes, setNegotiationNotes] = useState<string>(initialCosting.negotiationNotes ?? "");
   // Gate de envío al KAM (docs/04) — se preserva tal cual al
   // guardar cambios que no afectan el valor final ni el margen, y se
@@ -47,7 +47,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
     if (request.costing) {
       setTotalOfferedCop(request.costing.totalOfferedCop);
       setMarginPercent(request.costing.expectedMarginPercent);
-      setMarginAmountCop(request.costing.marginAmountCop ?? 0);
+      setMarginAmountCop(request.costing.marginAmountCop);
       setNegotiationNotes(request.costing.negotiationNotes ?? "");
       setReadyForKam(request.costing.readyForKam ?? false);
       setCostingSentAt(request.costing.costingSentAt);
@@ -65,8 +65,8 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
 
   const triggerSave = (
     newTotalOffered: number,
-    newMarginPercent: number,
-    newMarginAmountCop: number,
+    newMarginPercent: number | undefined,
+    newMarginAmountCop: number | undefined,
     newNotes: string,
     // Requisito 2: editar el valor final o el margen invalida el "Enviado
     // al KAM" previo — el Líder debe volver a confirmarlo explícitamente.
@@ -128,7 +128,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
   const advisorSubtitle = isExternalAdvisor ? request.externalProfessorData?.empresaConsultora : undefined;
   // Referencia informativa (docs/04): nunca sobreescribe el margen manual,
   // solo ayuda a detectar de un vistazo si el % y el valor en $ "cuadran".
-  const marginReferenceAmount = Math.round((totalOfferedCop * marginPercent) / 100);
+  const marginReferenceAmount = Math.round((totalOfferedCop * (marginPercent ?? 0)) / 100);
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card">
@@ -281,7 +281,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
               <div className="flex items-center gap-1.5 rounded-md bg-slate-50 dark:bg-white/5 px-2 py-1">
                 <Calculator className="h-3 w-3 shrink-0 text-slate-400" />
                 <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-                  {marginPercent}% de {formatCop(totalOfferedCop)} ={" "}
+                  {marginPercent ?? 0}% de {formatCop(totalOfferedCop)} ={" "}
                   <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
                     {formatCop(marginReferenceAmount)}
                   </span>
@@ -344,10 +344,10 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
             <div className="flex items-center justify-between py-2">
               <div className="flex items-center gap-1.5">
                 <span className="text-slate-600 dark:text-slate-400">Margen de Contribución</span>
-                <span className="text-[11px] text-slate-400">({marginPercent}%)</span>
+                <span className="text-[11px] text-slate-400">({marginPercent ?? 0}%)</span>
               </div>
               <span className="font-mono font-medium text-emerald-700 dark:text-emerald-400">
-                {formatCop(marginAmountCop)}
+                {formatCop(marginAmountCop ?? 0)}
               </span>
             </div>
 

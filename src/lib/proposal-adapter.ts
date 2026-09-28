@@ -132,6 +132,14 @@ export function parseParticipantsRange(range: string): { min?: number; max?: num
   return {};
 }
 
+/** Prisma Decimals arrive as strings in JSON. null/undefined (never set, cleared, or
+ * stripped for the KAM) stay undefined: 0 is a stored value, "no margin" is not 0. */
+function decimalToNumber(value: string | number | null | undefined): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : undefined;
+}
+
 export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, currentKamName?: string): RequestItem {
   const currentEconomics = p.economics?.find((e) => e.isCurrent) ?? p.economics?.[0];
   const grossValueNum = currentEconomics ? Number(currentEconomics.grossValue ?? 0) : 0;
@@ -190,14 +198,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     totalCostCop: grossValueNum,
     costing: {
       totalOfferedCop: grossValueNum,
-      expectedMarginPercent:
-        currentEconomics && "marginPercentage" in currentEconomics
-          ? Number((currentEconomics as { marginPercentage?: string | number | null }).marginPercentage ?? 0)
-          : 0,
-      marginAmountCop:
-        currentEconomics && "estimatedMargin" in currentEconomics
-          ? Number((currentEconomics as { estimatedMargin?: string | number | null }).estimatedMargin ?? 0)
-          : 0,
+      expectedMarginPercent: decimalToNumber(currentEconomics?.marginPercentage),
+      marginAmountCop: decimalToNumber(currentEconomics?.estimatedMargin),
       proCulturaTaxPercent: proCultura.applies ? PRO_CULTURA_PERCENT : 0,
       proCulturaTaxAmount: proCultura.amount,
       readyForKam: isReady,
