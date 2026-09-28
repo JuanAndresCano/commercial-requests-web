@@ -569,6 +569,103 @@ describe("requestTypeToBackend / modalityToBackend", () => {
   });
 });
 
+describe("mapProposalToRequestItem - returned-with-observations notice (HU 5.4)", () => {
+  type Response = "PENDING" | "CHANGES_REQUESTED";
+  const round = (roundNumber: number, clientResponse: Response, clientNote: string | null = null) => ({
+    id: `r${roundNumber}`,
+    proposalId: "9c858901-8a57-4791-81fe-4c455b099bc9",
+    roundNumber,
+    offeredValue: "30000000",
+    marginAmount: null,
+    marginPercentage: null,
+    scopeSnapshot: null,
+    leaderNote: null,
+    sentToKamAt: "2026-09-21T00:00:00.000Z",
+    sentToClientAt: null,
+    clientResponse,
+    clientNote,
+  });
+  const withRounds = (rounds: ReturnType<typeof round>[], code = "IN_COSTING") =>
+    baseProposal({ workflow: workflowWithStatus(code), negotiationRounds: rounds });
+
+  it("sorts the rounds ascending whatever order the API sends them in", () => {
+    const rounds = [round(1, "CHANGES_REQUESTED", "uno"), round(2, "PENDING"), round(3, "PENDING")];
+    for (const input of [rounds, [...rounds].reverse(), [rounds[1], rounds[2], rounds[0]]]) {
+      const item = mapProposalToRequestItem(withRounds(input));
+      expect(item.negotiationRounds?.map((r) => r.roundNumber)).toEqual([1, 2, 3]);
+    }
+  });
+
+  it("does not mutate the array it received", () => {
+    const input = [round(2, "PENDING"), round(1, "PENDING")];
+    mapProposalToRequestItem(withRounds(input));
+    expect(input.map((r) => r.roundNumber)).toEqual([2, 1]);
+  });
+
+  it("shows the notice when the latest round came back with changes, with 2 or 3 rounds in either order", () => {
+    const two = [round(1, "PENDING"), round(2, "CHANGES_REQUESTED", "Bajar el precio")];
+    const three = [round(1, "CHANGES_REQUESTED", "vieja"), round(2, "PENDING"), round(3, "CHANGES_REQUESTED", "Nueva")];
+    for (const input of [two, [...two].reverse()]) {
+      expect(mapProposalToRequestItem(withRounds(input)).clientObservations).toBe("Bajar el precio");
+    }
+    for (const input of [three, [...three].reverse()]) {
+      expect(mapProposalToRequestItem(withRounds(input)).clientObservations).toBe("Nueva");
+    }
+  });
+
+  it("clears the notice after a new PENDING round, in either order", () => {
+    const input = [round(1, "CHANGES_REQUESTED", "vieja"), round(2, "PENDING")];
+    expect(mapProposalToRequestItem(withRounds(input)).clientObservations).toBeUndefined();
+    expect(mapProposalToRequestItem(withRounds([...input].reverse())).clientObservations).toBeUndefined();
+  });
+
+  it("clears the notice after the redelivery (status DELIVERED) even if a round still says CHANGES_REQUESTED", () => {
+    const input = [round(1, "CHANGES_REQUESTED", "vieja")];
+    expect(mapProposalToRequestItem(withRounds(input, "DELIVERED")).clientObservations).toBeUndefined();
+  });
+
+  it("clears the notice on REJECTED", () => {
+    const input = [round(1, "PENDING"), round(2, "CHANGES_REQUESTED", "no")];
+    expect(mapProposalToRequestItem(withRounds(input, "REJECTED")).clientObservations).toBeUndefined();
+  });
+
+  describe("list items (latest round only)", () => {
+    const listItem = (rounds: unknown, code = "IN_COSTING") => {
+      const { negotiationRounds: _omit, ...rest } = baseProposal({ workflow: workflowWithStatus(code) });
+      return { ...rest, negotiationRounds: rounds } as unknown as ProposalListItem;
+    };
+    const thin = (roundNumber: number, clientResponse: Response, clientNote: string | null) => ({
+      roundNumber,
+      clientResponse,
+      clientNote,
+    });
+
+    it("maps the notice from the single round the list returns", () => {
+      const item = mapProposalToRequestItem(listItem([thin(2, "CHANGES_REQUESTED", "Ajustar alcance")]));
+      expect(item.clientObservations).toBe("Ajustar alcance");
+    });
+
+    it("shows no notice when the latest round is PENDING or the status is not en-costeo", () => {
+      expect(mapProposalToRequestItem(listItem([thin(3, "PENDING", null)])).clientObservations).toBeUndefined();
+      expect(
+        mapProposalToRequestItem(listItem([thin(2, "CHANGES_REQUESTED", "x")], "DELIVERED")).clientObservations,
+      ).toBeUndefined();
+    });
+
+    it("does not build detail rounds out of the three-field list rounds", () => {
+      const item = mapProposalToRequestItem(listItem([thin(2, "CHANGES_REQUESTED", "x")]));
+      expect(item.negotiationRounds).toBeUndefined();
+    });
+
+    it("does not throw and shows no notice for a list item without negotiationRounds (backend without PR A)", () => {
+      for (const rounds of [undefined, []]) {
+        const item = mapProposalToRequestItem(listItem(rounds));
+        expect(item.clientObservations).toBeUndefined();
+      }
+    });
+  });
+});
+
 describe("parseParticipantsRange", () => {
   it("parses a closed range", () => {
     expect(parseParticipantsRange("6 - 10")).toEqual({ min: 6, max: 10 });

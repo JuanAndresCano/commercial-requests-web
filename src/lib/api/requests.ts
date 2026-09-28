@@ -126,6 +126,10 @@ export interface NegotiationRound {
   clientNote: string | null;
 }
 
+/** What the list endpoints return per proposal: only the latest round, three fields
+ * (backend `LATEST_ROUND_FOR_LIST`). No margins, no snapshot. */
+export type ListNegotiationRound = Pick<NegotiationRound, "roundNumber" | "clientResponse" | "clientNote">;
+
 export interface ProposalAssignment {
   id: string;
   proposalId: string;
@@ -186,6 +190,8 @@ export interface ProposalListItem {
   }[];
   productLeader?: ProposalUserSummary | null;
   assignments?: ProposalAssignment[];
+  // Optional: a backend without the list contract (PR #26) does not send it.
+  negotiationRounds?: ListNegotiationRound[];
 }
 
 export interface ProposalDetail extends ProposalListItem {
