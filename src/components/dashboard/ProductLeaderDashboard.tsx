@@ -182,7 +182,7 @@ export function ProductLeaderDashboard({
       },
       {
         onSuccess: () => {
-          toast.success(`Solicitud ${reassigningRequest.id} transferida exitosamente.`);
+          toast.success(`Solicitud ${reassigningRequest.code ?? reassigningRequest.id} transferida exitosamente.`);
           setReassigningRequest(null);
         },
         onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo reasignar"),
@@ -284,6 +284,7 @@ export function ProductLeaderDashboard({
         const q = searchQuery.toLowerCase().trim();
         const matches =
           r.id.toLowerCase().includes(q) ||
+          (r.code ? r.code.toLowerCase().includes(q) : false) ||
           r.company.toLowerCase().includes(q) ||
           r.title.toLowerCase().includes(q) ||
           r.type.toLowerCase().includes(q) ||
@@ -316,6 +317,7 @@ export function ProductLeaderDashboard({
         const q = searchQuery.toLowerCase().trim();
         const matches =
           r.id.toLowerCase().includes(q) ||
+          (r.code ? r.code.toLowerCase().includes(q) : false) ||
           r.company.toLowerCase().includes(q) ||
           r.title.toLowerCase().includes(q) ||
           r.type.toLowerCase().includes(q) ||
@@ -863,7 +865,7 @@ export function ProductLeaderDashboard({
                       <tr key={r.id} className="transition-colors hover:bg-secondary/30 dark:hover:bg-[#1a1c2a]">
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs font-semibold text-foreground">{r.id}</span>
+                            <span className="font-mono text-xs font-semibold text-foreground">{r.code ?? r.id}</span>
                             <span className="text-muted-foreground/60 text-xs">·</span>
                             <span className="text-xs text-muted-foreground">
                               {format(new Date(r.createdAt), "d MMM", { locale: es })}
