@@ -544,7 +544,7 @@ export default function RequestDetail() {
         },
         {
           onSuccess: () => {
-            toast.success(`Solicitud ${req.id} reasignada exitosamente.`);
+            toast.success(`Solicitud ${req.code ?? req.id} reasignada exitosamente.`);
             setIsReassignModalOpen(false);
             // Tras reasignar, el visor deja de ser el Líder dueño de la solicitud —
             // el refetch de este mismo detalle puede fallar por permisos (ya no es
@@ -559,7 +559,7 @@ export default function RequestDetail() {
       return;
     }
     reassignRequest(req, { newLeader, newNode });
-    toast.success(`Solicitud ${req.id} reasignada a ${newLeader} exitosamente.`);
+    toast.success(`Solicitud ${req.code ?? req.id} reasignada a ${newLeader} exitosamente.`);
     setIsReassignModalOpen(false);
   };
 
