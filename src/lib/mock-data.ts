@@ -146,6 +146,9 @@ export interface ProposalDocument {
   category: "client_kam" | "internal_costing";
   uploadedBy?: string;
   tag?: string;
+  // Only set for real (backend) documents; mock documents behave as downloadable/deletable.
+  downloadable?: boolean;
+  canDelete?: boolean;
 }
 
 export interface ClientContact {

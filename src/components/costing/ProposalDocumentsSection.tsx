@@ -15,22 +15,33 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProposalDocument } from "@/lib/mock-data";
 import { toast } from "sonner";
 
+type DocumentCategory = ProposalDocument["category"];
+
+// Mirrors the backend limits (ATTACHMENT_MAX_BYTES and the allowed types); the backend
+// stays the authority, this only saves a round trip for an obvious mistake.
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "zip"];
+const CLIENT_KAM_EXTENSIONS = ["pdf", "doc", "docx"];
+
 interface ProposalDocumentsSectionProps {
   clientKamDocuments: ProposalDocument[];
   internalCostingDocuments: ProposalDocument[];
-  onAddDocument: (doc: ProposalDocument) => void;
-  onRemoveDocument: (docId: string, category: "client_kam" | "internal_costing") => void;
+  /** Called with a file that already passed the client-side checks. */
+  onUploadFile: (file: File, category: DocumentCategory, tag?: string) => void;
+  onRemoveDocument: (doc: ProposalDocument) => void;
+  onDownloadDocument: (doc: ProposalDocument) => void;
+  isUploading?: boolean;
   userRole: string;
-  userName: string;
 }
 
 export function ProposalDocumentsSection({
   clientKamDocuments,
   internalCostingDocuments,
-  onAddDocument,
+  onUploadFile,
   onRemoveDocument,
+  onDownloadDocument,
+  isUploading = false,
   userRole,
-  userName,
 }: ProposalDocumentsSectionProps) {
   const isLeader = userRole === "lider-producto" || userRole === "lider-nodo";
 
@@ -41,39 +52,33 @@ export function ProposalDocumentsSection({
   const [isDraggingInternal, setIsDraggingInternal] = useState(false);
   const [internalDocTag, setInternalDocTag] = useState<string>("Matriz de Costeo");
 
-  const handleFileUpload = (file: File, category: "client_kam" | "internal_costing", tag?: string) => {
-    const ext = file.name.split(".").pop()?.toLowerCase();
+  // Real documents carry the backend's verdict; mock ones keep the prototype's rule
+  // (only the Leader deletes).
+  const canDelete = (doc: ProposalDocument) => doc.canDelete ?? isLeader;
+  const canDownload = (doc: ProposalDocument) => doc.downloadable !== false;
+  const noFileHint = "Este documento se registró solo con su nombre; no tiene archivo almacenado";
 
-    if (category === "client_kam") {
-      if (ext !== "pdf" && ext !== "doc" && ext !== "docx") {
-        toast.error("La Propuesta Comercial requiere formato Word (.docx) o PDF (.pdf)");
-        return;
-      }
+  const handleFileUpload = (file: File, category: DocumentCategory, tag?: string) => {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+    if (category === "client_kam" && !CLIENT_KAM_EXTENSIONS.includes(ext)) {
+      toast.error("La Propuesta Comercial requiere formato Word (.docx) o PDF (.pdf)");
+      return;
+    }
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      toast.error("Tipo de archivo no permitido (usa PDF, Word, Excel, CSV o ZIP)");
+      return;
+    }
+    if (file.size === 0) {
+      toast.error("El archivo está vacío");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error("El archivo supera el límite de 20 MB");
+      return;
     }
 
-    const docType: ProposalDocument["type"] =
-      ext === "pdf" ? "pdf" : ext === "xlsx" || ext === "xls" || ext === "csv" ? "excel" : "doc";
-
-    const formattedSize =
-      file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`;
-
-    const newDoc: ProposalDocument = {
-      id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      name: file.name,
-      size: formattedSize,
-      date: new Date().toLocaleDateString("es-CO", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }),
-      type: docType,
-      category,
-      uploadedBy: userName,
-      tag: category === "internal_costing" ? tag || internalDocTag : undefined,
-    };
-
-    onAddDocument(newDoc);
-    toast.success(`Archivo "${file.name}" cargado`);
+    onUploadFile(file, category, category === "internal_costing" ? tag || internalDocTag : undefined);
   };
 
   const getFileIcon = (type: ProposalDocument["type"]) => {
@@ -116,7 +121,49 @@ export function ProposalDocumentsSection({
         </div>
 
         {/* LISTA DE ARCHIVOS DE LA PROPUESTA (SIN SELECTOR DE PESTAÑAS) */}
-        <div className="mt-4">
+        <div className="mt-4 space-y-3">
+          {/* El KAM puede adjuntar documentos de cara al cliente (nunca internos) */}
+          <div
+            className={`rounded-lg border border-dashed p-3 text-center transition-colors cursor-pointer ${
+              isDraggingClient
+                ? "border-primary bg-primary/5"
+                : "border-slate-200 hover:border-primary/60 bg-slate-50/50 hover:bg-slate-50 dark:border-border dark:bg-secondary/20 dark:hover:bg-secondary/30"
+            } ${isUploading ? "pointer-events-none opacity-60" : ""}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDraggingClient(true);
+            }}
+            onDragLeave={() => setIsDraggingClient(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingClient(false);
+              if (e.dataTransfer.files?.[0]) {
+                handleFileUpload(e.dataTransfer.files[0], "client_kam");
+              }
+            }}
+            onClick={() => clientFileInputRef.current?.click()}
+          >
+            <input
+              ref={clientFileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) {
+                  handleFileUpload(e.target.files[0], "client_kam");
+                }
+                e.target.value = "";
+              }}
+            />
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <UploadCloud className="h-4 w-4 text-slate-500" />
+              <span className="font-medium text-slate-700 dark:text-slate-200">
+                {isUploading ? "Subiendo archivo…" : "Adjuntar documento para el cliente (.pdf, .docx)"}
+              </span>
+              <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o haz clic</span>
+            </div>
+          </div>
+
           {clientKamDocuments.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-400 dark:border-border">
               No hay propuesta comercial oficial adjunta por el Líder aún.
@@ -140,15 +187,30 @@ export function ProposalDocumentsSection({
                     </div>
                   </div>
 
-                  <Button
-                    size="sm"
-                    className="h-8 px-3 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xs shrink-0 inline-flex items-center gap-1.5"
-                    onClick={() => toast.success(`Descargando propuesta: ${doc.name}`)}
-                    title={`Descargar propuesta oficial (${doc.type.toUpperCase()})`}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    <span>Descargar Propuesta ({doc.type === "pdf" ? ".pdf" : ".docx"})</span>
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      size="sm"
+                      className="h-8 px-3 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xs inline-flex items-center gap-1.5"
+                      onClick={() => onDownloadDocument(doc)}
+                      disabled={!canDownload(doc)}
+                      title={canDownload(doc) ? `Descargar propuesta oficial (${doc.type.toUpperCase()})` : noFileHint}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      <span>Descargar Propuesta ({doc.type === "pdf" ? ".pdf" : ".docx"})</span>
+                    </Button>
+
+                    {canDelete(doc) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        onClick={() => onRemoveDocument(doc)}
+                        title="Eliminar archivo"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -239,12 +301,13 @@ export function ProposalDocumentsSection({
                     if (e.target.files?.[0]) {
                       handleFileUpload(e.target.files[0], "client_kam");
                     }
+                    e.target.value = "";
                   }}
                 />
                 <div className="flex items-center justify-center gap-2 text-xs">
                   <UploadCloud className="h-4 w-4 text-slate-500" />
                   <span className="font-medium text-slate-700 dark:text-slate-200">
-                    Subir propuesta comercial (.pdf, .docx)
+                    {isUploading ? "Subiendo archivo…" : "Subir propuesta comercial (.pdf, .docx)"}
                   </span>
                   <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o haz clic</span>
                 </div>
@@ -280,22 +343,20 @@ export function ProposalDocumentsSection({
                         variant="ghost"
                         size="sm"
                         className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
-                        onClick={() => toast.success(`Descargando propuesta: ${doc.name}`)}
-                        title="Descargar archivo"
+                        onClick={() => onDownloadDocument(doc)}
+                        disabled={!canDownload(doc)}
+                        title={canDownload(doc) ? "Descargar archivo" : noFileHint}
                       >
                         <Download className="h-3.5 w-3.5 sm:mr-1" />
                         <span className="hidden sm:inline">Descargar</span>
                       </Button>
 
-                      {isLeader && (
+                      {canDelete(doc) && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                          onClick={() => {
-                            onRemoveDocument(doc.id, "client_kam");
-                            toast.info(`Documento eliminado`);
-                          }}
+                          onClick={() => onRemoveDocument(doc)}
                           title="Eliminar archivo"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -320,7 +381,7 @@ export function ProposalDocumentsSection({
                     isDraggingInternal
                       ? "border-amber-500 bg-amber-500/5"
                       : "border-slate-200 hover:border-amber-500/60 bg-slate-50/50 hover:bg-slate-50 dark:border-border dark:bg-secondary/20 dark:hover:bg-secondary/30"
-                  }`}
+                  } ${isUploading ? "pointer-events-none opacity-60" : ""}`}
                   onDragOver={(e) => {
                     e.preventDefault();
                     setIsDraggingInternal(true);
@@ -344,6 +405,7 @@ export function ProposalDocumentsSection({
                       if (e.target.files?.[0]) {
                         handleFileUpload(e.target.files[0], "internal_costing", internalDocTag);
                       }
+                      e.target.value = "";
                     }}
                   />
                   <div className="flex items-center justify-center gap-2 text-xs">
@@ -418,22 +480,20 @@ export function ProposalDocumentsSection({
                         variant="ghost"
                         size="sm"
                         className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
-                        onClick={() => toast.success(`Descargando: ${doc.name}`)}
-                        title="Descargar archivo"
+                        onClick={() => onDownloadDocument(doc)}
+                        disabled={!canDownload(doc)}
+                        title={canDownload(doc) ? "Descargar archivo" : noFileHint}
                       >
                         <Download className="h-3.5 w-3.5 sm:mr-1" />
                         <span className="hidden sm:inline">Descargar</span>
                       </Button>
 
-                      {isLeader && (
+                      {canDelete(doc) && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                          onClick={() => {
-                            onRemoveDocument(doc.id, "internal_costing");
-                            toast.info(`Archivo interno eliminado`);
-                          }}
+                          onClick={() => onRemoveDocument(doc)}
                           title="Eliminar archivo"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
