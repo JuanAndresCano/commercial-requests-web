@@ -24,10 +24,10 @@ export default function RequestsBoard() {
   const { data: apiProposals } = useRequests({ role: role === "kam" ? "KAM" : undefined });
   const activeDataset = useMemo(() => {
     if (apiProposals) {
-      return apiProposals.map((p) => mapProposalToRequestItem(p, user.name));
+      return apiProposals.map((p) => mapProposalToRequestItem(p));
     }
     return requests;
-  }, [apiProposals, requests, user.name]);
+  }, [apiProposals, requests]);
 
   const [view, setView] = useState<"board" | "list">("board");
   const [q, setQ] = useState("");
