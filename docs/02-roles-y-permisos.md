@@ -28,7 +28,7 @@ Es el dueño comercial de la relación con el cliente corporativo. Su "resultado
 - **Cancelar/eliminar su propia solicitud mientras esté en estado "Nueva"** (`08`, pregunta 14) — para corregir errores de creación (empresa duplicada, datos incorrectos) antes de que nadie la haya trabajado. Es una **cancelación lógica** (soft delete: la solicitud pasa a estado cancelado y no se borra físicamente) y exige un **motivo obligatorio**, que se elige entre motivos predefinidos (chips) o se escribe como texto libre. (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
 - Marcar una solicitud como **"Entregada"** (botón "Enviar a cliente" en el detalle) — esta es su acción de cierre de ciclo, y es **exclusiva del KAM**: el Líder de Producto no tiene ningún botón equivalente (ver más abajo, se corrigió un hueco donde sí lo tenía). **El botón está deshabilitado si el Líder de Producto todavía no definió un Valor Total Ofertado mayor a $0** (se encontró y corrigió un hueco donde se podía entregar con costeo en $0).
 - **Devolver una propuesta "Entregada" a "En proceso de costeo" con observaciones del cliente** (`08`, pregunta 13) — cuando el cliente pide ajustes tras recibir la propuesta. La nota queda visible para ambos roles (banner ámbar en el detalle, y en la tarjeta del Kanban del Líder) hasta que se vuelva a entregar.
-- Ver/gestionar documentos adjuntos de la solicitud (subir/eliminar, ambas categorías).
+- Ver/gestionar los documentos **de cara al cliente** de la solicitud (`client_kam`): subirlos, descargarlos y eliminar los que él subió. **No ve, no descarga ni sube los documentos internos de costeo** (`internal_costing`): esos son del equipo del Líder de Producto y el backend ni siquiera se los envía (HU 5.2; antes de la HU 5.2 este documento decía "ambas categorías", lo que contradecía el criterio de aceptación).
 
 ### Qué NO hace
 
@@ -76,7 +76,7 @@ A diferencia del KAM (que opera con pocas solicitudes activas a la vez conceptua
 - **Editar el costeo financiero completo**: el Valor Final de la Propuesta y el Margen de Contribución (% y $) se digitan directamente — ya no se calculan a partir de un costo base, porque el equipo trae ese número exacto de un Excel externo (ver `04`, `ProposalCosting`). También puede agregar una nota de alcance libre y confirmar explícitamente el envío al KAM con el botón "Enviar a KAM" (ver más abajo). Ya no existe el switch "requiere asesor externo": el indicador de asesor es de solo lectura, derivado directamente de a quién se asignó como docente/experto. Los campos numéricos están protegidos contra valores negativos (y el margen % contra >100) — se corrigió un hueco donde se podían guardar sin ningún aviso.
 - **Avanzar el estado** de la solicitud a través de las 4 etapas, con fricción proporcional al riesgo de cada transición (ver "Confirmaciones y validaciones" más abajo).
 - **Reasignar** una solicitud completa a otro Líder de Producto/nodo — mientras está en **"Nueva" o "En Experto"** (si el tema no corresponde a su especialidad, fue mal asignada por el KAM, hay sobrecarga operativa, o el experto asignado determina que el tema es de otro nodo) — con motivo estructurado (`select` de razones) y nota opcional. Ya está protegido por su propio modal (selección + confirmación), no es un riesgo de un solo clic. Si la solicitud estaba en "En Experto", reasignar la devuelve a "Nueva" y limpia el docente/asesor asignado (no aplicaría necesariamente bajo el nuevo nodo). ⚠️ La ampliación a "En Experto" es una decisión de Tomás, no confirmada aún por Dianis (`08`, pregunta 16).
-- Subir/eliminar documentos (ambas categorías: cara al cliente e internos de costeo).
+- Subir/descargar/eliminar documentos de **ambas categorías** (cara al cliente e internos de costeo) de las solicitudes que tiene asignadas, incluidos los que subió el KAM. Los internos son exclusivos de su lado (HU 5.2).
 - Ver contacto del asesor externo asignado.
 
 ### Confirmaciones y validaciones (fricción proporcional al riesgo)
@@ -155,6 +155,8 @@ Todos los roles tienen, en el menú del avatar (rail lateral), la opción **"Res
 | Cancelar solicitud | ✅ (mientras esté "Nueva") | ❌ | — | — |
 | Avanzar etapa del pipeline (Nueva → Experto → Costeo) | ❌ | ✅ | ❌ | ❌ |
 | Reasignar Líder de Producto | ❌ | ✅ ("Nueva" o "En Experto") | — (no implementado) | — |
-| Subir/eliminar documentos | ✅ | ✅ | — | — |
+| Documentos de cara al cliente (`client_kam`): subir/descargar | ✅ | ✅ | — | — |
+| Documentos de cara al cliente: eliminar | ✅ (solo los que subió) | ✅ (cualquiera de sus solicitudes) | — | — |
+| Documentos internos de costeo (`internal_costing`): ver/descargar/subir/eliminar | ❌ (ni los ve) | ✅ | — | — |
 | Marcar "Entregada"/"Enviar a cliente" | ✅ (única acción que cierra el ciclo) | ❌ (corregido — antes también podía) | — | — |
 | Devolver propuesta entregada con observaciones | ✅ | ❌ | — | — |
