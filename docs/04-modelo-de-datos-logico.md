@@ -260,7 +260,7 @@ interface ProposalDocument {
 }
 ```
 
-Nota: en el prototipo, subir un archivo probablemente no persiste el binario real (revisar `ProposalDocumentsSection.tsx` si se retoma esa pieza) — es una simulación de metadata.
+Nota: en el prototipo, subir un archivo no persistía el binario real (simulación de metadata). **Con el backend (HU 5.2) los documentos se guardan en almacenamiento privado (MinIO)** y `ProposalDocument` se construye desde el adjunto del API (`src/lib/proposal-documents.ts`): la categoría `client_kam` ↔ `CLIENT_FACING` e `internal_costing` ↔ `INTERNAL`, con `downloadable` (falso en adjuntos que solo tienen nombre) y `canDelete` calculado por el backend; el tamaño y la fecha se formatean en el cliente. El KAM nunca recibe los `internal_costing`. El flujo mock (solicitudes sin backend) conserva la simulación. Reglas y decisiones: `../commercial-requests-backend/docs/attachments-hu-5-2.md`.
 
 ## `CompanyRecord` (directorio de empresas con convenio, usado para autocompletar)
 

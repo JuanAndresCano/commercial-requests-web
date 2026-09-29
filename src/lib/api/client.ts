@@ -29,11 +29,14 @@ interface RequestOptions {
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, skipUnauthorizedHandler = false } = options;
 
+  // FormData (file uploads) must not get a JSON content type: the browser sets the
+  // multipart one, including the boundary.
+  const isForm = body instanceof FormData;
   const response = await fetch(`${API_URL}${path}`, {
     method,
     credentials: "include",
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined || isForm ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
 
   if (!response.ok) {

@@ -77,6 +77,8 @@ import { useUpdateRequestInfo } from "@/hooks/use-update-request-info";
 import { useDeleteRequest } from "@/hooks/use-delete-request";
 import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
 import { useAssignProfessor } from "@/hooks/use-assign-professor";
+import { useUploadAttachment, useDeleteAttachment, useDownloadAttachment } from "@/hooks/use-attachments";
+import { CATEGORY_TO_BACKEND, buildLocalDocument, splitAttachments } from "@/lib/proposal-documents";
 import { useMarkReadyForKam } from "@/hooks/use-mark-ready-for-kam";
 import { useReassignProposal } from "@/hooks/use-reassign-proposal";
 import { useUpdateServiceSpecs } from "@/hooks/use-update-service-specs";
@@ -180,6 +182,9 @@ export default function RequestDetail() {
   // Mutaciones reales (HU 4.1/4.3/4.4/4.5) — se llaman siempre (reglas de hooks), solo se
   // usan cuando `apiProposal` existe (ver AGENTS.md: Boolean(apiProposal) decide el flujo
   // real vs. mock); ver cada handler más abajo.
+  const uploadAttachmentReal = useUploadAttachment();
+  const deleteAttachmentReal = useDeleteAttachment();
+  const downloadAttachmentReal = useDownloadAttachment();
   const assignProfessorReal = useAssignProfessor();
   const markReadyForKamReal = useMarkReadyForKam();
   const reassignProposalReal = useReassignProposal();
@@ -564,8 +569,13 @@ export default function RequestDetail() {
   }));
   const nodeOptions = dbNodes?.map((n) => ({ id: n.id, label: n.name }));
 
-  const clientKamDocs: ProposalDocument[] = req?.clientKamDocuments ?? [];
-  const internalCostingDocs: ProposalDocument[] = req?.internalCostingDocuments ?? [];
+  // HU 5.2 — con backend los documentos vienen de `apiProposal.attachments` (el backend ya
+  // filtró por rol: el KAM nunca recibe los internos); sin backend, del mock local.
+  const apiDocuments = apiProposal ? splitAttachments(apiProposal.attachments ?? []) : null;
+  const clientKamDocs: ProposalDocument[] = apiDocuments ? apiDocuments.clientKam : (req?.clientKamDocuments ?? []);
+  const internalCostingDocs: ProposalDocument[] = apiDocuments
+    ? apiDocuments.internalCosting
+    : (req?.internalCostingDocuments ?? []);
 
   // Historial de negociación (docs/03/04): cada confirmación de "Enviar a
   // KAM" abre una ronda nueva, sin excepción — aunque la anterior nunca haya
@@ -648,14 +658,60 @@ export default function RequestDetail() {
     updateCosting(req.id, newCosting);
   };
 
-  const handleAddDocument = (doc: ProposalDocument) => {
+  // HU 5.2 — un documento va al backend (almacenamiento privado) o al mock local, nunca a ambos.
+  const handleUploadDocument = (file: File, category: ProposalDocument["category"], tag?: string) => {
     if (!req) return;
-    addDocument(req.id, doc);
+    if (apiProposal) {
+      uploadAttachmentReal.mutate(
+        { proposalId: apiProposal.id, file, category: CATEGORY_TO_BACKEND[category], tag },
+        {
+          onSuccess: () => toast.success(`Archivo "${file.name}" cargado`),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo subir el archivo"),
+        },
+      );
+      return;
+    }
+    addDocument(req.id, buildLocalDocument(file, category, tag, user.name));
+    toast.success(`Archivo "${file.name}" cargado`);
   };
 
-  const handleRemoveDocument = (docId: string, category: "client_kam" | "internal_costing") => {
+  const handleRemoveDocument = (doc: ProposalDocument) => {
     if (!req) return;
-    removeDocument(req.id, docId, category);
+    if (apiProposal) {
+      deleteAttachmentReal.mutate(
+        { proposalId: apiProposal.id, attachmentId: doc.id },
+        {
+          onSuccess: () => toast.info("Documento eliminado"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo eliminar el documento"),
+        },
+      );
+      return;
+    }
+    removeDocument(req.id, doc.id, doc.category);
+    toast.info("Documento eliminado");
+  };
+
+  // La URL de descarga es prefirmada y de corta vida: se pide justo al hacer clic (el
+  // backend valida rol y pertenencia) y se abre como descarga directa.
+  const handleDownloadDocument = (doc: ProposalDocument) => {
+    if (apiProposal) {
+      downloadAttachmentReal.mutate(
+        { proposalId: apiProposal.id, attachmentId: doc.id },
+        {
+          onSuccess: ({ url }) => {
+            const link = document.createElement("a");
+            link.href = url;
+            link.rel = "noopener";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          },
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo descargar el documento"),
+        },
+      );
+      return;
+    }
+    toast.success(`Descargando: ${doc.name}`);
   };
 
   // Avanzar de estado (y sobre todo "marcar entregada") es una acción con
@@ -1278,10 +1334,11 @@ export default function RequestDetail() {
             <ProposalDocumentsSection
               clientKamDocuments={clientKamDocs}
               internalCostingDocuments={internalCostingDocs}
-              onAddDocument={handleAddDocument}
+              onUploadFile={handleUploadDocument}
               onRemoveDocument={handleRemoveDocument}
+              onDownloadDocument={handleDownloadDocument}
+              isUploading={uploadAttachmentReal.isPending}
               userRole={role}
-              userName={user.name}
             />
 
             {/* 3. HISTORIAL DE NEGOCIACIÓN (docs/03) — solo si ya hay más de un

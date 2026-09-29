@@ -170,12 +170,23 @@ export interface ProfessorAssignmentLog {
   changedBy: { id: string; firstName: string | null; lastName: string | null };
 }
 
+export type AttachmentCategory = "CLIENT_FACING" | "INTERNAL";
+
+// HU 5.2 — the backend never sends the storage key; the file itself is fetched through a
+// presigned URL (see attachmentsApi.getDownloadUrl). `canDelete` is decided server-side.
 export interface ProposalAttachment {
   id: string;
-  proposalId: string;
   fileName: string;
-  fileUrl: string | null;
+  category: AttachmentCategory;
+  tag: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
   uploadedAt: string;
+  uploadedById: string | null;
+  uploadedBy: { id: string; firstName: string | null; lastName: string | null } | null;
+  /** False for attachments that only carry a name (created before file storage). */
+  downloadable: boolean;
+  canDelete: boolean;
 }
 
 export interface ProposalListItem {
