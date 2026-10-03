@@ -70,7 +70,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   // se utiliza el dataset fallback.
   const activeDataset = useMemo(() => {
     if (apiProposals) {
-      return apiProposals.map((p) => mapProposalToRequestItem(p, userName));
+      return apiProposals.map((p) => mapProposalToRequestItem(p));
     }
     return requests ? requests.filter((r) => r.kam === userName) : [];
   }, [apiProposals, requests, userName]);

@@ -167,7 +167,7 @@ export default function RequestDetail() {
   // enforced by the guards, not by this assertion.
   const req = useMemo((): RequestItem => {
     if (apiProposal) {
-      return mapProposalToRequestItem(apiProposal, user.name);
+      return mapProposalToRequestItem(apiProposal, isKam ? user.name : undefined);
     }
     // Solo usar el mock si todavía no llegó respuesta del backend (puede ser
     // que el backend no esté levantado en dev y el item vive en el contexto).

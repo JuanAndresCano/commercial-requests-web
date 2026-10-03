@@ -54,7 +54,7 @@ const proposals = [
   listItem("p-redelivered", "Propuesta reentregada", REDELIVERED),
   listItem("p-old-backend", "Propuesta sin rondas", undefined),
 ];
-const requests = proposals.map((p) => mapProposalToRequestItem(p, "Andrea Martínez"));
+const requests = proposals.map((p) => mapProposalToRequestItem(p));
 
 /** The strip is always rendered (invisible when it does not apply) to reserve the space. */
 function noticeIsVisible(card: HTMLElement) {
@@ -100,7 +100,7 @@ describe("returned-with-observations notice on the Kanban cards (HU 5.4)", () =>
   });
 
   it("shows the amber notice on the KAM's Kanban card only for the returned proposal, and still renders a list item without rounds", () => {
-    renderWithProviders(<KamCommandCenter requests={requests} userName="Andrea Martínez" />);
+    renderWithProviders(<KamCommandCenter requests={requests} userName="KAM Icesi" />);
     fireEvent.click(screen.getByLabelText("Vista kanban"));
 
     expect(noticeIsVisible(cardOf("Propuesta devuelta"))).toBe(true);

@@ -191,6 +191,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     ? `${p.productLeader.firstName ?? ""} ${p.productLeader.lastName ?? ""}`.trim()
     : "Por definir";
 
+  const creatorFullName = p.creator ? `${p.creator.firstName ?? ""} ${p.creator.lastName ?? ""}`.trim() : undefined;
+
   // Only the exact backend code gets the stamp; mapBackendTypeToFrontend falls back to
   // "Capacitación" for null/unknown types, which must not.
   const proCultura = calculateProCulturaReference(
@@ -230,7 +232,7 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     statusUpdatedAt: p.workflow?.currentStatusSince ?? undefined,
     node: (detail.node?.name as string) ?? "Por definir",
     productLeader: leaderFullName || "Por definir",
-    kam: currentKamName ?? "KAM Icesi",
+    kam: creatorFullName || currentKamName || "KAM Icesi",
     professor: professorName,
     professorType,
     externalProfessorData,

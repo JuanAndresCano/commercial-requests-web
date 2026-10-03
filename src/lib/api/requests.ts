@@ -216,6 +216,7 @@ export interface ProposalListItem {
     readyForKamAt: string | null;
   }[];
   productLeader?: ProposalUserSummary | null;
+  creator?: ProposalUserSummary | null;
   assignments?: ProposalAssignment[];
   // Optional: a backend without the list contract (PR #26) does not send it.
   negotiationRounds?: ListNegotiationRound[];
