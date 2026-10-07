@@ -30,11 +30,13 @@ describe("live refresh between roles", () => {
     vi.useRealTimers();
   });
 
-  it.each([
+  const cases: Array<[string, () => unknown, () => unknown]> = [
     ["the request list", () => useRequests(), () => requestsApi.list],
     ["the request detail", () => useRequestDetail("p1"), () => requestsApi.getById],
     ["the dashboard metrics", () => useDashboardMetrics(), () => requestsApi.getDashboardMetrics],
-  ])("re-fetches %s on its own", async (_label, hook, fn) => {
+  ];
+
+  it.each(cases)("re-fetches %s on its own", async (_label, hook, fn) => {
     renderHook(hook, { wrapper });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
