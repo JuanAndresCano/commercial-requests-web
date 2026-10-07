@@ -9,7 +9,7 @@ const sampleRequest: RequestItem = {
   code: "PROP-2026-0001",
   title: "Programa en Analítica de Datos",
   company: "Bancolombia",
-  contact: "Ana Gómez",
+  applicant: "Ana Gómez",
   kam: "Andrea Martínez",
   productLeader: "Carlos Mendoza",
   node: "Inteligencia Artificial y Tecnologías Digitales",
@@ -18,8 +18,6 @@ const sampleRequest: RequestItem = {
   urgency: "alta",
   createdAt: "2026-10-01T10:00:00Z",
   statusUpdatedAt: "2026-10-02T10:00:00Z",
-  assignments: [],
-  attachments: [],
   negotiationRounds: [],
 };
 
