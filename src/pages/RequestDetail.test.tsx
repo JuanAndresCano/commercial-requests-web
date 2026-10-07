@@ -83,6 +83,34 @@ const mockRequests: RequestItem[] = [
       },
     ],
   },
+  {
+    id: "REQ-2026-0004",
+    title: "Propuesta Devuelta para Ajustes",
+    company: "Argos S.A.",
+    companyNit: "890100200-1",
+    applicant: "Mateo Pérez",
+    type: "Capacitación",
+    createdAt: "2026-03-15T10:00:00.000Z",
+    deadline: "2026-03-25T10:00:00.000Z",
+    status: "en-costeo",
+    urgency: "alta",
+    productLeader: "Juan Pablo Corrales",
+    kam: "Andrea Martínez",
+    node: "Inteligencia Artificial",
+    costing: {
+      readyForKam: false,
+      totalOfferedCop: 20000000,
+    },
+    negotiationRounds: [
+      {
+        id: "REQ-2026-0004-r1",
+        roundNumber: 1,
+        totalOfferedCop: 20000000,
+        sentToKamAt: "2026-03-20T10:00:00.000Z",
+        clientResponse: "rechazada",
+      },
+    ],
+  },
 ];
 
 const authMock = vi.hoisted(() => ({
@@ -159,7 +187,14 @@ vi.mock("@/lib/api/requests", async (importOriginal) => {
             : [],
           assignments: [],
           attachments: [],
-          negotiationRounds: [],
+          negotiationRounds:
+            found.negotiationRounds?.map((nr) => ({
+              id: nr.id,
+              roundNumber: nr.roundNumber,
+              offeredValue: nr.totalOfferedCop,
+              clientResponse: nr.clientResponse === "rechazada" ? "CHANGES_REQUESTED" : "PENDING",
+              sentToKamAt: nr.sentToKamAt,
+            })) ?? [],
         });
       }),
       updateInfo: vi.fn().mockResolvedValue({ id: "REQ-2026-0001", title: "Capacitación Modificada" }),
@@ -195,6 +230,12 @@ function renderPage(requestId = "REQ-2026-0001") {
 
 describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () => {
   beforeEach(() => {
+    authMock.user = {
+      role: "kam",
+      roleLabel: "KAM",
+      name: "Andrea Martínez",
+      email: "andrea@icesi.edu.co",
+    };
     authMock.requests = [...mockRequests];
     authMock.updateRequest.mockReset();
     authMock.deleteRequest.mockReset();
@@ -259,6 +300,32 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
         }),
       );
       expect(requestsApi.updateInfo).not.toHaveBeenCalled();
+    });
+
+    it("renders 'Editar información' button when proposal is in 'en-costeo' status post-rejection (UI-004)", async () => {
+      renderPage("REQ-2026-0004");
+
+      const editBtn = await screen.findByRole("button", { name: /Editar información/i });
+      expect(editBtn).toBeInTheDocument();
+
+      fireEvent.click(editBtn);
+      expect(screen.getByText("Editar información de la solicitud")).toBeInTheDocument();
+    });
+  });
+
+  describe("HU 4.4: Leader reassignment in costeo (UI-002)", () => {
+    it("renders 'Reasignar' button when proposal is in 'en-costeo' status for Product Leader", async () => {
+      authMock.user = {
+        role: "lider-producto",
+        roleLabel: "Líder de Producto",
+        name: "Juan Pablo Corrales",
+        email: "jcorrales@icesi.edu.co",
+      };
+
+      renderPage("REQ-2026-0002");
+
+      const reassignBtn = await screen.findByRole("button", { name: /Reasignar/i });
+      expect(reassignBtn).toBeInTheDocument();
     });
   });
 

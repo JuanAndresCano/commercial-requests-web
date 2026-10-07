@@ -8,6 +8,7 @@ import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
 import type { BackendStatusCode } from "@/lib/api/requests";
 import type { RequestStatus } from "@/lib/mock-data";
 import { toast } from "sonner";
+import { KanbanBoardSkeleton } from "@/components/dashboard/KanbanBoardSkeleton";
 
 // Only the two transitions the Kanban triggers from here (docs/03, B.3): "Pasar a
 // Experto" and "Pasar a Costeo". Both go through the same backend endpoint as every
@@ -76,9 +77,9 @@ function ProductLeaderDashboardConnected({ user, updateRequest }: ProductLeaderD
 
   if (isLoading) {
     return (
-      <section className="mx-auto max-w-xl py-16 text-center text-sm text-muted-foreground">
-        Cargando tus propuestas...
-      </section>
+      <div className="space-y-6">
+        <KanbanBoardSkeleton />
+      </div>
     );
   }
 

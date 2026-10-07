@@ -65,8 +65,11 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { useCreateProposal } from "@/hooks/use-create-proposal";
 import { useNodes } from "@/hooks/use-nodes";
+import { useProductLeaders } from "@/hooks/use-product-leaders";
 import { useRequests } from "@/hooks/use-requests";
+import { attachmentsApi } from "@/lib/api/attachments";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
+
 import type {
   CreateProposalPayload,
   CompanyType,
@@ -186,7 +189,9 @@ export default function NewRequest() {
   const { user } = useAuth();
   const createProposal = useCreateProposal();
   const { data: dbNodes } = useNodes();
+  const { data: dbLeaders } = useProductLeaders();
   const [step, setStep] = useState(1);
+
   const [submitted, setSubmitted] = useState<null | "draft" | "sent">(null);
   const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ company: string; timestamp: string } | null>(null);
 
@@ -488,6 +493,18 @@ export default function NewRequest() {
     );
     const resolvedNodeId = matchedNode?.id;
 
+    // Resolve matching productLeaderId from backend directory if assigned
+    const matchedLeader = dbLeaders?.find((u) => {
+      const fullName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
+      return (
+        u.id === data.ldp ||
+        (data.ldp && fullName.toLowerCase() === data.ldp.toLowerCase()) ||
+        (data.ldp && u.email.toLowerCase() === data.ldp.toLowerCase())
+      );
+    });
+    const resolvedProductLeaderId =
+      matchedLeader?.id || (dbLeaders?.some((u) => u.id === data.ldp) ? data.ldp : undefined);
+
     const primaryContact = data.contactoNombre.trim()
       ? {
           name: data.contactoNombre.trim(),
@@ -514,6 +531,7 @@ export default function NewRequest() {
       sector: data.ciiuPrincipalDesc.trim() || undefined,
       website: data.web.trim() || undefined,
       nodeId: resolvedNodeId,
+      productLeaderId: resolvedProductLeaderId,
       priority: data.urgencia ? PRIORITY_MAP[data.urgencia] : undefined,
       contactName: primaryContact?.name,
       contactEmail: primaryContact?.email,
@@ -543,7 +561,25 @@ export default function NewRequest() {
     };
 
     try {
-      await createProposal.mutateAsync(payload);
+      const createdProposal = await createProposal.mutateAsync(payload);
+
+      // UI-006: Subir archivos físicos reales al backend si se adjuntaron en el formulario
+      if (createdProposal?.id && data.archivos && data.archivos.length > 0) {
+        try {
+          await Promise.all(
+            data.archivos.map((file) =>
+              attachmentsApi.upload(createdProposal.id, {
+                file,
+                category: "INTERNAL",
+              }),
+            ),
+          );
+        } catch (uploadErr) {
+          console.warn("Algunos adjuntos no pudieron subirse al almacenamiento:", uploadErr);
+          toast.warning("La solicitud fue creada, pero algunos documentos no pudieron subirse automáticamente.");
+        }
+      }
+
       toast.success("Solicitud comercial registrada exitosamente");
       // Limpiar borrador local tras envío exitoso
       try {
@@ -1398,7 +1434,15 @@ function Step3({
   errors: Record<string, string>;
 }) {
   const { data: dbNodes } = useNodes();
+  const { data: dbLeaders } = useProductLeaders();
   const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
+  const availableLeaders =
+    dbLeaders && dbLeaders.length > 0
+      ? dbLeaders.map((u) => ({
+          id: u.id,
+          name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email,
+        }))
+      : PRODUCT_LEADERS.map((name) => ({ id: "", name }));
 
   // Autofoco + scroll suave al campo de texto al elegir "Otro", sin clics extra
   const otroInputRef = useRef<HTMLInputElement>(null);
@@ -1462,7 +1506,13 @@ function Step3({
                     update("nodo", v);
                     // Asociación inteligente por Nodo: preselecciona automáticamente el líder sugerido para este nodo
                     if (v && NODE_DEFAULT_LEADERS[v]) {
-                      update("ldp", NODE_DEFAULT_LEADERS[v]);
+                      const defLeaderName = NODE_DEFAULT_LEADERS[v];
+                      const matchedInDb = dbLeaders?.find(
+                        (u) =>
+                          `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim().toLowerCase() ===
+                          defLeaderName.toLowerCase(),
+                      );
+                      update("ldp", matchedInDb ? matchedInDb.id || defLeaderName : defLeaderName);
                     }
                   }}
                 >
@@ -1482,9 +1532,26 @@ function Step3({
             </Field>
 
             {(() => {
-              const suggestedLeader = data.nodo ? NODE_DEFAULT_LEADERS[data.nodo] : "";
-              const isDefaultSuggested = Boolean(suggestedLeader && data.ldp === suggestedLeader);
-              const isCustomLeader = Boolean(data.ldp && suggestedLeader && data.ldp !== suggestedLeader);
+              const defLeaderName = data.nodo ? NODE_DEFAULT_LEADERS[data.nodo] : "";
+              const foundSuggested = dbLeaders?.find(
+                (u) =>
+                  `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim().toLowerCase() ===
+                  (defLeaderName || "").toLowerCase(),
+              );
+              const suggestedLeaderValue = foundSuggested ? foundSuggested.id || defLeaderName : defLeaderName;
+              const suggestedLeaderDisplay = foundSuggested
+                ? `${foundSuggested.firstName ?? ""} ${foundSuggested.lastName ?? ""}`.trim() || foundSuggested.email
+                : defLeaderName;
+
+              const isDefaultSuggested = Boolean(
+                suggestedLeaderDisplay && (data.ldp === suggestedLeaderDisplay || data.ldp === suggestedLeaderValue),
+              );
+              const isCustomLeader = Boolean(
+                data.ldp &&
+                suggestedLeaderDisplay &&
+                data.ldp !== suggestedLeaderDisplay &&
+                data.ldp !== suggestedLeaderValue,
+              );
 
               return (
                 <Field
@@ -1513,24 +1580,24 @@ function Step3({
                     ) : isCustomLeader ? (
                       <span className="flex items-center gap-1.5 flex-wrap">
                         <span>
-                          Líder sugerido por el nodo: <strong>{suggestedLeader}</strong>.
+                          Líder sugerido por el nodo: <strong>{suggestedLeaderDisplay}</strong>.
                         </span>
                         <button
                           type="button"
-                          onClick={() => update("ldp", suggestedLeader)}
+                          onClick={() => update("ldp", suggestedLeaderValue)}
                           className="text-accent underline font-medium hover:text-accent/80 transition-colors"
                         >
                           Restablecer sugerido
                         </button>
                       </span>
-                    ) : suggestedLeader ? (
+                    ) : suggestedLeaderDisplay ? (
                       <span className="flex items-center gap-1.5 flex-wrap">
                         <span>
-                          Sugerido para este nodo: <strong>{suggestedLeader}</strong>.
+                          Sugerido para este nodo: <strong>{suggestedLeaderDisplay}</strong>.
                         </span>
                         <button
                           type="button"
-                          onClick={() => update("ldp", suggestedLeader)}
+                          onClick={() => update("ldp", suggestedLeaderValue)}
                           className="text-accent underline font-medium hover:text-accent/80 transition-colors"
                         >
                           Aplicar sugerido
@@ -1551,12 +1618,15 @@ function Step3({
                           -- Sin líder sugerido (opcional / por definir) --
                         </SelectItem>
                       )}
-                      {PRODUCT_LEADERS.map((p) => {
-                        const isThisSuggested = Boolean(suggestedLeader === p);
+                      {availableLeaders.map((leader) => {
+                        const isThisSuggested = Boolean(
+                          suggestedLeaderDisplay &&
+                          (leader.name === suggestedLeaderDisplay || leader.id === suggestedLeaderValue),
+                        );
                         return (
                           <SelectItem
-                            key={p}
-                            value={p}
+                            key={leader.id || leader.name}
+                            value={leader.id || leader.name}
                             extra={
                               isThisSuggested ? (
                                 <span className="inline-flex items-center gap-1 rounded-full border border-accent/20 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent shrink-0">
@@ -1565,7 +1635,7 @@ function Step3({
                               ) : null
                             }
                           >
-                            {p}
+                            {leader.name}
                           </SelectItem>
                         );
                       })}

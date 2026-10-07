@@ -120,10 +120,8 @@ export function ReassignLeaderDialog({
           </div>
           <DialogTitle className="text-base font-bold text-foreground mt-1">Reasignar Líder de Producto</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Transfiere la gestión de esta solicitud comercial a otro líder si no corresponde a tu área temática.
-            {request?.status === "en-experto" && (
-              <> La solicitud volverá a la fase "Nueva" para que el nuevo líder reinicie la asignación de docente.</>
-            )}
+            Transfiere la gestión de esta propuesta comercial a otro líder de producto manteniendo intactos su estado
+            actual y los datos registrados.
           </DialogDescription>
         </DialogHeader>
 
