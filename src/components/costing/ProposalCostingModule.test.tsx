@@ -579,7 +579,51 @@ describe("ProposalCostingModule", () => {
       const { onUpdateCosting } = setup({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
       fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
       typeInto(screen.getByLabelText(/Nota de alcance comercial/i), "Ajuste acordado con el cliente");
-      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ readyForKam: true }));
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledWith(
+        expect.objectContaining({ readyForKam: true, negotiationNotes: "Ajuste acordado con el cliente" }),
+      );
+    });
+
+    it("saves the note once after a pause, not once per keystroke", () => {
+      const { onUpdateCosting } = setup();
+      fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+      const note = screen.getByLabelText(/Nota de alcance comercial/i);
+      typeInto(note, "A");
+      typeInto(note, "Aj");
+      typeInto(note, "Ajuste");
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ negotiationNotes: "Ajuste" }));
+    });
+
+    it("saves the note right away when the field is left", () => {
+      const { onUpdateCosting } = setup();
+      fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+      const note = screen.getByLabelText(/Nota de alcance comercial/i);
+      typeInto(note, "Ajuste");
+      fireEvent.blur(note);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves a note still pending when the module goes away", () => {
+      const onUpdateCosting = vi.fn();
+      const view = render(<ProposalCostingModule request={makeRequest({})} onUpdateCosting={onUpdateCosting} />);
+      fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+      typeInto(screen.getByLabelText(/Nota de alcance comercial/i), "Ajuste");
+      view.unmount();
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ negotiationNotes: "Ajuste" }));
+    });
+
+    it("does not overwrite a note being typed when the saved costing is refreshed", () => {
+      const { rerenderWith } = setup({ negotiationNotes: "Vieja" });
+      const note = screen.getByLabelText(/Nota de alcance comercial/i) as HTMLTextAreaElement;
+      typeInto(note, "Escribiendo una nota nueva");
+      rerenderWith({ negotiationNotes: "Vieja" });
+      expect(note.value).toBe("Escribiendo una nota nueva");
     });
 
     it("editing the note does not push a value still being typed", () => {
@@ -587,6 +631,7 @@ describe("ProposalCostingModule", () => {
       typeInto(totalInput(), "9.000.000");
       fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
       typeInto(screen.getByLabelText(/Nota de alcance comercial/i), "Ajuste");
+      fireEvent.blur(screen.getByLabelText(/Nota de alcance comercial/i));
       expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 1_000_000 }));
       expect(onUpdateCosting).not.toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 9_000_000 }));
     });

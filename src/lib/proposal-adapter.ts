@@ -13,6 +13,7 @@ import type {
   ProfessorAssignmentLogEntry,
   RequestItem,
   RequestStatus,
+  NegotiationRound as FrontendNegotiationRound,
   Urgency,
   RequestType as FrontendRequestType,
 } from "./mock-data";
@@ -143,6 +144,37 @@ function decimalToNumber(value: string | number | null | undefined): number | un
   return Number.isFinite(num) ? num : undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type RoundScope = Pick<FrontendNegotiationRound, "participantes" | "modalidad" | "horas" | "type" | "necesidad">;
+
+/** The scope the backend froze when the Product Leader pressed "Enviar a KAM" (`scopeSnapshot`, JSON),
+ * in the labels the round history compares: the same ones the live request fields use. Anything that is
+ * missing, null or not of the expected shape stays undefined — a round without a snapshot (legacy, or a
+ * proposal without a program) simply has no scope to diff, exactly like the prototype's first round. */
+function mapScopeSnapshot(raw: unknown): RoundScope {
+  if (!isRecord(raw)) return {};
+  const { requestType, programModality, totalHours, minParticipants, maxParticipants, generalDescription } = raw;
+  return {
+    participantes:
+      typeof minParticipants === "number" && typeof maxParticipants === "number"
+        ? `${minParticipants} - ${maxParticipants}`
+        : undefined,
+    modalidad:
+      typeof programModality === "string" && programModality in MODALITY_MAP
+        ? MODALITY_MAP[programModality as BackendProgramModality]
+        : undefined,
+    horas: typeof totalHours === "number" ? String(totalHours) : undefined,
+    type:
+      typeof requestType === "string" && (Object.values(REQUEST_TYPE_TO_BACKEND) as string[]).includes(requestType)
+        ? mapBackendTypeToFrontend(requestType as BackendRequestType)
+        : undefined,
+    necesidad: typeof generalDescription === "string" && generalDescription.trim() ? generalDescription : undefined,
+  };
+}
+
 const toFrontendProfessorType = (type: "STAFF" | "EXTERNAL"): "planta" | "externo" =>
   type === "EXTERNAL" ? "externo" : "planta";
 
@@ -206,14 +238,14 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
   // The API order is not a contract: the detail sends every round, the list only the
   // latest. Ascending by roundNumber, so "the last one" is always the current round.
   const rounds = [...(p.negotiationRounds ?? [])].sort((a, b) => a.roundNumber - b.roundNumber);
-  const latestRound = rounds[rounds.length - 1];
-  // The notice only lives while the proposal is back in costing with the client's latest
-  // answer being "changes requested": a redelivery (new PENDING round, DELIVERED) or a
-  // REJECTED closes it, even though the old round keeps its CHANGES_REQUESTED forever.
-  const returnedNote =
-    status === "en-costeo" && latestRound?.clientResponse === "CHANGES_REQUESTED"
-      ? (latestRound.clientNote ?? undefined)
-      : undefined;
+  // The prototype sets the client's note when the KAM returns the proposal and clears it only when the
+  // KAM redelivers it to the client (status back to "entregada"). Pressing "Enviar a KAM" opens a new
+  // PENDING round but does NOT clear it. So while the proposal is in costing it is the note of the
+  // highest-numbered CHANGES_REQUESTED round — not necessarily the latest round. The list sends that
+  // round on purpose (latest + latest returned).
+  const returnedRound =
+    status === "en-costeo" ? [...rounds].reverse().find((r) => r.clientResponse === "CHANGES_REQUESTED") : undefined;
+  const returnedNote = returnedRound?.clientNote ?? undefined;
   // List rounds carry three fields; only the detail's full rounds feed the history panel.
   const fullRounds = p.negotiationRounds && rounds.every((r): r is NegotiationRound => "id" in r) ? rounds : undefined;
 
@@ -244,6 +276,7 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
       marginAmountCop: decimalToNumber(currentEconomics?.estimatedMargin),
       proCulturaTaxPercent: proCultura.applies ? PRO_CULTURA_PERCENT : 0,
       proCulturaTaxAmount: proCultura.amount,
+      negotiationNotes: currentEconomics?.negotiationNotes ?? undefined,
       readyForKam: isReady,
       costingSentAt: currentEconomics?.readyForKamAt ?? undefined,
     },
@@ -304,7 +337,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
         sentToClientAt: nr.sentToClientAt ?? undefined,
         clientResponse: isRejected ? "rechazada" : "pendiente",
         clientObservation: nr.clientNote ?? undefined,
-        clientRespondedAt: undefined,
+        clientRespondedAt: nr.clientRespondedAt ?? undefined,
+        ...mapScopeSnapshot(nr.scopeSnapshot),
       };
     }),
   };

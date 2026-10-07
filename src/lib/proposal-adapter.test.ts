@@ -614,10 +614,28 @@ describe("mapProposalToRequestItem - returned-with-observations notice (HU 5.4)"
     }
   });
 
-  it("clears the notice after a new PENDING round, in either order", () => {
+  // Prototype behaviour: the client's note stays until the KAM redelivers (status back to entregada);
+  // "Enviar a KAM" opens a new PENDING round but does not clear it.
+  it("keeps the notice after a new PENDING round (Enviar a KAM), in either order", () => {
     const input = [round(1, "CHANGES_REQUESTED", "vieja"), round(2, "PENDING")];
-    expect(mapProposalToRequestItem(withRounds(input)).clientObservations).toBeUndefined();
-    expect(mapProposalToRequestItem(withRounds([...input].reverse())).clientObservations).toBeUndefined();
+    expect(mapProposalToRequestItem(withRounds(input)).clientObservations).toBe("vieja");
+    expect(mapProposalToRequestItem(withRounds([...input].reverse())).clientObservations).toBe("vieja");
+  });
+
+  it("shows the note of the highest-numbered CHANGES_REQUESTED round, not of an older one", () => {
+    const input = [
+      round(1, "CHANGES_REQUESTED", "vieja"),
+      round(2, "PENDING"),
+      round(3, "CHANGES_REQUESTED", "nueva"),
+      round(4, "PENDING"),
+    ];
+    for (const rounds of [input, [...input].reverse()]) {
+      expect(mapProposalToRequestItem(withRounds(rounds)).clientObservations).toBe("nueva");
+    }
+  });
+
+  it("shows no notice while the proposal has never been returned", () => {
+    expect(mapProposalToRequestItem(withRounds([round(1, "PENDING")])).clientObservations).toBeUndefined();
   });
 
   it("clears the notice after the redelivery (status DELIVERED) even if a round still says CHANGES_REQUESTED", () => {
@@ -646,7 +664,14 @@ describe("mapProposalToRequestItem - returned-with-observations notice (HU 5.4)"
       expect(item.clientObservations).toBe("Ajustar alcance");
     });
 
-    it("shows no notice when the latest round is PENDING or the status is not en-costeo", () => {
+    it("keeps the notice of the returned round the list sends next to a newer PENDING one", () => {
+      const item = mapProposalToRequestItem(
+        listItem([thin(3, "PENDING", null), thin(2, "CHANGES_REQUESTED", "Ajustar alcance")]),
+      );
+      expect(item.clientObservations).toBe("Ajustar alcance");
+    });
+
+    it("shows no notice when the only round is PENDING or the status is not en-costeo", () => {
       expect(mapProposalToRequestItem(listItem([thin(3, "PENDING", null)])).clientObservations).toBeUndefined();
       expect(
         mapProposalToRequestItem(listItem([thin(2, "CHANGES_REQUESTED", "x")], "DELIVERED")).clientObservations,
@@ -664,6 +689,118 @@ describe("mapProposalToRequestItem - returned-with-observations notice (HU 5.4)"
         expect(item.clientObservations).toBeUndefined();
       }
     });
+  });
+});
+
+describe("mapProposalToRequestItem - negotiation history of the detail (prototype's 'Historial de Negociación')", () => {
+  const detailRound = (overrides: Record<string, unknown> = {}) => ({
+    id: "r1",
+    proposalId: "9c858901-8a57-4791-81fe-4c455b099bc9",
+    roundNumber: 1,
+    offeredValue: "30000000",
+    marginAmount: "9000000",
+    marginPercentage: "30",
+    scopeSnapshot: null,
+    leaderNote: null,
+    sentToKamAt: "2026-09-21T00:00:00.000Z",
+    sentToClientAt: null,
+    clientResponse: "PENDING" as const,
+    clientNote: null,
+    ...overrides,
+  });
+  const withRounds = (rounds: unknown[]) =>
+    baseProposal({ negotiationRounds: rounds as ProposalDetail["negotiationRounds"] });
+
+  it("maps when the round was delivered to the client and when it came back", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([
+        detailRound({
+          sentToClientAt: "2026-09-22T00:00:00.000Z",
+          clientResponse: "CHANGES_REQUESTED",
+          clientNote: "Reducir",
+          clientRespondedAt: "2026-09-25T00:00:00.000Z",
+        }),
+      ]),
+    );
+    expect(item.negotiationRounds?.[0]).toMatchObject({
+      sentToClientAt: "2026-09-22T00:00:00.000Z",
+      clientRespondedAt: "2026-09-25T00:00:00.000Z",
+      clientResponse: "rechazada",
+    });
+  });
+
+  it("leaves the dates undefined for a round that was not delivered or returned (or a backend without clientRespondedAt)", () => {
+    const item = mapProposalToRequestItem(withRounds([detailRound()]));
+    expect(item.negotiationRounds?.[0].sentToClientAt).toBeUndefined();
+    expect(item.negotiationRounds?.[0].clientRespondedAt).toBeUndefined();
+  });
+
+  it("maps the scope snapshot into the labels the live request uses, so the round diff compares like with like", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([
+        detailRound({
+          scopeSnapshot: {
+            requestType: "CONSULTORIA",
+            requestTypeOther: null,
+            programType: "CURSO",
+            programModality: "PRESENCIAL_CLIENTE",
+            totalHours: 40,
+            minParticipants: 15,
+            maxParticipants: 20,
+            generalDescription: "Necesidad original",
+          },
+        }),
+      ]),
+    );
+    expect(item.negotiationRounds?.[0]).toMatchObject({
+      participantes: "15 - 20",
+      modalidad: "Presencial en sede cliente",
+      horas: "40",
+      type: "Consultoría",
+      necesidad: "Necesidad original",
+    });
+  });
+
+  it("leaves a scope field undefined when the snapshot lacks it, and the whole scope when there is no snapshot", () => {
+    const partial = mapProposalToRequestItem(
+      withRounds([detailRound({ scopeSnapshot: { totalHours: null, minParticipants: 25, maxParticipants: null } })]),
+    );
+    expect(partial.negotiationRounds?.[0]).toMatchObject({
+      participantes: undefined,
+      modalidad: undefined,
+      horas: undefined,
+      type: undefined,
+      necesidad: undefined,
+    });
+    for (const scopeSnapshot of [null, "texto", [1, 2]]) {
+      const item = mapProposalToRequestItem(withRounds([detailRound({ scopeSnapshot })]));
+      expect(item.negotiationRounds?.[0].horas).toBeUndefined();
+      expect(item.negotiationRounds?.[0].type).toBeUndefined();
+    }
+  });
+
+  it("ignores a snapshot code it does not know instead of showing the raw backend code", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([detailRound({ scopeSnapshot: { requestType: "NEW_TYPE", programModality: "TELEPATHY" } })]),
+    );
+    expect(item.negotiationRounds?.[0].type).toBeUndefined();
+    expect(item.negotiationRounds?.[0].modalidad).toBeUndefined();
+  });
+});
+
+describe("mapProposalToRequestItem - scope note of the costing (negotiationNotes)", () => {
+  const withNotes = (negotiationNotes: string | null | undefined) => {
+    const base = baseProposal();
+    return baseProposal({ economics: [{ ...base.economics[0], negotiationNotes }] as ProposalDetail["economics"] });
+  };
+
+  it("maps the note of the current economics row into costing.negotiationNotes", () => {
+    expect(mapProposalToRequestItem(withNotes("Alcance acordado")).costing?.negotiationNotes).toBe("Alcance acordado");
+  });
+
+  it("has no note when the row has none (null) or the backend does not send it", () => {
+    expect(mapProposalToRequestItem(withNotes(null)).costing?.negotiationNotes).toBeUndefined();
+    expect(mapProposalToRequestItem(withNotes(undefined)).costing?.negotiationNotes).toBeUndefined();
   });
 });
 

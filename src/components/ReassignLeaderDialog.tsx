@@ -113,15 +113,17 @@ export function ReassignLeaderDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-bold text-foreground">{request?.id}</span>
+            <span className="font-mono text-xs font-bold text-foreground">{request?.code ?? request?.id}</span>
             <span className="rounded bg-[#5454e9]/10 px-2 py-0.5 text-[10px] font-bold text-[#5454e9] dark:text-[#865cf0]">
               {request?.node}
             </span>
           </div>
           <DialogTitle className="text-base font-bold text-foreground mt-1">Reasignar Líder de Producto</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Transfiere la gestión de esta propuesta comercial a otro líder de producto manteniendo intactos su estado
-            actual y los datos registrados.
+            Transfiere la gestión de esta solicitud comercial a otro líder si no corresponde a tu área temática.
+            {request?.status === "en-experto" && (
+              <> La solicitud volverá a la fase "Nueva" para que el nuevo líder reinicie la asignación de docente.</>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -151,11 +153,16 @@ export function ReassignLeaderDialog({
                 disabled={isConnected && !optionsReady}
                 onValueChange={(val) => {
                   setSelectedNewLeader(val);
-                  if (isConnected) return; // sin nodo por defecto derivado en modo conectado
-                  const foundNode = Object.entries(NODE_DEFAULT_LEADERS).find(([, leader]) => leader === val);
-                  if (foundNode) {
-                    setSelectedNewNode(foundNode[0]);
-                  }
+                  // Same suggestion as the prototype: the node the chosen leader usually covers. Connected,
+                  // the option value is an id, so the leader is found by its label and the node by its name.
+                  const leaderName = isConnected ? leaderOptions?.find((l) => l.id === val)?.label : val;
+                  const defaultNode = Object.entries(NODE_DEFAULT_LEADERS).find(
+                    ([, leader]) => leader === leaderName,
+                  )?.[0];
+                  if (!defaultNode) return;
+                  setSelectedNewNode(
+                    isConnected ? (nodeOptions?.find((n) => n.label === defaultNode)?.id ?? "") : defaultNode,
+                  );
                 }}
               >
                 <SelectTrigger id="reassign-new-leader" className="text-xs h-9">
@@ -167,11 +174,18 @@ export function ReassignLeaderDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {isConnected
-                    ? (leaderOptions ?? []).map((leader) => (
-                        <SelectItem key={leader.id} value={leader.id}>
-                          {leader.label}
-                        </SelectItem>
-                      ))
+                    ? (leaderOptions ?? []).map((leader) => {
+                        const isCurrent = leader.label === request.productLeader;
+                        const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(
+                          ([, l]) => l === leader.label,
+                        )?.[0];
+                        return (
+                          <SelectItem key={leader.id} value={leader.id} disabled={isCurrent}>
+                            {leader.label}{" "}
+                            {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
+                          </SelectItem>
+                        );
+                      })
                     : PRODUCT_LEADERS.map((leader) => {
                         const isCurrent = leader === request.productLeader;
                         const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(([, l]) => l === leader)?.[0];
