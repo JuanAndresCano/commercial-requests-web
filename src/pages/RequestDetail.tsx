@@ -621,20 +621,22 @@ export default function RequestDetail() {
     assignProfessorDetailed(req.id, professorName, type, externalData);
   };
 
-  // HU 5.1: the offered value and both contribution margins round-trip to the backend
-  // (Pro-Cultura stays a client-side reference). Each save creates a new economics row,
-  // so nothing is sent unless the total or a margin actually changed (the scope note is
-  // not persisted). A margin the form holds empty is sent as null so it clears; 0 stays 0.
+  // HU 5.1: the offered value, both contribution margins and the "Nota de alcance comercial"
+  // round-trip to the backend (Pro-Cultura stays a client-side reference). Each save creates a
+  // new economics row, so nothing is sent unless one of them actually changed. A margin the form
+  // holds empty is sent as null so it clears; 0 stays 0; an empty note is sent as null too.
   // While a save is in flight `req.costing` is still the old row, so it is compared with what
-  // that save sent instead: an edit of the note must not send the same values again.
+  // that save sent instead: the same values must not go out twice.
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
     if (!req) return;
     if (apiProposal) {
       const current = upsertCostingReal.isPending && lastSentCosting.current ? lastSentCosting.current : req.costing;
+      const negotiationNotes = newCosting.negotiationNotes?.trim() || null;
       const unchanged =
         newCosting.totalOfferedCop === current?.totalOfferedCop &&
         newCosting.expectedMarginPercent === current?.expectedMarginPercent &&
-        newCosting.marginAmountCop === current?.marginAmountCop;
+        newCosting.marginAmountCop === current?.marginAmountCop &&
+        negotiationNotes === (current?.negotiationNotes?.trim() || null);
       if (unchanged) return;
       lastSentCosting.current = newCosting;
       upsertCostingReal.mutate(
@@ -643,6 +645,7 @@ export default function RequestDetail() {
           totalCost: newCosting.totalOfferedCop,
           marginPercentage: newCosting.expectedMarginPercent ?? null,
           marginAmount: newCosting.marginAmountCop ?? null,
+          negotiationNotes,
         },
         {
           // The backend's 400 messages are English validator output: show one generic Spanish text.

@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ShieldCheck, MessageSquare, ChevronUp, GraduationCap, Calculator } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { useCostingDraft } from "@/hooks/use-costing-draft";
+import { COSTING_AUTOSAVE_DELAY_MS, useCostingDraft } from "@/hooks/use-costing-draft";
 import { calculateProCulturaReference, formatCopPreview, isLikelyFraction, PRO_CULTURA_PERCENT } from "@/lib/currency";
 import { formatCop, RequestItem, ProposalCosting, calculateCosting } from "@/lib/mock-data";
 
@@ -39,6 +39,11 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
   );
   const { total: totalOfferedCop, percent: marginPercent, amount: marginAmountCop } = draft.values;
   const [negotiationNotes, setNegotiationNotes] = useState<string>(initialCosting.negotiationNotes ?? "");
+  // The scope note is saved like the numbers: after a pause in typing, on leaving the field, and when the
+  // module goes away. Each save is a costing version on the backend, so it must not go out once per key.
+  const notesRef = useRef(negotiationNotes);
+  const notePendingRef = useRef(false);
+  const noteTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Gate de envío al KAM (docs/04) — se preserva tal cual al
   // guardar cambios que no afectan el valor final ni el margen, y se
   // invalida (vuelve a false) si el Líder vuelve a tocar esos campos.
@@ -53,7 +58,8 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
   // Sync state when request prop changes
   useEffect(() => {
     if (request.costing) {
-      setNegotiationNotes(request.costing.negotiationNotes ?? "");
+      // A refetch must not overwrite a note that is still being typed (not saved yet).
+      if (!notePendingRef.current) setNegotiationNotes(request.costing.negotiationNotes ?? "");
       setReadyForKam(request.costing.readyForKam ?? false);
       setCostingSentAt(request.costing.costingSentAt);
       if (request.costing.negotiationNotes?.trim()) {
@@ -98,6 +104,23 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
 
     onUpdateCosting(updatedCosting);
   };
+
+  const saveNote = () => {
+    clearTimeout(noteTimerRef.current);
+    if (!notePendingRef.current) return;
+    notePendingRef.current = false;
+    // Solo lo ya guardado: un valor a medio escribir no debe adelantarse al autoguardado.
+    const saved = draft.committed();
+    triggerSave(saved.total, saved.percent, saved.amount, notesRef.current);
+  };
+  const saveNoteRef = useRef(saveNote);
+  saveNoteRef.current = saveNote;
+  useEffect(
+    () => () => {
+      saveNoteRef.current();
+    },
+    [],
+  );
 
   // Un valor negativo, no numérico o un % fuera de 0–100 no se guarda ni se
   // corrige en silencio: el campo lo avisa y conserva lo último guardado.
@@ -425,10 +448,12 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
               value={negotiationNotes}
               onChange={(e) => {
                 setNegotiationNotes(e.target.value);
-                // Solo lo ya guardado: un valor a medio escribir no debe adelantarse al autoguardado.
-                const saved = draft.committed();
-                triggerSave(saved.total, saved.percent, saved.amount, e.target.value);
+                notesRef.current = e.target.value;
+                notePendingRef.current = true;
+                clearTimeout(noteTimerRef.current);
+                noteTimerRef.current = setTimeout(() => saveNoteRef.current(), COSTING_AUTOSAVE_DELAY_MS);
               }}
+              onBlur={saveNote}
               placeholder="Ej: Se incluye ajuste de alcance en 2 módulos presenciales acordado con el cliente..."
               className="text-xs resize-none bg-white dark:bg-background border-slate-200 dark:border-border"
               disabled={isReadOnly}
