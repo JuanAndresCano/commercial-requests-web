@@ -325,6 +325,6 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(proposalId).toBe("prop-123");
     expect(payload.file).toBeInstanceOf(File);
     expect(payload.file.name).toBe("cotizacion.pdf");
-    expect(payload.category).toBe("INTERNAL");
+    expect(payload.category).toBe("CLIENT_FACING");
   }, 20000);
 });

@@ -575,7 +575,7 @@ export default function NewRequest() {
             uploadable.map((a) =>
               attachmentsApi.upload(createdProposal.id, {
                 file: a.file as File,
-                category: "INTERNAL",
+                category: "CLIENT_FACING",
               }),
             ),
           );
