@@ -23,8 +23,11 @@ const BOARD_COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "ent
 // vocabulario interno de coordinación académica ("en proceso por experto").
 // Se usan igual en el Kanban, la tabla y las tarjetas KPI para que las 3
 // vistas siempre coincidan — confirmado con Dianis (docs/08, pregunta 2).
+// "nueva" se rotula "Entregada al líder" solo aquí: para el KAM esa etapa es
+// "ya se la entregué al Líder de Producto". El Líder sigue viendo "Nueva"
+// (STATUS_META.nueva no cambia) y el reloj sigue corriendo desde la creación.
 const KAM_STAGE_LABELS: Record<RequestStatus, string> = {
-  nueva: "Nueva",
+  nueva: "Entregada al líder",
   "en-experto": "En Proceso",
   "en-costeo": "Lista para Entregar",
   entregada: "Entregada",
@@ -288,9 +291,9 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StageKpiCard
           stage="nueva"
-          label="Nueva"
+          label={KAM_STAGE_LABELS.nueva}
           count={nuevaCount}
-          hint="Recién enviadas, sin asignar"
+          hint="Recién enviadas al líder, sin asignar"
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
           active={viewMode === "tabla" ? activeFilter === "nueva" : isolatedStage === "nueva"}
           onClick={() => handleCardClick("nueva")}
@@ -587,7 +590,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                             {r.status === "nueva" && (
                               <span className="inline-flex items-center gap-1.5 rounded-full border border-icesi-blue/30 bg-icesi-blue/10 px-2.5 py-0.5 text-xs font-medium text-icesi-blue dark:text-icesi-purple">
                                 <span className="h-1.5 w-1.5 rounded-full bg-icesi-blue" />
-                                Nueva
+                                {KAM_STAGE_LABELS.nueva}
                               </span>
                             )}
                             {r.status === "en-experto" && (

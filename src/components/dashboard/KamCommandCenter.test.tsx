@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -93,11 +93,19 @@ describe("KamCommandCenter (HU 3.1)", () => {
 
   it("renders the 4 KPI stage cards with correct counts", () => {
     renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
-    // Nueva = 1, En Proceso = 0, Lista para Entregar = 1, Entregada = 0
-    expect(screen.getByRole("button", { name: /Nueva/i })).toBeInTheDocument();
+    // Entregada al líder (antes "Nueva") = 1, En Proceso = 0, Lista para Entregar = 1, Entregada = 0
+    expect(screen.getByRole("button", { name: /^Entregada al líder/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /En Proceso/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Lista para Entregar/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Entregada/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Entregada(?! al líder)/i })).toBeInTheDocument();
+  });
+
+  it('labels the "nueva" stage as "Entregada al líder" for the KAM, in the card and in the table row', () => {
+    renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
+    const row = screen.getByText("Propuesta Capacitación 1").closest("tr") as HTMLElement;
+    expect(within(row).getByText("Entregada al líder")).toBeInTheDocument();
+    expect(within(row).queryByText("Nueva")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Nueva\b/i })).not.toBeInTheDocument();
   });
 
   it("displays the contextual banner when proposals are ready to deliver", () => {
@@ -124,7 +132,7 @@ describe("KamCommandCenter (HU 3.1)", () => {
 
   it("filters the table when a KPI card is clicked", () => {
     renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
-    const nuevaCard = screen.getByRole("button", { name: /Nueva/i });
+    const nuevaCard = screen.getByRole("button", { name: /^Entregada al líder/i });
 
     fireEvent.click(nuevaCard);
     expect(screen.getByText("Propuesta Capacitación 1")).toBeInTheDocument();
