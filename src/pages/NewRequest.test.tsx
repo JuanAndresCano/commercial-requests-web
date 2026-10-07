@@ -46,7 +46,6 @@ vi.mock("@/lib/api/requests", () => ({
     create: vi.fn(),
     list: vi.fn().mockResolvedValue([]),
     getDashboardMetrics: vi.fn(),
-    getPrioritized: vi.fn(),
     getById: vi.fn(),
     updateStatus: vi.fn(),
     updateSpecs: vi.fn(),
