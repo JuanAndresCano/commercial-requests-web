@@ -35,7 +35,6 @@ describe("requestsApi", () => {
     respond(200, []);
     await requestsApi.list({
       q: "bancolombia",
-      role: "KAM",
       status: "nueva",
       urgency: "urgente",
       type: "CAPACITACION",
@@ -43,17 +42,17 @@ describe("requestsApi", () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("q=bancolombia");
-    expect(String(url)).toContain("role=KAM");
+    expect(String(url)).not.toContain("role=");
     expect(String(url)).toContain("status=nueva");
     expect(String(url)).toContain("urgency=urgente");
     expect(String(url)).toContain("type=CAPACITACION");
     expect(init).toMatchObject({ method: "GET", credentials: "include" });
   });
 
-  it("lists with role and status filters url-encoded", async () => {
+  it("never sends a role: the backend takes it from the session token", async () => {
     respond(200, []);
-    await requestsApi.list({ role: "PRODUCT_LEADER", status: "nueva" });
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\?role=PRODUCT_LEADER&status=nueva$/);
+    await requestsApi.list({ status: "nueva" });
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\?status=nueva$/);
   });
 
   it("gets proposal by ID", async () => {

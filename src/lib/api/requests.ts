@@ -252,7 +252,6 @@ export interface ProposalDashboardMetrics {
 
 export interface RequestsQueryParams {
   q?: string;
-  role?: "KAM" | "PRODUCT_LEADER" | "ADMIN";
   status?: string;
   urgency?: "urgente" | "proximo" | "sinfecha" | "all";
   type?: RequestType | "all";
@@ -378,7 +377,6 @@ export const requestsApi = {
   list: (params: RequestsQueryParams = {}) => {
     const search = new URLSearchParams();
     if (params.q) search.set("q", params.q);
-    if (params.role) search.set("role", params.role);
     if (params.status && params.status !== "all") search.set("status", params.status);
     if (params.urgency && params.urgency !== "all") search.set("urgency", params.urgency);
     if (params.type && params.type !== "all") search.set("type", params.type);

@@ -53,7 +53,7 @@ function kamStageOf(r: RequestItem): RequestStatus {
 }
 
 export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
-  const { data: apiProposals, isLoading, isError, refetch } = useRequests({ role: "KAM" });
+  const { data: apiProposals, isLoading, isError, refetch } = useRequests();
   const { data: apiMetrics } = useDashboardMetrics();
 
   // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
