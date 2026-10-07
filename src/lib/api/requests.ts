@@ -374,9 +374,6 @@ export const requestsApi = {
   /** Retrieves aggregated KPI metrics for the authenticated user based on role */
   getDashboardMetrics: () => apiRequest<ProposalDashboardMetrics>("/requests/dashboard/metrics"),
 
-  /** Retrieves prioritized active proposals for the dashboard */
-  getPrioritized: () => apiRequest<ProposalListItem[]>("/requests/dashboard/prioritized"),
-
   /** Retrieves filtered list of proposals */
   list: (params: RequestsQueryParams = {}) => {
     const search = new URLSearchParams();

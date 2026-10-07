@@ -11,7 +11,6 @@ import Index from "./pages/Index.tsx";
 import Login from "./pages/Login.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import NewRequest from "./pages/NewRequest.tsx";
-import RequestsBoard from "./pages/RequestsBoard.tsx";
 import RequestDetail from "./pages/RequestDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -36,7 +35,6 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route element={<RequireAuth />}>
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/solicitudes" element={<RequestsBoard />} />
                 <Route path="/solicitudes/nueva" element={<NewRequest />} />
                 <Route path="/solicitudes/:id" element={<RequestDetail />} />
               </Route>
