@@ -15,7 +15,8 @@ export interface KamBoardFilterOptions {
 
 export const EMPTY_KAM_BOARD_FILTERS: KamBoardFilters = { productLeader: "", company: "", type: "" };
 
-type FilterableRequest = Pick<RequestItem, "productLeader" | "company" | "type">;
+/** Estructural a propósito: basta con tener los tres campos (el tipo real es `RequestItem`). */
+type FilterableRequest = Pick<RequestItem, "productLeader" | "company"> & { type: string };
 
 function uniqueSorted(values: string[]): string[] {
   return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es"));

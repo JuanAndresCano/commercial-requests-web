@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KamCommandCenter } from "./KamCommandCenter";
-import type { RequestItem } from "@/lib/mock-data";
+import type { RequestItem, RequestType } from "@/lib/mock-data";
 
 const mockRequests: RequestItem[] = [
   {
@@ -178,7 +178,7 @@ describe("KamCommandCenter board filters (leader, company, type)", () => {
     n: number,
     company: string,
     productLeader: string,
-    type: string,
+    type: RequestType,
     status: RequestItem["status"],
   ): RequestItem => ({
     id: `REQ-2026-01${n}`,
