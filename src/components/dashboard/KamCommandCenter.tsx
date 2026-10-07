@@ -716,6 +716,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     getKey={(r) => r.id}
                     isolated={!!isolatedStage}
                     onExitIsolation={() => setIsolatedStage(null)}
+                    onHeaderClick={() => handleCardClick(col)}
                     renderItem={(r) => (
                       // Toda tarjeta en "en-costeo" ya pasó por kamStageOf, así que aquí solo
                       // llegan las confirmadas por el Líder — el atajo siempre aplica, igual

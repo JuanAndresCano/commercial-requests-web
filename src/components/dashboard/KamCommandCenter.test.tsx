@@ -149,6 +149,20 @@ describe("KamCommandCenter (HU 3.1)", () => {
     expect(kanbanButton).toHaveClass("bg-icesi-blue");
   });
 
+  it("isolates a stage when its Kanban column header is clicked, and restores it on a second click", () => {
+    renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
+    fireEvent.click(screen.getByTitle("Vista kanban por estado"));
+    expect(screen.getByRole("heading", { name: "En Proceso" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Lista para Entregar\s*1$/ }));
+    expect(screen.getByRole("heading", { name: "Lista para Entregar" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "En Proceso" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Entregada al líder" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Lista para Entregar\s*1$/ }));
+    expect(screen.getByRole("heading", { name: "En Proceso" })).toBeInTheDocument();
+  });
+
   it("filters the table when a KPI card is clicked", () => {
     renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
     const nuevaCard = screen.getByRole("button", { name: /^Entregada al líder/i });
