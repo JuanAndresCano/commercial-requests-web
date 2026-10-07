@@ -84,8 +84,8 @@ function sameValues(a: CostingDraftValues, b: CostingDraftValues) {
  * Text state of the costing form. The user types es-CO formatted text; each field is parsed with
  * `parseCopInput` / `parsePercentInput`, and `onCommit` gets the parsed values only when all three
  * are valid and differ from what was last committed. Commits happen after a pause in typing
- * (COSTING_AUTOSAVE_DELAY_MS), on blur, or right away for `applyValue` (preset chips), so a
- * burst of keystrokes is one save. `source` is the saved costing: when it changes, fields not
+ * (COSTING_AUTOSAVE_DELAY_MS) or on blur, so a burst of
+ * keystrokes is one save. `source` is the saved costing: when it changes, fields not
  * being edited follow it, but text that already parses to the same number is left as typed.
  */
 export function useCostingDraft(source: CostingDraftValues, onCommit: (values: CostingDraftValues) => void) {
@@ -125,14 +125,6 @@ export function useCostingDraft(source: CostingDraftValues, onCommit: (values: C
       edit(field, text);
       clearTimeout(timerRef.current);
       timerRef.current = setTimeout(commit, COSTING_AUTOSAVE_DELAY_MS);
-    },
-    [edit, commit],
-  );
-
-  const applyValue = useCallback(
-    (field: CostingField, value: number) => {
-      edit(field, toText(field, value));
-      commit();
     },
     [edit, commit],
   );
@@ -194,7 +186,6 @@ export function useCostingDraft(source: CostingDraftValues, onCommit: (values: C
     /** Values last handed to `onCommit` (or last loaded from `source`): never a half-typed edit. */
     committed: () => committedRef.current,
     setText,
-    applyValue,
     blur,
   };
 }
