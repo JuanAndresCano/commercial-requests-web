@@ -298,9 +298,13 @@ export default function RequestDetail() {
   const wasRejectedByClient = (req?.negotiationRounds ?? []).some(
     (r) => r.clientResponse === "rechazada" || (r.clientResponse as string) === "CHANGES_REQUESTED",
   );
+  // UAT C-02: once the Líder assigns a professor the KAM can no longer add or
+  // edit information (the expert would be confused). The lock follows the
+  // assignment, not the status: a professor can already be assigned in "Nueva".
   const canEditFullInfo =
     (isKam &&
       req?.kam === user.name &&
+      !req?.professor &&
       (req?.status === "nueva" || (req?.status === "en-costeo" && wasRejectedByClient))) ||
     (role === "lider-producto" &&
       req?.productLeader === user.name &&
@@ -1942,7 +1946,7 @@ export default function RequestDetail() {
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL: EDITAR INFORMACIÓN COMPLETA (KAM, solo mientras "Nueva") */}
+      {/* MODAL: EDITAR INFORMACIÓN COMPLETA (KAM, solo mientras "Nueva" y sin docente asignado) */}
       {/* ========================================================================= */}
       <Dialog open={isEditingFullInfo} onOpenChange={(open) => !open && handleCloseFullInfoModal()}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -1952,7 +1956,7 @@ export default function RequestDetail() {
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               {isKam
-                ? 'Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".'
+                ? 'Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva" y no tenga docente asignado.'
                 : "Corrige el alcance de la solicitud (por ejemplo la necesidad del cliente) — disponible porque el cliente ya devolvió esta propuesta pidiendo ajustes."}
             </DialogDescription>
           </DialogHeader>

@@ -115,6 +115,55 @@ const mockRequests: RequestItem[] = [
       },
     ],
   },
+  {
+    id: "REQ-2026-0005",
+    title: "Propuesta Nueva con Docente",
+    company: "Postobón S.A.",
+    companyNit: "890900241-4",
+    applicant: "Sofía Ramírez",
+    type: "Capacitación",
+    createdAt: "2026-03-18T10:00:00.000Z",
+    deadline: "2026-03-28T10:00:00.000Z",
+    status: "nueva",
+    urgency: "media",
+    productLeader: "Juan Pablo Corrales",
+    kam: "Andrea Martínez",
+    node: "Inteligencia Artificial",
+    professor: "Ana Torres",
+  },
+  {
+    id: "REQ-2026-0006",
+    title: "Propuesta Devuelta con Docente",
+    company: "Argos S.A.",
+    companyNit: "890100200-1",
+    applicant: "Mateo Pérez",
+    type: "Capacitación",
+    createdAt: "2026-03-15T10:00:00.000Z",
+    deadline: "2026-03-25T10:00:00.000Z",
+    status: "en-costeo",
+    urgency: "alta",
+    productLeader: "Juan Pablo Corrales",
+    kam: "Andrea Martínez",
+    node: "Inteligencia Artificial",
+    professor: "Ana Torres",
+    costing: {
+      readyForKam: false,
+      totalOfferedCop: 20000000,
+      proCulturaTaxPercent: 1.5,
+      proCulturaTaxAmount: 300000,
+    },
+    negotiationRounds: [
+      {
+        id: "REQ-2026-0006-r1",
+        roundNumber: 1,
+        totalOfferedCop: 20000000,
+        marginAmountCop: 0,
+        expectedMarginPercent: 0,
+        sentToKamAt: "2026-03-20T10:00:00.000Z",
+        clientResponse: "rechazada",
+      },
+    ],
+  },
 ];
 
 const authMock = vi.hoisted(() => ({
@@ -179,6 +228,7 @@ vi.mock("@/lib/api/requests", async (importOriginal) => {
             },
           },
           program: { requestType: "CAPACITACION" },
+          productLeader: { id: "u-2", firstName: "Juan Pablo", lastName: "Corrales", email: "jcorrales@icesi.edu.co" },
           creator: { id: "u-1", firstName: "Andrea", lastName: "Martínez", email: "andrea@icesi.edu.co" },
           economics: found.costing
             ? [
@@ -189,7 +239,15 @@ vi.mock("@/lib/api/requests", async (importOriginal) => {
                 },
               ]
             : [],
-          assignments: [],
+          assignments: found.professor
+            ? [
+                {
+                  id: "assign-1",
+                  role: "PROFESSOR",
+                  professor: { id: "prof-1", fullName: found.professor, type: "INTERNAL" },
+                },
+              ]
+            : [],
           attachments: [],
           negotiationRounds:
             found.negotiationRounds?.map((nr) => ({
@@ -314,6 +372,54 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
 
       fireEvent.click(editBtn);
       expect(screen.getByText("Editar información de la solicitud")).toBeInTheDocument();
+    });
+  });
+
+  describe("C-02: the KAM cannot edit once a professor is assigned", () => {
+    const editButton = () => screen.queryByRole("button", { name: /Editar información/i });
+
+    it("hides 'Editar información' from the KAM when a NEW proposal already has a professor", async () => {
+      renderPage("REQ-2026-0005");
+
+      await screen.findByText("Propuesta Nueva con Docente");
+      expect(editButton()).not.toBeInTheDocument();
+    });
+
+    it("hides 'Editar información' from the KAM in 'en-costeo' after a rejection when a professor is assigned", async () => {
+      renderPage("REQ-2026-0006");
+
+      await screen.findByText("Propuesta Devuelta con Docente");
+      expect(editButton()).not.toBeInTheDocument();
+    });
+
+    it("still shows 'Editar información' to the KAM on a NEW proposal without a professor", async () => {
+      renderPage("REQ-2026-0001");
+
+      expect(await screen.findByRole("button", { name: /Editar información/i })).toBeInTheDocument();
+    });
+
+    describe("as Product Leader (rules unchanged)", () => {
+      beforeEach(() => {
+        authMock.user = {
+          role: "lider-producto",
+          roleLabel: "Líder de Producto",
+          name: "Juan Pablo Corrales",
+          email: "jcorrales@icesi.edu.co",
+        };
+      });
+
+      it("shows the button in 'en-costeo' after a rejection even with a professor assigned", async () => {
+        renderPage("REQ-2026-0006");
+
+        expect(await screen.findByRole("button", { name: /Editar información/i })).toBeInTheDocument();
+      });
+
+      it("keeps the section read-only on a NEW proposal", async () => {
+        renderPage("REQ-2026-0005");
+
+        await screen.findByText("Propuesta Nueva con Docente");
+        expect(editButton()).not.toBeInTheDocument();
+      });
     });
   });
 
