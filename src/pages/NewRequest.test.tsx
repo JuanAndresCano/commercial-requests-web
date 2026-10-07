@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NewRequest from "./NewRequest";
 import { AuthProvider } from "@/context/AuthContext";
 import { requestsApi } from "@/lib/api/requests";
+import { attachmentsApi } from "@/lib/api/attachments";
 
 // Mock select component for headless jsdom environment
 const SelectContext = React.createContext<(val: string) => void>(() => {});
@@ -52,6 +53,12 @@ vi.mock("@/lib/api/requests", () => ({
   },
 }));
 
+vi.mock("@/lib/api/attachments", () => ({
+  attachmentsApi: {
+    upload: vi.fn().mockResolvedValue({}),
+  },
+}));
+
 vi.mock("@/lib/api/companies", () => ({
   companiesApi: {
     search: vi.fn().mockResolvedValue([]),
@@ -73,6 +80,7 @@ vi.mock("@/lib/api/users", () => ({
 }));
 
 const mockedRequestsApi = vi.mocked(requestsApi);
+const mockedAttachmentsApi = vi.mocked(attachmentsApi);
 
 function renderNewRequest() {
   const queryClient = new QueryClient({
@@ -280,5 +288,43 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     const callPayload = mockedRequestsApi.create.mock.calls[0][0];
     expect(callPayload.nodeId).toBe("node-uuid-1");
     expect(callPayload.productLeaderId).toBe("leader-uuid-1");
+  }, 20000);
+
+  it("uploads the real File object, not its metadata, after the proposal is created (UI-006)", async () => {
+    const { container } = renderNewRequest();
+
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa con Adjunto S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    fireEvent.click(await screen.findByRole("option", { name: /Gestión de Innovación/i }));
+    fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), {
+      target: { value: "Capacitación con adjunto" },
+    });
+    fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: "No" }));
+    fireEvent.click(screen.getByRole("button", { name: /Alto/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    const pdf = new File(["contenido"], "cotizacion.pdf", { type: "application/pdf" });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [pdf] } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i }));
+
+    await waitFor(() => {
+      expect(mockedAttachmentsApi.upload).toHaveBeenCalledTimes(1);
+    });
+
+    const [proposalId, payload] = mockedAttachmentsApi.upload.mock.calls[0];
+    expect(proposalId).toBe("prop-123");
+    expect(payload.file).toBeInstanceOf(File);
+    expect(payload.file.name).toBe("cotizacion.pdf");
+    expect(payload.category).toBe("CLIENT_FACING");
   }, 20000);
 });

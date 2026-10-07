@@ -127,6 +127,8 @@ export interface AttachedFile {
   name: string;
   size: string;
   type: string;
+  /** Archivo real para subir al backend. No sobrevive al borrador en localStorage (se serializa como {}). */
+  file?: File;
 }
 
 export interface RequestFormData {
@@ -565,17 +567,23 @@ export default function NewRequest() {
 
       // UI-006: Subir archivos físicos reales al backend si se adjuntaron en el formulario
       if (createdProposal?.id && data.archivos && data.archivos.length > 0) {
+        // Un borrador restaurado conserva solo los metadatos: sin File real no hay nada que subir.
+        const uploadable = data.archivos.filter((a) => a.file instanceof File);
+        let uploadFailed = uploadable.length < data.archivos.length;
         try {
           await Promise.all(
-            data.archivos.map((file) =>
+            uploadable.map((a) =>
               attachmentsApi.upload(createdProposal.id, {
-                file,
-                category: "INTERNAL",
+                file: a.file as File,
+                category: "CLIENT_FACING",
               }),
             ),
           );
         } catch (uploadErr) {
           console.warn("Algunos adjuntos no pudieron subirse al almacenamiento:", uploadErr);
+          uploadFailed = true;
+        }
+        if (uploadFailed) {
           toast.warning("La solicitud fue creada, pero algunos documentos no pudieron subirse automáticamente.");
         }
       }
@@ -2504,6 +2512,7 @@ function Step5({
       name: f.name,
       size: `${(f.size / (1024 * 1024)).toFixed(2)} MB`,
       type: f.type || "document",
+      file: f,
     }));
     update("archivos", [...data.archivos, ...newFiles]);
     toast.success(`${newFiles.length} archivo(s) añadido(s) exitosamente.`);

@@ -100,12 +100,16 @@ const mockRequests: RequestItem[] = [
     costing: {
       readyForKam: false,
       totalOfferedCop: 20000000,
+      proCulturaTaxPercent: 1.5,
+      proCulturaTaxAmount: 300000,
     },
     negotiationRounds: [
       {
         id: "REQ-2026-0004-r1",
         roundNumber: 1,
         totalOfferedCop: 20000000,
+        marginAmountCop: 0,
+        expectedMarginPercent: 0,
         sentToKamAt: "2026-03-20T10:00:00.000Z",
         clientResponse: "rechazada",
       },
