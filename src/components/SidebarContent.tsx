@@ -48,7 +48,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
     );
 
   return (
-    <div className="flex h-full w-full flex-col justify-between overflow-hidden py-4 select-none">
+    <div className="flex h-full w-full flex-col justify-between overflow-hidden py-4 text-white select-none">
       <div className="flex w-full flex-col gap-4 px-2">
         <Link
           to="/dashboard"
@@ -64,11 +64,11 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-0.5 whitespace-nowrap transition-colors hover:bg-sidebar-accent"
+              className="flex h-10 w-full items-center gap-3 rounded-lg px-0.5 whitespace-nowrap transition-colors hover:bg-white/5"
               title={`${user.name} (${user.roleLabel})`}
               aria-label="Menú de usuario y rol"
             >
-              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-accent text-xs font-bold text-sidebar-accent-foreground">
+              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-sidebar-accent text-xs font-bold text-white">
                 {initials}
                 <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-icesi-green ring-2 ring-sidebar" />
               </span>
@@ -79,7 +79,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
                 )}
               >
                 <span className="max-w-[140px] truncate text-xs font-bold">{user.name}</span>
-                <span className="text-[10px] text-muted-foreground">{user.roleLabel}</span>
+                <span className="text-[10px] text-zinc-400">{user.roleLabel}</span>
               </span>
             </button>
           </DropdownMenuTrigger>
@@ -99,7 +99,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="my-1 h-px w-full bg-sidebar-border" />
+        <div className="my-1 h-px w-full bg-white/10" />
 
         <nav aria-label="Navegación principal" className="flex w-full flex-col gap-2">
           {navItems.map((item) => {
@@ -115,7 +115,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
                   "relative flex h-11 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap transition-colors",
                   active
                     ? "bg-icesi-yellow font-bold text-black shadow-md"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    : "text-zinc-400 hover:bg-white/10 hover:text-white",
                 )}
                 title={item.label}
                 aria-label={item.label}
@@ -129,14 +129,11 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
       </div>
 
       <div className="flex w-full flex-col gap-2.5 px-2">
-        <ThemeToggle
-          showLabel={expanded}
-          className="h-11 w-full justify-start gap-3 whitespace-nowrap px-2.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        />
+        <ThemeToggle showLabel={expanded} onDark className="h-11 w-full justify-start gap-3 whitespace-nowrap px-2.5" />
         <button
           type="button"
           onClick={onLogout}
-          className="flex h-10 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap text-sidebar-foreground/70 transition-all hover:bg-destructive/15 hover:text-destructive"
+          className="flex h-10 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap text-zinc-400 transition-all hover:bg-red-500/20 hover:text-red-400"
           title="Cerrar sesión"
           aria-label="Cerrar sesión"
         >

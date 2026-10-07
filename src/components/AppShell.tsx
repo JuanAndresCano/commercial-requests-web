@@ -40,7 +40,7 @@ export function AppShell({ children }: AppShellProps) {
           aria-label="Menú lateral"
           data-expanded={expanded}
           className={cn(
-            "fixed inset-y-0 left-0 z-30 hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex",
+            "fixed inset-y-0 left-0 z-30 hidden border-r border-border bg-sidebar text-white dark:border-sidebar-border lg:flex",
             "transition-[width] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]",
             expanded ? "w-64" : "w-16",
           )}
@@ -61,10 +61,7 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Mobile menu: drawer that mirrors the same role-based links. */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <SheetContent
-            side="left"
-            className="w-64 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground lg:hidden"
-          >
+          <SheetContent side="left" className="w-64 border-sidebar-border bg-sidebar p-0 text-white lg:hidden">
             <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
             <SheetDescription className="sr-only">Enlaces principales según tu rol</SheetDescription>
             <SidebarContent expanded onLogout={handleLogout} onNavigate={() => setMobileMenuOpen(false)} />
