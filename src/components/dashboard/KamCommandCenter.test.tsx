@@ -108,6 +108,25 @@ describe("KamCommandCenter (HU 3.1)", () => {
     expect(screen.queryByRole("button", { name: /^Nueva\b/i })).not.toBeInTheDocument();
   });
 
+  it("shows how long each request has been in its stage in the table rows", () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000 - 60 * 60 * 1000).toISOString();
+    const withAges: RequestItem[] = [
+      { ...mockRequests[0], createdAt: daysAgo(3) },
+      {
+        ...mockRequests[1],
+        createdAt: daysAgo(20),
+        statusUpdatedAt: daysAgo(10),
+        costing: { ...mockRequests[1].costing!, costingSentAt: daysAgo(2) },
+      },
+    ];
+    renderWithClient(<KamCommandCenter requests={withAges} userName="Andrea Martínez" />);
+    const nueva = screen.getByText("Propuesta Capacitación 1").closest("tr") as HTMLElement;
+    const lista = screen.getByText("Propuesta Consultoría 2").closest("tr") as HTMLElement;
+    expect(within(nueva).getByText("Lleva 3 días en esta etapa")).toBeInTheDocument();
+    // "Lista para entregar" cuenta desde que el Líder envió el costeo, no desde el último cambio de estado.
+    expect(within(lista).getByText("Lleva 2 días en esta etapa")).toBeInTheDocument();
+  });
+
   it("displays the contextual banner when proposals are ready to deliver", () => {
     renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
     expect(screen.getByText(/¡Tienes 1 propuesta lista para entregar!/i)).toBeInTheDocument();

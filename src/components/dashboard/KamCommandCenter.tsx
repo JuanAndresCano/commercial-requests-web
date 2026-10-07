@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Rocket, Search, ArrowRight, X, Building2, LayoutGrid, List } from "@/components/icons";
+import { Plus, Rocket, Search, ArrowRight, X, Building2, LayoutGrid, List, Clock } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RequestItem, RequestStatus, formatCop, formatCompactCop, isReadyForKamHandoff } from "@/lib/mock-data";
@@ -16,6 +16,7 @@ import { useRequests } from "@/hooks/use-requests";
 import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
 import { formatRelativeTime, mapProposalToRequestItem } from "@/lib/proposal-adapter";
 import { fuzzyMatch } from "@/lib/fuzzy";
+import { getStageAgeLabel } from "@/lib/stage-age";
 
 const BOARD_COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "entregada"];
 
@@ -507,6 +508,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                       const isReady = isReadyForKamHandoff(r);
                       const isBeingCosted = r.status === "en-costeo" && !isReady;
                       const relativeTime = formatRelativeTime(r.createdAt);
+                      const stageAgeLabel = getStageAgeLabel(r, kamStageOf(r));
 
                       return (
                         <tr
@@ -617,6 +619,12 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                                 Entregada
                               </span>
                             )}
+                            {stageAgeLabel && (
+                              <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                {stageAgeLabel}
+                              </p>
+                            )}
                           </td>
 
                           {/* 6. Acción */}
@@ -712,7 +720,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                       // Toda tarjeta en "en-costeo" ya pasó por kamStageOf, así que aquí solo
                       // llegan las confirmadas por el Líder — el atajo siempre aplica, igual
                       // que los botones de acción del tablero del Líder de Producto.
-                      <RequestCard req={r} cta={col === "en-costeo" ? "Revisar y entregar" : undefined} />
+                      <RequestCard req={r} stage={col} cta={col === "en-costeo" ? "Revisar y entregar" : undefined} />
                     )}
                   />
                 ))}

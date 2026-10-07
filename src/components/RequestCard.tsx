@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
-import { Calendar, User, ArrowUpRight, AlertCircle, ArrowRight } from "@/components/icons";
+import { Calendar, User, ArrowUpRight, AlertCircle, ArrowRight, Clock } from "@/components/icons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { UrgencyBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
-import type { RequestItem } from "@/lib/mock-data";
+import type { RequestItem, RequestStatus } from "@/lib/mock-data";
+import { getStageAgeLabel } from "@/lib/stage-age";
 
 interface RequestCardProps {
   req: RequestItem;
@@ -16,9 +17,17 @@ interface RequestCardProps {
    * navega al detalle, así que no es un enlace independiente.
    */
   cta?: string;
+  /**
+   * Etapa con la que se muestra la tarjeta (para el KAM, la columna donde cae,
+   * ver `kamStageOf`). Define desde cuándo se cuenta "lleva N días en esta
+   * etapa"; si no se pasa, se usa el estado real de la solicitud.
+   */
+  stage?: RequestStatus;
 }
 
-export function RequestCard({ req, cta }: RequestCardProps) {
+export function RequestCard({ req, cta, stage }: RequestCardProps) {
+  const stageAgeLabel = getStageAgeLabel(req, stage ?? req.status);
+
   return (
     <Link
       to={`/solicitudes/${req.id}`}
@@ -83,6 +92,13 @@ export function RequestCard({ req, cta }: RequestCardProps) {
               <span>{format(new Date(req.createdAt), "d MMM", { locale: es })}</span>
             </div>
           </div>
+
+          {stageAgeLabel && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Clock className="h-3 w-3 shrink-0" />
+              <span>{stageAgeLabel}</span>
+            </div>
+          )}
         </div>
       </div>
 
