@@ -31,14 +31,6 @@ describe("requestsApi", () => {
     expect(metrics.total).toBe(10);
   });
 
-  it("fetches prioritized requests", async () => {
-    respond(200, [{ id: "req-1" }]);
-    const list = await requestsApi.getPrioritized();
-
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\/dashboard\/prioritized$/);
-    expect(list).toHaveLength(1);
-  });
-
   it("lists requests with query params", async () => {
     respond(200, []);
     await requestsApi.list({

@@ -53,10 +53,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   requests: RequestItem[];
-  addRequest: (item: Omit<RequestItem, "id" | "createdAt">) => RequestItem;
   updateRequest: (id: string, updates: Partial<RequestItem>) => void;
   deleteRequest: (id: string) => void;
-  assignProfessor: (id: string, professorName: string) => void;
   assignProfessorDetailed: (
     id: string,
     professorName: string,
@@ -205,27 +203,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void authApi.logout().catch(() => undefined);
   };
 
-  const addRequest = (item: Omit<RequestItem, "id" | "createdAt">): RequestItem => {
-    const newId = `REQ-2026-${String(requests.length + 145).padStart(4, "0")}`;
-    const newReq: RequestItem = {
-      ...item,
-      id: newId,
-      createdAt: new Date().toISOString().split("T")[0],
-      // Arranca el reloj de "tiempo en esta fase" desde el instante en que
-      // se crea (siempre en "nueva").
-      statusUpdatedAt: new Date().toISOString(),
-      // El costeo es responsabilidad exclusiva del Líder de Producto — una
-      // solicitud recién creada por el KAM nunca debe llegar con un precio
-      // ya calculado. Se queda sin definir hasta que el Líder lo guarde.
-      costing: item.costing,
-      clientKamDocuments: item.clientKamDocuments ?? [],
-      internalCostingDocuments: item.internalCostingDocuments ?? [],
-      totalCostCop: item.totalCostCop,
-    };
-    setRequests((prev) => [newReq, ...prev]);
-    return newReq;
-  };
-
   const updateRequest = (id: string, updates: Partial<RequestItem>) => {
     setRequests((prev) =>
       prev.map((r) => {
@@ -248,10 +225,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteRequest = (id: string) => {
     setRequests((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  const assignProfessor = (id: string, professorName: string) => {
-    updateRequest(id, { professor: professorName, professorType: "planta" });
   };
 
   const assignProfessorDetailed = (
@@ -322,10 +295,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         requests,
-        addRequest,
         updateRequest,
         deleteRequest,
-        assignProfessor,
         assignProfessorDetailed,
         updateCosting,
         addDocument,

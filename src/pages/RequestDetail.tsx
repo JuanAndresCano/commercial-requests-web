@@ -69,7 +69,6 @@ import {
   REASSIGN_REASON_TO_BACKEND,
   type ReassignConfirmParams,
 } from "@/components/ReassignLeaderDialog";
-import { useReassignRequest } from "@/hooks/use-reassign-request";
 import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
 import { toast } from "sonner";
 import { useRequestDetail } from "@/hooks/use-request-detail";
@@ -531,8 +530,6 @@ export default function RequestDetail() {
     setIsEditingFullInfo(false);
   };
 
-  const reassignRequest = useReassignRequest(updateRequest);
-
   const handleConfirmReassign = ({ newLeader, newNode, reason, notes }: ReassignConfirmParams) => {
     if (!req) return;
     if (apiProposal) {
@@ -561,7 +558,10 @@ export default function RequestDetail() {
       );
       return;
     }
-    reassignRequest(req, { newLeader, newNode });
+    updateRequest(req.id, {
+      productLeader: newLeader,
+      node: newNode || req.node,
+    });
     toast.success(`Solicitud ${req.code ?? req.id} reasignada a ${newLeader} exitosamente.`);
     setIsReassignModalOpen(false);
   };
