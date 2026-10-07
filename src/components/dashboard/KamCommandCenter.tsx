@@ -17,6 +17,15 @@ import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
 import { formatRelativeTime, mapProposalToRequestItem } from "@/lib/proposal-adapter";
 import { fuzzyMatch } from "@/lib/fuzzy";
 import { getStageAgeLabel } from "@/lib/stage-age";
+import {
+  EMPTY_KAM_BOARD_FILTERS,
+  deriveKamBoardFilterOptions,
+  hasActiveKamBoardFilters,
+  matchesKamBoardFilters,
+  sanitizeKamBoardFilters,
+  type KamBoardFilters as KamBoardFilterValues,
+} from "@/lib/kam-board-filters";
+import { KamBoardFilters } from "@/components/dashboard/KamBoardFilters";
 
 const BOARD_COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "entregada"];
 
@@ -81,6 +90,27 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
   const myRequests = activeDataset;
 
+  // Filtros por líder de producto, empresa y tipo. Se combinan (AND) con la
+  // etapa y el buscador, y se guardan igual que ellos. Las opciones salen de
+  // las solicitudes cargadas; una selección guardada que ya no existe en los
+  // datos se ignora para no dejar un filtro invisible que vacíe el tablero.
+  const [storedBoardFilters, setBoardFilters] = usePersistentState<KamBoardFilterValues>(
+    "icesi_kam_dashboard_board_filters_v1",
+    EMPTY_KAM_BOARD_FILTERS,
+  );
+  const boardFilterOptions = useMemo(() => deriveKamBoardFilterOptions(activeDataset), [activeDataset]);
+  const boardFilters = useMemo(
+    () => sanitizeKamBoardFilters(storedBoardFilters, boardFilterOptions),
+    [storedBoardFilters, boardFilterOptions],
+  );
+  const hasBoardFilters = hasActiveKamBoardFilters(boardFilters);
+  // Vacía buscador y filtros de líder/empresa/tipo (el filtro de etapa lo
+  // limpia aparte la vista Tabla, que es donde oculta filas).
+  const clearBoardFilters = () => {
+    setSearchQuery("");
+    setBoardFilters(EMPTY_KAM_BOARD_FILTERS);
+  };
+
   // Conteos por etapa percibida por el KAM (ver kamStageOf) — cada uno mapea
   // 1:1 a una columna del Kanban y a una tarjeta KPI, para que nunca se
   // desalineen entre vistas.
@@ -133,23 +163,25 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   const filteredRequests = useMemo(() => {
     return activeDataset.filter((req) => {
       if (searchQuery.trim() && !matchesSearch(req, searchQuery.toLowerCase().trim())) return false;
+      if (!matchesKamBoardFilters(req, boardFilters)) return false;
       if (activeFilter !== "all") {
         return kamStageOf(req) === activeFilter;
       }
       return true;
     });
-  }, [activeDataset, searchQuery, activeFilter]);
+  }, [activeDataset, searchQuery, activeFilter, boardFilters]);
 
   // Vista Kanban: la columna ya ES el estado, así que el filtro de estado no debe vaciar el
-  // contenido (no aporta nada nuevo) — solo el buscador, que sí cruza información que el
+  // contenido (no aporta nada nuevo) — solo el buscador y los filtros de líder/empresa/tipo, que sí cruzan información que el
   // tablero no muestra por sí solo. El filtro activo solo dispara el "spotlight" (resaltar +
   // scroll a la columna), no oculta nada.
   const kanbanRequests = useMemo(() => {
     return activeDataset.filter((req) => {
       if (searchQuery.trim() && !matchesSearch(req, searchQuery.toLowerCase().trim())) return false;
+      if (!matchesKamBoardFilters(req, boardFilters)) return false;
       return true;
     });
-  }, [activeDataset, searchQuery]);
+  }, [activeDataset, searchQuery, boardFilters]);
 
   // Agrupación por etapa percibida por el KAM (ver kamStageOf), para la vista
   // Kanban — así la columna "Lista para Entregar" solo contiene tarjetas que
@@ -368,54 +400,65 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
         <div className="rounded-xl border border-border dark:border-icesi-border bg-card dark:bg-icesi-card shadow-xs overflow-hidden">
           {/* Barra superior de la tabla */}
-          <div className="flex flex-col gap-3 border-b border-border dark:border-icesi-border p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-1 items-center gap-3">
-              <div className="relative w-full max-w-sm">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar por propuesta, empresa o ID..."
-                  className="h-9 w-full rounded-lg border-border dark:border-icesi-border bg-background dark:bg-icesi-dark pl-9 pr-8 text-xs focus-visible:ring-1 focus-visible:ring-icesi-blue"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+          <div className="space-y-3 border-b border-border dark:border-icesi-border p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-1 items-center gap-3">
+                <div className="relative w-full max-w-sm">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar por propuesta, empresa o ID..."
+                    className="h-9 w-full rounded-lg border-border dark:border-icesi-border bg-background dark:bg-icesi-dark pl-9 pr-8 text-xs focus-visible:ring-1 focus-visible:ring-icesi-blue"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Pill de filtro activo — solo aplica en Tabla, donde el filtro sí oculta filas */}
+                {viewMode === "tabla" && activeFilter !== "all" && (
+                  <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-icesi-blue/30 bg-icesi-blue/10 px-2.5 py-1 text-xs font-medium text-icesi-blue dark:text-icesi-purple">
+                    <span>
+                      {KAM_STAGE_LABELS[activeFilter]} ({stageCounts[activeFilter]})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveFilter("all")}
+                      className="rounded-full p-0.5 hover:bg-icesi-blue/20 transition-colors"
+                      title="Quitar filtro"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
                 )}
               </div>
 
-              {/* Pill de filtro activo — solo aplica en Tabla, donde el filtro sí oculta filas */}
               {viewMode === "tabla" && activeFilter !== "all" && (
-                <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-icesi-blue/30 bg-icesi-blue/10 px-2.5 py-1 text-xs font-medium text-icesi-blue dark:text-icesi-purple">
-                  <span>
-                    {KAM_STAGE_LABELS[activeFilter]} ({stageCounts[activeFilter]})
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveFilter("all")}
-                    className="rounded-full p-0.5 hover:bg-icesi-blue/20 transition-colors"
-                    title="Quitar filtro"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveFilter("all")}
+                  className="text-xs text-muted-foreground hover:text-foreground self-start sm:self-auto sm:hidden"
+                >
+                  Limpiar filtro
+                </button>
               )}
             </div>
 
-            {viewMode === "tabla" && activeFilter !== "all" && (
-              <button
-                type="button"
-                onClick={() => setActiveFilter("all")}
-                className="text-xs text-muted-foreground hover:text-foreground self-start sm:self-auto sm:hidden"
-              >
-                Limpiar filtro
-              </button>
+            {activeDataset.length > 0 && (
+              <KamBoardFilters
+                filters={boardFilters}
+                options={boardFilterOptions}
+                onChange={setBoardFilters}
+                onClear={() => setBoardFilters(EMPTY_KAM_BOARD_FILTERS)}
+              />
             )}
           </div>
 
@@ -481,21 +524,21 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                             <>
                               <p className="font-medium text-foreground">No se encontraron solicitudes</p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {searchQuery || activeFilter !== "all"
+                                {searchQuery || activeFilter !== "all" || hasBoardFilters
                                   ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
                                   : "No hay registros disponibles en este momento."}
                               </p>
-                              {(searchQuery || activeFilter !== "all") && (
+                              {(searchQuery || activeFilter !== "all" || hasBoardFilters) && (
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   onClick={() => {
-                                    setSearchQuery("");
+                                    clearBoardFilters();
                                     setActiveFilter("all");
                                   }}
                                   className="mt-3 text-xs"
                                 >
-                                  Restablecer filtros
+                                  Limpiar filtros
                                 </Button>
                               )}
                             </>
@@ -687,13 +730,13 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     <>
                       <p className="font-medium text-foreground">No se encontraron solicitudes</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {searchQuery
-                          ? "Intenta modificar los términos de búsqueda."
+                        {searchQuery || hasBoardFilters
+                          ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
                           : "No hay registros disponibles en este momento."}
                       </p>
-                      {searchQuery && (
-                        <Button variant="outline" size="sm" onClick={() => setSearchQuery("")} className="mt-3 text-xs">
-                          Limpiar búsqueda
+                      {(searchQuery || hasBoardFilters) && (
+                        <Button variant="outline" size="sm" onClick={clearBoardFilters} className="mt-3 text-xs">
+                          Limpiar filtros
                         </Button>
                       )}
                     </>

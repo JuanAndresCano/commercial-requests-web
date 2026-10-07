@@ -172,3 +172,121 @@ describe("KamCommandCenter (HU 3.1)", () => {
     expect(screen.queryByText("Propuesta Consultoría 2")).not.toBeInTheDocument();
   });
 });
+
+describe("KamCommandCenter board filters (leader, company, type)", () => {
+  const mk = (
+    n: number,
+    company: string,
+    productLeader: string,
+    type: string,
+    status: RequestItem["status"],
+  ): RequestItem => ({
+    id: `REQ-2026-01${n}`,
+    title: `Propuesta ${n}`,
+    company,
+    applicant: "Contacto",
+    type,
+    createdAt: new Date().toISOString(),
+    status,
+    urgency: "media",
+    productLeader,
+    kam: "Andrea Martínez",
+    node: "IA",
+  });
+  const dataset: RequestItem[] = [
+    mk(1, "Bancolombia", "Carlos Gómez", "Capacitación", "nueva"),
+    mk(2, "Carvajal", "Ana Ruiz", "Consultoría", "nueva"),
+    mk(3, "Carvajal", "Carlos Gómez", "Capacitación", "en-experto"),
+    mk(4, "Bancolombia", "Ana Ruiz", "Capacitación", "en-experto"),
+  ];
+  const pick = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("derives the options from the loaded requests", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    expect(screen.getByRole("option", { name: "Ana Ruiz" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Carvajal" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Consultoría" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Mentoría" })).not.toBeInTheDocument();
+  });
+
+  it("filters the table by leader, company and type, combined with each other", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+
+    pick("Filtrar por líder de producto", "Carlos Gómez");
+    expect(screen.getByText("Propuesta 1")).toBeInTheDocument();
+    expect(screen.getByText("Propuesta 3")).toBeInTheDocument();
+    expect(screen.queryByText("Propuesta 2")).not.toBeInTheDocument();
+    expect(screen.queryByText("Propuesta 4")).not.toBeInTheDocument();
+
+    pick("Filtrar por empresa", "Carvajal");
+    expect(screen.getByText("Propuesta 3")).toBeInTheDocument();
+    expect(screen.queryByText("Propuesta 1")).not.toBeInTheDocument();
+
+    pick("Filtrar por tipo de solicitud", "Consultoría");
+    expect(screen.queryByText("Propuesta 3")).not.toBeInTheDocument();
+  });
+
+  it("combines with the stage card and the text search", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    pick("Filtrar por empresa", "Carvajal");
+    fireEvent.click(screen.getByRole("button", { name: /^Entregada al líder/i }));
+    expect(screen.getByText("Propuesta 2")).toBeInTheDocument();
+    expect(screen.queryByText("Propuesta 3")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buscar por propuesta, empresa o ID.../i), {
+      target: { value: "Bancolombia" },
+    });
+    expect(screen.queryByText("Propuesta 2")).not.toBeInTheDocument();
+  });
+
+  it("applies the filters in the Kanban view too", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    fireEvent.click(screen.getByTitle("Vista kanban por estado"));
+    pick("Filtrar por líder de producto", "Ana Ruiz");
+    expect(screen.getByText("Propuesta 2")).toBeInTheDocument();
+    expect(screen.getByText("Propuesta 4")).toBeInTheDocument();
+    expect(screen.queryByText("Propuesta 1")).not.toBeInTheDocument();
+    expect(screen.queryByText("Propuesta 3")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty state with a clear-filters action when nothing matches", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    pick("Filtrar por líder de producto", "Ana Ruiz");
+    pick("Filtrar por empresa", "Bancolombia");
+    pick("Filtrar por tipo de solicitud", "Consultoría");
+
+    expect(screen.getByText("No se encontraron solicitudes")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar filtros" }));
+
+    expect(screen.queryByText("No se encontraron solicitudes")).not.toBeInTheDocument();
+    ["Propuesta 1", "Propuesta 2", "Propuesta 3", "Propuesta 4"].forEach((t) =>
+      expect(screen.getByText(t)).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Filtrar por empresa")).toHaveDisplayValue("Todas las empresas");
+  });
+
+  it("remembers the selection after leaving and coming back to the dashboard", () => {
+    const first = renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    pick("Filtrar por empresa", "Carvajal");
+    first.unmount();
+
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    expect(screen.getByLabelText("Filtrar por empresa")).toHaveDisplayValue("Carvajal");
+    expect(screen.queryByText("Propuesta 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Propuesta 2")).toBeInTheDocument();
+  });
+
+  it("ignores a stored selection that no longer exists in the data", () => {
+    window.localStorage.setItem(
+      "icesi_kam_dashboard_board_filters_v1",
+      JSON.stringify({ productLeader: "", company: "Empresa Fantasma", type: "" }),
+    );
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    expect(screen.getByText("Propuesta 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filtrar por empresa")).toHaveDisplayValue("Todas las empresas");
+  });
+});
