@@ -26,10 +26,10 @@ Este documento describe, pantalla por pantalla, los dos recorridos prioritarios:
 ### A.2 — Punto de partida: `KamCommandCenter`
 El KAM aterriza en su centro de comando, filtrado siempre a **sus propias solicitudes** (no ve las de otros KAMs). Desde aquí tiene tres caminos típicos:
 - **Crear algo nuevo** → botón "Nueva Solicitud" (esquina superior derecha, también disponible en la barra lateral y en la topbar global de `AppShell`).
-- **Revisar el pipeline existente** → 4 tarjetas KPI (Nueva / En Proceso / Lista para Entregar / Entregada) que filtran la tabla, o la tabla directamente.
+- **Revisar el pipeline existente** → 4 tarjetas KPI (Entregada al líder / En Proceso / Lista para Entregar / Entregada) que filtran la tabla, o la tabla directamente. Además, tres filtros combinables (Líder de Producto, empresa, tipo de solicitud) junto al buscador.
 - **Escanear visualmente** → toggle a vista Kanban (mismas 4 columnas, mismos colores que la tabla).
 
-En Kanban, un clic en una tarjeta KPI **no oculta nada** (las columnas ya son el filtro) — aísla esa columna a pantalla completa, con las tarjetas en cuadrícula de hasta 3 por fila, para revisarlas más cómodo sin perder el contexto visual del Kanban. Un botón "Ver las 4 fases" regresa a la vista completa.
+En Kanban, un clic en una tarjeta KPI **no oculta nada** (las columnas ya son el filtro) — aísla esa columna a pantalla completa, con las tarjetas en cuadrícula de hasta 3 por fila, para revisarlas más cómodo sin perder el contexto visual del Kanban. Un botón "Ver las 4 fases" regresa a la vista completa. El mismo efecto se obtiene haciendo clic en el encabezado de cualquier columna del Kanban.
 
 ### A.3 — Registrar una nueva solicitud (`/solicitudes/nueva`)
 Wizard de 5 pasos con stepper clicable (se puede saltar hacia atrás libremente; hacia adelante valida el paso actual). Guardado automático en `localStorage` en cada cambio (si hay contenido significativo), con banner de recuperación de borrador si se detecta uno al entrar.
@@ -48,7 +48,7 @@ Al enviar: se crea el `RequestItem` con `status: "nueva"` siempre, sin costeo ni
 El KAM no tiene que hacer nada más hasta que la propuesta avance. Se entera de que algo está listo por:
 - El **banner verde** en su dashboard ("¡Tienes N propuestas listas para entregar!") — solo cuenta lo que el Líder ya confirmó con "Enviar a KAM" (`readyForKam`), no basta con que la solicitud haya llegado a `en-costeo` (ver B.4).
 - La tarjeta KPI "Lista para Entregar" (mismo criterio; una `en-costeo` sin confirmar aparece bajo "En Proceso").
-- La columna "Estado" en la tabla (4 badges de color, uno por estado real — ya no fusiona "Nueva" y "En Proceso" en un solo badge como antes).
+- La columna "Estado" en la tabla (4 badges de color, uno por estado real — ya no fusiona "Nueva" y "En Proceso" en un solo badge como antes; el estado `nueva` se rotula "Entregada al líder" para el KAM). Debajo se indica "Lleva N días en esta etapa" (también en las tarjetas del Kanban).
 
 ### A.5 — Ver el detalle y confirmar entrega (`/solicitudes/:id`)
 Desde la tabla o el Kanban, clic en una solicitud lleva al detalle. Para el KAM, la columna principal muestra:
