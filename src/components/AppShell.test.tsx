@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -113,5 +115,59 @@ describe("AppShell mobile drawer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Menú de navegación" }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("link", { name: "Nueva solicitud" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("AppShell black side menu", () => {
+  beforeEach(() => window.localStorage.clear());
+
+  const rootTokens = () => {
+    const css = readFileSync(resolve(__dirname, "../index.css"), "utf8");
+    const rootBlock = /:root\s*\{([\s\S]*?)\n {2}\}/.exec(css)?.[1] ?? "";
+    return Object.fromEntries(
+      [...rootBlock.matchAll(/(--sidebar-[a-z-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]),
+    );
+  };
+
+  it("defines the sidebar tokens as black in :root, so the light theme keeps it black", () => {
+    const tokens = rootTokens();
+    expect(tokens["--sidebar-background"]).toMatch(/^240 18% 5%/);
+    expect(tokens["--sidebar-foreground"]).toBe("0 0% 96%");
+    expect(tokens["--sidebar-accent"]).toBe("232 16% 16%");
+    expect(tokens["--sidebar-accent-foreground"]).toBe("0 0% 100%");
+    expect(tokens["--sidebar-border"]).toBe("232 14% 17%");
+  });
+
+  it("paints the rail on the sidebar token with light text, and styles items for a black surface", () => {
+    renderShell("kam");
+    const rail = document.getElementById("icesi-sidebar-rail");
+    expect(rail).toHaveClass("bg-sidebar", "text-white");
+
+    const active = within(mainNav()).getByRole("link", { name: "Solicitudes" });
+    expect(active).toHaveClass("bg-icesi-yellow", "text-black");
+    const inactive = within(mainNav()).getByRole("link", { name: "Nueva solicitud" });
+    expect(inactive).toHaveClass("text-zinc-400", "hover:bg-white/10", "hover:text-white");
+
+    const logout = within(rail as HTMLElement).getByRole("button", { name: "Cerrar sesión" });
+    expect(logout).toHaveClass("text-zinc-400", "hover:bg-red-500/20", "hover:text-red-400");
+    expect(within(rail as HTMLElement).getByText("KAM")).toHaveClass("text-zinc-400");
+  });
+
+  it("keeps the theme toggle light-on-black even in the light theme", () => {
+    renderShell("kam");
+    const toggle = within(document.getElementById("icesi-sidebar-rail") as HTMLElement).getByRole("button", {
+      name: "Activar modo oscuro",
+    });
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(toggle).toHaveClass("text-zinc-400", "hover:text-white");
+    expect(toggle).not.toHaveClass("text-slate-600");
+  });
+
+  it("renders the mobile drawer on the same black surface", () => {
+    renderShell("kam");
+    fireEvent.click(screen.getByRole("button", { name: "Menú de navegación" }));
+    const drawer = screen.getByRole("dialog");
+    expect(drawer).toHaveClass("bg-sidebar", "text-white");
+    expect(within(drawer).getByRole("button", { name: "Activar modo oscuro" })).toHaveClass("text-zinc-400");
   });
 });
