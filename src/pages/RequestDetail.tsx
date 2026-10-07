@@ -300,11 +300,14 @@ export default function RequestDetail() {
     (r) => r.clientResponse === "rechazada" || (r.clientResponse as string) === "CHANGES_REQUESTED",
   );
   const canEditFullInfo =
-    (isKam && req?.kam === user.name && req?.status === "nueva") ||
+    (isKam &&
+      req?.kam === user.name &&
+      (req?.status === "nueva" || (req?.status === "en-costeo" && wasRejectedByClient))) ||
     (role === "lider-producto" &&
       req?.productLeader === user.name &&
       req?.status === "en-costeo" &&
       wasRejectedByClient);
+
   const fullInfoCompleteness = getFullInfoCompleteness(req ?? ({} as RequestItem));
   const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
   const emptyFullInfoDraft = {
@@ -1671,15 +1674,16 @@ export default function RequestDetail() {
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Líder de Producto</span>
-                    {role === "lider-producto" && (req.status === "nueva" || req.status === "en-experto") && (
-                      <button
-                        type="button"
-                        onClick={() => setIsReassignModalOpen(true)}
-                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <ArrowLeftRight className="h-3 w-3" /> Reasignar
-                      </button>
-                    )}
+                    {role === "lider-producto" &&
+                      (req.status === "nueva" || req.status === "en-experto" || req.status === "en-costeo") && (
+                        <button
+                          type="button"
+                          onClick={() => setIsReassignModalOpen(true)}
+                          className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <ArrowLeftRight className="h-3 w-3" /> Reasignar
+                        </button>
+                      )}
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-foreground">{req.productLeader}</p>

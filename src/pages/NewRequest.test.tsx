@@ -59,6 +59,20 @@ vi.mock("@/lib/api/companies", () => ({
   },
 }));
 
+vi.mock("@/lib/api/users", () => ({
+  usersApi: {
+    findByRole: vi.fn().mockResolvedValue([
+      {
+        id: "leader-uuid-1",
+        email: "jcorrales@icesi.edu.co",
+        firstName: "Juan Pablo",
+        lastName: "Corrales Arenas",
+        isActive: true,
+      },
+    ]),
+  },
+}));
+
 const mockedRequestsApi = vi.mocked(requestsApi);
 
 function renderNewRequest() {
@@ -217,5 +231,55 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     await waitFor(() => {
       expect(screen.getByText(/Solicitud registrada con éxito/i)).toBeInTheDocument();
     });
+  }, 20000);
+
+  it("resolves and attaches productLeaderId to payload when node with suggested leader is selected (UI-001)", async () => {
+    renderNewRequest();
+
+    // Step 1: Fill company name and type
+    const companyInput = screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i);
+    fireEvent.change(companyInput, { target: { value: "Empresa con Líder S.A.S" } });
+    const privadaOption = screen.getByRole("button", { name: "Privada" });
+    fireEvent.click(privadaOption);
+
+    // Step 1 -> Step 2
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    // Step 2 -> Step 3
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    // Step 3: Select node that maps to Juan Pablo Corrales Arenas -> leader-uuid-1
+    const nodeOption = await screen.findByRole("option", { name: /Inteligencia Artificial y Tecnologías Digitales/i });
+    fireEvent.click(nodeOption);
+
+    const titleInput = screen.getByLabelText(/Título o nombre de la propuesta/i);
+    fireEvent.change(titleInput, { target: { value: "Diplomado en IA Generativa" } });
+
+    const tipoCapacitacion = screen.getByRole("option", { name: "Capacitación" });
+    fireEvent.click(tipoCapacitacion);
+
+    // Step 3 -> Step 4
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    // Step 4: Fill formacion previa (No) and urgency (Alta -> Alto)
+    const prevNo = screen.getByRole("button", { name: "No" });
+    fireEvent.click(prevNo);
+    const urgencyAlta = screen.getByRole("button", { name: /Alto/i });
+    fireEvent.click(urgencyAlta);
+
+    // Step 4 -> Step 5
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    // Step 5: Submit request
+    const submitBtn = screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockedRequestsApi.create).toHaveBeenCalledTimes(1);
+    });
+
+    const callPayload = mockedRequestsApi.create.mock.calls[0][0];
+    expect(callPayload.nodeId).toBe("node-uuid-1");
+    expect(callPayload.productLeaderId).toBe("leader-uuid-1");
   }, 20000);
 });

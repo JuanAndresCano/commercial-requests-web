@@ -697,9 +697,10 @@ export function ProductLeaderDashboard({
                             </div>
 
                             <div className="flex items-center gap-1">
-                              {/* Reasignar mientras la solicitud sigue en las etapas tempranas
-                            (aún no entra a costeo): "Nueva" o "En Experto" (docs/03). */}
-                              {(req.status === "nueva" || req.status === "en-experto") && (
+                              {/* Reasignar en etapas permitidas: "Nueva", "En Experto" o "En Costeo" */}
+                              {(req.status === "nueva" ||
+                                req.status === "en-experto" ||
+                                req.status === "en-costeo") && (
                                 <button
                                   type="button"
                                   onClick={() => handleOpenReassign(req)}
