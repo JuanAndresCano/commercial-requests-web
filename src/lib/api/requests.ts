@@ -94,6 +94,9 @@ export interface UpsertCostingPayload {
   totalCost: number;
   marginPercentage?: number | null;
   marginAmount?: number | null;
+  /** "Nota de alcance comercial" of the current costing row: the KAM sees it next to the offered value.
+   * Left out it keeps the previous note, null (or empty) clears it. */
+  negotiationNotes?: string | null;
 }
 
 export interface ProposalEconomics {
@@ -107,6 +110,8 @@ export interface ProposalEconomics {
   estimatedCost?: string | number | null;
   estimatedMargin?: string | number | null;
   marginPercentage?: string | number | null;
+  /** "Nota de alcance comercial" the Product Leader wrote for this costing row (visible to the KAM). */
+  negotiationNotes?: string | null;
   readyForKam: boolean;
   readyForKamAt: string | null;
 }
@@ -121,13 +126,17 @@ export interface NegotiationRound {
   scopeSnapshot: unknown | null;
   leaderNote: string | null;
   sentToKamAt: string;
+  /** Written when the KAM delivers the round to the client. */
   sentToClientAt: string | null;
   clientResponse: "PENDING" | "CHANGES_REQUESTED";
   clientNote: string | null;
+  /** Written when the KAM returns the round with the client's observations. Optional: a backend
+   * without it just shows no "Devuelta el" date. */
+  clientRespondedAt?: string | null;
 }
 
-/** What the list endpoints return per proposal: only the latest round, three fields
- * (backend `LATEST_ROUND_FOR_LIST`). No margins, no snapshot. */
+/** What the list endpoints return per proposal: the latest round plus the latest CHANGES_REQUESTED round
+ * when it is another one, three fields each (backend `LATEST_ROUND_FOR_LIST`). No margins, no snapshot. */
 export type ListNegotiationRound = Pick<NegotiationRound, "roundNumber" | "clientResponse" | "clientNote">;
 
 export interface ProposalAssignment {
@@ -212,6 +221,7 @@ export interface ProposalListItem {
     // Only for Product Leader / Admin: the backend strips both for the KAM.
     estimatedMargin?: string | number | null;
     marginPercentage?: string | number | null;
+    negotiationNotes?: string | null;
     readyForKam: boolean;
     readyForKamAt: string | null;
   }[];

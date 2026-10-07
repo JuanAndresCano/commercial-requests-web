@@ -855,12 +855,42 @@ describe("RequestDetail - negotiation history and returned notice (HU 5.4)", () 
     expect(await screen.findByText(BANNER)).toBeInTheDocument();
   });
 
+  // Prototype behaviour: pressing "Enviar a KAM" opens a new PENDING round but the client's note
+  // stays visible until the KAM redelivers the proposal to the client.
+  it("keeps the banner after the Product Leader sent a new PENDING round to the KAM", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+      proposalWith([round(1, "CHANGES_REQUESTED", "Bajar el precio"), round(2, "PENDING", null)]),
+    );
+    renderPage("REQ-2026-0002");
+
+    await screen.findByText("Historial de Negociación");
+    expect(screen.getByText(BANNER)).toBeInTheDocument();
+    expect(screen.getAllByText("Bajar el precio").length).toBeGreaterThan(0);
+  });
+
+  it("shows when each round was delivered to the client and when it came back, and the scope changes", async () => {
+    const returned = {
+      ...round(1, "CHANGES_REQUESTED", "Bajar el precio"),
+      sentToClientAt: "2026-09-22T12:00:00.000Z",
+      clientRespondedAt: "2026-09-25T12:00:00.000Z",
+      scopeSnapshot: { totalHours: 40, minParticipants: 15, maxParticipants: 20, programModality: "VIRTUAL" },
+    };
+    const next = {
+      ...round(2, "PENDING", null),
+      scopeSnapshot: { totalHours: 24, minParticipants: 15, maxParticipants: 20, programModality: "VIRTUAL" },
+    };
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith([returned, next]));
+    renderPage("REQ-2026-0002");
+
+    await screen.findByText("Historial de Negociación");
+    expect(within(roundCard(1)).getByText(/entregada al cliente el/)).toHaveTextContent("22 de septiembre, 2026");
+    expect(within(roundCard(1)).getByText(/Devuelta el/)).toHaveTextContent("25 de septiembre, 2026");
+    expect(within(roundCard(2)).getByText("Cambios de alcance frente a la ronda anterior")).toBeInTheDocument();
+    expect(within(roundCard(2)).getByText("Horas: 40 → 24")).toBeInTheDocument();
+    expect(within(roundCard(1)).queryByText("Cambios de alcance frente a la ronda anterior")).not.toBeInTheDocument();
+  });
+
   it.each([
-    [
-      "a new PENDING round",
-      [round(1, "CHANGES_REQUESTED", "Bajar el precio"), round(2, "PENDING", null)],
-      "IN_COSTING",
-    ],
     ["the redelivery", [round(1, "CHANGES_REQUESTED", "Bajar el precio")], "DELIVERED"],
     ["a rejection", [round(1, "PENDING", null), round(2, "CHANGES_REQUESTED", "No")], "REJECTED"],
   ])("clears the banner after %s", async (_case, rounds, statusCode) => {
