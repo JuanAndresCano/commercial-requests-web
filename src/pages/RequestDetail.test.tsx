@@ -232,6 +232,37 @@ function renderPage(requestId = "REQ-2026-0001") {
   );
 }
 
+// A Product Leader's detail payload in a given status, owned by "Juan Pablo Corrales" (the test user).
+const rejectedRound = {
+  id: "r1",
+  proposalId: "p-1",
+  roundNumber: 1,
+  offeredValue: "20000000",
+  scopeSnapshot: null,
+  leaderNote: null,
+  sentToKamAt: "2026-09-21T00:00:00.000Z",
+  sentToClientAt: "2026-09-22T00:00:00.000Z",
+  clientResponse: "CHANGES_REQUESTED" as const,
+  clientNote: "Ajustar alcance",
+};
+const proposalInStatus = (statusCode: string, overrides: Record<string, unknown> = {}) =>
+  ({
+    id: "p-1",
+    code: "REQ-2026-0002",
+    title: "Propuesta Devuelta para Ajustes",
+    priority: "MEDIA",
+    company: { id: "comp-1", name: "Argos S.A." },
+    workflow: { currentStatus: { code: statusCode } },
+    program: { requestType: "CAPACITACION" },
+    creator: { id: "u-1", firstName: "Andrea", lastName: "Martínez", email: "andrea@icesi.edu.co" },
+    productLeader: { id: "lp-1", firstName: "Juan Pablo", lastName: "Corrales", email: "lp@icesi.edu.co" },
+    economics: [{ id: "e1", isCurrent: true, grossValue: "20000000", readyForKam: false, readyForKamAt: null }],
+    assignments: [],
+    attachments: [],
+    negotiationRounds: [],
+    ...overrides,
+  }) as unknown as ProposalDetail;
+
 describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () => {
   beforeEach(() => {
     authMock.user = {
@@ -306,30 +337,103 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(requestsApi.updateInfo).not.toHaveBeenCalled();
     });
 
-    it("renders 'Editar información' button when proposal is in 'en-costeo' status post-rejection (UI-004)", async () => {
+    // Prototype rule (RequestDetail.tsx canEditFullInfo): the KAM edits only while "nueva"; after a
+    // client rejection only the owning Product Leader edits, and only in "en-costeo".
+    it("does not let the KAM edit the information in 'en-costeo' after a client rejection", async () => {
       renderPage("REQ-2026-0004");
 
-      const editBtn = await screen.findByRole("button", { name: /Editar información/i });
-      expect(editBtn).toBeInTheDocument();
-
-      fireEvent.click(editBtn);
-      expect(screen.getByText("Editar información de la solicitud")).toBeInTheDocument();
+      await screen.findByText("Propuesta Devuelta para Ajustes");
+      expect(screen.queryByRole("button", { name: /Editar información/i })).not.toBeInTheDocument();
     });
-  });
 
-  describe("HU 4.4: Leader reassignment in costeo (UI-002)", () => {
-    it("renders 'Reasignar' button when proposal is in 'en-costeo' status for Product Leader", async () => {
+    it("lets the owning Product Leader edit the information in 'en-costeo' after a client rejection", async () => {
       authMock.user = {
         role: "lider-producto",
         roleLabel: "Líder de Producto",
         name: "Juan Pablo Corrales",
         email: "jcorrales@icesi.edu.co",
       };
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+        proposalInStatus("IN_COSTING", { negotiationRounds: [rejectedRound] }),
+      );
+      renderPage("REQ-2026-0004");
 
+      const editBtn = await screen.findByRole("button", { name: /Editar información/i });
+      fireEvent.click(editBtn);
+      expect(screen.getByText("Editar información de la solicitud")).toBeInTheDocument();
+    });
+
+    it("does not let the Product Leader edit the information before any client rejection", async () => {
+      authMock.user = {
+        role: "lider-producto",
+        roleLabel: "Líder de Producto",
+        name: "Juan Pablo Corrales",
+        email: "jcorrales@icesi.edu.co",
+      };
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalInStatus("IN_COSTING"));
+      renderPage("REQ-2026-0004");
+
+      await screen.findByText("Propuesta Devuelta para Ajustes");
+      expect(screen.queryByRole("button", { name: /Editar información/i })).not.toBeInTheDocument();
+    });
+
+    it("offers only the title and the urgency in the General tab: node, leader and type are not editable here", async () => {
+      renderPage("REQ-2026-0001");
+
+      fireEvent.click(await screen.findByRole("button", { name: /Editar información/i }));
+
+      expect(screen.getByLabelText(/Título de la propuesta/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Urgencia/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Nodo Asignado/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Tipo de requerimiento/i)).not.toBeInTheDocument();
+      expect(screen.queryByText("Asignación Académica Institucional")).not.toBeInTheDocument();
+    });
+
+    it("never sends node, product leader or request type when the KAM saves the information", async () => {
+      renderPage("REQ-2026-0001");
+
+      fireEvent.click(await screen.findByRole("button", { name: /Editar información/i }));
+      fireEvent.change(screen.getByLabelText(/Título de la propuesta/i), { target: { value: "Otro título" } });
+      fireEvent.click(screen.getByRole("button", { name: /Guardar información/i }));
+
+      await waitFor(() => expect(requestsApi.updateInfo).toHaveBeenCalledTimes(1));
+      const payload = vi.mocked(requestsApi.updateInfo).mock.calls[0][1];
+      expect(payload).not.toHaveProperty("nodeId");
+      expect(payload).not.toHaveProperty("productLeaderId");
+      expect(payload).not.toHaveProperty("requestType");
+    });
+  });
+
+  describe("HU 4.4: Leader reassignment only while 'nueva' or 'en-experto'", () => {
+    const asLeader = () => {
+      authMock.user = {
+        role: "lider-producto",
+        roleLabel: "Líder de Producto",
+        name: "Juan Pablo Corrales",
+        email: "jcorrales@icesi.edu.co",
+      };
+    };
+
+    it.each([
+      ["NEW", true],
+      ["IN_PROGRESS", true],
+      ["IN_COSTING", false],
+      ["DELIVERED", false],
+    ])("with the proposal in %s, the 'Reasignar' button is shown: %s", async (statusCode, shown) => {
+      asLeader();
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalInStatus(statusCode));
       renderPage("REQ-2026-0002");
 
-      const reassignBtn = await screen.findByRole("button", { name: /Reasignar/i });
-      expect(reassignBtn).toBeInTheDocument();
+      await screen.findByText("Equipo Asignado");
+      expect(screen.queryByRole("button", { name: /Reasignar/i }) !== null).toBe(shown);
+    });
+
+    it("does not show 'Reasignar' to the KAM", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalInStatus("NEW"));
+      renderPage("REQ-2026-0002");
+
+      await screen.findByText("Equipo Asignado");
+      expect(screen.queryByRole("button", { name: /Reasignar/i })).not.toBeInTheDocument();
     });
   });
 

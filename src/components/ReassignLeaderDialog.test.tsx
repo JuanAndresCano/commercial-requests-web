@@ -28,21 +28,30 @@ describe("ReassignLeaderDialog (UI-003)", () => {
     expect(screen.queryByText("Reasignar Líder de Producto")).not.toBeInTheDocument();
   });
 
-  it("renders accurate description without claiming to reset status to Nueva or clear professor", () => {
+  it("warns that reassigning from En Experto restarts the flow in Nueva (prototype rule)", () => {
     render(<ReassignLeaderDialog request={sampleRequest} onOpenChange={vi.fn()} onConfirm={vi.fn()} />);
 
-    // Accurate description
-    expect(screen.getByText(/manteniendo intactos su estado actual y los datos registrados/i)).toBeInTheDocument();
+    expect(screen.getByText(/La solicitud volverá a la fase "Nueva"/i)).toBeInTheDocument();
+    expect(screen.getByText(/reinicie la asignación de docente/i)).toBeInTheDocument();
+  });
 
-    // Outdated misleading warning should NOT be present
+  it("does not announce a restart when the request is still Nueva", () => {
+    render(
+      <ReassignLeaderDialog
+        request={{ ...sampleRequest, status: "nueva" }}
+        onOpenChange={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/si no corresponde a tu área temática/i)).toBeInTheDocument();
     expect(screen.queryByText(/La solicitud volverá a la fase "Nueva"/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/reinicie la asignación de docente/i)).not.toBeInTheDocument();
   });
 
   it("displays current request details in summary panel", () => {
     render(<ReassignLeaderDialog request={sampleRequest} onOpenChange={vi.fn()} onConfirm={vi.fn()} />);
 
-    expect(screen.getByText("REQ-2026-0001")).toBeInTheDocument();
+    expect(screen.getByText("PROP-2026-0001")).toBeInTheDocument();
     expect(screen.getByText("Programa en Analítica de Datos")).toBeInTheDocument();
     expect(screen.getByText("Bancolombia")).toBeInTheDocument();
     expect(screen.getByText("Carlos Mendoza")).toBeInTheDocument();
