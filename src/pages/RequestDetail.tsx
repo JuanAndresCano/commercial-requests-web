@@ -55,6 +55,7 @@ import {
   type NegotiationRound,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
+import { BackButton } from "@/components/BackButton";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
 import { AdvisorContactDialog } from "@/components/costing/AdvisorContactDialog";
 import { ProposalCostingModule } from "@/components/costing/ProposalCostingModule";
@@ -138,6 +139,10 @@ export default function RequestDetail() {
   const { data: dbNodes } = useNodes();
 
   const role = user.role;
+  const backTarget =
+    role === "kam" || role === "lider-producto"
+      ? { to: "/dashboard", label: "Volver al tablero" }
+      : { to: "/solicitudes", label: "Volver a solicitudes" };
   const isKam = role === "kam";
   const isLeader = role === "lider-producto" || role === "lider-nodo";
 
@@ -952,14 +957,7 @@ export default function RequestDetail() {
     return (
       <AppShell>
         <div className="space-y-6 max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <Link
-              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
-            </Link>
-          </div>
+          <BackButton to={backTarget.to} label={backTarget.label} />
           <div className="rounded-xl border border-border bg-card p-10 text-center space-y-3 shadow-xs">
             <p className="text-lg font-semibold text-foreground">
               {showLoadFailure ? "No se pudo cargar la solicitud" : "Solicitud no encontrada"}
@@ -1151,14 +1149,7 @@ export default function RequestDetail() {
         {/* ========================================================================= */}
         {/* TOP BAR: BACK NAVIGATION & CLEAN ROLE SIMULATOR PILL */}
         {/* ========================================================================= */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <Link
-            to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
-          </Link>
-        </div>
+        <BackButton to={backTarget.to} label={backTarget.label} />
 
         {/* ========================================================================= */}
         {/* 1. CABECERA MINIMALISTA */}
