@@ -233,6 +233,17 @@ export interface NegotiationRound {
   horas?: string;
   type?: RequestType;
   necesidad?: string;
+  // Además de los 5 del prototipo, todo lo que el Líder puede ajustar entre
+  // rondas (decisión del dueño, 2026-10-07), para listar cada cambio.
+  deadline?: string; // ISO
+  competencias?: string;
+  exito?: string;
+  resultados?: string;
+  areaParticipantes?: string;
+  alimentacion?: string;
+  formacionPrevia?: string;
+  /** false cuando la ronda no congeló el alcance (datos antiguos): solo se compara el precio. */
+  hasScopeSnapshot?: boolean;
 }
 
 /**

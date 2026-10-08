@@ -148,16 +148,69 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-type RoundScope = Pick<FrontendNegotiationRound, "participantes" | "modalidad" | "horas" | "type" | "necesidad">;
+type RoundScope = Pick<
+  FrontendNegotiationRound,
+  | "participantes"
+  | "modalidad"
+  | "horas"
+  | "type"
+  | "necesidad"
+  | "deadline"
+  | "competencias"
+  | "exito"
+  | "resultados"
+  | "areaParticipantes"
+  | "alimentacion"
+  | "formacionPrevia"
+  | "hasScopeSnapshot"
+>;
+
+/** "Sí - notas" / "Sí" / "No" — the label the live request shows for catering. */
+function cateringLabel(requiresCatering: boolean | null | undefined, notes: string | null | undefined): string {
+  return requiresCatering ? (notes ? `Sí - ${notes}` : "Sí") : "No";
+}
+
+/** Backend free text ("Si", "No se"...) to the wizard's three options; anything else stays undefined. */
+function previousTrainingLabel(value: unknown): "Sí" | "No" | "No sé" | undefined {
+  if (value === "Si" || value === "Sí") return "Sí";
+  if (value === "No") return "No";
+  if (value === "No sé" || value === "No se") return "No sé";
+  return undefined;
+}
+
+const textOrUndefined = (value: unknown) => (typeof value === "string" && value.trim() ? value : undefined);
 
 /** The scope the backend froze when the Product Leader pressed "Enviar a KAM" (`scopeSnapshot`, JSON),
  * in the labels the round history compares: the same ones the live request fields use. Anything that is
  * missing, null or not of the expected shape stays undefined — a round without a snapshot (legacy, or a
  * proposal without a program) simply has no scope to diff, exactly like the prototype's first round. */
 function mapScopeSnapshot(raw: unknown): RoundScope {
-  if (!isRecord(raw)) return {};
-  const { requestType, programModality, totalHours, minParticipants, maxParticipants, generalDescription } = raw;
+  if (!isRecord(raw)) return { hasScopeSnapshot: false };
+  const {
+    requestType,
+    programModality,
+    totalHours,
+    minParticipants,
+    maxParticipants,
+    generalDescription,
+    programDescription,
+    requiresCatering,
+    cateringNotes,
+    deadline,
+  } = raw;
   return {
+    hasScopeSnapshot: true,
+    deadline: textOrUndefined(deadline),
+    competencias: textOrUndefined(raw.competencies),
+    exito: textOrUndefined(raw.successMetrics),
+    resultados: textOrUndefined(raw.expectedResults),
+    areaParticipantes: textOrUndefined(raw.participantArea),
+    // Older snapshots did not freeze catering: unknown, not "No".
+    alimentacion:
+      typeof requiresCatering === "boolean"
+        ? cateringLabel(requiresCatering, textOrUndefined(cateringNotes))
+        : undefined,
+    formacionPrevia: previousTrainingLabel(raw.previousTraining),
     participantes:
       typeof minParticipants === "number" && typeof maxParticipants === "number"
         ? `${minParticipants} - ${maxParticipants}`
@@ -171,7 +224,8 @@ function mapScopeSnapshot(raw: unknown): RoundScope {
       typeof requestType === "string" && (Object.values(REQUEST_TYPE_TO_BACKEND) as string[]).includes(requestType)
         ? mapBackendTypeToFrontend(requestType as BackendRequestType)
         : undefined,
-    necesidad: typeof generalDescription === "string" && generalDescription.trim() ? generalDescription : undefined,
+    // Same source as the live field: the program description, else the general one.
+    necesidad: textOrUndefined(programDescription) ?? textOrUndefined(generalDescription),
   };
 }
 
@@ -309,19 +363,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     exito: p.program?.successMetrics ?? undefined,
     resultados: p.program?.expectedResults ?? undefined,
     areaParticipantes: p.program?.participantArea ?? undefined,
-    alimentacion: p.program?.requiresCatering
-      ? p.program?.cateringNotes
-        ? `Sí - ${p.program.cateringNotes}`
-        : "Sí"
-      : "No",
-    formacionPrevia:
-      p.program?.previousTraining === "Si" || p.program?.previousTraining === "Sí"
-        ? "Sí"
-        : p.program?.previousTraining === "No"
-          ? "No"
-          : p.program?.previousTraining === "No sé" || p.program?.previousTraining === "No se"
-            ? "No sé"
-            : undefined,
+    alimentacion: cateringLabel(p.program?.requiresCatering, p.program?.cateringNotes),
+    formacionPrevia: previousTrainingLabel(p.program?.previousTraining),
     descFormacion: p.program?.previousTrainingDetail ?? undefined,
     empresaPrevia: p.program?.previousTrainingCompany ?? undefined,
     fechaPrevia: p.program?.previousTrainingDate ? p.program.previousTrainingDate.slice(0, 10) : undefined,

@@ -65,7 +65,12 @@ import {
   REASSIGN_REASON_TO_BACKEND,
   type ReassignConfirmParams,
 } from "@/components/ReassignLeaderDialog";
-import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
+import {
+  openNegotiationRound,
+  closeRoundForClientDelivery,
+  rejectRoundWithObservations,
+  getRoundChanges,
+} from "@/lib/negotiation";
 import { toast } from "sonner";
 import { useRequestDetail } from "@/hooks/use-request-detail";
 import { useUpdateRequestInfo } from "@/hooks/use-update-request-info";
@@ -1312,7 +1317,7 @@ export default function RequestDetail() {
                     const isRejected =
                       round.clientResponse === "rechazada" || (round.clientResponse as string) === "CHANGES_REQUESTED";
                     const isCurrentRound = isPending && idx === negotiationRounds.length - 1;
-                    const scopeDiffs = getScopeDiffs(round, negotiationRounds[idx - 1]);
+                    const scopeDiffs = getRoundChanges(round, negotiationRounds[idx - 1]);
                     return (
                       <div
                         key={round.id}
@@ -1387,7 +1392,7 @@ export default function RequestDetail() {
                         {scopeDiffs.length > 0 && (
                           <div className="rounded-lg border border-border dark:border-[#252838] bg-secondary/30 dark:bg-secondary/10 p-2.5 space-y-1">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                              Cambios de alcance frente a la ronda anterior
+                              Cambios frente a la ronda anterior
                             </span>
                             <ul className="space-y-0.5">
                               {scopeDiffs.map((diff) => (
@@ -2500,27 +2505,6 @@ function getFullInfoCompleteness(req: RequestItem): { filled: number; total: num
 // alguno cambió respecto a la ronda anterior, el historial lo muestra como
 // parte del resumen de la ronda ("Participantes: 15-20 → 9-12"). La ronda 1
 // nunca tiene con qué compararse, así que no muestra diffs.
-const SCOPE_DIFF_FIELDS: { key: keyof NegotiationRound; label: string }[] = [
-  { key: "participantes", label: "Participantes" },
-  { key: "modalidad", label: "Modalidad" },
-  { key: "horas", label: "Horas" },
-  { key: "type", label: "Tipo de servicio" },
-  { key: "necesidad", label: "Necesidad" },
-];
-
-function getScopeDiffs(round: NegotiationRound, previousRound?: NegotiationRound): string[] {
-  if (!previousRound) return [];
-  const diffs: string[] = [];
-  for (const { key, label } of SCOPE_DIFF_FIELDS) {
-    const prevValue = previousRound[key];
-    const newValue = round[key];
-    if (prevValue !== undefined && newValue !== undefined && prevValue !== newValue) {
-      diffs.push(`${label}: ${prevValue} → ${newValue}`);
-    }
-  }
-  return diffs;
-}
-
 function EditableField({
   label,
   value,

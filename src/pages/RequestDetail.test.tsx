@@ -1196,9 +1196,30 @@ describe("RequestDetail - negotiation history and returned notice (HU 5.4)", () 
     await screen.findByText("Historial de Negociación");
     expect(within(roundCard(1)).getByText(/entregada al cliente el/)).toHaveTextContent("22 de septiembre, 2026");
     expect(within(roundCard(1)).getByText(/Devuelta el/)).toHaveTextContent("25 de septiembre, 2026");
-    expect(within(roundCard(2)).getByText("Cambios de alcance frente a la ronda anterior")).toBeInTheDocument();
+    expect(within(roundCard(2)).getByText("Cambios frente a la ronda anterior")).toBeInTheDocument();
     expect(within(roundCard(2)).getByText("Horas: 40 → 24")).toBeInTheDocument();
-    expect(within(roundCard(1)).queryByText("Cambios de alcance frente a la ronda anterior")).not.toBeInTheDocument();
+    expect(within(roundCard(1)).queryByText("Cambios frente a la ronda anterior")).not.toBeInTheDocument();
+  });
+
+  it("lists the price change and a scope field that was empty in the previous round", async () => {
+    const first = {
+      ...round(1, "CHANGES_REQUESTED", "Bajar el precio"),
+      offeredValue: "52000000",
+      scopeSnapshot: { totalHours: 40 },
+    };
+    const second = {
+      ...round(2, "PENDING", null),
+      offeredValue: "520030000",
+      scopeSnapshot: { totalHours: 44, minParticipants: 20, maxParticipants: 25 },
+    };
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith([first, second]));
+    renderPage("REQ-2026-0002");
+
+    await screen.findByText("Historial de Negociación");
+    const card = within(roundCard(2));
+    expect(card.getByText(/^Valor ofertado: .*52\.000\.000 → .*520\.030\.000$/)).toBeInTheDocument();
+    expect(card.getByText("Horas: 40 → 44")).toBeInTheDocument();
+    expect(card.getByText("Participantes: Sin definir → 20 - 25")).toBeInTheDocument();
   });
 
   it.each([

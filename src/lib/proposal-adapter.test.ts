@@ -820,6 +820,49 @@ describe("mapProposalToRequestItem - negotiation history of the detail (prototyp
     }
   });
 
+  it("maps every other adjustable field of the snapshot with the same rules as the live request", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([
+        detailRound({
+          scopeSnapshot: {
+            generalDescription: "Descripción general",
+            programDescription: "Necesidad ajustada",
+            competencies: "Liderazgo",
+            successMetrics: "NPS > 80",
+            expectedResults: "Plan de acción",
+            participantArea: "Operaciones",
+            requiresCatering: true,
+            cateringNotes: "Refrigerio",
+            previousTraining: "Si",
+            deadline: "2026-11-30T05:00:00.000Z",
+          },
+        }),
+      ]),
+    );
+    expect(item.negotiationRounds?.[0]).toMatchObject({
+      hasScopeSnapshot: true,
+      necesidad: "Necesidad ajustada",
+      competencias: "Liderazgo",
+      exito: "NPS > 80",
+      resultados: "Plan de acción",
+      areaParticipantes: "Operaciones",
+      alimentacion: "Sí - Refrigerio",
+      formacionPrevia: "Sí",
+      deadline: "2026-11-30T05:00:00.000Z",
+    });
+  });
+
+  it("marks a round without a snapshot, and leaves unknown catering/training undefined instead of 'No'", () => {
+    const none = mapProposalToRequestItem(withRounds([detailRound({ scopeSnapshot: null })]));
+    expect(none.negotiationRounds?.[0].hasScopeSnapshot).toBe(false);
+    const old = mapProposalToRequestItem(withRounds([detailRound({ scopeSnapshot: { totalHours: 40 } })]));
+    expect(old.negotiationRounds?.[0]).toMatchObject({
+      hasScopeSnapshot: true,
+      alimentacion: undefined,
+      formacionPrevia: undefined,
+    });
+  });
+
   it("ignores a snapshot code it does not know instead of showing the raw backend code", () => {
     const item = mapProposalToRequestItem(
       withRounds([detailRound({ scopeSnapshot: { requestType: "NEW_TYPE", programModality: "TELEPATHY" } })]),
