@@ -125,10 +125,19 @@ describe("requestsApi", () => {
 
   it("assigns a directory professor with a PATCH to /professor", async () => {
     respond(200, {});
-    await requestsApi.assignProfessor("p1", "prof-1");
+    await requestsApi.assignProfessor("p1", { professorId: "prof-1" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/requests\/p1\/professor$/);
     expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ professorId: "prof-1" }) });
+  });
+
+  it("assigns a typed professor in the same PATCH, without a professorId", async () => {
+    respond(200, {});
+    const professor = { fullName: "Luis Mora", type: "EXTERNAL" as const, company: "Mora SAS", email: "luis@mora.co" };
+    await requestsApi.assignProfessor("p1", { professor });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/professor$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ professor }) });
   });
 
   it("reassigns with a PATCH to /reassign", async () => {

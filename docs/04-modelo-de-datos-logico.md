@@ -315,7 +315,7 @@ interface User {
 | `NODES` | Los 5 nodos temáticos |
 | `KAMS` | 4 KAMs: Andrea Martínez, Carlos Riveros, Diana Salcedo, Felipe Ortiz |
 | `PRODUCT_LEADERS` | 6 líderes de producto |
-| `PROFESSORS` | Lista corta de referencia (la lista real usada en el modal de asignación es `ICESI_FACULTY`, definida aparte en `AdvisorAssignmentModal.tsx` con 6 profesores + departamento + correo) |
+| `PROFESSORS` | Lista corta de referencia (el modal de asignación ya no usa una lista cerrada: se eliminó `ICESI_FACULTY` y la Líder digita los datos o elige del directorio de profesores del backend) |
 | `NODE_DEFAULT_LEADERS` | Mapeo Nodo → Líder de Producto sugerido |
 | `STATUS_META` | Metadata visual (label, clases de color Tailwind) por cada `RequestStatus` |
 | `URGENCY_META` | Metadata visual por cada `Urgency` |

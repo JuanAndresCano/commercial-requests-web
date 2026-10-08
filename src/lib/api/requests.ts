@@ -1,7 +1,11 @@
 import { apiRequest } from "./client";
 import type { Company, CompanyType } from "./companies";
+import type { ProfessorInput } from "./professors";
 
 export type { Company, CompanyType };
+
+/** Body of PATCH /requests/:id/professor: exactly one of the two. */
+export type AssignProfessorTarget = { professorId: string } | { professor: ProfessorInput };
 
 export type ProposalPriority = "ALTA" | "MEDIA" | "BAJA";
 
@@ -155,8 +159,9 @@ export interface ProposalAssignment {
     type: "STAFF" | "EXTERNAL";
     faculty: string | null;
     company: string | null;
-    // HU 4.2 — only set for EXTERNAL advisors, optional at registration.
-    identityDocument: string | null;
+    // Typed by the product leader (any kind, all optional). The KAM receives the contact fields below but
+    // never `identityDocument`, hence optional.
+    identityDocument?: string | null;
     email: string | null;
     phone: string | null;
     profile: string | null;
@@ -438,11 +443,15 @@ export const requestsApi = {
 
   // --- HU 4.2/4.3/4.4/5.1(mínimo) — Líder de Producto side, not in #7's contract ---
 
-  /** Assigns a directory professor (staff or external) to the proposal (HU 4.2). */
-  assignProfessor: (id: string, professorId: string) =>
+  /**
+   * Assigns a professor/advisor (HU 4.2): exactly one of an existing directory entry (`professorId`) or the
+   * typed data (`professor`), which the backend creates or reuses and assigns atomically. It never advances
+   * the status.
+   */
+  assignProfessor: (id: string, target: AssignProfessorTarget) =>
     apiRequest<ProposalDetail>(`/requests/${id}/professor`, {
       method: "PATCH",
-      body: { professorId },
+      body: target,
     }),
 
   /** Product Leader confirms the current costing is ready for the KAM to deliver. */

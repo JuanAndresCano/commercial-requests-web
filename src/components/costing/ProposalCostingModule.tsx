@@ -139,7 +139,9 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
     : request.professorType === "planta"
       ? request.professor || "Docente de planta sin nombre registrado"
       : "Sin docente o asesor asignado todavía";
-  const advisorSubtitle = isExternalAdvisor ? request.externalProfessorData?.empresaConsultora : undefined;
+  const advisorSubtitle = isExternalAdvisor
+    ? request.externalProfessorData?.empresaConsultora
+    : request.externalProfessorData?.facultad;
   // Referencia informativa (docs/04): nunca sobreescribe el margen manual,
   // solo ayuda a detectar de un vistazo si el % y el valor en $ "cuadran".
   const marginReferenceAmount = Math.round((totalOfferedCop * (marginPercent ?? 0)) / 100);

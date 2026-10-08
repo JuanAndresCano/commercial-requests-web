@@ -29,7 +29,7 @@ Arriba a la derecha, cambia el rol a **"Líder de Producto"**.
 
 - [ ] Mira tu Kanban: 4 columnas, cada tarjeta muestra urgencia, valor (si ya tiene), docente, fecha límite y hace cuánto está en esa fase.
 - [ ] Busca una tarjeta con la etiqueta ámbar **"Cliente pidió ajustes"** (o la que acabas de devolver en la Parte 1) y ábrela.
-- [ ] En una solicitud "Nueva" sin docente → clic **"Asignar"** → elige un profesor de planta → guarda.
+- [ ] En una solicitud "Nueva" sin docente → clic **"Asignar"** → escribe el nombre de un profesor (elige la sugerencia del directorio si aparece, o completa los datos para crear uno nuevo) → guarda. La solicitud sigue en "Nueva".
 - [ ] Clic **"Pasar a Experto"** → aparece una confirmación con el nombre de la empresa → confirma.
 - [ ] Clic **"Pasar a Costeo"** → confirma.
 - [ ] En el detalle, en "Costeo Financiero": pon el **Valor Final de la Propuesta**, y por separado el Margen de Contribución (% y $) — son independientes, no se calculan solos.
