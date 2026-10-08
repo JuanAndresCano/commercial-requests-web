@@ -38,7 +38,7 @@ Wizard de 5 pasos con stepper clicable (se puede saltar hacia atrás libremente;
 2. **Paso 2 — Contacto** (100% opcional): datos del interlocutor principal + posibilidad de agregar múltiples contactos adicionales (para empresas con varios tomadores de decisión/áreas).
 3. **Paso 3 — Requerimiento** (`nombreReq` y `tipoReq` **obligatorios**; `tipoReqOtro` obligatorio solo si el tipo es "Otro"): aquí se elige el Nodo temático — **opcional, pero si se deja en blanco la solicitud queda con Líder de Producto "Por definir" y no le aparece a nadie real** — el tipo de servicio, y hay una sección "avanzada" colapsable con diagnóstico opcional (necesidad, competencias a fortalecer, resultados esperados, horas, modalidad, participantes, etc.).
 4. **Paso 4 — Formación previa** (`formacionPrevia` y `urgencia` **obligatorios**): si la empresa ya ha tomado servicios similares antes, y el nivel de urgencia de la solicitud.
-5. **Paso 5 — Observaciones y Documentos** (100% opcional): notas libres + adjuntar archivos.
+5. **Paso 5 — Observaciones y Documentos** (100% opcional): notas libres + adjuntar archivos. Al final del paso, justo antes de enviar, se muestra el historial de propuestas entregadas y en proceso de la misma empresa (con filtro por estado y modal de detalle), para detectar antecedentes o duplicidades.
 
 Al final: botón **"Enviar solicitud a Líder de Producto"**. Son **6 los campos con validación dura** (razón social, naturaleza jurídica, título, tipo de requerimiento + su descripción si es "Otro", formación previa, urgencia) — si falta alguno, salta automáticamente al paso correspondiente con un toast de error y resalta el campo. Todo lo demás es opcional.
 

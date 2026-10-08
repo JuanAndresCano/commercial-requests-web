@@ -205,6 +205,9 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
     expect(screen.getByText(/4\. Formación Previa/i)).toBeInTheDocument();
 
+    // The proposal history no longer appears mid-form (C-16): it lives in Step 5
+    expect(screen.queryByText(/Buscador de Propuestas Entregadas y en Proceso/i)).not.toBeInTheDocument();
+
     // Step 4: Fill formacion previa (No) and urgency (Alta -> Alto)
     const prevNo = screen.getByRole("button", { name: "No" });
     fireEvent.click(prevNo);
@@ -219,6 +222,10 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     // Step 5: Submit request
     const submitBtn = screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i });
     expect(submitBtn).toBeInTheDocument();
+
+    // The proposal history is shown at the end of the form, right before the submit button
+    const historyHeading = screen.getByText(/Buscador de Propuestas Entregadas y en Proceso/i);
+    expect(historyHeading.compareDocumentPosition(submitBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
