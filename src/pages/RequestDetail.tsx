@@ -981,8 +981,8 @@ export default function RequestDetail() {
     );
   }
 
-  // C-22: the full request information sits at the top of the main column while the request is being triaged
-  // ("nueva" / "en-experto"), and right under the costing afterwards, so the product lead can find it.
+  // C-22: the full request information always sits at the top of the main column, in every stage, so the
+  // product lead finds it in the same place (it was at the bottom and she could not find it).
   const fullInfoSection = (
     <div className="pt-1">
       <h2 className="mb-2.5 px-0.5 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -1144,8 +1144,6 @@ export default function RequestDetail() {
       </div>
     </div>
   );
-
-  const showFullInfoFirst = req?.status === "nueva" || req?.status === "en-experto";
 
   return (
     <AppShell>
@@ -1371,7 +1369,7 @@ export default function RequestDetail() {
               </div>
             )}
 
-            {showFullInfoFirst && fullInfoSection}
+            {fullInfoSection}
 
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
@@ -1486,8 +1484,6 @@ export default function RequestDetail() {
                 </p>
               </div>
             )}
-
-            {!showFullInfoFirst && fullInfoSection}
 
             {/* 2. SECCIÓN GESTIÓN DE DOCUMENTOS */}
             <ProposalDocumentsSection

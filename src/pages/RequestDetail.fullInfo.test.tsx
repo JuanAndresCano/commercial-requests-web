@@ -145,13 +145,13 @@ describe("RequestDetail: where the full request information sits (C-22)", () => 
     expect(await screen.findByText("Diagnóstico del requerimiento")).toBeInTheDocument();
   });
 
-  it("keeps the costing first once the request reaches costing", async () => {
+  it("keeps it above the costing once the request reaches costing: same place in every stage", async () => {
     authMock.user = LEADER_USER;
     load(proposal("IN_COSTING"));
     renderPage();
 
     const info = await infoTitle();
 
-    expect(before(await screen.findByText("Costeo Financiero"), info)).toBe(true);
+    expect(before(info, await screen.findByText("Costeo Financiero"))).toBe(true);
   });
 });
