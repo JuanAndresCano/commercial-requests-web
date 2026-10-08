@@ -10,9 +10,6 @@ import {
   Layers,
   Calendar,
   Send,
-  Phone,
-  Mail,
-  User,
   Check,
   MessageSquare,
   ArrowLeftRight,
@@ -59,6 +56,7 @@ import {
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
+import { AdvisorContactDialog } from "@/components/costing/AdvisorContactDialog";
 import { ProposalCostingModule } from "@/components/costing/ProposalCostingModule";
 import { ProposalDocumentsSection } from "@/components/costing/ProposalDocumentsSection";
 import {
@@ -89,6 +87,7 @@ import {
   mapProposalToRequestItem,
 } from "@/lib/proposal-adapter";
 import { canEditProfessor } from "@/lib/professor-assignment";
+import { toProfessorInput } from "@/lib/professor-form";
 import { ApiError } from "@/lib/api/client";
 import type { UpdateProposalInfoPayload, CompanyType } from "@/lib/api/requests";
 
@@ -542,7 +541,9 @@ export default function RequestDetail() {
   const nextRoundNumber = negotiationRounds.length + 1;
   const lastRejectedRound = [...negotiationRounds].reverse().find((round) => round.clientResponse === "rechazada");
 
-  const handleSaveAssignment = (
+  // Resolves when the assignment is saved and rejects when it fails: the modal shows the error and
+  // stays open, so a failed save is never taken for a done one.
+  const handleSaveAssignment = async (
     professorName: string,
     type: "planta" | "externo",
     externalData?: ExternalProfessorData,
@@ -550,19 +551,12 @@ export default function RequestDetail() {
   ) => {
     if (!req) return;
     if (apiProposal) {
-      // `professorId` was already real (ProfessorPicker searches/registers against the
-      // backend directory, HU 2.2) — it just never reached the actual assignment call.
-      if (!professorId) {
-        toast.error("No se pudo identificar el profesor seleccionado");
-        return;
-      }
-      assignProfessorReal.mutate(
-        { id: req.id, professorId },
-        {
-          onSuccess: () => toast.success("Docente/asesor asignado"),
-          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo asignar"),
-        },
-      );
+      // A picked directory entry goes by id; typed data goes as `professor` and the backend creates or
+      // reuses it and assigns it in the same request. Either way the status does not change.
+      await assignProfessorReal.mutateAsync({
+        id: req.id,
+        target: professorId ? { professorId } : { professor: toProfessorInput(professorName, type, externalData) },
+      });
       return;
     }
     // El indicador de "asesor externo" del costeo ya no es un campo propio:
@@ -1689,24 +1683,26 @@ export default function RequestDetail() {
                           )}
                         </div>
 
-                        {/* Botón rápido de contacto para asesor externo */}
-                        {req.professorType === "externo" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsContactAdvisorModalOpen(true)}
-                            className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                            title="Ver datos de contacto del asesor externo"
-                          >
-                            Contacto
-                          </Button>
-                        )}
+                        {/* Botón rápido de contacto: el KAM ve los datos de contacto, nunca la identificación */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsContactAdvisorModalOpen(true)}
+                          className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                          title="Ver datos de contacto del docente o asesor"
+                        >
+                          Contacto
+                        </Button>
                       </div>
 
-                      {/* Subtítulo si tiene empresa */}
-                      {req.professorType === "externo" && req.externalProfessorData?.empresaConsultora && (
+                      {/* Subtítulo: empresa del asesor externo o facultad del docente de planta */}
+                      {(req.professorType === "externo"
+                        ? req.externalProfessorData?.empresaConsultora
+                        : req.externalProfessorData?.facultad) && (
                         <p className="text-[11px] text-muted-foreground">
-                          {req.externalProfessorData.empresaConsultora}
+                          {req.professorType === "externo"
+                            ? req.externalProfessorData?.empresaConsultora
+                            : req.externalProfessorData?.facultad}
                         </p>
                       )}
                     </div>
@@ -2175,111 +2171,16 @@ export default function RequestDetail() {
       />
 
       {/* ========================================================================= */}
-      {/* MODAL RÁPIDO DE CONTACTO: ASESOR EXTERNO */}
+      {/* MODAL RÁPIDO DE CONTACTO: DOCENTE / ASESOR */}
       {/* ========================================================================= */}
-      <Dialog open={isContactAdvisorModalOpen} onOpenChange={setIsContactAdvisorModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-xl border border-slate-200/80 p-6 shadow-lg dark:border-border dark:bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <User className="h-4 w-4 text-primary" />
-              Contacto del Asesor Externo
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              {isLeader
-                ? "Datos de contacto rápido para coordinación académica y administrativa."
-                : "Datos de contacto del asesor externo en modo solo lectura."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 pt-2 text-xs">
-            <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3.5 space-y-2.5 dark:border-border dark:bg-secondary/20">
-              <div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                  Nombre Completo
-                </span>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {req.externalProfessorData?.nombre || req.professor}
-                </p>
-              </div>
-
-              {req.externalProfessorData?.empresaConsultora && (
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                    Empresa / Consultora
-                  </span>
-                  <p className="font-medium text-slate-800 dark:text-slate-200">
-                    {req.externalProfessorData.empresaConsultora}
-                  </p>
-                </div>
-              )}
-
-              {req.externalProfessorData?.correo && (
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Correo Electrónico
-                    </span>
-                    <a
-                      href={`mailto:${req.externalProfessorData.correo}`}
-                      className="text-primary hover:underline font-medium flex items-center gap-1.5"
-                    >
-                      <Mail className="h-3 w-3" />
-                      {req.externalProfessorData.correo}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {req.externalProfessorData?.telefono && (
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Teléfono de Contacto
-                    </span>
-                    <a
-                      href={`tel:${req.externalProfessorData.telefono}`}
-                      className="text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1.5 hover:text-primary"
-                    >
-                      <Phone className="h-3 w-3" />
-                      {req.externalProfessorData.telefono}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {req.externalProfessorData?.perfil && (
-                <div className="pt-1">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                    Perfil Profesional
-                  </span>
-                  <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
-                    {req.externalProfessorData.perfil}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              {isLeader && canEditProfessor(req.status) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs font-medium"
-                  onClick={() => {
-                    setIsContactAdvisorModalOpen(false);
-                    setIsAssignModalOpen(true);
-                  }}
-                >
-                  Editar datos
-                </Button>
-              )}
-              <Button size="sm" className="h-8 text-xs font-medium" onClick={() => setIsContactAdvisorModalOpen(false)}>
-                Cerrar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AdvisorContactDialog
+        open={isContactAdvisorModalOpen}
+        onOpenChange={setIsContactAdvisorModalOpen}
+        request={req}
+        isLeader={isLeader}
+        canChange={canEditProfessor(req.status)}
+        onChange={() => setIsAssignModalOpen(true)}
+      />
 
       {/* Modal Reasignar Líder de Producto */}
       <ReassignLeaderDialog

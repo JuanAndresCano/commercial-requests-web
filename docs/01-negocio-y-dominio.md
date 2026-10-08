@@ -44,8 +44,8 @@ El nodo es **opcional** al crear la solicitud ("por definir" es válido), y el L
 
 Cuando el Líder de Producto asigna quién ejecutará la propuesta académica, elige entre dos caminos con implicaciones distintas:
 
-- **Docente de planta**: profesor vinculado a Icesi, se elige de una lista cerrada (facultad interna). No requiere datos de contacto adicionales — ya están en el directorio institucional.
-- **Consultor/docente externo**: profesional fuera de la universidad. Requiere capturar una ficha completa: nombre, identificación, firma consultora/institución, correo, teléfono, perfil profesional. Marcar "externo" **activa automáticamente** el interruptor "¿Requiere asesor externo?" en el módulo de costeo, porque un externo normalmente implica honorarios adicionales que afectan el costo base.
+- **Docente de planta**: profesor vinculado a Icesi. La Líder digita sus datos (solo el nombre es obligatorio; facultad, identificación, correo, teléfono y perfil son opcionales) o elige una entrada ya existente del directorio.
+- **Consultor/docente externo**: profesional fuera de la universidad. Misma ficha, con firma consultora/institución en lugar de facultad: nombre, identificación, correo, teléfono, perfil profesional. Marcar "externo" **activa automáticamente** el interruptor "¿Requiere asesor externo?" en el módulo de costeo, porque un externo normalmente implica honorarios adicionales que afectan el costo base.
 
 ## Costeo financiero (la lógica más sensible del dominio)
 
