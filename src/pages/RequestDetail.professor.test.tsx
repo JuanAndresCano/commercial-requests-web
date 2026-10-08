@@ -130,7 +130,7 @@ describe("RequestDetail: the leader assigns a professor/advisor", () => {
     fireEvent.change(screen.getByRole("combobox", { name: /Nombre completo/ }), { target: { value: "Luis Mora" } });
     fireEvent.change(screen.getByLabelText(/Firma consultora/), { target: { value: "Mora SAS" } });
     fireEvent.change(screen.getByLabelText(/Correo electrónico/), { target: { value: "luis@mora.co" } });
-    fireEvent.click(screen.getByRole("button", { name: /Guardar asignación/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Solo guardar" }));
 
     await waitFor(() => expect(requestsApi.assignProfessor).toHaveBeenCalledTimes(1));
     expect(requestsApi.assignProfessor).toHaveBeenCalledWith(UUID, {
@@ -147,11 +147,35 @@ describe("RequestDetail: the leader assigns a professor/advisor", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Asignar" }));
     fireEvent.change(screen.getByRole("combobox", { name: /Nombre completo/ }), { target: { value: "ana" } });
     fireEvent.click(await screen.findByRole("option", { name: /Ana Ruiz/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Guardar asignación/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Solo guardar" }));
 
     await waitFor(() => expect(requestsApi.assignProfessor).toHaveBeenCalledTimes(1));
     expect(requestsApi.assignProfessor).toHaveBeenCalledWith(UUID, { professorId: "e1" });
     expect(requestsApi.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it("'Guardar y avanzar a experto' assigns and then moves the request to IN_PROGRESS in one click", async () => {
+    load(proposal("NEW"));
+    vi.mocked(requestsApi.updateStatus).mockResolvedValue(proposal("IN_PROGRESS"));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Asignar" }));
+    fireEvent.change(screen.getByRole("combobox", { name: /Nombre completo/ }), { target: { value: "Luis Mora" } });
+    fireEvent.click(screen.getByRole("button", { name: /Guardar y avanzar a experto/ }));
+
+    await waitFor(() => expect(requestsApi.updateStatus).toHaveBeenCalledTimes(1));
+    expect(requestsApi.assignProfessor).toHaveBeenCalledTimes(1);
+    expect(requestsApi.updateStatus).toHaveBeenCalledWith(UUID, { status: "IN_PROGRESS" });
+  });
+
+  it("offers no 'avanzar' button in the form when the request is already with the expert", async () => {
+    load(proposal("IN_PROGRESS", external));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cambiar" }));
+
+    expect(await screen.findByRole("button", { name: /Guardar asignación/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Guardar y avanzar/ })).not.toBeInTheDocument();
   });
 
   it("shows an error toast and keeps the form open when the backend refuses", async () => {
@@ -161,7 +185,7 @@ describe("RequestDetail: the leader assigns a professor/advisor", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Asignar" }));
     fireEvent.change(screen.getByRole("combobox", { name: /Nombre completo/ }), { target: { value: "Luis Mora" } });
-    fireEvent.click(screen.getByRole("button", { name: /Guardar asignación/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Solo guardar" }));
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("ya no permite cambiar")));
     expect(toastMock.success).not.toHaveBeenCalled();

@@ -43,6 +43,11 @@ interface AdvisorAssignmentModalProps {
     data?: ExternalProfessorData,
     professorId?: string,
   ) => void | Promise<void>;
+  /**
+   * Only given while the request is still "nueva": it adds a "Guardar y avanzar a experto" button that saves the
+   * assignment and then moves the request on, so the leader does it in one click. "Solo guardar" keeps the stage.
+   */
+  onAdvanceToExpert?: () => void | Promise<void>;
 }
 
 const KINDS: { value: ProfessorType; label: string; icon: typeof GraduationCap }[] = [
@@ -60,7 +65,13 @@ function describeSaveError(error: unknown): string {
   return "No pudimos asignar el docente o asesor. Revisa los datos e intenta de nuevo.";
 }
 
-export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignment }: AdvisorAssignmentModalProps) {
+export function AdvisorAssignmentModal({
+  isOpen,
+  onClose,
+  request,
+  onSaveAssignment,
+  onAdvanceToExpert,
+}: AdvisorAssignmentModalProps) {
   const [values, setValues] = useState<ProfessorFormValues>(EMPTY_PROFESSOR_FORM);
   // The directory entry whose data fills the form; while set, the fields are read-only.
   const [selected, setSelected] = useState<Professor | null>(null);
@@ -110,8 +121,7 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
     document.getElementById(`advisor-kind-${next}`)?.focus();
   };
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submit = async (advance: boolean) => {
     if (isSaving) return;
 
     const found = validateProfessorForm(values);
@@ -132,9 +142,31 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
       setIsSaving(false);
       return;
     }
+    if (advance && onAdvanceToExpert) {
+      try {
+        await onAdvanceToExpert();
+      } catch {
+        // The professor is already saved: say so, and let the leader advance from the detail page.
+        setIsSaving(false);
+        toast.error(
+          `${data.nombre} quedó asignado, pero no se pudo avanzar a "En proceso por experto". Inténtalo desde el botón de la solicitud.`,
+        );
+        onClose();
+        return;
+      }
+      setIsSaving(false);
+      toast.success(`${data.nombre} asignado y solicitud en "En proceso por experto"`);
+      onClose();
+      return;
+    }
     setIsSaving(false);
     toast.success(`${data.nombre} asignado como docente o asesor`);
     onClose();
+  };
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    void submit(false);
   };
 
   const readOnlyClass = readOnly ? "bg-muted/40" : undefined;
@@ -150,8 +182,10 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
             Escribe los datos del docente o asesor que liderará esta propuesta. Si ya está en el directorio, elígelo
-            mientras escribes el nombre y se reutiliza su registro sin modificarlo. Guardar asigna el docente; el estado
-            de la solicitud no cambia.
+            mientras escribes el nombre y se reutiliza su registro sin modificarlo.{" "}
+            {onAdvanceToExpert
+              ? "Puedes guardar y avanzar a experto de una vez, o solo guardar."
+              : "Guardar asigna el docente; el estado de la solicitud no cambia."}
           </DialogDescription>
         </DialogHeader>
 
@@ -345,14 +379,34 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
           </div>
         </form>
 
+        {onAdvanceToExpert && (
+          <p className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+            <strong className="text-foreground">Guardar y avanzar a experto:</strong> el docente asignado queda como
+            responsable de formular la temática y el cronograma antes del costeo. <strong>Solo guardar</strong> asigna
+            el docente y no cambia la etapa.
+          </p>
+        )}
+
         <DialogFooter className="mt-4 gap-2 sm:gap-0">
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={disabled}>
             Cancelar
           </Button>
-          <Button type="submit" form="advisor-assignment-form" size="sm" disabled={disabled}>
-            <Check className="h-4 w-4 mr-1" />
-            {isSaving ? "Guardando…" : "Guardar asignación"}
-          </Button>
+          {onAdvanceToExpert ? (
+            <>
+              <Button type="submit" form="advisor-assignment-form" variant="outline" size="sm" disabled={disabled}>
+                Solo guardar
+              </Button>
+              <Button type="button" size="sm" disabled={disabled} onClick={() => void submit(true)}>
+                <Check className="h-4 w-4 mr-1" />
+                {isSaving ? "Guardando…" : "Guardar y avanzar a experto"}
+              </Button>
+            </>
+          ) : (
+            <Button type="submit" form="advisor-assignment-form" size="sm" disabled={disabled}>
+              <Check className="h-4 w-4 mr-1" />
+              {isSaving ? "Guardando…" : "Guardar asignación"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

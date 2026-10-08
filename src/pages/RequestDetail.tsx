@@ -714,6 +714,17 @@ export default function RequestDetail() {
     setConfirmingAction(null);
   };
 
+  // Used by "Guardar y avanzar a experto" in the assignment form: same transition as the header button, but it
+  // resolves or rejects so the form can report a failure. The confirmation lives in the form itself.
+  const handleAdvanceAfterAssign = async () => {
+    if (!req) return;
+    if (apiProposal) {
+      await updateStatusMutation.mutateAsync({ id: req.id, data: { status: "IN_PROGRESS" } });
+      return;
+    }
+    updateStatus(req.id, "en-experto");
+  };
+
   const handleMoveToCosteo = () => {
     if (!req) return;
     if (apiProposal) {
@@ -970,6 +981,172 @@ export default function RequestDetail() {
     );
   }
 
+  // C-22: the full request information sits at the top of the main column while the request is being triaged
+  // ("nueva" / "en-experto"), and right under the costing afterwards, so the product lead can find it.
+  const fullInfoSection = (
+    <div className="pt-1">
+      <h2 className="mb-2.5 px-0.5 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        Detalle completo de la solicitud
+      </h2>
+
+      <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 p-5",
+            showFullInfo && "border-b border-border dark:border-[#252838]",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setShowFullInfo((v) => !v)}
+            className="flex flex-1 min-w-0 items-center gap-3 text-left"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/70 dark:bg-secondary/20">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-foreground">Información completa de la solicitud</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                {fullInfoCompleteness.filled} de {fullInfoCompleteness.total} campos diligenciados
+                {req.fullInfoUpdatedAt &&
+                  ` · Editado ${formatDistanceToNow(new Date(req.fullInfoUpdatedAt), { addSuffix: true, locale: es })}`}
+              </p>
+            </div>
+          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {canEditFullInfo && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleStartEditFullInfo}
+                className="h-8 px-3 text-xs font-semibold border-[#5454e9]/30 text-[#5454e9] dark:text-[#865cf0] hover:bg-[#5454e9]/10"
+              >
+                <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                Editar información
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowFullInfo((v) => !v)}
+              aria-label={showFullInfo ? "Contraer sección" : "Expandir sección"}
+              className="rounded-lg p-2 text-muted-foreground hover:bg-secondary/70 dark:hover:bg-secondary/20 transition-colors"
+            >
+              <ChevronDown className={cn("h-4 w-4 transition-transform", showFullInfo && "rotate-180")} />
+            </button>
+          </div>
+        </div>
+
+        {!showFullInfo && (
+          <div
+            data-testid="full-info-summary"
+            className="space-y-1 border-t border-border dark:border-[#252838] px-5 py-3 text-xs"
+          >
+            <p className="text-muted-foreground">
+              <span className="font-semibold text-foreground">{req.company}</span>
+              {req.applicant ? ` · Contacto: ${req.applicant}` : ""}
+            </p>
+            {req.necesidad?.trim() && <p className="line-clamp-2 text-muted-foreground">{req.necesidad.trim()}</p>}
+            <button
+              type="button"
+              onClick={() => setShowFullInfo(true)}
+              className="font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+            >
+              Ver información completa
+            </button>
+          </div>
+        )}
+
+        {showFullInfo && (
+          <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
+            {/* Empresa */}
+            <InfoSection title="Empresa">
+              <InfoRow label="NIT" value={req.companyNit} />
+              <InfoRow label="Dirección" value={req.companyDireccion} />
+              <InfoRow label="Teléfono" value={req.companyTelefono} />
+              <InfoRow label="Correo" value={req.companyCorreo} />
+              <InfoRow
+                label="CIIU principal"
+                value={
+                  req.companyCiiuPrincipal
+                    ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}`
+                    : undefined
+                }
+              />
+              <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
+              <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
+              <InfoRow label="Sitio web" value={req.companyWeb} />
+              <InfoRow label="Descripción" value={req.companyDescripcion} block />
+            </InfoSection>
+
+            {/* Contacto */}
+            <InfoSection title="Contacto del cliente">
+              <InfoRow label="Nombre" value={req.applicant} />
+              <InfoRow label="Cargo" value={req.contactCargo} />
+              <InfoRow label="Área o dependencia" value={req.contactArea} />
+              <InfoRow label="Teléfono" value={req.contactTelefono} />
+              <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
+              <InfoRow label="Correo" value={req.contactCorreo} />
+              <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
+
+              {req.additionalContacts && req.additionalContacts.length > 0 && (
+                <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Contactos adicionales
+                  </span>
+                  {req.additionalContacts.map((c) => (
+                    <div
+                      key={c.id}
+                      className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5"
+                    >
+                      <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
+                      {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
+                      {(c.telefono || c.correo) && (
+                        <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </InfoSection>
+
+            {/* Diagnóstico del requerimiento */}
+            <InfoSection title="Diagnóstico del requerimiento">
+              <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
+              <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
+              <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
+              <InfoRow label="Resultados esperados" value={req.resultados} block />
+              <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
+              <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
+            </InfoSection>
+
+            {/* Formación previa */}
+            <InfoSection title="Formación previa">
+              <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
+              {req.formacionPrevia === "Sí" && (
+                <>
+                  <InfoRow label="Descripción" value={req.descFormacion} block />
+                  <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
+                  <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
+                </>
+              )}
+            </InfoSection>
+
+            {/* Observaciones */}
+            <div className="lg:col-span-2">
+              <InfoSection title="Observaciones del KAM">
+                <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
+              </InfoSection>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const showFullInfoFirst = req?.status === "nueva" || req?.status === "en-experto";
+
   return (
     <AppShell>
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -1194,6 +1371,8 @@ export default function RequestDetail() {
               </div>
             )}
 
+            {showFullInfoFirst && fullInfoSection}
+
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
               req.status === "en-costeo" || req.status === "entregada" ? (
@@ -1205,13 +1384,15 @@ export default function RequestDetail() {
                    con Dianis (docs/08, pregunta 7: "todo se hace en el
                    momento del costeo", sin valores parciales antes de esa
                    fase). Se oculta por completo hasta llegar a "En Costeo". */
-                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 p-8 text-center">
-                  <Clock className="h-6 w-6 text-slate-400" />
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Costeo aún no disponible</p>
-                  <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
-                    El módulo de costeo se habilita cuando la solicitud llegue a "En Costeo" — todavía hay trabajo
-                    previo por completar (asignar docente, avanzar a "En Experto").
-                  </p>
+                <div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 px-4 py-3">
+                  <Clock className="h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Costeo aún no disponible</p>
+                    <p className="text-xs text-slate-500 dark:text-muted-foreground">
+                      El módulo de costeo se habilita cuando la solicitud llegue a "En Costeo" — todavía hay trabajo
+                      previo por completar (asignar docente, avanzar a "En Experto").
+                    </p>
+                  </div>
                 </div>
               )
             ) : hasValidCosting && !req.costing?.readyForKam ? (
@@ -1305,6 +1486,8 @@ export default function RequestDetail() {
                 </p>
               </div>
             )}
+
+            {!showFullInfoFirst && fullInfoSection}
 
             {/* 2. SECCIÓN GESTIÓN DE DOCUMENTOS */}
             <ProposalDocumentsSection
@@ -1820,149 +2003,6 @@ export default function RequestDetail() {
       </div>
 
       {/* ========================================================================= */}
-      {/* INFORMACIÓN COMPLETA DE LA SOLICITUD (todo lo que diligenció el KAM) */}
-      {/* ========================================================================= */}
-      <div className="pt-1">
-        <h2 className="mb-2.5 px-0.5 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Detalle completo de la solicitud
-        </h2>
-
-        <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
-          <div
-            className={cn(
-              "flex items-center justify-between gap-3 p-5",
-              showFullInfo && "border-b border-border dark:border-[#252838]",
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => setShowFullInfo((v) => !v)}
-              className="flex flex-1 min-w-0 items-center gap-3 text-left"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/70 dark:bg-secondary/20">
-                <ClipboardList className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-foreground">Información completa de la solicitud</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                  {fullInfoCompleteness.filled} de {fullInfoCompleteness.total} campos diligenciados
-                  {req.fullInfoUpdatedAt &&
-                    ` · Editado ${formatDistanceToNow(new Date(req.fullInfoUpdatedAt), { addSuffix: true, locale: es })}`}
-                </p>
-              </div>
-            </button>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {canEditFullInfo && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleStartEditFullInfo}
-                  className="h-8 px-3 text-xs font-semibold border-[#5454e9]/30 text-[#5454e9] dark:text-[#865cf0] hover:bg-[#5454e9]/10"
-                >
-                  <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-                  Editar información
-                </Button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowFullInfo((v) => !v)}
-                aria-label={showFullInfo ? "Contraer sección" : "Expandir sección"}
-                className="rounded-lg p-2 text-muted-foreground hover:bg-secondary/70 dark:hover:bg-secondary/20 transition-colors"
-              >
-                <ChevronDown className={cn("h-4 w-4 transition-transform", showFullInfo && "rotate-180")} />
-              </button>
-            </div>
-          </div>
-
-          {showFullInfo && (
-            <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
-              {/* Empresa */}
-              <InfoSection title="Empresa">
-                <InfoRow label="NIT" value={req.companyNit} />
-                <InfoRow label="Dirección" value={req.companyDireccion} />
-                <InfoRow label="Teléfono" value={req.companyTelefono} />
-                <InfoRow label="Correo" value={req.companyCorreo} />
-                <InfoRow
-                  label="CIIU principal"
-                  value={
-                    req.companyCiiuPrincipal
-                      ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}`
-                      : undefined
-                  }
-                />
-                <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
-                <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
-                <InfoRow label="Sitio web" value={req.companyWeb} />
-                <InfoRow label="Descripción" value={req.companyDescripcion} block />
-              </InfoSection>
-
-              {/* Contacto */}
-              <InfoSection title="Contacto del cliente">
-                <InfoRow label="Nombre" value={req.applicant} />
-                <InfoRow label="Cargo" value={req.contactCargo} />
-                <InfoRow label="Área o dependencia" value={req.contactArea} />
-                <InfoRow label="Teléfono" value={req.contactTelefono} />
-                <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
-                <InfoRow label="Correo" value={req.contactCorreo} />
-                <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
-
-                {req.additionalContacts && req.additionalContacts.length > 0 && (
-                  <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Contactos adicionales
-                    </span>
-                    {req.additionalContacts.map((c) => (
-                      <div
-                        key={c.id}
-                        className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5"
-                      >
-                        <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
-                        {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
-                        {(c.telefono || c.correo) && (
-                          <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </InfoSection>
-
-              {/* Diagnóstico del requerimiento */}
-              <InfoSection title="Diagnóstico del requerimiento">
-                <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
-                <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
-                <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
-                <InfoRow label="Resultados esperados" value={req.resultados} block />
-                <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
-                <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
-              </InfoSection>
-
-              {/* Formación previa */}
-              <InfoSection title="Formación previa">
-                <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
-                {req.formacionPrevia === "Sí" && (
-                  <>
-                    <InfoRow label="Descripción" value={req.descFormacion} block />
-                    <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
-                    <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
-                  </>
-                )}
-              </InfoSection>
-
-              {/* Observaciones */}
-              <div className="lg:col-span-2">
-                <InfoSection title="Observaciones del KAM">
-                  <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
-                </InfoSection>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
       {/* MODAL: EDITAR INFORMACIÓN COMPLETA (KAM, solo mientras "Nueva" y sin docente asignado) */}
       {/* ========================================================================= */}
       <Dialog open={isEditingFullInfo} onOpenChange={(open) => !open && handleCloseFullInfoModal()}>
@@ -2240,6 +2280,7 @@ export default function RequestDetail() {
         onClose={() => setIsAssignModalOpen(false)}
         request={req}
         onSaveAssignment={handleSaveAssignment}
+        onAdvanceToExpert={req.status === "nueva" ? handleAdvanceAfterAssign : undefined}
       />
 
       {/* ========================================================================= */}

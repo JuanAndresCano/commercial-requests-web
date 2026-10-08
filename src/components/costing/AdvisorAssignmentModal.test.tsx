@@ -47,12 +47,22 @@ const request: RequestItem = {
 
 type Save = (name: string, type: "planta" | "externo", data?: unknown, professorId?: string) => void | Promise<void>;
 
-function renderModal(onSaveAssignment: Save = vi.fn(), current: RequestItem = request) {
+function renderModal(
+  onSaveAssignment: Save = vi.fn(),
+  current: RequestItem = request,
+  onAdvanceToExpert?: () => void | Promise<void>,
+) {
   const onClose = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <AdvisorAssignmentModal isOpen onClose={onClose} request={current} onSaveAssignment={onSaveAssignment} />
+      <AdvisorAssignmentModal
+        isOpen
+        onClose={onClose}
+        request={current}
+        onSaveAssignment={onSaveAssignment}
+        onAdvanceToExpert={onAdvanceToExpert}
+      />
     </QueryClientProvider>,
   );
   return { onSaveAssignment, onClose };
@@ -350,5 +360,90 @@ describe("AdvisorAssignmentModal: saving", () => {
 
     expect(screen.getByText(/Asignado actualmente/)).toHaveTextContent("Lina Ayala");
     expect(nameInput()).toHaveValue("");
+  });
+});
+
+describe("AdvisorAssignmentModal: save and advance in one click", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockedList.mockResolvedValue([]);
+  });
+
+  const saveOnly = () => screen.getByRole("button", { name: "Solo guardar" });
+  const saveAndAdvance = () => screen.getByRole("button", { name: /Guardar y avanzar a experto/ });
+
+  it("offers only the plain save when the request cannot advance", () => {
+    renderModal();
+
+    expect(screen.getByRole("button", { name: /Guardar asignación/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Guardar y avanzar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Solo guardar" })).not.toBeInTheDocument();
+  });
+
+  it("explains in the form what advancing means and that 'Solo guardar' keeps the stage", () => {
+    renderModal(vi.fn(), request, vi.fn());
+
+    expect(screen.getByText(/responsable de formular la temática y el cronograma/)).toBeInTheDocument();
+    expect(screen.getByText(/no cambia la etapa/)).toBeInTheDocument();
+  });
+
+  it("'Solo guardar' assigns without advancing", async () => {
+    const onAdvance = vi.fn();
+    const { onSaveAssignment, onClose } = renderModal(vi.fn().mockResolvedValue(undefined), request, onAdvance);
+    type(nameInput(), "Luis Mora");
+
+    fireEvent.click(saveOnly());
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onSaveAssignment).toHaveBeenCalledTimes(1);
+    expect(onAdvance).not.toHaveBeenCalled();
+  });
+
+  it("'Guardar y avanzar a experto' assigns first and then advances, with one click", async () => {
+    const calls: string[] = [];
+    const onSave = vi.fn().mockImplementation(async () => void calls.push("save"));
+    const onAdvance = vi.fn().mockImplementation(async () => void calls.push("advance"));
+    const { onClose } = renderModal(onSave, request, onAdvance);
+    type(nameInput(), "Luis Mora");
+
+    fireEvent.click(saveAndAdvance());
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(calls).toEqual(["save", "advance"]);
+  });
+
+  it("does not advance when the save fails", async () => {
+    const onAdvance = vi.fn();
+    const { onClose } = renderModal(vi.fn().mockRejectedValue(new ApiError(500, "boom")), request, onAdvance);
+    type(nameInput(), "Luis Mora");
+
+    fireEvent.click(saveAndAdvance());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("No pudimos asignar")));
+    expect(onAdvance).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("tells the user when the professor was saved but the advance failed, and closes", async () => {
+    const { onClose } = renderModal(
+      vi.fn().mockResolvedValue(undefined),
+      request,
+      vi.fn().mockRejectedValue(new Error("no")),
+    );
+    type(nameInput(), "Luis Mora");
+
+    fireEvent.click(saveAndAdvance());
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("quedó asignado"));
+  });
+
+  it("requires the name before doing either action", () => {
+    const { onSaveAssignment } = renderModal(vi.fn(), request, vi.fn());
+
+    fireEvent.click(saveAndAdvance());
+
+    expect(onSaveAssignment).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
   });
 });
