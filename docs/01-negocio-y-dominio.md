@@ -52,7 +52,7 @@ Cuando el Líder de Producto asigna quién ejecutará la propuesta académica, e
 El costeo se construye así, en este orden:
 
 1. **Costo Base Directo (COP)** — lo que le cuesta a la universidad ejecutar el servicio (honorarios, materiales, logística). Lo ingresa manualmente el Líder de Producto.
-2. **Margen de Contribución (%)** — porcentaje de utilidad esperado sobre el costo base. Hay atajos predefinidos (25%, 30%, 35%, 40%) pero es editable libremente.
+2. **Margen de Contribución (%)** — porcentaje de utilidad esperado sobre el costo base. Es editable libremente (ya no hay atajos de porcentaje predefinidos: confundían a la Líder en la UAT). En la pantalla de costeo actual, el % se aplica sobre el **valor final ofrecido al cliente**, no sobre el costo (referencia "X% de $Y = $Z").
    - `montoMargen = costoBase × (margen / 100)`
 3. **Estampilla Pro-Cultura** — impuesto legal colombiano que aplica **únicamente cuando el tipo de servicio es "Capacitación"**. Es un **1.5% fijo sobre el costo base**, calculado y mostrado automáticamente (no editable). Para cualquier otro tipo de servicio es $0 y no aparece en el desglose.
    - `estampilla = esCapacitación ? costoBase × 0.015 : 0`

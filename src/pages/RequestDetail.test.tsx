@@ -673,6 +673,14 @@ describe("RequestDetail - loading and not-found states", () => {
   });
 });
 
+// The margin percentage is typed by hand; leaving the field saves it right away.
+async function typeMarginPercent(value: string) {
+  await screen.findByLabelText(/Valor Final de la Propuesta/i);
+  const input = document.getElementById("margin-percent-input") as HTMLInputElement;
+  fireEvent.change(input, { target: { value } });
+  fireEvent.blur(input);
+}
+
 describe("RequestDetail - costing wiring (HU 5.1)", () => {
   const PROPOSAL_UUID = "9c858901-8a57-4791-81fe-4c455b099bc9";
 
@@ -723,7 +731,7 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({}));
     renderPage("REQ-2026-0002");
 
-    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+    await typeMarginPercent("35");
 
     await waitFor(() => expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1));
     expect(requestsApi.upsertCosting).toHaveBeenCalledWith(PROPOSAL_UUID, {
@@ -867,7 +875,7 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     vi.mocked(requestsApi.getById).mockResolvedValueOnce(leaderProposal({ readyForKam: true }));
     renderPage("REQ-2026-0002");
 
-    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+    await typeMarginPercent("35");
 
     await waitFor(() => expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(requestsApi.getById).toHaveBeenCalledTimes(2));
@@ -880,7 +888,7 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     );
     renderPage("REQ-2026-0002");
 
-    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+    await typeMarginPercent("35");
 
     await waitFor(() =>
       expect(toastMock.error).toHaveBeenCalledWith(
@@ -896,7 +904,7 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     vi.mocked(requestsApi.upsertCosting).mockRejectedValueOnce(new ApiError(403, "Forbidden resource"));
     renderPage("REQ-2026-0002");
 
-    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+    await typeMarginPercent("35");
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Forbidden resource"));
   });
@@ -906,7 +914,7 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     vi.mocked(requestsApi.upsertCosting).mockReturnValueOnce(new Promise(() => {}));
     renderPage("REQ-2026-0002");
 
-    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+    await typeMarginPercent("35");
     await waitFor(() => expect(requestsApi.upsertCosting).toHaveBeenCalledTimes(1));
 
     // The same preset again, then a note edited back to the (empty) note the first save sent.
@@ -946,7 +954,7 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
     renderPage("REQ-2026-0002");
 
-    fireEvent.click(await screen.findByRole("button", { name: "35%" }));
+    await typeMarginPercent("35");
 
     expect(authMock.updateCosting).toHaveBeenCalledWith(
       "REQ-2026-0002",

@@ -318,36 +318,21 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                   cuando "no cuadran". */}
               <div className="flex items-center gap-1.5 rounded-md bg-slate-50 dark:bg-white/5 px-2 py-1">
                 <Calculator className="h-3 w-3 shrink-0 text-slate-400" />
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-                  {marginPercent ?? 0}% de {formatCop(totalOfferedCop)} ={" "}
-                  <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
-                    {formatCop(marginReferenceAmount)}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            {/* Chips tipo pill minimalistas en tono slate suave */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-slate-400 mr-1 hidden sm:inline">Predefinidos:</span>
-              {[25, 30, 35, 40].map((preset) => {
-                const isActive = marginPercent === preset;
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => draft.applyValue("percent", preset)}
-                    disabled={isReadOnly}
-                    className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                      isActive
-                        ? "bg-slate-900 text-white shadow-xs dark:bg-primary dark:text-primary-foreground font-semibold"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200/70 dark:bg-secondary/60 dark:text-slate-300 dark:hover:bg-secondary"
-                    }`}
+                <div className="space-y-0.5">
+                  <p
+                    data-testid="margin-base-caption"
+                    className="text-[11px] text-slate-500 dark:text-muted-foreground leading-snug"
                   >
-                    {preset}%
-                  </button>
-                );
-              })}
+                    El porcentaje se calcula sobre el valor final ofrecido al cliente, no sobre el costo.
+                  </p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                    {marginPercent ?? 0}% de {formatCop(totalOfferedCop)} ={" "}
+                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
+                      {formatCop(marginReferenceAmount)}
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
           <p className="text-[11px] text-slate-400">
