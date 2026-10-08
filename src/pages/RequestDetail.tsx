@@ -65,6 +65,7 @@ import {
   REASSIGN_REASON_TO_BACKEND,
   type ReassignConfirmParams,
 } from "@/components/ReassignLeaderDialog";
+import { EditTeamDialog, type EditTeamParams } from "@/components/EditTeamDialog";
 import {
   openNegotiationRound,
   closeRoundForClientDelivery,
@@ -182,10 +183,9 @@ export default function RequestDetail() {
   const updateSpecsReal = useUpdateServiceSpecs();
   const upsertCostingReal = useUpsertCosting();
   const lastSentCosting = useRef<ProposalCosting | null>(null);
-  // Only a connected Product Leader can reassign, so only fetch this directory for
-  // that case — /users is Product-Leader/Admin-only on the backend, and a KAM (or a
-  // mock proposal) opening this page would otherwise fire a request that's certain to 403.
-  const productLeadersQuery = useProductLeaders(Boolean(apiProposal) && isLeader);
+  // The Product Leader directory feeds the Leader's reassignment and the KAM's team
+  // correction (GET /users allows PRODUCT_LEADER, ADMIN and KAM); never for a mock proposal.
+  const productLeadersQuery = useProductLeaders(Boolean(apiProposal) && (isLeader || isKam));
 
   // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
   // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
@@ -197,6 +197,7 @@ export default function RequestDetail() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
@@ -529,6 +530,22 @@ export default function RequestDetail() {
     label: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
   }));
   const nodeOptions = dbNodes?.map((n) => ({ id: n.id, label: n.name }));
+
+  // Decisión del dueño (2026-10-07): el KAM corrige el nodo o el líder mientras la
+  // solicitud sigue "Entregada al líder" (nueva) y sin docente — la misma ventana en
+  // la que edita la información (C-02). Queda en el historial del equipo.
+  const canKamEditTeam = isKam && canEditFullInfo && Boolean(apiProposal);
+
+  const handleConfirmEditTeam = async ({ nodeId, productLeaderId }: EditTeamParams) => {
+    if (!apiProposal) return;
+    try {
+      await updateInfoMutation.mutateAsync({ id: apiProposal.id, data: { nodeId, productLeaderId } });
+      toast.success("Nodo y líder actualizados");
+      setIsEditTeamOpen(false);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar el nodo o el líder");
+    }
+  };
 
   // HU 5.2 — con backend los documentos vienen de `apiProposal.attachments` (el backend ya
   // filtró por rol: el KAM nunca recibe los internos); sin backend, del mock local.
@@ -1622,7 +1639,19 @@ export default function RequestDetail() {
               <div className="space-y-3.5 text-xs">
                 {/* Nodo Temático */}
                 <div className="space-y-0.5">
-                  <span className="text-[11px] font-medium text-muted-foreground">Nodo Temático</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-muted-foreground">Nodo Temático</span>
+                    {canKamEditTeam && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditTeamOpen(true)}
+                        aria-label="Cambiar nodo temático"
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
+                      >
+                        Cambiar
+                      </button>
+                    )}
+                  </div>
                   <p className="font-semibold text-foreground leading-snug">{req.node}</p>
                 </div>
 
@@ -1639,12 +1668,47 @@ export default function RequestDetail() {
                         <ArrowLeftRight className="h-3 w-3" /> Reasignar
                       </button>
                     )}
+                    {canKamEditTeam && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditTeamOpen(true)}
+                        aria-label="Cambiar líder de producto"
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
+                      >
+                        Cambiar
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-foreground">{req.productLeader}</p>
                     {req.productLeader === user.name && <span className="text-[10px] text-muted-foreground">(Tú)</span>}
                   </div>
                 </div>
+
+                {/* Historial de cambios de nodo / líder (corrección del KAM o reasignación) */}
+                {req.teamHistory && req.teamHistory.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Historial de nodo y líder
+                    </span>
+                    <ul className="space-y-1">
+                      {[...req.teamHistory].reverse().map((entry) => (
+                        <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                          {entry.field === "nodo" ? "Nodo" : "Líder"}:{" "}
+                          {entry.previous && <span className="line-through">{entry.previous}</span>}
+                          {entry.previous && " → "}
+                          <span className="font-medium text-foreground">{entry.next}</span> · {entry.changedBy} ·{" "}
+                          {new Date(entry.changedAt).toLocaleDateString("es-CO", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                          {entry.reason && <> · Motivo: {entry.reason}</>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* KAM asignado */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
@@ -2188,6 +2252,16 @@ export default function RequestDetail() {
         isLeader={isLeader}
         canChange={canEditProfessor(req.status)}
         onChange={() => setIsAssignModalOpen(true)}
+      />
+
+      {/* Modal: el KAM corrige nodo o líder (nueva y sin docente) */}
+      <EditTeamDialog
+        request={isEditTeamOpen ? req : null}
+        onOpenChange={setIsEditTeamOpen}
+        onConfirm={handleConfirmEditTeam}
+        nodeOptions={nodeOptions}
+        leaderOptions={leaderOptions}
+        saving={updateInfoMutation.isPending}
       />
 
       {/* Modal Reasignar Líder de Producto */}

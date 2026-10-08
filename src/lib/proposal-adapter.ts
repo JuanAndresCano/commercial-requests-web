@@ -4,6 +4,7 @@ import type {
   ProposalDetail,
   NegotiationRound,
   ProfessorAssignmentLog,
+  ProposalTeamChangeLog,
   RequestType as BackendRequestType,
   ProposalPriority,
   ProgramModality as BackendProgramModality,
@@ -11,6 +12,7 @@ import type {
 import type {
   ExternalProfessorData,
   ProfessorAssignmentLogEntry,
+  TeamChangeEntry,
   RequestItem,
   RequestStatus,
   NegotiationRound as FrontendNegotiationRound,
@@ -251,6 +253,30 @@ function mapProfessorHistory(logs: ProfessorAssignmentLog[] | undefined): Profes
     }));
 }
 
+/** Spanish label of the reassignment reason codes (same five options as the Leader's dialog). */
+const REASSIGN_REASON_LABELS: Record<string, string> = {
+  NOT_MATCHING_NODE: "Temática no afín / Corresponde a otro nodo",
+  KAM_ASSIGNMENT_ERROR: "Asignada por error por el KAM",
+  WORKLOAD_REDISTRIBUTION: "Redistribución por sobrecarga operativa",
+  SPECIFIC_EXPERTISE_NEEDED: "Especialidad técnica específica",
+  OTHER: "Otro motivo",
+};
+
+function mapTeamHistory(logs: ProposalTeamChangeLog[] | undefined): TeamChangeEntry[] | undefined {
+  if (!logs || logs.length === 0) return undefined;
+  return [...logs]
+    .sort((a, b) => Date.parse(a.changedAt) - Date.parse(b.changedAt))
+    .map((l) => ({
+      id: l.id,
+      field: l.field === "NODE" ? "nodo" : "lider",
+      previous: l.previousName ?? undefined,
+      next: l.newName,
+      changedBy: [l.changedBy.firstName, l.changedBy.lastName].filter(Boolean).join(" ") || "Usuario",
+      changedAt: l.changedAt,
+      reason: l.reason ? (REASSIGN_REASON_LABELS[l.reason] ?? l.reason) : undefined,
+    }));
+}
+
 export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, currentKamName?: string): RequestItem {
   const currentEconomics = p.economics?.find((e) => e.isCurrent) ?? p.economics?.[0];
   const grossValueNum = currentEconomics ? Number(currentEconomics.grossValue ?? 0) : 0;
@@ -325,6 +351,7 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     professorType,
     externalProfessorData,
     professorHistory: mapProfessorHistory(detail.professorAssignmentLogs),
+    teamHistory: mapTeamHistory(detail.teamChangeLogs),
     totalCostCop: grossValueNum,
     costing: {
       totalOfferedCop: grossValueNum,

@@ -335,6 +335,82 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
     vi.clearAllMocks();
   });
 
+  describe("KAM corrects the node or the leader (owner decision 2026-10-07)", () => {
+    it("offers 'Cambiar' on the node and the leader while the request is new and has no professor", async () => {
+      renderPage("REQ-2026-0001");
+      expect(await screen.findByRole("button", { name: "Cambiar nodo temático" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Cambiar líder de producto" })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Cambiar líder de producto" }));
+      expect(await screen.findByText("Cambiar nodo o líder")).toBeInTheDocument();
+    });
+
+    it("does not offer it once a professor is assigned (C-02) or after 'Nueva'", async () => {
+      authMock.requests = mockRequests.map((r) => (r.id === "REQ-2026-0001" ? { ...r, professor: "Dr. Mejía" } : r));
+      const getById = vi.mocked(requestsApi.getById);
+      const original = getById.getMockImplementation()!;
+      getById.mockImplementationOnce(
+        async (id: string) =>
+          ({
+            ...(await original(id)),
+            assignments: [
+              { id: "a1", role: "PROFESSOR", professor: { id: "p1", fullName: "Dr. Mejía", type: "STAFF" } },
+            ],
+          }) as unknown as ProposalDetail,
+      );
+      const { unmount } = renderPage("REQ-2026-0001");
+      await screen.findByText("Equipo Asignado");
+      expect(screen.queryByRole("button", { name: "Cambiar líder de producto" })).not.toBeInTheDocument();
+      unmount();
+
+      renderPage("REQ-2026-0002");
+      await screen.findByText("Equipo Asignado");
+      expect(screen.queryByRole("button", { name: "Cambiar nodo temático" })).not.toBeInTheDocument();
+    });
+
+    it("never shows the KAM's button to the product leader", async () => {
+      authMock.user = {
+        role: "lider-producto",
+        roleLabel: "Líder de Producto",
+        name: "Juan Pablo Corrales",
+        email: "jcorrales@icesi.edu.co",
+      };
+      renderPage("REQ-2026-0001");
+      await screen.findByText("Equipo Asignado");
+      expect(screen.queryByRole("button", { name: "Cambiar líder de producto" })).not.toBeInTheDocument();
+    });
+
+    it("shows who changed the node or the leader, with no reason for a KAM correction", async () => {
+      const getById = vi.mocked(requestsApi.getById);
+      const original = getById.getMockImplementation()!;
+      getById.mockImplementationOnce(
+        async (id: string) =>
+          ({
+            ...(await original(id)),
+            teamChangeLogs: [
+              {
+                id: "t1",
+                field: "PRODUCT_LEADER",
+                previousName: "Laura Diaz",
+                newName: "Juan Pablo Corrales",
+                reason: null,
+                changedAt: "2026-10-07T15:00:00.000Z",
+                changedBy: { id: "u-1", firstName: "Andrea", lastName: "Martínez" },
+              },
+            ],
+          }) as ProposalDetail,
+      );
+      renderPage("REQ-2026-0001");
+      expect(await screen.findByText("Historial de nodo y líder")).toBeInTheDocument();
+      const previous = screen.getByText("Laura Diaz");
+      expect(previous).toHaveClass("line-through");
+      expect(previous.closest("li")).toHaveTextContent(
+        /^Líder: Laura Diaz → Juan Pablo Corrales · Andrea Martínez · 7 (de )?oct/,
+      );
+      expect(previous.closest("li")).not.toHaveTextContent("Motivo");
+    });
+  });
+
   describe("HU 3.3: Early proposal editing in NEW status", () => {
     it("renders 'Editar información' button when proposal is in NEW status and owned by KAM", async () => {
       renderPage("REQ-2026-0001");

@@ -169,6 +169,8 @@ export interface RequestItem {
   professorType?: "planta" | "externo";
   externalProfessorData?: ExternalProfessorData;
   professorHistory?: ProfessorAssignmentLogEntry[];
+  /** Cambios de nodo o de Líder de Producto, del más antiguo al más reciente. */
+  teamHistory?: TeamChangeEntry[];
   totalCostCop?: number;
   costing?: ProposalCosting;
   clientKamDocuments?: ProposalDocument[];
@@ -193,6 +195,17 @@ export interface RequestItem {
   // sobrescritos de `costing` — es el registro de lo que pasó, no el estado
   // actual del costeo.
   negotiationRounds?: NegotiationRound[];
+}
+
+export interface TeamChangeEntry {
+  id: string;
+  field: "nodo" | "lider";
+  previous?: string;
+  next: string;
+  changedBy: string;
+  changedAt: string;
+  /** Motivo de la reasignación del Líder; vacío cuando el KAM corrigió el dato. */
+  reason?: string;
 }
 
 export interface ProfessorAssignmentLogEntry {

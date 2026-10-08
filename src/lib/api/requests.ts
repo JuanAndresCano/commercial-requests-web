@@ -184,6 +184,18 @@ export interface ProfessorAssignmentLog {
   changedBy: { id: string; firstName: string | null; lastName: string | null };
 }
 
+/** One change of the node or the Product Leader (backend `ProposalTeamChangeLog`): the KAM's
+ * correction while "Nueva" without a professor, or the Leader's reassignment (with its reason code). */
+export interface ProposalTeamChangeLog {
+  id: string;
+  field: "NODE" | "PRODUCT_LEADER";
+  previousName: string | null;
+  newName: string;
+  reason: string | null;
+  changedAt: string;
+  changedBy: { id: string; firstName: string | null; lastName: string | null };
+}
+
 export type AttachmentCategory = "CLIENT_FACING" | "INTERNAL";
 
 // HU 5.2 — the backend never sends the storage key; the file itself is fetched through a
@@ -249,6 +261,7 @@ export interface ProposalDetail extends ProposalListItem {
   negotiationRounds: NegotiationRound[];
   // Oldest first. Optional: a backend without the assignment audit (PR #25) does not send it.
   professorAssignmentLogs?: ProfessorAssignmentLog[];
+  teamChangeLogs?: ProposalTeamChangeLog[];
 }
 
 export interface ProposalDashboardMetrics {

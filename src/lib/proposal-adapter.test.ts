@@ -1074,3 +1074,56 @@ describe("parseParticipantsRange", () => {
     expect(parseParticipantsRange("Más de 25")).toEqual({ min: 25 });
   });
 });
+
+describe("mapProposalToRequestItem - node and leader change history", () => {
+  it("maps the team change log oldest first, with who changed it and the reassignment reason in Spanish", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        teamChangeLogs: [
+          {
+            id: "t2",
+            field: "NODE",
+            previousName: "IA+ Tech Digital",
+            newName: "Salud Global",
+            reason: "NOT_MATCHING_NODE",
+            changedAt: "2026-10-07T12:00:00.000Z",
+            changedBy: { id: "ldp", firstName: "Laura", lastName: "Diaz" },
+          },
+          {
+            id: "t1",
+            field: "PRODUCT_LEADER",
+            previousName: "Laura Diaz",
+            newName: "Diana Romero",
+            reason: null,
+            changedAt: "2026-10-06T12:00:00.000Z",
+            changedBy: { id: "kam", firstName: "Diana", lastName: "Martínez" },
+          },
+        ],
+      } as Partial<ProposalDetail>),
+    );
+    expect(item.teamHistory).toEqual([
+      {
+        id: "t1",
+        field: "lider",
+        previous: "Laura Diaz",
+        next: "Diana Romero",
+        changedBy: "Diana Martínez",
+        changedAt: "2026-10-06T12:00:00.000Z",
+        reason: undefined,
+      },
+      {
+        id: "t2",
+        field: "nodo",
+        previous: "IA+ Tech Digital",
+        next: "Salud Global",
+        changedBy: "Laura Diaz",
+        changedAt: "2026-10-07T12:00:00.000Z",
+        reason: "Temática no afín / Corresponde a otro nodo",
+      },
+    ]);
+  });
+
+  it("has no history when the backend sends none", () => {
+    expect(mapProposalToRequestItem(baseProposal()).teamHistory).toBeUndefined();
+  });
+});
