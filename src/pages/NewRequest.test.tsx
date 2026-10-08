@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NewRequest from "./NewRequest";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { requestsApi } from "@/lib/api/requests";
 import { attachmentsApi } from "@/lib/api/attachments";
 
@@ -93,9 +94,11 @@ function renderNewRequest() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <AuthProvider>
-          <NewRequest />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <NewRequest />
+          </AuthProvider>
+        </ThemeProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );

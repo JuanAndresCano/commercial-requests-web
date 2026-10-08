@@ -11,6 +11,8 @@ import {
   ExternalProfessorData,
 } from "@/lib/mock-data";
 import { assignProfessorWithHistory } from "@/lib/professor-assignment";
+import { resetDashboardUiState } from "@/lib/dashboard-ui-state";
+import { useTheme } from "@/context/ThemeContext";
 
 export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor" | "administrador";
 
@@ -74,11 +76,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
 
+  const { setTheme } = useTheme();
+
+  // Every session starts like the first visit: light theme and clean boards.
+  const resetUiForNewSession = useCallback(() => {
+    resetDashboardUiState();
+    setTheme("light");
+  }, [setTheme]);
+
   const clearSession = useCallback(() => {
     setUser(ANONYMOUS_USER);
     setExpiresAt(null);
     setStatus("unauthenticated");
-  }, []);
+    resetUiForNewSession();
+  }, [resetUiForNewSession]);
 
   // Returns false (and leaves the user signed out) when the session is expired
   // or the account has no role the UI knows about.
@@ -190,6 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     await authApi.login(email, password);
+    resetUiForNewSession();
     const session = await authApi.getMe();
     if (!applySession(session)) {
       throw new Error("La cuenta no tiene un rol habilitado en esta plataforma.");

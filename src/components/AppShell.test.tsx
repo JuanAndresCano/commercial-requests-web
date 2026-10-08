@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ROLE_CONFIGS, type UserRole } from "@/context/AuthContext";
-import { AppShell, SIDEBAR_STORAGE_KEY } from "./AppShell";
+import { AppShell } from "./AppShell";
 
 const auth = vi.hoisted(() => ({
   current: { role: "kam", roleLabel: "KAM", name: "Ana Pérez", email: "ana@icesi.edu.co" } as {
@@ -75,22 +75,36 @@ describe("AppShell role-based menu", () => {
   });
 });
 
-describe("AppShell collapsible sidebar", () => {
+describe("AppShell hover sidebar (as in the validated prototype)", () => {
   beforeEach(() => window.localStorage.clear());
 
-  it("starts collapsed, expands with the toggle and remembers the choice", () => {
-    const first = renderShell();
-    const rail = () => document.getElementById("icesi-sidebar-rail");
-    expect(rail()).toHaveAttribute("data-expanded", "false");
+  const rail = () => document.getElementById("icesi-sidebar-rail") as HTMLElement;
 
-    fireEvent.click(screen.getByRole("button", { name: "Expandir menú" }));
-    expect(rail()).toHaveAttribute("data-expanded", "true");
-    expect(screen.getByRole("button", { name: "Contraer menú" })).toHaveAttribute("aria-expanded", "true");
-    expect(window.localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBe("true");
-
-    first.unmount();
+  it("is a narrow rail that widens on hover, floating over the page", () => {
     renderShell();
-    expect(rail()).toHaveAttribute("data-expanded", "true");
+    expect(rail()).toHaveClass("group", "w-16", "hover:w-64", "hover:shadow-2xl");
+    const page = screen.getByText("contenido").closest("main")?.parentElement;
+    expect(page).toHaveClass("lg:pl-16");
+    expect(page).not.toHaveClass("lg:pl-64");
+  });
+
+  it("reveals the labels only while the pointer is over the rail", () => {
+    renderShell();
+    const label = within(mainNav()).getByText("Nueva solicitud");
+    expect(label).toHaveClass("max-w-0", "opacity-0", "group-hover:max-w-[160px]", "group-hover:opacity-100");
+  });
+
+  it("has no expand/collapse button any more", () => {
+    renderShell();
+    expect(screen.queryByRole("button", { name: /expandir menú|contraer menú/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the labels at once inside the mobile drawer", () => {
+    renderShell("kam");
+    fireEvent.click(screen.getByRole("button", { name: "Menú de navegación" }));
+    const label = within(screen.getByRole("dialog")).getByText("Nueva solicitud");
+    expect(label).toHaveClass("max-w-[160px]", "opacity-100");
+    expect(label).not.toHaveClass("group-hover:max-w-[160px]");
   });
 });
 

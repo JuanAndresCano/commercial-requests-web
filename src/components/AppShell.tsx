@@ -1,9 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Menu } from "@/components/icons";
-import { cn } from "@/lib/utils";
+import { Menu } from "@/components/icons";
 import { useAuth } from "@/context/AuthContext";
-import { usePersistentState } from "@/hooks/use-persistent-state";
 import { SidebarContent } from "@/components/SidebarContent";
 import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -12,13 +10,9 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-export const SIDEBAR_STORAGE_KEY = "icesi_sidebar_expanded";
-
 export function AppShell({ children }: AppShellProps) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  // Desktop menu: expanded/collapsed is remembered across pages and reloads.
-  const [expanded, setExpanded] = usePersistentState(SIDEBAR_STORAGE_KEY, false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const activeRoleLabel = user.roleLabel;
@@ -34,29 +28,15 @@ export function AppShell({ children }: AppShellProps) {
       <div className="h-1.5 w-full bg-primary shrink-0" />
 
       <div className="flex flex-1 relative">
-        {/* Desktop side menu: fixed, expandable with a button, keeps its state. */}
+        {/* Desktop side menu: narrow icon rail that widens over the page while the
+            pointer is on it, revealing the labels (same animation as the validated
+            prototype and the Icesi student portal). */}
         <aside
           id="icesi-sidebar-rail"
           aria-label="Menú lateral"
-          data-expanded={expanded}
-          className={cn(
-            "fixed inset-y-0 left-0 z-30 hidden border-r border-border bg-sidebar text-white dark:border-sidebar-border lg:flex",
-            "transition-[width] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]",
-            expanded ? "w-64" : "w-16",
-          )}
+          className="group fixed inset-y-0 left-0 z-30 hidden w-16 border-r border-border bg-sidebar text-white transition-[width,box-shadow] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:w-64 hover:shadow-2xl dark:border-sidebar-border lg:flex"
         >
-          <SidebarContent expanded={expanded} onLogout={handleLogout} />
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            aria-expanded={expanded}
-            aria-controls="icesi-sidebar-rail"
-            aria-label={expanded ? "Contraer menú" : "Expandir menú"}
-            title={expanded ? "Contraer menú" : "Expandir menú"}
-            className="absolute -right-3 top-20 z-40 flex h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-md transition-colors hover:bg-sidebar-accent"
-          >
-            {expanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
+          <SidebarContent onLogout={handleLogout} />
         </aside>
 
         {/* Mobile menu: drawer that mirrors the same role-based links. */}
@@ -68,13 +48,9 @@ export function AppShell({ children }: AppShellProps) {
           </SheetContent>
         </Sheet>
 
-        {/* Main Application Container (offset by the side menu on desktop) */}
-        <div
-          className={cn(
-            "flex-1 flex flex-col min-h-screen min-w-0 transition-[padding] duration-300",
-            expanded ? "lg:pl-64" : "lg:pl-16",
-          )}
-        >
+        {/* Main Application Container (offset by the collapsed rail on desktop; the
+            expanded rail floats over the page instead of pushing it) */}
+        <div className="flex-1 flex flex-col min-h-screen min-w-0 lg:pl-16">
           {/* Top Brand Application Bar */}
           <header className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-3 transition-colors">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">

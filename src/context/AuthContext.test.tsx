@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiRequest } from "@/lib/api/client";
 import { authApi, type SessionUser } from "@/lib/api/auth";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { ThemeProvider, useTheme } from "./ThemeContext";
 
 vi.mock("@/lib/api/auth", () => ({
   authApi: { login: vi.fn(), getMe: vi.fn(), logout: vi.fn() },
@@ -20,18 +21,20 @@ const session = (overrides: Partial<SessionUser> = {}): SessionUser => ({
   ...overrides,
 });
 
-type Auth = ReturnType<typeof useAuth>;
+type Auth = ReturnType<typeof useAuth> & { theme: ReturnType<typeof useTheme> };
 
 function mountProvider() {
   const ref: { current: Auth | null } = { current: null };
   function Probe() {
-    ref.current = useAuth();
+    ref.current = { ...useAuth(), theme: useTheme() };
     return null;
   }
   render(
-    <AuthProvider>
-      <Probe />
-    </AuthProvider>,
+    <ThemeProvider>
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>
+    </ThemeProvider>,
   );
   return ref as { current: Auth };
 }
@@ -40,6 +43,7 @@ describe("AuthProvider session handling", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocked.logout.mockResolvedValue(undefined);
+    window.localStorage.clear();
   });
 
   it("restores a live session from the cookie", async () => {
@@ -157,5 +161,48 @@ describe("AuthProvider session handling", () => {
       vi.unstubAllGlobals();
     }
     expect(auth.current.status).toBe("unauthenticated");
+  });
+
+  it("starts every sign-in with clean boards and the light theme", async () => {
+    mocked.getMe.mockRejectedValueOnce(new ApiError(401, "no cookie"));
+    const auth = mountProvider();
+    await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
+
+    act(() => auth.current.theme.setTheme("dark"));
+    window.localStorage.setItem("icesi_kam_dashboard_isolated_v1", JSON.stringify("entregada"));
+    window.localStorage.setItem("icesi_kam_dashboard_view_v1", JSON.stringify("tabla"));
+
+    mocked.login.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
+    mocked.getMe.mockResolvedValue(session());
+    await act(async () => {
+      await auth.current.login("ana@icesi.edu.co", "secret");
+    });
+
+    expect(auth.current.theme.theme).toBe("light");
+    expect(window.localStorage.getItem("icesi_kam_dashboard_isolated_v1")).toBeNull();
+    expect(window.localStorage.getItem("icesi_kam_dashboard_view_v1")).toBeNull();
+  });
+
+  it("logout forgets the board selections and returns to the light theme", async () => {
+    mocked.getMe.mockResolvedValue(session());
+    const auth = mountProvider();
+    await waitFor(() => expect(auth.current.status).toBe("authenticated"));
+
+    act(() => auth.current.theme.setTheme("dark"));
+    window.localStorage.setItem("icesi_lp_dashboard_isolated_v1", JSON.stringify("nueva"));
+
+    act(() => auth.current.logout());
+
+    expect(auth.current.theme.theme).toBe("light");
+    expect(window.localStorage.getItem("icesi_lp_dashboard_isolated_v1")).toBeNull();
+  });
+
+  it("keeps the board selections when the page reloads within the same session", async () => {
+    window.localStorage.setItem("icesi_kam_dashboard_isolated_v1", JSON.stringify("entregada"));
+    mocked.getMe.mockResolvedValue(session());
+    const auth = mountProvider();
+    await waitFor(() => expect(auth.current.status).toBe("authenticated"));
+
+    expect(window.localStorage.getItem("icesi_kam_dashboard_isolated_v1")).toBe(JSON.stringify("entregada"));
   });
 });

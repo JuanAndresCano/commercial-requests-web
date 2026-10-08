@@ -71,10 +71,11 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
   // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
   // el KAM al volver del detalle de una propuesta — antes se reiniciaba porque
-  // el dashboard se desmonta y remonta en cada navegación.
+  // el dashboard se desmonta y remonta en cada navegación. Cada inicio de sesión
+  // arranca limpio y en Kanban (resetDashboardUiState en AuthContext).
   const [activeFilter, setActiveFilter] = usePersistentState<FilterType>("icesi_kam_dashboard_filter_v1", "all");
   const [searchQuery, setSearchQuery] = usePersistentState("icesi_kam_dashboard_search_v1", "");
-  const [viewMode, setViewMode] = usePersistentState<"tabla" | "kanban">("icesi_kam_dashboard_view_v1", "tabla");
+  const [viewMode, setViewMode] = usePersistentState<"tabla" | "kanban">("icesi_kam_dashboard_view_v1", "kanban");
 
   const firstName = userName ? userName.split(" ")[0] : "Andrea";
 

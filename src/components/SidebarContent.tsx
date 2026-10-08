@@ -15,8 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface SidebarContentProps {
-  /** Show the text labels next to the icons (always true inside the mobile drawer). */
-  expanded: boolean;
+  /**
+   * Show the text labels next to the icons. `true` inside the mobile drawer; when
+   * omitted, the labels appear while the pointer is over the rail (its `group`).
+   */
+  expanded?: boolean;
   onLogout: () => void;
   /** Called after a link is followed, e.g. to close the mobile drawer. */
   onNavigate?: () => void;
@@ -24,6 +27,12 @@ interface SidebarContentProps {
 
 const LABEL_TRANSITION =
   "transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]";
+
+// Literal class names so Tailwind generates them (same widths as the prototype).
+const LABEL_WIDTH = {
+  user: { open: "max-w-[140px]", hover: "group-hover:max-w-[140px]" },
+  item: { open: "max-w-[160px]", hover: "group-hover:max-w-[160px]" },
+} as const;
 
 /** Nav links, user menu and controls of the side menu; the links come from the session role. */
 export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarContentProps) {
@@ -40,11 +49,12 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
         .toUpperCase()
     : user.roleLabel.slice(0, 2).toUpperCase();
 
-  const labelClass = (maxWidth: string) =>
+  const labelClass = (width: keyof typeof LABEL_WIDTH) =>
     cn(
       "overflow-hidden whitespace-nowrap",
       LABEL_TRANSITION,
-      expanded ? `${maxWidth} opacity-100` : "max-w-0 opacity-0",
+      expanded ? `${LABEL_WIDTH[width].open} opacity-100` : "max-w-0 opacity-0",
+      expanded === undefined && [LABEL_WIDTH[width].hover, "group-hover:opacity-100 group-hover:delay-75"],
     );
 
   return (
@@ -73,10 +83,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
                 <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-icesi-green ring-2 ring-sidebar" />
               </span>
               <span
-                className={cn(
-                  "flex flex-col items-start justify-center gap-0.5 leading-tight",
-                  labelClass("max-w-[140px]"),
-                )}
+                className={cn("flex flex-col items-start justify-center gap-0.5 leading-tight", labelClass("user"))}
               >
                 <span className="max-w-[140px] truncate text-xs font-bold">{user.name}</span>
                 <span className="text-[10px] text-zinc-400">{user.roleLabel}</span>
@@ -121,7 +128,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
                 aria-label={item.label}
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                <span className={cn("text-sm font-semibold", labelClass("max-w-[160px]"))}>{item.label}</span>
+                <span className={cn("text-sm font-semibold", labelClass("item"))}>{item.label}</span>
               </Link>
             );
           })}
@@ -129,7 +136,11 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
       </div>
 
       <div className="flex w-full flex-col gap-2.5 px-2">
-        <ThemeToggle showLabel={expanded} onDark className="h-11 w-full justify-start gap-3 whitespace-nowrap px-2.5" />
+        <ThemeToggle
+          showLabel={expanded ?? true}
+          onDark
+          className="h-11 w-full justify-start gap-3 whitespace-nowrap px-2.5"
+        />
         <button
           type="button"
           onClick={onLogout}
@@ -138,7 +149,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
           aria-label="Cerrar sesión"
         >
           <LogOut className="h-4 w-4 shrink-0" />
-          <span className={cn("text-sm font-semibold", labelClass("max-w-[160px]"))}>Cerrar sesión</span>
+          <span className={cn("text-sm font-semibold", labelClass("item"))}>Cerrar sesión</span>
         </button>
       </div>
     </div>

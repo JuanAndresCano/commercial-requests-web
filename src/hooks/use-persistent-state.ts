@@ -29,3 +29,15 @@ export function usePersistentState<T>(key: string, initialValue: T) {
 
   return [state, setState] as const;
 }
+
+/** Forgets every remembered value whose key starts with one of the prefixes (or equals it). */
+export function clearPersistentState(prefixes: readonly string[]): void {
+  try {
+    const keys = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)).filter(
+      (key): key is string => key !== null && prefixes.some((p) => key.startsWith(p)),
+    );
+    keys.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Storage no disponible — no había nada recordado.
+  }
+}

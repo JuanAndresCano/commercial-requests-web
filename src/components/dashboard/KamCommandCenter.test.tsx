@@ -71,9 +71,20 @@ function renderWithClient(ui: React.ReactElement) {
   );
 }
 
+/** The board opens in Kanban; the table-based tests switch to the table view first, as the user would. */
+const startInTableView = () => window.localStorage.setItem("icesi_kam_dashboard_view_v1", JSON.stringify("tabla"));
+
 describe("KamCommandCenter (HU 3.1)", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    startInTableView();
+  });
+
+  it("opens in the Kanban view when nothing was chosen in this session", () => {
+    window.localStorage.clear();
+    renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
+    expect(screen.getByTitle("Vista kanban por estado")).toHaveClass("bg-icesi-blue");
+    expect(screen.getByRole("heading", { name: "En Proceso" })).toBeInTheDocument();
   });
 
   it("renders the greeting with the KAM's first name", () => {
@@ -203,6 +214,7 @@ describe("KamCommandCenter board filters (leader, company, type)", () => {
 
   beforeEach(() => {
     window.localStorage.clear();
+    startInTableView();
   });
 
   it("derives the options from the loaded requests", () => {
