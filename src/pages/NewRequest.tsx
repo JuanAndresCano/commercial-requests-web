@@ -44,7 +44,7 @@ import {
 } from "@/lib/mock-data";
 import type { Company } from "@/lib/api/companies";
 import { companyTypeLabel, formatNit } from "@/lib/company";
-import { cateringToPayload } from "@/lib/catering";
+import { buildCreateProposalPayload } from "@/lib/create-proposal-payload";
 import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
 import { ProposalHistorySection } from "@/components/wizard/ProposalHistorySection";
 import { useAuth } from "@/context/AuthContext";
@@ -53,50 +53,6 @@ import { useCreateProposal } from "@/hooks/use-create-proposal";
 import { useNodes } from "@/hooks/use-nodes";
 import { useProductLeaders } from "@/hooks/use-product-leaders";
 import { attachmentsApi } from "@/lib/api/attachments";
-
-import type {
-  CreateProposalPayload,
-  CompanyType,
-  ProposalPriority,
-  RequestType as ApiRequestType,
-  ProgramModality,
-} from "@/lib/api/requests";
-
-const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
-  Pública: "PUBLICA",
-  Privada: "PRIVADA",
-  Mixta: "MIXTA",
-  "Sin ánimo de lucro": "SIN_ANIMO_LUCRO",
-  PUBLICA: "PUBLICA",
-  PRIVADA: "PRIVADA",
-  MIXTA: "MIXTA",
-  SIN_ANIMO_LUCRO: "SIN_ANIMO_LUCRO",
-};
-
-const PRIORITY_MAP: Record<string, ProposalPriority> = {
-  alta: "ALTA",
-  media: "MEDIA",
-  baja: "BAJA",
-  ALTA: "ALTA",
-  MEDIA: "MEDIA",
-  BAJA: "BAJA",
-};
-
-const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
-  Capacitación: "CAPACITACION",
-  Consultoría: "CONSULTORIA",
-  Mentoría: "MENTORIA",
-  Investigación: "INVESTIGACION",
-  "Proyectos Especiales (Eventos)": "SPECIAL_PROJECTS",
-  Otro: "OTHER",
-};
-
-const MODALITY_MAP: Record<string, ProgramModality> = {
-  "Presencial en campus Icesi": "PRESENCIAL_ICESI",
-  "Presencial en sede cliente": "PRESENCIAL_CLIENTE",
-  "Virtual sincrónica": "VIRTUAL",
-  Híbrida: "HIBRIDA",
-};
 
 const STEPS = [
   { id: 1, title: "Empresa", icon: Building2 },
@@ -491,62 +447,11 @@ export default function NewRequest() {
     const resolvedProductLeaderId =
       matchedLeader?.id || (dbLeaders?.some((u) => u.id === data.ldp) ? data.ldp : undefined);
 
-    const primaryContact = data.contactoNombre.trim()
-      ? {
-          name: data.contactoNombre.trim(),
-          email: data.correo.trim() || undefined,
-          phone: data.telefono.trim() || undefined,
-          role: data.cargo.trim() || undefined,
-          area: data.area.trim() || undefined,
-        }
-      : data.contactosAdicionales.length > 0 && data.contactosAdicionales[0].nombre.trim()
-        ? {
-            name: data.contactosAdicionales[0].nombre.trim(),
-            email: data.contactosAdicionales[0].correo?.trim() || undefined,
-            phone: data.contactosAdicionales[0].telefono?.trim() || undefined,
-            role: data.contactosAdicionales[0].cargo?.trim() || undefined,
-            area: data.contactosAdicionales[0].area?.trim() || undefined,
-          }
-        : undefined;
-
-    const catering = cateringToPayload(data.alimentacion);
-
-    const payload: CreateProposalPayload = {
-      companyName: data.empresaNombre.trim() || "Empresa Aliada",
-      companyNit: data.nit.trim() || undefined,
-      companyDescription: data.descripcion.trim() || undefined,
-      companyType: data.tipoEmpresa ? COMPANY_TYPE_MAP[data.tipoEmpresa] : undefined,
-      sector: data.ciiuPrincipalDesc.trim() || undefined,
-      website: data.web.trim() || undefined,
+    const payload = buildCreateProposalPayload(data, {
+      title: finalTitle,
       nodeId: resolvedNodeId,
       productLeaderId: resolvedProductLeaderId,
-      priority: data.urgencia ? PRIORITY_MAP[data.urgencia] : undefined,
-      contactName: primaryContact?.name,
-      contactEmail: primaryContact?.email,
-      contactPhone: primaryContact?.phone,
-      contactRole: primaryContact?.role,
-      contactArea: primaryContact?.area,
-      requestType: data.tipoReq ? REQUEST_TYPE_MAP[data.tipoReq] : undefined,
-      requestTypeOther: data.tipoReq === "Otro" ? data.tipoReqOtro.trim() || undefined : undefined,
-      participantRange: data.participantes.trim() || undefined,
-      programName: finalTitle,
-      needDescription: data.necesidad.trim() || undefined,
-      estimatedHours: data.horas ? parseInt(data.horas, 10) || undefined : undefined,
-      modality: data.modalidad ? MODALITY_MAP[data.modalidad] : undefined,
-      requiresCatering: catering.requiresCatering,
-      cateringNotes: catering.cateringNotes ?? undefined,
-      expectedResults: data.resultados.trim() || undefined,
-      successMetrics: data.exito.trim() || undefined,
-      competencies: data.competencias.trim() || undefined,
-      participantArea: data.areaParticipantes.trim() || undefined,
-      hasPreviousTraining: data.formacionPrevia === "Sí",
-      previousTraining: data.formacionPrevia || undefined,
-      previousTrainingDescription: data.descFormacion.trim() || undefined,
-      previousTrainingCompany: data.empresaPrevia.trim() || undefined,
-      previousTrainingDate: data.fechaPrevia.trim() || undefined,
-      observations: data.observaciones.trim() || undefined,
-      // Files are not part of the create payload: they are uploaded right after it.
-    };
+    });
 
     try {
       const createdProposal = await createProposal.mutateAsync(payload);

@@ -1079,6 +1079,63 @@ describe("mapProposalToRequestItem - professor assignment history (HU 4.2)", () 
   });
 });
 
+describe("mapProposalToRequestItem - company and contact details the wizard collects", () => {
+  it("maps the company address, phone, e-mail and CIIU codes, with the CIIU description from the sector", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        company: {
+          ...baseProposal().company,
+          address: "Calle 1 # 2-3",
+          phone: "6025551234",
+          email: "info@acme.co",
+          ciiuCode: "6412",
+          ciiuSecondary: ["6419", "6492"],
+          sector: "Bancos",
+        },
+      }),
+    );
+    expect(item).toMatchObject({
+      companyDireccion: "Calle 1 # 2-3",
+      companyTelefono: "6025551234",
+      companyCorreo: "info@acme.co",
+      companyCiiuPrincipal: "6412",
+      companyCiiuPrincipalDesc: "Bancos",
+      companyCiiusSecundarios: ["6419", "6492"],
+    });
+  });
+
+  it("maps the contact's secondary phone and alternative e-mail", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        contact: { ...baseProposal().contact!, secondaryPhone: "3105550000", alternativeEmail: "alt@acme.co" },
+      }),
+    );
+    expect(item).toMatchObject({ contactTelefonoSecundario: "3105550000", contactCorreoAlternativo: "alt@acme.co" });
+  });
+
+  it("maps the additional contacts in order", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        additionalContacts: [
+          { id: "a1", name: "Ana", role: "Gerente", area: "RRHH", phone: "300", email: "ana@acme.co", position: 0 },
+          { id: "a2", name: "Luis", role: null, area: null, phone: null, email: null, position: 1 },
+        ],
+      }),
+    );
+    expect(item.additionalContacts).toEqual([
+      { id: "a1", nombre: "Ana", cargo: "Gerente", area: "RRHH", telefono: "300", correo: "ana@acme.co" },
+      { id: "a2", nombre: "Luis", cargo: "", area: "", telefono: "", correo: "" },
+    ]);
+  });
+
+  it("leaves them undefined for a backend that does not send them", () => {
+    const item = mapProposalToRequestItem(baseProposal());
+    expect(item.companyDireccion).toBeUndefined();
+    expect(item.companyCiiusSecundarios).toBeUndefined();
+    expect(item.additionalContacts).toBeUndefined();
+  });
+});
+
 describe("parseParticipantsRange", () => {
   it("parses a closed range", () => {
     expect(parseParticipantsRange("6 - 10")).toEqual({ min: 6, max: 10 });

@@ -23,6 +23,19 @@ export interface ProposalContact {
   phone: string | null;
   role: string | null;
   areaDependency: string | null;
+  secondaryPhone?: string | null;
+  alternativeEmail?: string | null;
+}
+
+/** A client contact beyond the main one. */
+export interface ProposalAdditionalContact {
+  id: string;
+  name: string | null;
+  role: string | null;
+  area: string | null;
+  phone: string | null;
+  email: string | null;
+  position: number;
 }
 
 export interface ProposalNode {
@@ -251,6 +264,7 @@ export interface ProposalListItem {
 
 export interface ProposalDetail extends ProposalListItem {
   contact: ProposalContact | null;
+  additionalContacts?: ProposalAdditionalContact[];
   node: ProposalNode;
   creator: ProposalUserSummary;
   productLeader: ProposalUserSummary | null;
@@ -285,6 +299,14 @@ export interface RequestsQueryParams {
   type?: RequestType | "all";
 }
 
+export interface AdditionalContactPayload {
+  name?: string;
+  role?: string;
+  area?: string;
+  phone?: string;
+  email?: string;
+}
+
 export interface CreateProposalPayload {
   companyName: string;
   companyNit?: string;
@@ -292,6 +314,11 @@ export interface CreateProposalPayload {
   companyType?: CompanyType;
   sector?: string;
   website?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyEmail?: string;
+  ciiuCode?: string;
+  ciiuSecondary?: string[];
   nodeId?: string;
   productLeaderId?: string;
   deliveryDays?: string;
@@ -301,6 +328,9 @@ export interface CreateProposalPayload {
   contactPhone?: string;
   contactRole?: string;
   contactArea?: string;
+  contactSecondaryPhone?: string;
+  contactAlternativeEmail?: string;
+  additionalContacts?: AdditionalContactPayload[];
   requestType?: RequestType;
   requestTypeOther?: string;
   trainingSubtype?: ProgramType;
@@ -344,26 +374,34 @@ export interface UpdateServiceSpecsPayload {
 
 export interface UpdateProposalInfoPayload {
   companyName?: string;
-  companyNit?: string;
-  companyDescription?: string;
+  companyNit?: string | null;
+  companyDescription?: string | null;
   companyType?: CompanyType;
-  sector?: string;
-  website?: string;
+  sector?: string | null;
+  website?: string | null;
+  companyAddress?: string | null;
+  companyPhone?: string | null;
+  companyEmail?: string | null;
+  ciiuCode?: string | null;
+  ciiuSecondary?: string[];
   nodeId?: string;
   productLeaderId?: string;
   priority?: ProposalPriority;
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  contactRole?: string;
-  contactArea?: string;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  contactRole?: string | null;
+  contactArea?: string | null;
+  contactSecondaryPhone?: string | null;
+  contactAlternativeEmail?: string | null;
+  additionalContacts?: AdditionalContactPayload[];
   programName?: string;
   requestType?: RequestType;
   requestTypeOther?: string;
   trainingSubtype?: ProgramType;
   participantRange?: string;
   participantExact?: string;
-  needDescription?: string;
+  needDescription?: string | null;
   estimatedHours?: number;
   hoursAtProfessorDiscretion?: boolean;
   modality?: ProgramModality;
@@ -371,17 +409,17 @@ export interface UpdateProposalInfoPayload {
   requiresCatering?: boolean;
   /** `null` clears the notes. */
   cateringNotes?: string | null;
-  expectedResults?: string;
-  successMetrics?: string;
-  competencies?: string;
-  participantArea?: string;
+  expectedResults?: string | null;
+  successMetrics?: string | null;
+  competencies?: string | null;
+  participantArea?: string | null;
   participantLocation?: string;
   hasPreviousTraining?: boolean;
   previousTraining?: string;
-  previousTrainingDescription?: string;
-  previousTrainingCompany?: string;
-  previousTrainingDate?: string;
-  observations?: string;
+  previousTrainingDescription?: string | null;
+  previousTrainingCompany?: string | null;
+  previousTrainingDate?: string | null;
+  observations?: string | null;
 }
 
 // Every code ALLOWED_TRANSITIONS in commercial-requests-backend actually uses —

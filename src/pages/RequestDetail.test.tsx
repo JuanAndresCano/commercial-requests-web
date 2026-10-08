@@ -448,6 +448,30 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(authMock.updateRequest).not.toHaveBeenCalled();
     });
 
+    it("sends null, not nothing, for the fields left empty so the backend clears them", async () => {
+      renderPage("REQ-2026-0001");
+
+      fireEvent.click(await screen.findByRole("button", { name: /Editar información/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Guardar información/i }));
+
+      await waitFor(() => expect(requestsApi.updateInfo).toHaveBeenCalledTimes(1));
+      const payload = vi.mocked(requestsApi.updateInfo).mock.calls[0][1];
+      expect(payload).toMatchObject({
+        observations: null,
+        contactArea: null,
+        competencies: null,
+        previousTrainingDate: null,
+        requiresCatering: false,
+        cateringNotes: null,
+        companyAddress: null,
+        companyPhone: null,
+        companyEmail: null,
+        ciiuCode: null,
+        contactSecondaryPhone: null,
+        contactAlternativeEmail: null,
+      });
+    });
+
     it("falls back to local updateRequest when apiProposal is null (pure mock)", async () => {
       // Return null from API so it behaves as local mock
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
