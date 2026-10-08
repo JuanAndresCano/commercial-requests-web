@@ -22,6 +22,12 @@ interface KanbanColumnProps<T> {
    */
   isolated?: boolean;
   onExitIsolation?: () => void;
+  /**
+   * Hace clicable el encabezado (mismo efecto que la tarjeta KPI de la etapa:
+   * aislar o volver a ver todas). Es opcional: sin él el encabezado queda
+   * como texto plano, igual que antes (tablero del Líder de Producto).
+   */
+  onHeaderClick?: () => void;
 }
 
 export function KanbanColumn<T>({
@@ -36,8 +42,25 @@ export function KanbanColumn<T>({
   columnRef,
   isolated,
   onExitIsolation,
+  onHeaderClick,
 }: KanbanColumnProps<T>) {
   const theme = STAGE_THEME[stage];
+
+  const headerContent = (
+    <>
+      <span
+        className={cn("h-2.5 w-2.5 rounded-full shrink-0", theme.pulse && "animate-pulse")}
+        style={{ backgroundColor: theme.colorHex }}
+      />
+      <h3 className="font-bold text-sm text-foreground font-sans truncate">{title}</h3>
+      <span
+        className="rounded-full px-2 py-0.5 text-xs font-bold text-white shrink-0"
+        style={{ backgroundColor: theme.colorHex }}
+      >
+        {items.length}
+      </span>
+    </>
+  );
 
   return (
     <div
@@ -52,19 +75,19 @@ export function KanbanColumn<T>({
     >
       <div className="p-3.5 border-b border-border dark:border-[#202230] bg-secondary/30 dark:bg-[#161826]">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={cn("h-2.5 w-2.5 rounded-full shrink-0", theme.pulse && "animate-pulse")}
-              style={{ backgroundColor: theme.colorHex }}
-            />
-            <h3 className="font-bold text-sm text-foreground font-sans truncate">{title}</h3>
-            <span
-              className="rounded-full px-2 py-0.5 text-xs font-bold text-white shrink-0"
-              style={{ backgroundColor: theme.colorHex }}
+          {onHeaderClick ? (
+            <button
+              type="button"
+              onClick={onHeaderClick}
+              aria-pressed={!!isolated}
+              title={isolated ? "Volver a ver las 4 fases" : "Ver solo esta fase"}
+              className="flex items-center gap-2 min-w-0 rounded-md text-left -m-1 p-1 hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-icesi-blue transition-colors"
             >
-              {items.length}
-            </span>
-          </div>
+              {headerContent}
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0">{headerContent}</div>
+          )}
           {isolated && onExitIsolation && (
             <button
               type="button"
