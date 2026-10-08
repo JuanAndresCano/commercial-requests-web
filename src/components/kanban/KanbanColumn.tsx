@@ -23,9 +23,8 @@ interface KanbanColumnProps<T> {
   isolated?: boolean;
   onExitIsolation?: () => void;
   /**
-   * Hace clicable el encabezado (mismo efecto que la tarjeta KPI de la etapa:
-   * aislar o volver a ver todas). Es opcional: sin él el encabezado queda
-   * como texto plano, igual que antes (tablero del Líder de Producto).
+   * Hace clicable todo el encabezado (mismo efecto que la tarjeta KPI de la
+   * etapa: aislar o volver a ver todas). Sin él el encabezado queda como texto.
    */
   onHeaderClick?: () => void;
 }
@@ -73,34 +72,41 @@ export function KanbanColumn<T>({
       )}
       style={isolated ? { boxShadow: `0 0 0 2px ${theme.colorHex}33` } : undefined}
     >
-      <div className="p-3.5 border-b border-border dark:border-[#202230] bg-secondary/30 dark:bg-[#161826]">
-        <div className="flex items-center justify-between gap-2">
-          {onHeaderClick ? (
-            <button
-              type="button"
-              onClick={onHeaderClick}
-              aria-pressed={!!isolated}
-              title={isolated ? "Volver a ver las 4 fases" : "Ver solo esta fase"}
-              className="flex items-center gap-2 min-w-0 rounded-md text-left -m-1 p-1 hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-icesi-blue transition-colors"
-            >
-              {headerContent}
-            </button>
-          ) : (
+      <div className="relative border-b border-border dark:border-[#202230] bg-secondary/30 dark:bg-[#161826]">
+        {onHeaderClick ? (
+          // The whole header area (title, counter and description) isolates the stage.
+          <button
+            type="button"
+            onClick={onHeaderClick}
+            aria-pressed={!!isolated}
+            title={isolated ? "Volver a ver las 4 fases" : "Ver solo esta fase"}
+            className={cn(
+              "block w-full p-3.5 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-icesi-blue",
+              isolated && onExitIsolation && "pr-36",
+            )}
+          >
+            <span className="flex items-center gap-2 min-w-0">{headerContent}</span>
+            {description && (
+              <span className="mt-1 block text-[11px] text-muted-foreground line-clamp-1">{description}</span>
+            )}
+          </button>
+        ) : (
+          <div className={cn("p-3.5", isolated && onExitIsolation && "pr-36")}>
             <div className="flex items-center gap-2 min-w-0">{headerContent}</div>
-          )}
-          {isolated && onExitIsolation && (
-            <button
-              type="button"
-              onClick={onExitIsolation}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              title="Volver a ver las 4 fases"
-            >
-              <X className="h-3 w-3" />
-              Ver las 4 fases
-            </button>
-          )}
-        </div>
-        {description && <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">{description}</p>}
+            {description && <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">{description}</p>}
+          </div>
+        )}
+        {isolated && onExitIsolation && (
+          <button
+            type="button"
+            onClick={onExitIsolation}
+            className="absolute right-3.5 top-3 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            title="Volver a ver las 4 fases"
+          >
+            <X className="h-3 w-3" />
+            Ver las 4 fases
+          </button>
+        )}
       </div>
 
       <div

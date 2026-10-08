@@ -35,4 +35,22 @@ describe("KanbanColumn header", () => {
     renderColumn({ onHeaderClick: vi.fn(), isolated: true });
     expect(screen.getByRole("button", { name: /En Proceso/ })).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("makes the whole header area clickable, description included", () => {
+    const onHeaderClick = vi.fn();
+    renderColumn({ onHeaderClick, description: "El Líder de Producto la está formulando" });
+    const header = screen.getByRole("button", { name: /En Proceso/ });
+    expect(header).toHaveClass("w-full");
+    fireEvent.click(screen.getByText("El Líder de Producto la está formulando"));
+    expect(onHeaderClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps 'Ver las 4 fases' as a separate button that fires once", () => {
+    const onHeaderClick = vi.fn();
+    const onExitIsolation = vi.fn();
+    renderColumn({ onHeaderClick, onExitIsolation, isolated: true });
+    fireEvent.click(screen.getByRole("button", { name: /Ver las 4 fases/ }));
+    expect(onExitIsolation).toHaveBeenCalledTimes(1);
+    expect(onHeaderClick).not.toHaveBeenCalled();
+  });
 });

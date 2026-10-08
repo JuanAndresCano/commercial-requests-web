@@ -31,7 +31,7 @@ export function RequestCard({ req, cta, stage }: RequestCardProps) {
   return (
     <Link
       to={`/solicitudes/${req.id}`}
-      className="group block rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-2xs transition-all hover:border-[#5454e9]/40 hover:shadow-md dark:hover:bg-[#171926] overflow-hidden"
+      className="group flex h-full flex-col rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-2xs transition-all hover:border-[#5454e9]/40 hover:shadow-md dark:hover:bg-[#171926] overflow-hidden"
     >
       {/* El cliente pidió ajustes — el KAM habla directo con el cliente, así
           que necesita ver esta señal igual que el Líder de Producto. Se
@@ -50,7 +50,8 @@ export function RequestCard({ req, cta, stage }: RequestCardProps) {
         <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
       </div>
 
-      <div className="p-3.5">
+      {/* flex-1: in a row of cards (isolated stage grid) the CTA stays at the bottom of every card. */}
+      <div className="flex-1 p-3.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <span className="text-[11px] font-medium text-foreground truncate block max-w-full">{req.company}</span>

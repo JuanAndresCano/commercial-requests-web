@@ -604,6 +604,7 @@ export function ProductLeaderDashboard({
                   getKey={(req) => req.id}
                   isolated={!!isolatedStage}
                   onExitIsolation={() => setIsolatedStage(null)}
+                  onHeaderClick={() => handleStageKpiClick(stage.id)}
                   renderItem={(req) => {
                     const hasRealCosting = req.costing && req.costing.totalOfferedCop > 0;
                     const deadlineInfo = getDeadlineDisplay(req.deadline, req.status);
@@ -613,7 +614,7 @@ export function ProductLeaderDashboard({
                     });
 
                     return (
-                      <div className="group relative rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
+                      <div className="group relative flex h-full flex-col rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
                         {/* Alerta prioritaria: el cliente pidió ajustes — es la señal
                       más urgente que puede tener una tarjeta, va antes que
                       cualquier otra cosa (docs/08, pregunta 13). Se renderiza
@@ -636,7 +637,7 @@ export function ProductLeaderDashboard({
                         </div>
 
                         {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
-                        <Link to={`/solicitudes/${req.id}`} className="block p-3.5">
+                        <Link to={`/solicitudes/${req.id}`} className="block flex-1 p-3.5">
                           {/* Top: ID, Company & Urgency */}
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
