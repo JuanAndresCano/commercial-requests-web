@@ -94,6 +94,12 @@ describe("AppShell hover sidebar (as in the validated prototype)", () => {
     expect(label).toHaveClass("max-w-0", "opacity-0", "group-hover:max-w-[160px]", "group-hover:opacity-100");
   });
 
+  it("hides the theme label too while collapsed, so no letter peeks out of the rail", () => {
+    renderShell();
+    const label = within(rail()).getByText("Modo oscuro");
+    expect(label).toHaveClass("max-w-0", "opacity-0", "group-hover:max-w-[160px]", "group-hover:opacity-100");
+  });
+
   it("has no expand/collapse button any more", () => {
     renderShell();
     expect(screen.queryByRole("button", { name: /expandir menú|contraer menú/i })).not.toBeInTheDocument();

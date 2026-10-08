@@ -137,7 +137,8 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
 
       <div className="flex w-full flex-col gap-2.5 px-2">
         <ThemeToggle
-          showLabel={expanded ?? true}
+          showLabel
+          labelClassName={labelClass("item")}
           onDark
           className="h-11 w-full justify-start gap-3 whitespace-nowrap px-2.5"
         />

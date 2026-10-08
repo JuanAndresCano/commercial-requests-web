@@ -9,9 +9,17 @@ interface ThemeToggleProps {
   showLabel?: boolean;
   /** Render light-on-black colours whatever the theme (for always-black surfaces such as the side menu). */
   onDark?: boolean;
+  /** Extra classes for the text label (e.g. to hide it while the side menu is collapsed). */
+  labelClassName?: string;
 }
 
-export function ThemeToggle({ className, variant = "icon", showLabel = false, onDark = false }: ThemeToggleProps) {
+export function ThemeToggle({
+  className,
+  variant = "icon",
+  showLabel = false,
+  onDark = false,
+  labelClassName,
+}: ThemeToggleProps) {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const lightOnBlack = isDark || onDark;
@@ -72,7 +80,9 @@ export function ThemeToggle({ className, variant = "icon", showLabel = false, on
         />
       )}
       {showLabel && (
-        <span className="whitespace-nowrap text-sm font-semibold">{isDark ? "Modo claro" : "Modo oscuro"}</span>
+        <span className={cn("whitespace-nowrap text-sm font-semibold", labelClassName)}>
+          {isDark ? "Modo claro" : "Modo oscuro"}
+        </span>
       )}
     </button>
   );
