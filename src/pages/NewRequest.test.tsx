@@ -336,5 +336,13 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(payload.file).toBeInstanceOf(File);
     expect(payload.file.name).toBe("cotizacion.pdf");
     expect(payload.category).toBe("CLIENT_FACING");
+
+    // The create endpoint whitelists its fields and rejects unknown ones (400
+    // "property attachments should not exist"): files only travel in the upload.
+    const createPayload = mockedRequestsApi.create.mock.calls[0][0];
+    expect(createPayload).not.toHaveProperty("attachments");
+    expect(mockedRequestsApi.create.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedAttachmentsApi.upload.mock.invocationCallOrder[0],
+    );
   }, 20000);
 });

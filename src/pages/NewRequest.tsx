@@ -542,7 +542,7 @@ export default function NewRequest() {
       previousTrainingCompany: data.empresaPrevia.trim() || undefined,
       previousTrainingDate: data.fechaPrevia.trim() || undefined,
       observations: data.observaciones.trim() || undefined,
-      attachments: data.archivos.map((f) => ({ fileName: f.name })),
+      // Files are not part of the create payload: they are uploaded right after it.
     };
 
     try {

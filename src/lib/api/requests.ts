@@ -311,7 +311,6 @@ export interface CreateProposalPayload {
   previousTrainingCompany?: string;
   previousTrainingDate?: string;
   observations?: string;
-  attachments?: { fileName: string }[];
 }
 
 export interface UpdateStatusPayload {

@@ -106,4 +106,24 @@ describe("ProposalHistorySection", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Cerrar" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  it("shows the request code and the delivery date, not the internal id or a raw timestamp", () => {
+    const fromApi = makeRequest({
+      id: "0b8f7c3e-1111-4222-8333-444455556666",
+      code: "REQ-2026-0142",
+      title: "Diplomado en datos",
+      company: "Carvajal Tecnología",
+      deadline: "2026-10-23T15:50:56.277Z",
+    });
+    mockRequests.push(fromApi);
+    try {
+      render(<ProposalHistorySection empresaNombre="Carvajal Tecnología" />);
+
+      expect(screen.getByText("REQ-2026-0142")).toBeInTheDocument();
+      expect(screen.queryByText(/0b8f7c3e-1111/)).not.toBeInTheDocument();
+      expect(screen.getByText(/Entrega: 2026-10-23$/)).toBeInTheDocument();
+    } finally {
+      mockRequests.pop();
+    }
+  });
 });

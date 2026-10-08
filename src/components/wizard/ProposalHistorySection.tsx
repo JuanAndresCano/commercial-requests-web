@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -179,7 +180,7 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div className="space-y-1.5 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-xs font-bold text-foreground">{item.id}</span>
+                            <span className="font-mono text-xs font-bold text-foreground">{item.code ?? item.id}</span>
                             <span
                               className={cn(
                                 "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border",
@@ -220,7 +221,7 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
                             </span>
                             {item.deadline && (
                               <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" /> Entrega: {item.deadline}
+                                <Clock className="h-3 w-3" /> Entrega: {format(new Date(item.deadline), "yyyy-MM-dd")}
                               </span>
                             )}
                             {hasClientDocs && (
@@ -294,7 +295,9 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-muted-foreground">{selectedProposalModal?.id}</span>
+              <span className="font-mono text-xs font-bold text-muted-foreground">
+                {selectedProposalModal?.code ?? selectedProposalModal?.id}
+              </span>
               {selectedProposalModal && (
                 <span
                   className={cn(
