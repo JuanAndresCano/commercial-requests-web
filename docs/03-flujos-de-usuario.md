@@ -58,15 +58,15 @@ Desde la tabla o el Kanban, clic en una solicitud lleva al detalle. Para el KAM,
 
 En la columna lateral: "Especificaciones del Servicio" (de solo lectura para el KAM), "Equipo Asignado" (Nodo, Líder de Producto, KAM, Docente/Asesor — con botón de contacto rápido si el docente es externo).
 
-Más abajo, la sección colapsable **"Información completa de la solicitud"** (empresa, contacto, diagnóstico, formación previa, observaciones) — de solo lectura para el KAM una vez sale de "Nueva" (ver B.7 sobre cuándo puede editarla el Líder), con un contador "X de Y campos diligenciados" siempre visible en el encabezado, aunque esté colapsada.
+Más abajo, la sección colapsable **"Información completa de la solicitud"** (empresa, contacto, diagnóstico, formación previa, observaciones) — de solo lectura para el KAM una vez sale de "Nueva" o en cuanto el Líder le asigna docente (ver A.6 y B.7 sobre cuándo puede editarla el Líder), con un contador "X de Y campos diligenciados" siempre visible en el encabezado, aunque esté colapsada.
 
 **Acciones disponibles según el estado, todas arriba a la derecha:**
 - `en-costeo`: botón **"Enviar a cliente"** → cambia el estado a `entregada`. **Deshabilitado si el costeo aún no tiene un valor mayor a $0, o si el Líder de Producto todavía no confirmó explícitamente el envío** (ver B.4 — ya no basta con que exista un valor, el Líder debe darle "Enviar a KAM" primero).
 - `nueva` (y la solicitud es suya): botón **"Cancelar solicitud"** → abre un diálogo que exige un **motivo obligatorio** (chips predefinidos o texto libre; el botón de confirmar queda deshabilitado sin motivo) y la marca como cancelada (cancelación lógica, no se elimina físicamente). (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
 - `entregada`: insignia sólida **"Propuesta Entregada"** + botón **"Devolver con observaciones"** (ver A.7).
 
-### A.6 — Editar su propia solicitud (solo mientras "Nueva")
-Si la solicitud sigue en "Nueva" y es suya, aparece un botón **"Editar información"** junto a "Información completa de la solicitud". Abre un modal con 6 pestañas (General, Empresa, Contacto, Diagnóstico, Formación, Otros) que cubre prácticamente todos los campos capturados en el wizard, incluyendo título y urgencia (que antes no se podían corregir desde ningún lado). Valida formato de correos/teléfonos, no deja guardar el título vacío, y si se intenta cerrar con cambios sin guardar pide confirmación.
+### A.6 — Editar su propia solicitud (solo mientras "Nueva" y sin docente asignado)
+Si la solicitud sigue en "Nueva", es suya y el Líder de Producto aún no le asignó docente, aparece un botón **"Editar información"** junto a "Información completa de la solicitud". Abre un modal con 6 pestañas (General, Empresa, Contacto, Diagnóstico, Formación, Otros) que cubre prácticamente todos los campos capturados en el wizard, incluyendo título y urgencia (que antes no se podían corregir desde ningún lado). Valida formato de correos/teléfonos, no deja guardar el título vacío, y si se intenta cerrar con cambios sin guardar pide confirmación. **En cuanto el Líder asigna un docente, el botón desaparece** aunque la solicitud siga en "Nueva" (el experto no debe ver información que cambia por debajo); el backend lo rechaza también (400). Si el KAM necesita corregir algo después, por ahora lo hace el Líder (`08`, pregunta 19). "Cancelar solicitud" no se ve afectado por esta regla.
 
 ### A.7 — Si el cliente pide ajustes después de entregada
 Desde el detalle de una solicitud `entregada`, el KAM puede hacer clic en **"Devolver con observaciones"**: abre un modal para escribir la nota del cliente, y al confirmar:
