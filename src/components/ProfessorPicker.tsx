@@ -20,7 +20,7 @@ interface ProfessorPickerProps {
 export function ProfessorPicker({ type, selectedId, onSelect, label, placeholder }: ProfessorPickerProps) {
   const [term, setTerm] = useState("");
   const inputId = useId();
-  const { professors, isSearching, isError, hasSearched } = useProfessorSearch(term, type);
+  const { professors, isSearching, isError, hasSearched } = useProfessorSearch(term, { type });
 
   return (
     <div className="space-y-2">

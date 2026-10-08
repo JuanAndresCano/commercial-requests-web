@@ -1,7 +1,7 @@
 import { apiRequest } from "./client";
 
 // Mirrors the backend contract of commercial-requests-backend (src/modules/professors).
-// Professors have no account: this is a look-up directory for the product leader.
+// Professors have no account: this is a directory the product leader types into and looks up.
 export type ProfessorType = "STAFF" | "EXTERNAL";
 
 export interface Professor {
@@ -12,7 +12,7 @@ export interface Professor {
   faculty: string | null;
   /** Only for EXTERNAL advisors (free text). */
   company: string | null;
-  /** Only for EXTERNAL advisors; all optional, captured at registration time. */
+  /** Optional data typed by the product leader (any kind). The KAM never receives `identityDocument`. */
   identityDocument: string | null;
   email: string | null;
   phone: string | null;
@@ -28,13 +28,24 @@ export interface ProfessorSearchParams {
   limit?: number;
 }
 
-export interface NewExternalProfessor {
+/**
+ * What the product leader types, for both kinds, in one shape. `faculty` only makes sense for STAFF and
+ * `company` for EXTERNAL. Only `fullName` is required.
+ */
+export interface ProfessorInput {
   fullName: string;
+  type: ProfessorType;
+  faculty?: string;
   company?: string;
   identityDocument?: string;
   email?: string;
   phone?: string;
   profile?: string;
+}
+
+/** Answer of POST /professors: 201 when created, 200 when an existing entry was reused (never updated). */
+export interface SavedProfessor extends Professor {
+  reused: boolean;
 }
 
 export const professorsApi = {
@@ -48,6 +59,6 @@ export const professorsApi = {
     const qs = search.toString();
     return apiRequest<Professor[]>(`/professors${qs ? `?${qs}` : ""}`);
   },
-  /** Registers an external advisor once; answers 409 when the same name and company exist. */
-  createExternal: (data: NewExternalProfessor) => apiRequest<Professor>("/professors", { method: "POST", body: data }),
+  /** Creates the professor/advisor, or reuses the existing entry without updating it (`reused: true`). */
+  create: (data: ProfessorInput) => apiRequest<SavedProfessor>("/professors", { method: "POST", body: data }),
 };

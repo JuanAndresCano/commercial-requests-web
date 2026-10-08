@@ -38,9 +38,16 @@ export const NODE_DEFAULT_LEADERS: Record<string, string> = {
   "Competitividad Organizacional, Economías Creativas": "María Camila Restrepo",
   "Salud Global, Calidad de Vida": "Sebastián Vélez",
 };
+/**
+ * Data of the assigned professor/advisor, of either kind (the name is historical: it started for externals).
+ * `identificacion` is only known to the product leader; the KAM's payload never carries it.
+ */
 export interface ExternalProfessorData {
   nombre: string;
   identificacion?: string;
+  /** Faculty of a planta professor. */
+  facultad?: string;
+  /** Company or institution of an external advisor. */
   empresaConsultora?: string;
   correo?: string;
   telefono?: string;

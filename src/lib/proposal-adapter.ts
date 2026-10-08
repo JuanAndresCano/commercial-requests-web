@@ -206,18 +206,20 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
   const professorName = professorAssignment?.professor?.fullName ?? professorAssignment?.rawName ?? undefined;
   const professorType = professorAssignment?.professor?.type === "EXTERNAL" ? "externo" : "planta";
 
-  // HU 4.2 (Líder de Producto, not in #7) — only populated for an external advisor.
-  const externalProfessorData: ExternalProfessorData | undefined =
-    professorType === "externo" && professorAssignment?.professor
-      ? {
-          nombre: professorAssignment.professor.fullName,
-          identificacion: professorAssignment.professor.identityDocument ?? undefined,
-          empresaConsultora: professorAssignment.professor.company ?? undefined,
-          correo: professorAssignment.professor.email ?? undefined,
-          telefono: professorAssignment.professor.phone ?? undefined,
-          perfil: professorAssignment.professor.profile ?? undefined,
-        }
-      : undefined;
+  // HU 4.2 — the typed data of the assigned professor/advisor, of either kind. The KAM's payload carries
+  // the contact fields but never `identityDocument`, so `identificacion` stays empty for the KAM.
+  const assignedProfessor = professorAssignment?.professor;
+  const externalProfessorData: ExternalProfessorData | undefined = assignedProfessor
+    ? {
+        nombre: assignedProfessor.fullName,
+        identificacion: assignedProfessor.identityDocument ?? undefined,
+        facultad: assignedProfessor.faculty ?? undefined,
+        empresaConsultora: assignedProfessor.company ?? undefined,
+        correo: assignedProfessor.email ?? undefined,
+        telefono: assignedProfessor.phone ?? undefined,
+        perfil: assignedProfessor.profile ?? undefined,
+      }
+    : undefined;
 
   const leaderFullName = p.productLeader
     ? `${p.productLeader.firstName ?? ""} ${p.productLeader.lastName ?? ""}`.trim()

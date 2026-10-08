@@ -378,7 +378,8 @@ describe("mapProposalToRequestItem (HU 4.1-4.5, Líder de Producto)", () => {
     const item = mapProposalToRequestItem(baseProposal());
     expect(item.professor).toBe("Dra. Paula Henao");
     expect(item.professorType).toBe("planta");
-    expect(item.externalProfessorData).toBeUndefined();
+    // Both kinds carry the typed data now (a planta professor has at least its name and, if known, faculty).
+    expect(item.externalProfessorData).toMatchObject({ nombre: "Dra. Paula Henao" });
 
     const external = mapProposalToRequestItem(
       baseProposal({
@@ -415,6 +416,46 @@ describe("mapProposalToRequestItem (HU 4.1-4.5, Líder de Producto)", () => {
       correo: "carlos.vega@consultores.com",
       telefono: "+57 315 123 4567",
       perfil: "Especialista en transformación digital.",
+    });
+  });
+
+  it("maps a planta professor's faculty and contact fields, and leaves the identity empty for the KAM", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        assignments: [
+          {
+            id: "as-3",
+            proposalId: "9c858901-8a57-4791-81fe-4c455b099bc9",
+            userId: null,
+            professorId: "prof-3",
+            role: "PROFESSOR",
+            rawName: null,
+            isMapped: true,
+            createdAt: "2026-09-15T00:00:00.000Z",
+            // The KAM's payload: contact fields yes, `identityDocument` is not even present.
+            professor: {
+              id: "prof-3",
+              fullName: "Nohra Villegas",
+              type: "STAFF",
+              faculty: "Ingeniería",
+              company: null,
+              email: "nohra@icesi.edu.co",
+              phone: "+57 300 000 0000",
+              profile: "Optimización.",
+            },
+          },
+        ],
+      }),
+    );
+    expect(item.professorType).toBe("planta");
+    expect(item.externalProfessorData).toEqual({
+      nombre: "Nohra Villegas",
+      identificacion: undefined,
+      facultad: "Ingeniería",
+      empresaConsultora: undefined,
+      correo: "nohra@icesi.edu.co",
+      telefono: "+57 300 000 0000",
+      perfil: "Optimización.",
     });
   });
 

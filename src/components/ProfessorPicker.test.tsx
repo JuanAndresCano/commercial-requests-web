@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { professorsApi, type Professor } from "@/lib/api/professors";
 import { ProfessorPicker } from "./ProfessorPicker";
 
-vi.mock("@/lib/api/professors", () => ({ professorsApi: { list: vi.fn(), createExternal: vi.fn() } }));
+vi.mock("@/lib/api/professors", () => ({ professorsApi: { list: vi.fn(), create: vi.fn() } }));
 
 const mockedList = vi.mocked(professorsApi.list);
 
