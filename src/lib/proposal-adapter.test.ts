@@ -543,9 +543,16 @@ describe("mapProposalToRequestItem (HU 4.1-4.5, Líder de Producto)", () => {
     expect(item.participantes).toBe("5 - 15");
   });
 
-  it("leaves participantes undefined for an open-ended range (no maxParticipants)", () => {
+  it("shows an open-ended range (no maxParticipants) as 'Más de N'", () => {
     const item = mapProposalToRequestItem(
       baseProposal({ program: { ...baseProposal().program!, minParticipants: 25, maxParticipants: null } }),
+    );
+    expect(item.participantes).toBe("Más de 25");
+  });
+
+  it("leaves participantes undefined when there is no minimum", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({ program: { ...baseProposal().program!, minParticipants: null, maxParticipants: 10 } }),
     );
     expect(item.participantes).toBeUndefined();
   });
@@ -804,7 +811,7 @@ describe("mapProposalToRequestItem - negotiation history of the detail (prototyp
 
   it("leaves a scope field undefined when the snapshot lacks it, and the whole scope when there is no snapshot", () => {
     const partial = mapProposalToRequestItem(
-      withRounds([detailRound({ scopeSnapshot: { totalHours: null, minParticipants: 25, maxParticipants: null } })]),
+      withRounds([detailRound({ scopeSnapshot: { totalHours: null, minParticipants: null, maxParticipants: null } })]),
     );
     expect(partial.negotiationRounds?.[0]).toMatchObject({
       participantes: undefined,
@@ -818,6 +825,13 @@ describe("mapProposalToRequestItem - negotiation history of the detail (prototyp
       expect(item.negotiationRounds?.[0].horas).toBeUndefined();
       expect(item.negotiationRounds?.[0].type).toBeUndefined();
     }
+  });
+
+  it("shows an open-ended participant range of a round snapshot as 'Más de N'", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([detailRound({ scopeSnapshot: { minParticipants: 25, maxParticipants: null } })]),
+    );
+    expect(item.negotiationRounds?.[0].participantes).toBe("Más de 25");
   });
 
   it("maps every other adjustable field of the snapshot with the same rules as the live request", () => {
@@ -1070,8 +1084,8 @@ describe("parseParticipantsRange", () => {
     expect(parseParticipantsRange("6 - 10")).toEqual({ min: 6, max: 10 });
   });
 
-  it("parses the open-ended 'Más de N' option with no max", () => {
-    expect(parseParticipantsRange("Más de 25")).toEqual({ min: 25 });
+  it("parses the open-ended 'Más de N' option with a null max, so an edit clears the old upper bound", () => {
+    expect(parseParticipantsRange("Más de 25")).toEqual({ min: 25, max: null });
   });
 });
 

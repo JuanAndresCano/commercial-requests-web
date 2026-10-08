@@ -92,6 +92,7 @@ import {
   modalityToBackend,
   mapProposalToRequestItem,
 } from "@/lib/proposal-adapter";
+import { cateringToPayload } from "@/lib/catering";
 import { canEditProfessor } from "@/lib/professor-assignment";
 import { toProfessorInput } from "@/lib/professor-form";
 import { ApiError } from "@/lib/api/client";
@@ -438,8 +439,7 @@ export default function RequestDetail() {
       successMetrics: fullInfoDraft.exito.trim() || undefined,
       expectedResults: fullInfoDraft.resultados.trim() || undefined,
       participantArea: fullInfoDraft.areaParticipantes.trim() || undefined,
-      requiresCatering: Boolean(fullInfoDraft.alimentacion.trim()),
-      cateringNotes: fullInfoDraft.alimentacion.trim() || undefined,
+      ...cateringToPayload(fullInfoDraft.alimentacion),
       hasPreviousTraining: fullInfoDraft.formacionPrevia === "Sí",
       previousTraining: fullInfoDraft.formacionPrevia || undefined,
       previousTrainingDescription: fullInfoDraft.descFormacion.trim() || undefined,

@@ -335,7 +335,8 @@ export interface UpdateServiceSpecsPayload {
   totalHours?: number;
   programModality?: ProgramModality;
   minParticipants?: number;
-  maxParticipants?: number;
+  /** `null` clears the upper bound ("Más de 25"). */
+  maxParticipants?: number | null;
   requestType?: RequestType;
   requestTypeOther?: string;
   deadline?: string;
@@ -368,7 +369,8 @@ export interface UpdateProposalInfoPayload {
   modality?: ProgramModality;
   modalityOtherPlace?: string;
   requiresCatering?: boolean;
-  cateringNotes?: string;
+  /** `null` clears the notes. */
+  cateringNotes?: string | null;
   expectedResults?: string;
   successMetrics?: string;
   competencies?: string;

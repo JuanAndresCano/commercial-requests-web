@@ -300,6 +300,38 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(callPayload.productLeaderId).toBe("leader-uuid-1");
   }, 20000);
 
+  // Data-loss regressions found on 2026-10-08: "Más de 25" was dropped by the backend and "No" in the catering
+  // field was saved as "Sí - No". What the wizard sends must carry both intact.
+  it("sends 'Más de 25' as the participant range and 'No' catering as no catering", async () => {
+    renderNewRequest();
+
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa Test S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    fireEvent.click(await screen.findByRole("option", { name: /Gestión de Innovación/i }));
+    fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "Taller" } });
+    fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+    fireEvent.click(screen.getByText(/Cupo, intensidad horaria, modalidad, logística y objetivos esperados/));
+    fireEvent.click(screen.getByRole("option", { name: /Más de 25 participantes/ }));
+    fireEvent.change(screen.getByLabelText(/Servicio de alimentación y logística/i), { target: { value: "No" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: "No" }));
+    fireEvent.click(screen.getByRole("button", { name: /Alto/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i }));
+
+    await waitFor(() => expect(mockedRequestsApi.create).toHaveBeenCalledTimes(1));
+    const payload = mockedRequestsApi.create.mock.calls[0][0];
+    expect(payload.participantRange).toBe("Más de 25");
+    expect(payload.requiresCatering).toBe(false);
+    expect(payload.cateringNotes).toBeUndefined();
+  }, 20000);
+
   it("uploads the real File object, not its metadata, after the proposal is created (UI-006)", async () => {
     const { container } = renderNewRequest();
 

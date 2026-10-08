@@ -44,6 +44,7 @@ import {
 } from "@/lib/mock-data";
 import type { Company } from "@/lib/api/companies";
 import { companyTypeLabel, formatNit } from "@/lib/company";
+import { cateringToPayload } from "@/lib/catering";
 import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
 import { ProposalHistorySection } from "@/components/wizard/ProposalHistorySection";
 import { useAuth } from "@/context/AuthContext";
@@ -508,6 +509,8 @@ export default function NewRequest() {
           }
         : undefined;
 
+    const catering = cateringToPayload(data.alimentacion);
+
     const payload: CreateProposalPayload = {
       companyName: data.empresaNombre.trim() || "Empresa Aliada",
       companyNit: data.nit.trim() || undefined,
@@ -530,8 +533,8 @@ export default function NewRequest() {
       needDescription: data.necesidad.trim() || undefined,
       estimatedHours: data.horas ? parseInt(data.horas, 10) || undefined : undefined,
       modality: data.modalidad ? MODALITY_MAP[data.modalidad] : undefined,
-      requiresCatering: Boolean(data.alimentacion?.trim()),
-      cateringNotes: data.alimentacion?.trim() || undefined,
+      requiresCatering: catering.requiresCatering,
+      cateringNotes: catering.cateringNotes ?? undefined,
       expectedResults: data.resultados.trim() || undefined,
       successMetrics: data.exito.trim() || undefined,
       competencies: data.competencias.trim() || undefined,

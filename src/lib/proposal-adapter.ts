@@ -127,12 +127,19 @@ export function modalityToBackend(label: string): BackendProgramModality | undef
   return MODALITY_TO_BACKEND[label];
 }
 
+/** Shows the stored bounds the way the wizard words them: "N - M", or "Más de N" when there is no upper bound. */
+function participantsLabel(min: unknown, max: unknown): string | undefined {
+  if (typeof min !== "number") return undefined;
+  return typeof max === "number" ? `${min} - ${max}` : `Más de ${min}`;
+}
+
 /** Parses the front's fixed participant range strings ("1 - 5", "Más de 25", ...) into
  * the min/max integers the backend stores. Any string outside that fixed set (there
  * shouldn't be one — it comes from a closed Select) maps to undefined rather than guess. */
-export function parseParticipantsRange(range: string): { min?: number; max?: number } {
+export function parseParticipantsRange(range: string): { min?: number; max?: number | null } {
+  // Open-ended: the null max clears any previous upper bound when this is sent as an edit.
   const moreThan = /^Más de (\d+)/.exec(range);
-  if (moreThan) return { min: Number(moreThan[1]) };
+  if (moreThan) return { min: Number(moreThan[1]), max: null };
   const between = /^(\d+)\s*-\s*(\d+)/.exec(range);
   if (between) return { min: Number(between[1]), max: Number(between[2]) };
   return {};
@@ -213,10 +220,7 @@ function mapScopeSnapshot(raw: unknown): RoundScope {
         ? cateringLabel(requiresCatering, textOrUndefined(cateringNotes))
         : undefined,
     formacionPrevia: previousTrainingLabel(raw.previousTraining),
-    participantes:
-      typeof minParticipants === "number" && typeof maxParticipants === "number"
-        ? `${minParticipants} - ${maxParticipants}`
-        : undefined,
+    participantes: participantsLabel(minParticipants, maxParticipants),
     modalidad:
       typeof programModality === "string" && programModality in MODALITY_MAP
         ? MODALITY_MAP[programModality as BackendProgramModality]
@@ -364,12 +368,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
       costingSentAt: currentEconomics?.readyForKamAt ?? undefined,
     },
     clientObservations: returnedNote,
-    // "N - M" only when both ends are known (HU 4.5's specs Select is a closed set of
-    // fixed ranges, e.g. "Más de 25" — this mapper doesn't guess an open-ended one).
-    participantes:
-      p.program?.minParticipants != null && p.program?.maxParticipants != null
-        ? `${p.program.minParticipants} - ${p.program.maxParticipants}`
-        : undefined,
+    // "N - M", or "Más de N" for the open-ended option of the closed Select (HU 4.5).
+    participantes: participantsLabel(p.program?.minParticipants, p.program?.maxParticipants),
     // Spanish label, not the raw backend code — HU 4.5's Select and modalityToBackend
     // round-trip on this exact label.
     modalidad: p.program?.programModality ? MODALITY_MAP[p.program.programModality] : undefined,
