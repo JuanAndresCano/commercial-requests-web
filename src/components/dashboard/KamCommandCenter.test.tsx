@@ -302,3 +302,77 @@ describe("KamCommandCenter board filters (leader, company, type)", () => {
     expect(screen.getByLabelText("Filtrar por empresa")).toHaveDisplayValue("Todas las empresas");
   });
 });
+
+describe("KamCommandCenter stage between 'create' and 'assign' (C-01)", () => {
+  const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000 - 60 * 60 * 1000).toISOString();
+  const base = (n: number, over: Partial<RequestItem>): RequestItem => ({
+    id: `REQ-2026-02${n}`,
+    title: `Solicitud ${n}`,
+    company: "Bancolombia",
+    applicant: "Contacto",
+    type: "Capacitación",
+    createdAt: daysAgo(4),
+    status: "nueva",
+    urgency: "media",
+    productLeader: "Carlos Gómez",
+    kam: "Andrea Martínez",
+    node: "IA",
+    ...over,
+  });
+  const dataset: RequestItem[] = [
+    base(1, {}),
+    base(2, { professor: "Dra. Paula Henao", professorType: "planta" }),
+    base(3, { status: "en-costeo" }),
+  ];
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    startInTableView();
+  });
+
+  it("shows 'Entregada al líder' without professor and 'En Proceso' with one, though both are nueva", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    const sinDocente = screen.getByText("Solicitud 1").closest("tr") as HTMLElement;
+    const conDocente = screen.getByText("Solicitud 2").closest("tr") as HTMLElement;
+    expect(within(sinDocente).getByText("Entregada al líder")).toBeInTheDocument();
+    expect(within(conDocente).getByText("En Proceso")).toBeInTheDocument();
+    expect(within(conDocente).queryByText("Entregada al líder")).not.toBeInTheDocument();
+  });
+
+  it("shows costing not yet sent to the KAM as 'En Proceso' too", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    const row = screen.getByText("Solicitud 3").closest("tr") as HTMLElement;
+    expect(within(row).getByText("En Proceso")).toBeInTheDocument();
+  });
+
+  it("counts them in the KPI cards by the stage the KAM perceives", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    expect(screen.getByRole("button", { name: /^Entregada al líder\s*1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^En Proceso\s*2/ })).toBeInTheDocument();
+  });
+
+  it("filters the table by the perceived stage", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    fireEvent.click(screen.getByRole("button", { name: /^En Proceso\s*2/ }));
+    expect(screen.queryByText("Solicitud 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Solicitud 2")).toBeInTheDocument();
+    expect(screen.getByText("Solicitud 3")).toBeInTheDocument();
+  });
+
+  it("does not restart the time in stage when the professor is assigned", () => {
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    const sinDocente = screen.getByText("Solicitud 1").closest("tr") as HTMLElement;
+    const conDocente = screen.getByText("Solicitud 2").closest("tr") as HTMLElement;
+    expect(within(sinDocente).getByText("Lleva 4 días en esta etapa")).toBeInTheDocument();
+    expect(within(conDocente).getByText("Lleva 4 días en esta etapa")).toBeInTheDocument();
+  });
+
+  it("places each request in the Kanban column of its perceived stage", () => {
+    window.localStorage.clear();
+    renderWithClient(<KamCommandCenter requests={dataset} userName="Andrea Martínez" />);
+    const column = (name: string) => screen.getByRole("heading", { name }).closest("div.flex-col") as HTMLElement;
+    expect(within(column("Entregada al líder")).getByText("Solicitud 1")).toBeInTheDocument();
+    expect(within(column("En Proceso")).getByText("Solicitud 2")).toBeInTheDocument();
+    expect(within(column("En Proceso")).getByText("Solicitud 3")).toBeInTheDocument();
+  });
+});

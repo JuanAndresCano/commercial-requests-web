@@ -4,6 +4,7 @@ import { Plus, Rocket, Search, ArrowRight, X, Building2, LayoutGrid, List, Clock
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RequestItem, RequestStatus, formatCop, formatCompactCop, isReadyForKamHandoff } from "@/lib/mock-data";
+import { KAM_BOARD_STAGES, KAM_STAGE_LABELS, countByStage, groupByStage, kamStageOf } from "@/lib/board-stages";
 import { cn } from "@/lib/utils";
 import { IcesiCenefa } from "@/components/IcesiLogo";
 import { UrgencyBadge } from "@/components/StatusBadge";
@@ -27,22 +28,15 @@ import {
 } from "@/lib/kam-board-filters";
 import { KamBoardFilters } from "@/components/dashboard/KamBoardFilters";
 
-const BOARD_COLUMNS: RequestStatus[] = ["nueva", "en-experto", "en-costeo", "entregada"];
-
-// Etiquetas comerciales para el KAM: mismo estado real del pipeline, pero sin
-// vocabulario interno de coordinación académica ("en proceso por experto").
-// Se usan igual en el Kanban, la tabla y las tarjetas KPI para que las 3
-// vistas siempre coincidan — confirmado con Dianis (docs/08, pregunta 2).
-// "nueva" se rotula "Entregada al líder" solo aquí: para el KAM esa etapa es
-// "ya se la entregué al Líder de Producto". El Líder sigue viendo "Nueva"
-// (STATUS_META.nueva no cambia) y el reloj sigue corriendo desde la creación.
-const KAM_STAGE_LABELS: Record<RequestStatus, string> = {
-  nueva: "Entregada al líder",
-  "en-experto": "En Proceso",
-  "en-costeo": "Lista para Entregar",
-  entregada: "Entregada",
-  rechazada: "Rechazada",
-  cancelada: "Cancelada",
+// Color de la insignia de la tabla por etapa percibida (las mismas 4 etapas del Kanban).
+const KAM_STAGE_BADGE: Partial<Record<RequestStatus, { tone: string; dot: string }>> = {
+  nueva: {
+    tone: "border-icesi-blue/30 bg-icesi-blue/10 text-icesi-blue dark:text-icesi-purple",
+    dot: "bg-icesi-blue",
+  },
+  "en-experto": { tone: "border-icesi-orange/30 bg-icesi-orange/10 text-icesi-orange", dot: "bg-icesi-orange" },
+  "en-costeo": { tone: "border-icesi-purple/30 bg-icesi-purple/10 text-icesi-purple", dot: "bg-icesi-purple" },
+  entregada: { tone: "border-icesi-green/30 bg-icesi-green/10 text-icesi-green", dot: "bg-icesi-green" },
 };
 
 interface KamCommandCenterProps {
@@ -51,19 +45,6 @@ interface KamCommandCenterProps {
 }
 
 type FilterType = RequestStatus | "all";
-
-// Reclasifica una solicitud a la etapa que el KAM realmente percibe. Una
-// "en-costeo" que el Líder todavía no confirmó ("Enviar a KAM") sigue siendo,
-// desde la óptica del KAM, trabajo en proceso — no algo que ya pueda revisar
-// para entregar. Antes esa distinción solo se aplicaba al contador de la
-// tarjeta KPI ("Lista para Entregar"), mientras el Kanban seguía agrupando
-// por el estado real "en-costeo" completo: la tarjeta decía "1" pero la
-// columna mostraba las 3 solicitudes en costeo. Con una sola función como
-// fuente de verdad para KPI, tabla y Kanban, ese desfase no puede repetirse.
-function kamStageOf(r: RequestItem): RequestStatus {
-  if (r.status === "en-costeo" && !isReadyForKamHandoff(r)) return "en-experto";
-  return r.status;
-}
 
 export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
   const { data: apiProposals, isLoading, isError, refetch } = useRequests();
@@ -115,24 +96,17 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   // Conteos por etapa percibida por el KAM (ver kamStageOf) — cada uno mapea
   // 1:1 a una columna del Kanban y a una tarjeta KPI, para que nunca se
   // desalineen entre vistas.
-  const nuevaCount = activeDataset.filter((r) => kamStageOf(r) === "nueva").length;
-  const enProcesoCount = activeDataset.filter((r) => kamStageOf(r) === "en-experto").length;
+  const stageCounts = countByStage(activeDataset, kamStageOf);
+  const nuevaCount = stageCounts.nueva;
+  const enProcesoCount = stageCounts["en-experto"];
   // "Lista para Entregar" es una promesa concreta ("ya puedes enviarla al
   // cliente"), no solo la etapa "en-costeo" — desde que el Líder de Producto
   // confirma explícitamente el envío (docs/04), una solicitud
   // puede estar en "en-costeo" sin que el KAM tenga nada que hacer todavía.
   // Contar solo las confirmadas evita que este número (y el aviso de abajo)
   // le diga al KAM que puede entregar algo que el Líder aún está costeando.
-  const listasParaEntregarCount = activeDataset.filter((r) => kamStageOf(r) === "en-costeo").length;
-  const entregadasCount = activeDataset.filter((r) => kamStageOf(r) === "entregada").length;
-  const stageCounts: Record<RequestStatus, number> = {
-    nueva: nuevaCount,
-    "en-experto": enProcesoCount,
-    "en-costeo": listasParaEntregarCount,
-    entregada: entregadasCount,
-    rechazada: activeDataset.filter((r) => kamStageOf(r) === "rechazada").length,
-    cancelada: activeDataset.filter((r) => kamStageOf(r) === "cancelada").length,
-  };
+  const listasParaEntregarCount = stageCounts["en-costeo"];
+  const entregadasCount = stageCounts.entregada;
 
   // Métricas agregadas (no son una etapa del pipeline) — se muestran como
   // dato secundario, no como tarjeta-filtro principal.
@@ -188,21 +162,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   // Kanban — así la columna "Lista para Entregar" solo contiene tarjetas que
   // de verdad se pueden entregar, y las "en-costeo" aún sin confirmar caen en
   // "En Proceso" junto con las que están con el experto.
-  const groupedByStatus = useMemo(() => {
-    const g: Record<RequestStatus, RequestItem[]> = {
-      nueva: [],
-      "en-experto": [],
-      "en-costeo": [],
-      entregada: [],
-      rechazada: [],
-      cancelada: [],
-    };
-    kanbanRequests.forEach((r) => {
-      const stage = kamStageOf(r);
-      if (g[stage]) g[stage].push(r);
-    });
-    return g;
-  }, [kanbanRequests]);
+  const groupedByStatus = useMemo(() => groupByStage(kanbanRequests, kamStageOf), [kanbanRequests]);
 
   // En Kanban, las columnas ya son el filtro — la tarjeta KPI en esa vista no
   // oculta nada (no aportaba valor, ver docs), sino que "aísla" esa columna a
@@ -327,23 +287,23 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           stage="nueva"
           label={KAM_STAGE_LABELS.nueva}
           count={nuevaCount}
-          hint="Recién enviadas al líder, sin asignar"
+          hint="Entregadas al líder, aún sin docente asignado"
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
           active={viewMode === "tabla" ? activeFilter === "nueva" : isolatedStage === "nueva"}
           onClick={() => handleCardClick("nueva")}
         />
         <StageKpiCard
           stage="en-experto"
-          label="En Proceso"
+          label={KAM_STAGE_LABELS["en-experto"]}
           count={enProcesoCount}
-          hint="El Líder de Producto la está formulando"
+          hint="El Líder ya la trabaja con docente asignado"
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
           active={viewMode === "tabla" ? activeFilter === "en-experto" : isolatedStage === "en-experto"}
           onClick={() => handleCardClick("en-experto")}
         />
         <StageKpiCard
           stage="en-costeo"
-          label="Lista para Entregar"
+          label={KAM_STAGE_LABELS["en-costeo"]}
           count={listasParaEntregarCount}
           hint="Costeo listo para enviar al cliente"
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
@@ -352,7 +312,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         />
         <StageKpiCard
           stage="entregada"
-          label="Entregada"
+          label={KAM_STAGE_LABELS.entregada}
           count={entregadasCount}
           hint="Cerradas con el cliente"
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
@@ -550,9 +510,9 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   ) : (
                     filteredRequests.map((r) => {
                       const isReady = isReadyForKamHandoff(r);
-                      const isBeingCosted = r.status === "en-costeo" && !isReady;
                       const relativeTime = formatRelativeTime(r.createdAt);
-                      const stageAgeLabel = getStageAgeLabel(r, kamStageOf(r));
+                      const kamStage = kamStageOf(r);
+                      const stageAgeLabel = getStageAgeLabel(r, kamStage);
 
                       return (
                         <tr
@@ -631,36 +591,23 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                             )}
                           </td>
 
-                          {/* 5. Estado — mismas 4 etiquetas y colores que el Kanban */}
+                          {/* 5. Estado — misma etapa, etiqueta y color que el Kanban (kamStageOf) */}
                           <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                            {r.status === "nueva" && (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-icesi-blue/30 bg-icesi-blue/10 px-2.5 py-0.5 text-xs font-medium text-icesi-blue dark:text-icesi-purple">
-                                <span className="h-1.5 w-1.5 rounded-full bg-icesi-blue" />
-                                {KAM_STAGE_LABELS.nueva}
-                              </span>
-                            )}
-                            {r.status === "en-experto" && (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-icesi-orange/30 bg-icesi-orange/10 px-2.5 py-0.5 text-xs font-medium text-icesi-orange">
-                                <span className="h-1.5 w-1.5 rounded-full bg-icesi-orange animate-pulse" />
-                                En Proceso
-                              </span>
-                            )}
-                            {isBeingCosted && (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                                En Costeo
-                              </span>
-                            )}
-                            {isReady && (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-icesi-purple/30 bg-icesi-purple/10 px-2.5 py-0.5 text-xs font-medium text-icesi-purple">
-                                <span className="h-1.5 w-1.5 rounded-full bg-icesi-purple" />
-                                Lista para entregar
-                              </span>
-                            )}
-                            {r.status === "entregada" && (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-icesi-green/30 bg-icesi-green/10 px-2.5 py-0.5 text-xs font-medium text-icesi-green">
-                                <span className="h-1.5 w-1.5 rounded-full bg-icesi-green" />
-                                Entregada
+                            {KAM_STAGE_BADGE[kamStage] && (
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                                  KAM_STAGE_BADGE[kamStage].tone,
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "h-1.5 w-1.5 rounded-full",
+                                    KAM_STAGE_BADGE[kamStage].dot,
+                                    kamStage === "en-experto" && "animate-pulse",
+                                  )}
+                                />
+                                {KAM_STAGE_LABELS[kamStage]}
                               </span>
                             )}
                             {stageAgeLabel && (
@@ -751,7 +698,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   isolatedStage ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-4",
                 )}
               >
-                {(isolatedStage ? [isolatedStage] : BOARD_COLUMNS).map((col) => (
+                {(isolatedStage ? [isolatedStage] : KAM_BOARD_STAGES).map((col) => (
                   <KanbanColumn
                     key={col}
                     stage={col}

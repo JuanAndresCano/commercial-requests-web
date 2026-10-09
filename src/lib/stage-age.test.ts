@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatStageAge, getStageAgeDays, getStageAgeLabel, getStageStartedAt } from "./stage-age";
+import {
+  formatStageAge,
+  getLeaderStageStartedAt,
+  getStageAgeDays,
+  getStageAgeLabel,
+  getStageStartedAt,
+} from "./stage-age";
 
 const NOW = new Date("2026-10-10T12:00:00.000Z");
 
@@ -37,6 +43,48 @@ describe("getStageStartedAt", () => {
     expect(
       getStageStartedAt({ createdAt: "2026-09-01T00:00:00Z", statusUpdatedAt: "2026-09-05T00:00:00Z" }, "en-costeo"),
     ).toBe("2026-09-05T00:00:00Z");
+  });
+});
+
+describe("getStageStartedAt when the KAM's stage changes without a status change", () => {
+  const created = "2026-09-01T00:00:00Z";
+
+  it("does not restart the clock when a professor is assigned (nueva shown as 'En Proceso')", () => {
+    const req = { createdAt: created, statusUpdatedAt: created };
+    expect(getStageStartedAt(req, "nueva")).toBe(created);
+    expect(getStageStartedAt(req, "en-experto")).toBe(created);
+  });
+
+  it("falls back to createdAt for a new request with no status timestamp", () => {
+    expect(getStageStartedAt({ createdAt: created }, "en-experto")).toBe(created);
+  });
+});
+
+describe("getLeaderStageStartedAt", () => {
+  const costing = {
+    readyForKam: true,
+    costingSentAt: "2026-10-08T00:00:00Z",
+    totalOfferedCop: 1,
+    expectedMarginPercent: 0,
+    marginAmountCop: 0,
+    proCulturaTaxPercent: 0,
+    proCulturaTaxAmount: 0,
+  };
+  const req = { createdAt: "2026-09-01T00:00:00Z", statusUpdatedAt: "2026-09-05T00:00:00Z", costing };
+
+  it("counts 'Enviada al KAM' from the moment the leader sent it", () => {
+    expect(getLeaderStageStartedAt(req, "enviada-kam")).toBe("2026-10-08T00:00:00Z");
+  });
+
+  it("falls back to statusUpdatedAt when costingSentAt is missing", () => {
+    expect(getLeaderStageStartedAt({ ...req, costing: { ...costing, costingSentAt: undefined } }, "enviada-kam")).toBe(
+      "2026-09-05T00:00:00Z",
+    );
+  });
+
+  it("ignores costingSentAt in the other stages, including 'En proceso de costeo'", () => {
+    expect(getLeaderStageStartedAt(req, "en-costeo")).toBe("2026-09-05T00:00:00Z");
+    expect(getLeaderStageStartedAt({ createdAt: "2026-09-01T00:00:00Z" }, "nueva")).toBe("2026-09-01T00:00:00Z");
   });
 });
 

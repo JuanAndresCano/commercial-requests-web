@@ -1,5 +1,6 @@
 import { differenceInDays } from "date-fns";
 import type { RequestItem, RequestStatus } from "@/lib/mock-data";
+import type { BoardStage } from "@/lib/board-stages";
 
 type StageAgeSource = Pick<RequestItem, "createdAt" | "statusUpdatedAt" | "costing">;
 
@@ -17,6 +18,16 @@ type StageAgeSource = Pick<RequestItem, "createdAt" | "statusUpdatedAt" | "costi
  */
 export function getStageStartedAt(req: StageAgeSource, displayedStage: RequestStatus): string {
   if (displayedStage === "en-costeo" && req.costing?.costingSentAt) return req.costing.costingSentAt;
+  return req.statusUpdatedAt ?? req.createdAt;
+}
+
+/**
+ * Same idea for the product leader's board. "Enviada al KAM" counts from the moment the leader
+ * sent it (`costing.costingSentAt`); every other stage, including "En proceso de costeo", counts
+ * from the last real status change.
+ */
+export function getLeaderStageStartedAt(req: StageAgeSource, stage: BoardStage): string {
+  if (stage === "enviada-kam" && req.costing?.costingSentAt) return req.costing.costingSentAt;
   return req.statusUpdatedAt ?? req.createdAt;
 }
 
