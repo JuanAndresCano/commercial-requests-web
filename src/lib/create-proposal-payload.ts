@@ -64,8 +64,10 @@ function toContactPayload(contact: ClientContact): AdditionalContactPayload | un
 
 interface PayloadContext {
   title: string;
-  nodeId: string | undefined;
-  productLeaderId: string | undefined;
+  /** Optional: only when the KAM picked a node. */
+  nodeId?: string;
+  /** Mandatory: the leader decides where the request goes. */
+  productLeaderId: string;
 }
 
 /**

@@ -36,7 +36,6 @@ import { cn } from "@/lib/utils";
 import {
   NODES,
   PRODUCT_LEADERS,
-  NODE_DEFAULT_LEADERS,
   REQUEST_TYPES,
   type RequestType,
   type Urgency,
@@ -46,6 +45,8 @@ import type { Company } from "@/lib/api/companies";
 import { companyTypeLabel } from "@/lib/company";
 import { displayNit, formatNit, parseNit } from "@/lib/nit";
 import { buildCreateProposalPayload } from "@/lib/create-proposal-payload";
+import { leaderDisplayName, resolveNodeId, resolveProductLeaderId, toLeaderOptions } from "@/lib/wizard-assignment";
+import { restoreDraftData } from "@/lib/wizard-draft";
 import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
 import { ProposalHistorySection } from "@/components/wizard/ProposalHistorySection";
 import { useAuth } from "@/context/AuthContext";
@@ -98,8 +99,8 @@ export interface RequestFormData {
   contactosAdicionales: ClientContact[]; // Múltiples contactos en la empresa
 
   // Paso 3 - Requerimiento del Servicio
-  nodo: string; // Opcional
-  ldp: string; // Líder de producto asignado
+  nodo: string; // Opcional y suelto: elegirlo no cambia el líder. Arranca vacío.
+  ldp: string; // Obligatorio — líder de producto que atiende la solicitud. Arranca vacío.
   nombreReq: string; // Obligatorio
   tipoReq: RequestType | ""; // Obligatorio — arranca vacío, sin preselección
   tipoReqOtro: string; // Obligatorio condicional si tipoReq === 'Otro'
@@ -124,6 +125,8 @@ export interface RequestFormData {
   observaciones: string;
   archivos: AttachedFile[]; // 100% opcional
 }
+
+const LEADER_REQUIRED_MESSAGE = "Selecciona el Líder de Producto que atenderá la solicitud para continuar.";
 
 const DRAFT_STORAGE_KEY = "icesi_kam_new_request_draft_v1";
 
@@ -230,8 +233,10 @@ export default function NewRequest() {
       const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed?.data) {
-          setData(parsed.data);
+        // Un borrador de una versión anterior puede no tener todos los campos actuales (p. ej. el líder).
+        const restored = restoreDraftData(parsed?.data, initialFormData);
+        if (restored) {
+          setData(restored);
           toast.success("Borrador recuperado correctamente");
         }
       }
@@ -279,7 +284,7 @@ export default function NewRequest() {
     empresaNombre: "empresa-nombre",
     nit: "empresa-nit",
     tipoEmpresa: "tipo-empresa-group",
-    nodo: "nodo-select",
+    ldp: "ldp-select",
     nombreReq: "nombre-req",
     tipoReq: "tipo-req",
     tipoReqOtro: "tipo-otro-input",
@@ -304,8 +309,8 @@ export default function NewRequest() {
       // Paso 2 (Contactos) es 100% opcional según directriz de Líder de Producto
       return true;
     } else if (currentStep === 3) {
-      if (!data.nodo) {
-        newErrors.nodo = "Selecciona un nodo temático para continuar.";
+      if (!data.ldp) {
+        newErrors.ldp = LEADER_REQUIRED_MESSAGE;
       }
       if (!data.nombreReq.trim()) {
         newErrors.nombreReq = "Ingresa un título o nombre de la propuesta para continuar.";
@@ -400,12 +405,9 @@ export default function NewRequest() {
         setStep(1);
         return;
       }
-      if (!data.nodo) {
-        toast.error("Por favor selecciona un nodo temático en el Paso 3.");
-        setFieldErrors((prev) => ({
-          ...prev,
-          nodo: "Selecciona un nodo temático para continuar.",
-        }));
+      if (!data.ldp) {
+        toast.error("Por favor selecciona el Líder de Producto en el Paso 3.");
+        setFieldErrors((prev) => ({ ...prev, ldp: LEADER_REQUIRED_MESSAGE }));
         setStep(3);
         return;
       }
@@ -451,23 +453,23 @@ export default function NewRequest() {
       ? data.nombreReq.trim()
       : `${data.tipoReq === "Otro" && data.tipoReqOtro ? data.tipoReqOtro : data.tipoReq || "Solicitud"} - ${data.empresaNombre || "Empresa Aliada"}`;
 
-    // Resolve matching nodeId from backend catalogue if assigned
-    const matchedNode = dbNodes?.find(
-      (n) => n.name.toLowerCase() === (data.nodo || "").toLowerCase() || n.id === data.nodo,
-    );
-    const resolvedNodeId = matchedNode?.id;
-
-    // Resolve matching productLeaderId from backend directory if assigned
-    const matchedLeader = dbLeaders?.find((u) => {
-      const fullName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
-      return (
-        u.id === data.ldp ||
-        (data.ldp && fullName.toLowerCase() === data.ldp.toLowerCase()) ||
-        (data.ldp && u.email.toLowerCase() === data.ldp.toLowerCase())
-      );
-    });
-    const resolvedProductLeaderId =
-      matchedLeader?.id || (dbLeaders?.some((u) => u.id === data.ldp) ? data.ldp : undefined);
+    // El líder es obligatorio y debe existir en el directorio del backend; el nodo es opcional.
+    const resolvedProductLeaderId = resolveProductLeaderId(data.ldp, dbLeaders);
+    if (!resolvedProductLeaderId) {
+      const message = data.ldp
+        ? "No se pudo identificar al Líder de Producto elegido. Selecciónalo de nuevo en el Paso 3."
+        : LEADER_REQUIRED_MESSAGE;
+      toast.error(message);
+      setFieldErrors((prev) => ({ ...prev, ldp: message }));
+      setStep(3);
+      return;
+    }
+    const resolvedNodeId = resolveNodeId(data.nodo, dbNodes);
+    if (data.nodo && !resolvedNodeId) {
+      toast.error("No se pudo identificar el nodo elegido. Selecciónalo de nuevo en el Paso 3 o quítalo.");
+      setStep(3);
+      return;
+    }
 
     const payload = buildCreateProposalPayload(data, {
       title: finalTitle,
@@ -1367,13 +1369,7 @@ function Step3({
   const { data: dbNodes } = useNodes();
   const { data: dbLeaders } = useProductLeaders();
   const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
-  const availableLeaders =
-    dbLeaders && dbLeaders.length > 0
-      ? dbLeaders.map((u) => ({
-          id: u.id,
-          name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email,
-        }))
-      : PRODUCT_LEADERS.map((name) => ({ id: "", name }));
+  const availableLeaders = toLeaderOptions(dbLeaders, PRODUCT_LEADERS);
 
   // Autofoco + scroll suave al campo de texto al elegir "Otro", sin clics extra
   const otroInputRef = useRef<HTMLInputElement>(null);
@@ -1425,156 +1421,52 @@ function Step3({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
-              label="Nodo Asignado"
+              label="Líder de Producto"
               required
-              hint={!errors.nodo ? "Nodo temático de la Universidad Icesi" : undefined}
-              id="nodo-select"
+              hint={!errors.ldp ? "Quien atiende la solicitud y define hacia dónde va" : undefined}
+              id="ldp-select"
             >
-              <FieldErrorFrame show={!!errors.nodo}>
-                <Select
-                  value={data.nodo}
-                  onValueChange={(v) => {
-                    update("nodo", v);
-                    // Asociación inteligente por Nodo: preselecciona automáticamente el líder sugerido para este nodo
-                    if (v && NODE_DEFAULT_LEADERS[v]) {
-                      const defLeaderName = NODE_DEFAULT_LEADERS[v];
-                      const matchedInDb = dbLeaders?.find(
-                        (u) =>
-                          `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim().toLowerCase() ===
-                          defLeaderName.toLowerCase(),
-                      );
-                      update("ldp", matchedInDb ? matchedInDb.id || defLeaderName : defLeaderName);
-                    }
-                  }}
-                >
-                  <SelectTrigger id="nodo-select" className="bg-card">
-                    <SelectValue placeholder="Selecciona un nodo temático" />
+              <FieldErrorFrame show={!!errors.ldp}>
+                <Select value={data.ldp} onValueChange={(v) => update("ldp", v)}>
+                  <SelectTrigger id="ldp-select" className="bg-card">
+                    <SelectValue placeholder="Seleccionar líder de producto" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableNodes.map((n) => (
-                      <SelectItem key={n} value={n}>
-                        {n}
+                    {availableLeaders.map((leader) => (
+                      <SelectItem key={leader.id || leader.name} value={leader.id || leader.name}>
+                        {leader.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </FieldErrorFrame>
-              {errors.nodo && <FieldErrorText>{errors.nodo}</FieldErrorText>}
+              {errors.ldp && <FieldErrorText>{errors.ldp}</FieldErrorText>}
             </Field>
 
-            {(() => {
-              const defLeaderName = data.nodo ? NODE_DEFAULT_LEADERS[data.nodo] : "";
-              const foundSuggested = dbLeaders?.find(
-                (u) =>
-                  `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim().toLowerCase() ===
-                  (defLeaderName || "").toLowerCase(),
-              );
-              const suggestedLeaderValue = foundSuggested ? foundSuggested.id || defLeaderName : defLeaderName;
-              const suggestedLeaderDisplay = foundSuggested
-                ? `${foundSuggested.firstName ?? ""} ${foundSuggested.lastName ?? ""}`.trim() || foundSuggested.email
-                : defLeaderName;
-
-              const isDefaultSuggested = Boolean(
-                suggestedLeaderDisplay && (data.ldp === suggestedLeaderDisplay || data.ldp === suggestedLeaderValue),
-              );
-              const isCustomLeader = Boolean(
-                data.ldp &&
-                suggestedLeaderDisplay &&
-                data.ldp !== suggestedLeaderDisplay &&
-                data.ldp !== suggestedLeaderValue,
-              );
-
-              return (
-                <Field
-                  label="Líder de Producto sugerido"
-                  id="ldp-select"
-                  badge={
-                    isDefaultSuggested ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent shrink-0">
-                        <Sparkles className="h-3 w-3 text-accent" />
-                        Sugerido por nodo
-                      </span>
-                    ) : isCustomLeader ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/80 px-2 py-0.5 text-[11px] font-medium text-muted-foreground shrink-0">
-                        Personalizado
-                      </span>
-                    ) : (
-                      <span className="text-xs font-normal text-muted-foreground shrink-0">Opcional</span>
-                    )
-                  }
-                  hint={
-                    isDefaultSuggested ? (
-                      <span className="flex items-center gap-1.5 text-accent font-medium">
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-accent" />
-                        Preseleccionado automáticamente según el nodo temático asignado
-                      </span>
-                    ) : isCustomLeader ? (
-                      <span className="flex items-center gap-1.5 flex-wrap">
-                        <span>
-                          Líder sugerido por el nodo: <strong>{suggestedLeaderDisplay}</strong>.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => update("ldp", suggestedLeaderValue)}
-                          className="text-accent underline font-medium hover:text-accent/80 transition-colors"
-                        >
-                          Restablecer sugerido
-                        </button>
-                      </span>
-                    ) : suggestedLeaderDisplay ? (
-                      <span className="flex items-center gap-1.5 flex-wrap">
-                        <span>
-                          Sugerido para este nodo: <strong>{suggestedLeaderDisplay}</strong>.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => update("ldp", suggestedLeaderValue)}
-                          className="text-accent underline font-medium hover:text-accent/80 transition-colors"
-                        >
-                          Aplicar sugerido
-                        </button>
-                      </span>
-                    ) : (
-                      "Responsable técnico sugerido (se preseleccionará automáticamente al asignar el nodo)"
-                    )
-                  }
-                >
-                  <Select value={data.ldp || ""} onValueChange={(v) => update("ldp", v === "none" ? "" : v)}>
-                    <SelectTrigger id="ldp-select" className="bg-card">
-                      <SelectValue placeholder="Seleccionar líder sugerido (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {data.ldp && (
-                        <SelectItem value="none" className="text-muted-foreground italic">
-                          -- Sin líder sugerido (opcional / por definir) --
-                        </SelectItem>
-                      )}
-                      {availableLeaders.map((leader) => {
-                        const isThisSuggested = Boolean(
-                          suggestedLeaderDisplay &&
-                          (leader.name === suggestedLeaderDisplay || leader.id === suggestedLeaderValue),
-                        );
-                        return (
-                          <SelectItem
-                            key={leader.id || leader.name}
-                            value={leader.id || leader.name}
-                            extra={
-                              isThisSuggested ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-accent/20 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent shrink-0">
-                                  <Sparkles className="h-2.5 w-2.5" /> Sugerido
-                                </span>
-                              ) : null
-                            }
-                          >
-                            {leader.name}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              );
-            })()}
+            <Field
+              label="Nodo"
+              showOptionalBadge
+              hint="Nodo temático de la Universidad Icesi, adicional al líder (no lo cambia)"
+              id="nodo-select"
+            >
+              <Select value={data.nodo} onValueChange={(v) => update("nodo", v === "none" ? "" : v)}>
+                <SelectTrigger id="nodo-select" className="bg-card">
+                  <SelectValue placeholder="Seleccionar nodo (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {data.nodo && (
+                    <SelectItem value="none" className="text-muted-foreground italic">
+                      -- Sin nodo --
+                    </SelectItem>
+                  )}
+                  {availableNodes.map((n) => (
+                    <SelectItem key={n} value={n}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
         </div>
 
@@ -2061,6 +1953,7 @@ function Step5({
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
 }) {
+  const { data: dbLeaders } = useProductLeaders();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -2207,8 +2100,12 @@ function Step5({
                 ? ` (+${data.contactosAdicionales.length} adicional${data.contactosAdicionales.length > 1 ? "es" : ""})`
                 : ""}
             </dd>
-            <dt className="text-muted-foreground mt-1">Nodo Asignado:</dt>
-            <dd className="font-medium text-accent truncate">{data.nodo || "Sin asignar"}</dd>
+            <dt className="text-muted-foreground mt-1">Líder de Producto:</dt>
+            <dd className="font-medium text-accent truncate">
+              {leaderDisplayName(data.ldp, dbLeaders) || "Sin asignar"}
+            </dd>
+            <dt className="text-muted-foreground mt-1">Nodo:</dt>
+            <dd className="font-medium text-foreground truncate">{data.nodo || "Sin nodo"}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Tipo de Requerimiento:</dt>
@@ -2246,7 +2143,7 @@ function SuccessScreen({ kind, onClose }: { kind: "draft" | "sent"; onClose: () 
           <p className="mt-2 text-sm text-muted-foreground">
             {isDraft
               ? "Tu borrador comercial fue almacenado. Puedes retomarlo o editarlo cuando desees."
-              : "La solicitud fue vinculada al Nodo Asignado y notificada al Líder de Producto para formulación."}
+              : "La solicitud fue registrada y notificada al Líder de Producto para formulación."}
           </p>
 
           {!isDraft && (

@@ -46,8 +46,8 @@ const EMPTY: RequestFormData = {
   archivos: [],
 };
 
-const build = (data: Partial<RequestFormData>) =>
-  buildCreateProposalPayload({ ...EMPTY, ...data }, { title: "Título", nodeId: "n1", productLeaderId: "l1" });
+const build = (data: Partial<RequestFormData>, context: { nodeId?: string } = { nodeId: "n1" }) =>
+  buildCreateProposalPayload({ ...EMPTY, ...data }, { title: "Título", productLeaderId: "l1", ...context });
 
 describe("buildCreateProposalPayload: company details", () => {
   it("carries the address, phone, e-mail and CIIU codes the wizard collects", () => {
@@ -145,5 +145,12 @@ describe("buildCreateProposalPayload: requirement", () => {
   it("sends the chosen node and leader and the title", () => {
     const payload = build({});
     expect(payload).toMatchObject({ nodeId: "n1", productLeaderId: "l1", programName: "Título" });
+  });
+
+  it("always sends the leader, and the node only when the KAM chose one", () => {
+    const withoutNode = build({}, {});
+    expect(withoutNode.productLeaderId).toBe("l1");
+    expect(withoutNode.nodeId).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(withoutNode))).not.toHaveProperty("nodeId");
   });
 });
