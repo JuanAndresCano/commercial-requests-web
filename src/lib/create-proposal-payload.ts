@@ -9,6 +9,7 @@ import type {
 import type { ClientContact } from "@/lib/mock-data";
 import type { RequestFormData } from "@/pages/NewRequest";
 import { cateringToPayload } from "@/lib/catering";
+import { parseNit } from "@/lib/nit";
 
 const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
   Pública: "PUBLICA",
@@ -102,10 +103,12 @@ export function buildCreateProposalPayload(data: RequestFormData, context: Paylo
       : undefined;
 
   const catering = cateringToPayload(data.alimentacion);
+  // Ten digits only. The wizard blocks an invalid NIT before this runs; if one slips through it is not sent.
+  const nit = parseNit(data.nit);
 
   return {
     companyName: data.empresaNombre.trim() || "Empresa Aliada",
-    companyNit: text(data.nit),
+    companyNit: nit.ok && nit.nit ? nit.nit : undefined,
     companyDescription: text(data.descripcion),
     companyType: data.tipoEmpresa ? COMPANY_TYPE_MAP[data.tipoEmpresa] : undefined,
     sector: text(data.ciiuPrincipalDesc),

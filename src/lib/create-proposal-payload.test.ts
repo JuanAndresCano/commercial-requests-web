@@ -69,6 +69,16 @@ describe("buildCreateProposalPayload: company details", () => {
     });
   });
 
+  it("sends the NIT as ten digits only, adding the check digit to a 9-digit one", () => {
+    expect(build({ nit: "890.903.938-8" }).companyNit).toBe("8909039388");
+    expect(build({ nit: "890903938" }).companyNit).toBe("8909039388");
+  });
+
+  it("does not send a NIT that is empty or invalid (the wizard blocks the latter before it gets here)", () => {
+    expect(build({ nit: "" }).companyNit).toBeUndefined();
+    expect(build({ nit: "890903938-5" }).companyNit).toBeUndefined();
+  });
+
   it("omits what is empty", () => {
     const payload = build({});
     expect(payload.companyAddress).toBeUndefined();

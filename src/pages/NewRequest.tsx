@@ -43,7 +43,8 @@ import {
   type ClientContact,
 } from "@/lib/mock-data";
 import type { Company } from "@/lib/api/companies";
-import { companyTypeLabel, formatNit } from "@/lib/company";
+import { companyTypeLabel } from "@/lib/company";
+import { displayNit, formatNit, parseNit } from "@/lib/nit";
 import { buildCreateProposalPayload } from "@/lib/create-proposal-payload";
 import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
 import { ProposalHistorySection } from "@/components/wizard/ProposalHistorySection";
@@ -276,6 +277,7 @@ export default function NewRequest() {
   // Mapa campo -> id del elemento en pantalla, para el auto-scroll de validación
   const FIELD_SCROLL_TARGETS: Record<string, string> = {
     empresaNombre: "empresa-nombre",
+    nit: "empresa-nit",
     tipoEmpresa: "tipo-empresa-group",
     nodo: "nodo-select",
     nombreReq: "nombre-req",
@@ -296,6 +298,8 @@ export default function NewRequest() {
       if (!data.tipoEmpresa) {
         newErrors.tipoEmpresa = "Selecciona la naturaleza jurídica de la empresa para continuar.";
       }
+      const nit = parseNit(data.nit);
+      if (!nit.ok) newErrors.nit = nit.error;
     } else if (currentStep === 2) {
       // Paso 2 (Contactos) es 100% opcional según directriz de Líder de Producto
       return true;
@@ -358,7 +362,25 @@ export default function NewRequest() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
+  // Al salir del campo NIT: si es válido se muestra con formato (y con su dígito de verificación); si no, se marca.
+  const commitNit = () => {
+    const nit = parseNit(data.nit);
+    if (!nit.ok) {
+      setFieldErrors((prev) => ({ ...prev, nit: nit.error }));
+    } else if (nit.nit) {
+      setData((prev) => ({ ...prev, nit: formatNit(nit.nit) }));
+    }
+  };
+
   const handleFinish = async (kind: "draft" | "sent") => {
+    // El NIT es opcional, pero si se escribió debe ser un NIT real: aplica a cualquier envío.
+    const nit = parseNit(data.nit);
+    if (!nit.ok) {
+      toast.error(nit.error);
+      setFieldErrors((prev) => ({ ...prev, nit: nit.error }));
+      setStep(1);
+      return;
+    }
     if (kind === "sent") {
       if (!data.empresaNombre.trim()) {
         toast.error("Por favor ingresa o busca la Razón Social de la empresa en el Paso 1.");
@@ -633,7 +655,7 @@ export default function NewRequest() {
 
         {/* Step container */}
         <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-8 shadow-xs">
-          {step === 1 && <Step1 data={data} update={update} errors={fieldErrors} />}
+          {step === 1 && <Step1 data={data} update={update} errors={fieldErrors} onNitBlur={commitNit} />}
           {step === 2 && <Step2 data={data} update={update} />}
           {step === 3 && <Step3 data={data} update={update} errors={fieldErrors} />}
           {step === 4 && <Step4 data={data} update={update} errors={fieldErrors} />}
@@ -813,10 +835,12 @@ function Step1({
   data,
   update,
   errors,
+  onNitBlur,
 }: {
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
   errors: Record<string, string>;
+  onNitBlur: () => void;
 }) {
   const [matchedCompany, setMatchedCompany] = useState<Company | null>(null);
 
@@ -905,16 +929,24 @@ function Step1({
         <Field
           label="NIT de la Empresa"
           showOptionalBadge
-          hint="Número de Identificación Tributaria (opcional si aún no se tiene)"
+          hint={
+            !errors.nit
+              ? "9 dígitos; el dígito de verificación se calcula solo (opcional si aún no se tiene)"
+              : undefined
+          }
           id="empresa-nit"
         >
-          <Input
-            id="empresa-nit"
-            placeholder="Ej. 890900608-9 (opcional)"
-            value={data.nit}
-            onChange={(e) => update("nit", e.target.value)}
-            className="font-mono text-sm"
-          />
+          <FieldErrorFrame show={!!errors.nit}>
+            <Input
+              id="empresa-nit"
+              placeholder="Ej. 890.903.938-8 (opcional)"
+              value={data.nit}
+              onChange={(e) => update("nit", e.target.value)}
+              onBlur={onNitBlur}
+              className="font-mono text-sm"
+            />
+          </FieldErrorFrame>
+          {errors.nit && <FieldErrorText>{errors.nit}</FieldErrorText>}
         </Field>
 
         <Field label="Dirección corporativa" hint="Sede principal de la organización" id="empresa-dir">
@@ -2164,7 +2196,7 @@ function Step5({
             <dt className="text-muted-foreground">Empresa / Razón Social:</dt>
             <dd className="font-semibold text-foreground truncate">{data.empresaNombre || "Sin especificar"}</dd>
             <dt className="text-muted-foreground mt-1">NIT:</dt>
-            <dd className="font-mono text-foreground">{data.nit || "No registrado"}</dd>
+            <dd className="font-mono text-foreground">{data.nit ? displayNit(data.nit) : "No registrado"}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Contacto:</dt>

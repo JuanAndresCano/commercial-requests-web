@@ -159,6 +159,37 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     });
   });
 
+  it("blocks step 1 when the NIT check digit does not match and says which one it should be", () => {
+    renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa Test S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.change(screen.getByLabelText(/NIT de la Empresa/i), { target: { value: "890903938-5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    expect(screen.getAllByText(/El dígito de verificación no coincide \(debería ser 8\)/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/1\. Datos de la Empresa/i)).toBeInTheDocument();
+  });
+
+  it("shows a valid NIT formatted when leaving the field and a 9-digit one gets its check digit", () => {
+    renderNewRequest();
+    const nit = screen.getByLabelText(/NIT de la Empresa/i) as HTMLInputElement;
+    fireEvent.change(nit, { target: { value: "890903938" } });
+    fireEvent.blur(nit);
+    expect(nit.value).toBe("890.903.938-8");
+  });
+
+  it("does not validate the NIT when it is empty (it is optional)", () => {
+    renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa Test S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText(/2\. Contacto del Cliente/i)).toBeInTheDocument();
+  });
+
   it("renders the wizard header and first step (Empresa)", () => {
     renderNewRequest();
     expect(screen.getByText("Registro de Solicitud Comercial")).toBeInTheDocument();
