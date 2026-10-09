@@ -45,6 +45,12 @@ export function formatStageAge(days: number): string {
   return `Lleva ${days} días en esta etapa`;
 }
 
+/** Lo mismo para el tablero del Líder (ver `getLeaderStageStartedAt`): mismo texto que ve el KAM. */
+export function getLeaderStageAgeLabel(req: StageAgeSource, stage: BoardStage, now: Date = new Date()): string | null {
+  const days = getStageAgeDays(getLeaderStageStartedAt(req, stage), now);
+  return days === null ? null : formatStageAge(days);
+}
+
 /** Atajo para las vistas: texto del indicador de una solicitud, o `null` si no hay fecha utilizable. */
 export function getStageAgeLabel(
   req: StageAgeSource,

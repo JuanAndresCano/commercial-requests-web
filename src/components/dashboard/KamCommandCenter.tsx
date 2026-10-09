@@ -17,7 +17,8 @@ import { useRequests } from "@/hooks/use-requests";
 import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
 import { formatRelativeTime, mapProposalToRequestItem } from "@/lib/proposal-adapter";
 import { fuzzyMatch } from "@/lib/fuzzy";
-import { getStageAgeLabel } from "@/lib/stage-age";
+import { getStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
+import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
 import {
   EMPTY_KAM_BOARD_FILTERS,
   deriveKamBoardFilterOptions,
@@ -513,6 +514,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                       const relativeTime = formatRelativeTime(r.createdAt);
                       const kamStage = kamStageOf(r);
                       const stageAgeLabel = getStageAgeLabel(r, kamStage);
+                      const totalAgeLabel = getTotalAgeLabel(r);
 
                       return (
                         <tr
@@ -526,6 +528,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                           <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
                               <span className="font-mono text-xs font-semibold text-foreground">{r.code ?? r.id}</span>
+                              <OfficialNumberBadge officialNumber={r.officialNumber} />
                               <span className="text-muted-foreground/60 text-xs">·</span>
                               <span className="text-xs text-muted-foreground">{relativeTime}</span>
                             </div>
@@ -614,6 +617,12 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                               <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                                 <Clock className="h-3 w-3 shrink-0" />
                                 {stageAgeLabel}
+                              </p>
+                            )}
+                            {totalAgeLabel && (
+                              <p className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                {totalAgeLabel}
                               </p>
                             )}
                           </td>

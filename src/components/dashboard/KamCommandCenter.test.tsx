@@ -376,3 +376,27 @@ describe("KamCommandCenter stage between 'create' and 'assign' (C-01)", () => {
     expect(within(column("En Proceso")).getByText("Solicitud 3")).toBeInTheDocument();
   });
 });
+
+describe("KamCommandCenter total age and official number (C-13)", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const daysAgo = (d: number) => new Date(Date.now() - d * DAY - 60 * 60 * 1000).toISOString();
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    startInTableView();
+  });
+
+  it("shows the total days next to the days in the stage, and the official number only when there is one", () => {
+    const items: RequestItem[] = [
+      { ...mockRequests[0], createdAt: daysAgo(6) },
+      { ...mockRequests[1], createdAt: daysAgo(20), officialNumber: "CP 2026-0169" },
+    ];
+    renderWithClient(<KamCommandCenter requests={items} userName="Andrea Martínez" />);
+    const first = screen.getByText("Propuesta Capacitación 1").closest("tr") as HTMLElement;
+    const second = screen.getByText("Propuesta Consultoría 2").closest("tr") as HTMLElement;
+    expect(within(first).getByText("Total 6 días")).toBeInTheDocument();
+    expect(within(first).queryByTitle("Número oficial")).not.toBeInTheDocument();
+    expect(within(second).getByText("Total 20 días")).toBeInTheDocument();
+    expect(within(second).getByText("CP 2026-0169")).toBeInTheDocument();
+  });
+});

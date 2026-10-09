@@ -5,7 +5,8 @@ import { es } from "date-fns/locale";
 import { UrgencyBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import type { RequestItem, RequestStatus } from "@/lib/mock-data";
-import { getStageAgeLabel } from "@/lib/stage-age";
+import { getStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
+import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
 
 interface RequestCardProps {
   req: RequestItem;
@@ -27,6 +28,7 @@ interface RequestCardProps {
 
 export function RequestCard({ req, cta, stage }: RequestCardProps) {
   const stageAgeLabel = getStageAgeLabel(req, stage ?? req.status);
+  const totalAgeLabel = getTotalAgeLabel(req);
 
   return (
     <Link
@@ -54,6 +56,7 @@ export function RequestCard({ req, cta, stage }: RequestCardProps) {
       <div className="flex-1 p-3.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
+            <OfficialNumberBadge officialNumber={req.officialNumber} className="mb-1" />
             <span className="text-[11px] font-medium text-foreground truncate block max-w-full">{req.company}</span>
             <h3 className="mt-1 line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-foreground group-hover:text-[#5454e9] transition-colors font-sans">
               {req.title}
@@ -98,6 +101,12 @@ export function RequestCard({ req, cta, stage }: RequestCardProps) {
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <Clock className="h-3 w-3 shrink-0" />
               <span>{stageAgeLabel}</span>
+            </div>
+          )}
+          {totalAgeLabel && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Clock className="h-3 w-3 shrink-0" />
+              <span>{totalAgeLabel}</span>
             </div>
           )}
         </div>

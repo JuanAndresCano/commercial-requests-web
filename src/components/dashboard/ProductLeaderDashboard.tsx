@@ -28,7 +28,8 @@ import { useNodes } from "@/hooks/use-nodes";
 import { useProductLeaders } from "@/hooks/use-product-leaders";
 import { formatCop, formatCompactCop, type RequestItem, type RequestStatus } from "@/lib/mock-data";
 import { LEADER_BOARD_STAGES, countByStage, groupByStage, leaderStageOf, type BoardStage } from "@/lib/board-stages";
-import { getLeaderStageStartedAt } from "@/lib/stage-age";
+import { getLeaderStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
+import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
 import {
   Dialog,
   DialogContent,
@@ -581,10 +582,8 @@ export function ProductLeaderDashboard({
                     renderItem={(req) => {
                       const hasRealCosting = req.costing && req.costing.totalOfferedCop > 0;
                       const deadlineInfo = getDeadlineDisplay(req.deadline, req.status);
-                      const stageAge = formatDistanceToNow(new Date(getLeaderStageStartedAt(req, stage.id)), {
-                        addSuffix: true,
-                        locale: es,
-                      });
+                      const stageAgeLabel = getLeaderStageAgeLabel(req, stage.id);
+                      const totalAgeLabel = getTotalAgeLabel(req);
 
                       return (
                         <div className="group relative flex h-full flex-col rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
@@ -614,6 +613,7 @@ export function ProductLeaderDashboard({
                             {/* Top: ID, Company & Urgency */}
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
+                                <OfficialNumberBadge officialNumber={req.officialNumber} className="mb-1" />
                                 <span className="text-[11px] font-medium text-foreground truncate block max-w-full">
                                   {req.company}
                                 </span>
@@ -650,11 +650,20 @@ export function ProductLeaderDashboard({
                               )}
                             </div>
 
-                            {/* Antigüedad en la fase actual — ayuda a detectar cuellos de botella */}
-                            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                              <Clock className="h-3 w-3 shrink-0" />
-                              <span>En esta fase {stageAge}</span>
-                            </div>
+                            {/* Antigüedad en la etapa actual y total desde la creación — ayuda a detectar cuellos
+                                de botella (mismo texto que ve el KAM) */}
+                            {stageAgeLabel && (
+                              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                <span>{stageAgeLabel}</span>
+                              </div>
+                            )}
+                            {totalAgeLabel && (
+                              <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                <span>{totalAgeLabel}</span>
+                              </div>
+                            )}
                           </Link>
 
                           {/* Footer: Date & Direct Actions — fuera del área de navegación */}
@@ -838,11 +847,14 @@ export function ProductLeaderDashboard({
                 ) : (
                   filteredRequests.map((r) => {
                     const hasRealCosting = r.costing && r.costing.totalOfferedCop > 0;
+                    const stageAgeLabel = getLeaderStageAgeLabel(r, leaderStageOf(r));
+                    const totalAgeLabel = getTotalAgeLabel(r);
                     return (
                       <tr key={r.id} className="transition-colors hover:bg-secondary/30 dark:hover:bg-[#1a1c2a]">
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-xs font-semibold text-foreground">{r.code ?? r.id}</span>
+                            <OfficialNumberBadge officialNumber={r.officialNumber} />
                             <span className="text-muted-foreground/60 text-xs">·</span>
                             <span className="text-xs text-muted-foreground">
                               {format(new Date(r.createdAt), "d MMM", { locale: es })}
@@ -892,6 +904,18 @@ export function ProductLeaderDashboard({
                         </td>
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                           <StatusBadge status={leaderStageOf(r)} />
+                          {stageAgeLabel && (
+                            <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <Clock className="h-3 w-3 shrink-0" />
+                              {stageAgeLabel}
+                            </p>
+                          )}
+                          {totalAgeLabel && (
+                            <p className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <Clock className="h-3 w-3 shrink-0" />
+                              {totalAgeLabel}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
                           <Link

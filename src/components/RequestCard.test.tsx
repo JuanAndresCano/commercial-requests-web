@@ -74,3 +74,21 @@ describe("RequestCard stage age", () => {
     expect(screen.getByText("Lleva 12 días en esta etapa")).toBeInTheDocument();
   });
 });
+
+describe("RequestCard total age and official number", () => {
+  it("shows the total days since the request was created, next to the days in the stage", () => {
+    renderCard(<RequestCard req={{ ...baseRequest, statusUpdatedAt: daysAgo(4) }} />);
+    expect(screen.getByText("Lleva 4 días en esta etapa")).toBeInTheDocument();
+    expect(screen.getByText("Total 9 días")).toBeInTheDocument();
+  });
+
+  it("shows the official number when the request has one", () => {
+    renderCard(<RequestCard req={{ ...baseRequest, status: "entregada", officialNumber: "CP 2026-0169" }} />);
+    expect(screen.getByText("CP 2026-0169")).toBeInTheDocument();
+  });
+
+  it("shows no official number when it is null", () => {
+    renderCard(<RequestCard req={baseRequest} />);
+    expect(screen.queryByTitle("Número oficial")).not.toBeInTheDocument();
+  });
+});

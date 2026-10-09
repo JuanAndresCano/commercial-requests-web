@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatStageAge,
+  getLeaderStageAgeLabel,
   getLeaderStageStartedAt,
   getStageAgeDays,
   getStageAgeLabel,
@@ -136,5 +137,30 @@ describe("getTotalAgeLabel (days since the request was created)", () => {
 
   it("returns null when the creation date is unusable", () => {
     expect(getTotalAgeLabel({ createdAt: "" }, NOW)).toBeNull();
+  });
+});
+
+describe("getLeaderStageAgeLabel", () => {
+  const costing = {
+    readyForKam: true,
+    costingSentAt: "2026-10-08T12:00:00.000Z",
+    totalOfferedCop: 1,
+    expectedMarginPercent: 0,
+    marginAmountCop: 0,
+    proCulturaTaxPercent: 0,
+    proCulturaTaxAmount: 0,
+  };
+  const req = { createdAt: "2026-09-01T00:00:00Z", statusUpdatedAt: "2026-10-05T12:00:00.000Z", costing };
+
+  it("uses the same wording as the KAM board", () => {
+    expect(getLeaderStageAgeLabel(req, "en-costeo", NOW)).toBe("Lleva 5 días en esta etapa");
+  });
+
+  it("counts 'Enviada al KAM' from the moment the leader sent it", () => {
+    expect(getLeaderStageAgeLabel(req, "enviada-kam", NOW)).toBe("Lleva 2 días en esta etapa");
+  });
+
+  it("returns null when the date is unusable", () => {
+    expect(getLeaderStageAgeLabel({ createdAt: "" }, "nueva", NOW)).toBeNull();
   });
 });

@@ -119,3 +119,63 @@ describe("ProductLeaderDashboard stages (C-03)", () => {
     expect(screen.queryByRole("button", { name: /Esperando al KAM/ })).not.toBeInTheDocument();
   });
 });
+
+describe("ProductLeaderDashboard time counters and official number (C-13)", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const daysAgo = (d: number) => new Date(Date.now() - d * DAY - 60 * 60 * 1000).toISOString();
+  const timed: RequestItem[] = [
+    req(1, { status: "nueva", createdAt: daysAgo(10), statusUpdatedAt: daysAgo(3) }),
+    req(2, {
+      status: "entregada",
+      createdAt: daysAgo(30),
+      statusUpdatedAt: daysAgo(1),
+      costing: costing(true),
+      officialNumber: "CP 2026-0169",
+    }),
+  ];
+
+  const renderTimed = () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ProductLeaderDashboard
+            requests={timed}
+            user={{ name: "Carlos Gómez", email: "c@icesi.edu.co", roleLabel: "Líder de Producto" }}
+            updateRequest={vi.fn()}
+            updateStatus={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  };
+
+  beforeEach(() => window.localStorage.clear());
+
+  it("shows the days in the stage and the total days on each Kanban card", () => {
+    renderTimed();
+    const card = screen.getByText("Solicitud 1").closest("a") as HTMLElement;
+    expect(within(card).getByText("Lleva 3 días en esta etapa")).toBeInTheDocument();
+    expect(within(card).getByText("Total 10 días")).toBeInTheDocument();
+  });
+
+  it("shows the official number on the card that has one and nowhere else", () => {
+    renderTimed();
+    const delivered = screen.getByText("Solicitud 2").closest("a") as HTMLElement;
+    expect(within(delivered).getByText("CP 2026-0169")).toBeInTheDocument();
+    const fresh = screen.getByText("Solicitud 1").closest("a") as HTMLElement;
+    expect(within(fresh).queryByTitle("Número oficial")).not.toBeInTheDocument();
+  });
+
+  it("shows the counters and the official number, next to the REQ code, in the table view", () => {
+    window.localStorage.setItem("icesi_lp_dashboard_view_v1", JSON.stringify("tabla"));
+    renderTimed();
+    const fresh = screen.getByText("Solicitud 1").closest("tr") as HTMLElement;
+    expect(within(fresh).getByText("Lleva 3 días en esta etapa")).toBeInTheDocument();
+    expect(within(fresh).getByText("Total 10 días")).toBeInTheDocument();
+    expect(within(fresh).queryByTitle("Número oficial")).not.toBeInTheDocument();
+    const delivered = screen.getByText("Solicitud 2").closest("tr") as HTMLElement;
+    expect(within(delivered).getByText("REQ-2026-032")).toBeInTheDocument();
+    expect(within(delivered).getByText("CP 2026-0169")).toBeInTheDocument();
+  });
+});
