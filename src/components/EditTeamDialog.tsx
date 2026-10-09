@@ -11,10 +11,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { NODE_DEFAULT_LEADERS, type RequestItem } from "@/lib/mock-data";
+import {
+  NO_NODE_LABEL,
+  NO_NODE_VALUE,
+  applyLeaderChange,
+  applyNodeChange,
+  selectValueForNode,
+  type TeamSelection,
+} from "@/lib/node-selection";
 import type { SelectableOption } from "@/components/ReassignLeaderDialog";
 
 export interface EditTeamParams {
-  nodeId: string;
+  /** `null` leaves the request without node (C-06: the node is optional). */
+  nodeId: string | null;
   productLeaderId: string;
 }
 
@@ -43,8 +52,10 @@ export function suggestedLeaderIdFor(
 /**
  * Corrección del nodo o del Líder de Producto por parte del KAM, mientras la
  * solicitud sigue "Entregada al líder" y sin docente (decisión del dueño,
- * 2026-10-07). Al elegir un nodo se preselecciona su líder sugerido, igual que
- * en el asistente de creación. Sin motivo: el cambio queda en el historial.
+ * 2026-10-07). El nodo es opcional (C-06): se puede dejar en "Sin nodo". Al
+ * elegir un nodo se preselecciona su líder sugerido, igual que en el asistente
+ * de creación; cambiar el líder nunca rellena ni cambia el nodo. Sin motivo: el
+ * cambio queda en el historial.
  */
 export function EditTeamDialog({
   request,
@@ -54,31 +65,36 @@ export function EditTeamDialog({
   leaderOptions,
   saving = false,
 }: EditTeamDialogProps) {
-  const [nodeId, setNodeId] = useState("");
-  const [leaderId, setLeaderId] = useState("");
-  const [initial, setInitial] = useState<EditTeamParams>({ nodeId: "", productLeaderId: "" });
+  const [selection, setSelection] = useState<TeamSelection>({ nodeId: null, leaderId: "" });
+  const [initial, setInitial] = useState<TeamSelection>({ nodeId: null, leaderId: "" });
+  const { nodeId, leaderId } = selection;
 
   useEffect(() => {
     if (!request) return;
-    const currentNode = nodeOptions?.find((n) => n.label === request.node)?.id ?? "";
+    const currentNode = request.node ? (nodeOptions?.find((n) => n.label === request.node)?.id ?? null) : null;
     const currentLeader = leaderOptions?.find((l) => l.label === request.productLeader)?.id ?? "";
-    setNodeId(currentNode);
-    setLeaderId(currentLeader);
-    setInitial({ nodeId: currentNode, productLeaderId: currentLeader });
+    setSelection({ nodeId: currentNode, leaderId: currentLeader });
+    setInitial({ nodeId: currentNode, leaderId: currentLeader });
   }, [request, nodeOptions, leaderOptions]);
 
-  const suggestedLeaderId = suggestedLeaderIdFor(nodeId, nodeOptions, leaderOptions);
+  const suggestedLeaderId = nodeId ? suggestedLeaderIdFor(nodeId, nodeOptions, leaderOptions) : undefined;
 
   // Como en el asistente: al elegir un nodo se preselecciona su líder sugerido.
-  const handleNodeChange = (value: string) => {
-    setNodeId(value);
-    const suggested = suggestedLeaderIdFor(value, nodeOptions, leaderOptions);
-    if (suggested) setLeaderId(suggested);
-  };
+  const handleNodeChange = (value: string) =>
+    setSelection((current) =>
+      applyNodeChange(
+        current,
+        value,
+        value === NO_NODE_VALUE ? undefined : suggestedLeaderIdFor(value, nodeOptions, leaderOptions),
+      ),
+    );
+
+  // Cambiar el líder nunca toca el nodo.
+  const handleLeaderChange = (value: string) => setSelection((current) => applyLeaderChange(current, value));
 
   const loading = !nodeOptions || !leaderOptions;
-  const changed = nodeId !== initial.nodeId || leaderId !== initial.productLeaderId;
-  const canSave = !loading && !saving && !!nodeId && !!leaderId && changed;
+  const changed = nodeId !== initial.nodeId || leaderId !== initial.leaderId;
+  const canSave = !loading && !saving && !!leaderId && changed;
 
   return (
     <Dialog open={!!request} onOpenChange={onOpenChange}>
@@ -96,11 +112,12 @@ export function EditTeamDialog({
             <Label htmlFor="edit-team-node" className="text-xs font-semibold text-foreground">
               Nodo temático
             </Label>
-            <Select value={nodeId} onValueChange={handleNodeChange} disabled={loading}>
+            <Select value={selectValueForNode(nodeId)} onValueChange={handleNodeChange} disabled={loading}>
               <SelectTrigger id="edit-team-node" className="bg-card">
-                <SelectValue placeholder={loading ? "Cargando nodos..." : "Selecciona un nodo"} />
+                <SelectValue placeholder={loading ? "Cargando nodos..." : NO_NODE_LABEL} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_NODE_VALUE}>{NO_NODE_LABEL}</SelectItem>
                 {nodeOptions?.map((n) => (
                   <SelectItem key={n.id} value={n.id}>
                     {n.label}
@@ -114,7 +131,7 @@ export function EditTeamDialog({
             <Label htmlFor="edit-team-leader" className="text-xs font-semibold text-foreground">
               Líder de Producto
             </Label>
-            <Select value={leaderId} onValueChange={setLeaderId} disabled={loading}>
+            <Select value={leaderId} onValueChange={handleLeaderChange} disabled={loading}>
               <SelectTrigger id="edit-team-leader" className="bg-card">
                 <SelectValue placeholder={loading ? "Cargando líderes..." : "Selecciona un líder"} />
               </SelectTrigger>

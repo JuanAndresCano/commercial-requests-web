@@ -66,6 +66,9 @@ import {
   type ReassignConfirmParams,
 } from "@/components/ReassignLeaderDialog";
 import { EditTeamDialog, type EditTeamParams } from "@/components/EditTeamDialog";
+import { TeamNodeEditor } from "@/components/TeamNodeEditor";
+import { CenterFields } from "@/components/CenterFields";
+import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
 import {
   openNegotiationRound,
   closeRoundForClientDelivery,
@@ -84,6 +87,8 @@ import { useMarkReadyForKam } from "@/hooks/use-mark-ready-for-kam";
 import { useReassignProposal } from "@/hooks/use-reassign-proposal";
 import { useUpdateServiceSpecs } from "@/hooks/use-update-service-specs";
 import { useUpsertCosting } from "@/hooks/use-upsert-costing";
+import { useSetRequestNode } from "@/hooks/use-set-request-node";
+import { useSetRequestCenter } from "@/hooks/use-set-request-center";
 import { useNodes } from "@/hooks/use-nodes";
 import { useProductLeaders } from "@/hooks/use-product-leaders";
 import {
@@ -96,7 +101,7 @@ import { cateringToPayload } from "@/lib/catering";
 import { canEditProfessor } from "@/lib/professor-assignment";
 import { toProfessorInput } from "@/lib/professor-form";
 import { ApiError } from "@/lib/api/client";
-import type { UpdateProposalInfoPayload, CompanyType } from "@/lib/api/requests";
+import type { UpdateProposalInfoPayload, CompanyType, SetCenterPayload } from "@/lib/api/requests";
 
 const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
   Privada: "PRIVADA",
@@ -183,6 +188,8 @@ export default function RequestDetail() {
   const reassignProposalReal = useReassignProposal();
   const updateSpecsReal = useUpdateServiceSpecs();
   const upsertCostingReal = useUpsertCosting();
+  const setNodeReal = useSetRequestNode();
+  const setCenterReal = useSetRequestCenter();
   const lastSentCosting = useRef<ProposalCosting | null>(null);
   // The Product Leader directory feeds the Leader's reassignment and the KAM's team
   // correction (GET /users allows PRODUCT_LEADER, ADMIN and KAM); never for a mock proposal.
@@ -552,6 +559,32 @@ export default function RequestDetail() {
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "No se pudo actualizar el nodo o el líder");
     }
+  };
+
+  // C-06 / C-07 — el Líder dueño pone o quita el nodo y escribe el centro y el CENCO desde "Equipo
+  // Asignado" (el backend responde 403 a cualquier otro rol). Solo con solicitud real.
+  const canLeaderEditTeamData = role === "lider-producto" && Boolean(apiProposal);
+
+  const handleSaveNode = (patch: { nodeId: string | null }) => {
+    if (!apiProposal) return;
+    setNodeReal.mutate(
+      { id: apiProposal.id, ...patch },
+      {
+        onSuccess: () => toast.success(patch.nodeId ? "Nodo actualizado" : "Se quitó el nodo de la solicitud"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo actualizar el nodo"),
+      },
+    );
+  };
+
+  const handleSaveCenter = (patch: SetCenterPayload) => {
+    if (!apiProposal) return;
+    setCenterReal.mutate(
+      { id: apiProposal.id, ...patch },
+      {
+        onSuccess: () => toast.success("Centro y CENCO guardados"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar el centro"),
+      },
+    );
   };
 
   // HU 5.2 — con backend los documentos vienen de `apiProposal.attachments` (el backend ya
@@ -1178,6 +1211,7 @@ export default function RequestDetail() {
               {/* Fila de metadatos inline sutiles: Empresa, Contacto, Código REQ y Badges discretos */}
               <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-muted-foreground">
                 <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.code ?? req.id}</span>
+                <OfficialNumberBadge officialNumber={req.officialNumber} className="text-xs" />
 
                 <span className="text-border dark:text-[#252838]">·</span>
 
@@ -1825,11 +1859,16 @@ export default function RequestDetail() {
               </h3>
 
               <div className="space-y-3.5 text-xs">
-                {/* Nodo Temático */}
-                <div className="space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-muted-foreground">Nodo Temático</span>
-                    {canKamEditTeam && (
+                {/* Nodo Temático — opcional: sin nodo dice "Sin nodo"; el Líder dueño lo pone o lo quita */}
+                <TeamNodeEditor
+                  nodeName={req.node}
+                  nodeId={req.nodeId}
+                  nodeOptions={nodeOptions}
+                  editable={canLeaderEditTeamData}
+                  saving={setNodeReal.isPending}
+                  onSave={handleSaveNode}
+                  headerAction={
+                    canKamEditTeam ? (
                       <button
                         type="button"
                         onClick={() => setIsEditTeamOpen(true)}
@@ -1838,10 +1877,9 @@ export default function RequestDetail() {
                       >
                         Cambiar
                       </button>
-                    )}
-                  </div>
-                  <p className="font-semibold text-foreground leading-snug">{req.node}</p>
-                </div>
+                    ) : undefined
+                  }
+                />
 
                 {/* Líder de Producto */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
@@ -1903,6 +1941,15 @@ export default function RequestDetail() {
                   <span className="text-[11px] font-medium text-muted-foreground">KAM Responsable</span>
                   <p className="font-semibold text-foreground">{req.kam}</p>
                 </div>
+
+                {/* Centro y CENCO (texto libre): el Líder dueño los escribe; el KAM los ve solo si tienen valor */}
+                <CenterFields
+                  center={req.center}
+                  costCenter={req.costCenter}
+                  editable={canLeaderEditTeamData}
+                  saving={setCenterReal.isPending}
+                  onSave={handleSaveCenter}
+                />
 
                 {/* Docente / Asesor asignado */}
                 <div className="space-y-1.5 pt-2 border-t border-border dark:border-[#252838]">

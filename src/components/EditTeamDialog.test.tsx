@@ -73,3 +73,35 @@ describe("EditTeamDialog (KAM corrects node or leader)", () => {
     expect(screen.queryByText("Cambiar nodo o líder")).not.toBeInTheDocument();
   });
 });
+
+describe("EditTeamDialog when the request has no node (C-06)", () => {
+  const noNode: RequestItem = { ...request, node: null };
+
+  it("starts on Sin nodo with the current leader, and nothing to save yet", () => {
+    render(
+      <EditTeamDialog
+        request={noNode}
+        onOpenChange={vi.fn()}
+        onConfirm={vi.fn()}
+        nodeOptions={nodeOptions}
+        leaderOptions={leaderOptions}
+      />,
+    );
+    expect(nodeSelect()).toHaveTextContent("Sin nodo");
+    expect(leaderSelect()).toHaveTextContent("Laura Diaz");
+    expect(saveButton()).toBeDisabled();
+  });
+
+  it("does not ask for a node before saving", () => {
+    render(
+      <EditTeamDialog
+        request={noNode}
+        onOpenChange={vi.fn()}
+        onConfirm={vi.fn()}
+        nodeOptions={nodeOptions}
+        leaderOptions={leaderOptions}
+      />,
+    );
+    expect(screen.queryByText("Selecciona un nodo")).not.toBeInTheDocument();
+  });
+});
