@@ -1214,3 +1214,61 @@ describe("mapProposalToRequestItem - node and leader change history", () => {
     expect(mapProposalToRequestItem(baseProposal()).teamHistory).toBeUndefined();
   });
 });
+
+describe("mapProposalToRequestItem (optional node, center, official number, status history)", () => {
+  it("maps a request without node to node null instead of a placeholder", () => {
+    const mapped = mapProposalToRequestItem(baseProposal({ nodeId: null, node: null }));
+    expect(mapped.node).toBeNull();
+    expect(mapped.nodeId).toBeNull();
+  });
+
+  it("keeps the node name and id when there is one", () => {
+    const mapped = mapProposalToRequestItem(baseProposal());
+    expect(mapped.node).toBe("IA+ Tech Digital");
+    expect(mapped.nodeId).toBe("n1");
+  });
+
+  it("maps center, cost center and official number, with null as absent", () => {
+    const filled = mapProposalToRequestItem(
+      baseProposal({ center: "Eduteka", costCenter: "CC-1234", officialNumber: "CP 2026-0169" }),
+    );
+    expect(filled.center).toBe("Eduteka");
+    expect(filled.costCenter).toBe("CC-1234");
+    expect(filled.officialNumber).toBe("CP 2026-0169");
+
+    const empty = mapProposalToRequestItem(baseProposal({ center: null, costCenter: null, officialNumber: null }));
+    expect(empty.center).toBeUndefined();
+    expect(empty.costCenter).toBeUndefined();
+    expect(empty.officialNumber).toBeUndefined();
+  });
+
+  it("maps the status history to front statuses and keeps it ascending", () => {
+    const mapped = mapProposalToRequestItem(
+      baseProposal({
+        statusHistory: [
+          { statusCode: "NEW", changedAt: "2026-09-01T10:00:00.000Z" },
+          { statusCode: "IN_PROGRESS", changedAt: "2026-09-03T10:00:00.000Z" },
+          { statusCode: "IN_COSTING", changedAt: "2026-09-05T10:00:00.000Z" },
+        ],
+      }),
+    );
+    expect(mapped.statusHistory).toEqual([
+      { status: "nueva", changedAt: "2026-09-01T10:00:00.000Z" },
+      { status: "en-experto", changedAt: "2026-09-03T10:00:00.000Z" },
+      { status: "en-costeo", changedAt: "2026-09-05T10:00:00.000Z" },
+    ]);
+  });
+
+  it("sorts an out-of-order history and has none when the backend sends none", () => {
+    const mapped = mapProposalToRequestItem(
+      baseProposal({
+        statusHistory: [
+          { statusCode: "IN_PROGRESS", changedAt: "2026-09-03T10:00:00.000Z" },
+          { statusCode: "NEW", changedAt: "2026-09-01T10:00:00.000Z" },
+        ],
+      }),
+    );
+    expect(mapped.statusHistory?.map((h) => h.status)).toEqual(["nueva", "en-experto"]);
+    expect(mapProposalToRequestItem(baseProposal()).statusHistory).toBeUndefined();
+  });
+});

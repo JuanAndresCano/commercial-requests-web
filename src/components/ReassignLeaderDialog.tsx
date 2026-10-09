@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { NODES, NODE_DEFAULT_LEADERS, PRODUCT_LEADERS, type RequestItem } from "@/lib/mock-data";
+import { nodeLabel } from "@/lib/node-selection";
 
 export const REASSIGN_REASONS = [
   "Temática no afín / Corresponde a otro nodo",
@@ -92,7 +93,9 @@ export function ReassignLeaderDialog({
       setSelectedNewLeader("");
       // En modo conectado, `request.node` es el nombre real (map-proposal.ts) — se
       // busca el id que corresponde en las opciones reales en vez de usarlo tal cual.
-      setSelectedNewNode(isConnected ? (nodeOptions?.find((n) => n.label === request.node)?.id ?? "") : request.node);
+      setSelectedNewNode(
+        isConnected ? (nodeOptions?.find((n) => n.label === request.node)?.id ?? "") : (request.node ?? ""),
+      );
       setReassignReason(REASSIGN_REASONS[0]);
       setReassignNotes("");
     }
@@ -102,7 +105,7 @@ export function ReassignLeaderDialog({
     if (!request || !selectedNewLeader) return;
     onConfirm({
       newLeader: selectedNewLeader,
-      newNode: selectedNewNode || request.node,
+      newNode: selectedNewNode || request.node || "",
       reason: reassignReason,
       notes: reassignNotes,
     });
@@ -115,7 +118,7 @@ export function ReassignLeaderDialog({
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-bold text-foreground">{request?.code ?? request?.id}</span>
             <span className="rounded bg-[#5454e9]/10 px-2 py-0.5 text-[10px] font-bold text-[#5454e9] dark:text-[#865cf0]">
-              {request?.node}
+              {nodeLabel(request?.node)}
             </span>
           </div>
           <DialogTitle className="text-base font-bold text-foreground mt-1">Reasignar Líder de Producto</DialogTitle>

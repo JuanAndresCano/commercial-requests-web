@@ -504,7 +504,7 @@ export default function RequestDetail() {
         {
           id: req.id,
           newProductLeaderId: newLeader,
-          newNodeId: newNode,
+          newNodeId: newNode || undefined,
           reason: backendReason,
           note: notes.trim() || undefined,
         },

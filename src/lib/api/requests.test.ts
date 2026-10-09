@@ -180,6 +180,39 @@ describe("requestsApi", () => {
     expect("marginAmount" in body).toBe(false);
   });
 
+  it("sets the node with PATCH /requests/:id/node", async () => {
+    respond(200, { id: "p1", nodeId: "n-1", node: { id: "n-1", name: "Nodo" } });
+    await requestsApi.setNode("p1", { nodeId: "n-1" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/node$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ nodeId: "n-1" }) });
+  });
+
+  it("removes the node by sending an explicit null", async () => {
+    respond(200, { id: "p1", nodeId: null, node: null });
+    await requestsApi.setNode("p1", { nodeId: null });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nodeId: null });
+  });
+
+  it("saves the center and the cost center with PATCH /requests/:id/center", async () => {
+    respond(200, { id: "p1" });
+    await requestsApi.setCenter("p1", { center: "Eduteka", costCenter: "CC-1234" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/center$/);
+    expect(init).toMatchObject({ method: "PATCH" });
+    expect(JSON.parse(init.body as string)).toEqual({ center: "Eduteka", costCenter: "CC-1234" });
+  });
+
+  it("clears a center field with null and leaves an omitted one out of the body", async () => {
+    respond(200, { id: "p1" });
+    await requestsApi.setCenter("p1", { center: null });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({ center: null });
+    expect("costCenter" in body).toBe(false);
+  });
+
   it("surfaces errors as ApiError instances", async () => {
     respond(403, { message: "Forbidden access" });
     await expect(requestsApi.getById("req-unauthorized")).rejects.toBeInstanceOf(ApiError);

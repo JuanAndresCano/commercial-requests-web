@@ -5,6 +5,7 @@ import type {
   NegotiationRound,
   ProfessorAssignmentLog,
   ProposalTeamChangeLog,
+  ProposalStatusChange,
   RequestType as BackendRequestType,
   ProposalPriority,
   ProgramModality as BackendProgramModality,
@@ -13,6 +14,7 @@ import type {
   ExternalProfessorData,
   ProfessorAssignmentLogEntry,
   TeamChangeEntry,
+  StatusHistoryEntry,
   RequestItem,
   RequestStatus,
   NegotiationRound as FrontendNegotiationRound,
@@ -281,6 +283,15 @@ function mapTeamHistory(logs: ProposalTeamChangeLog[] | undefined): TeamChangeEn
     }));
 }
 
+/** Backend status codes to front statuses, oldest first. The API order is not trusted. */
+function mapStatusHistory(history: ProposalStatusChange[] | undefined): StatusHistoryEntry[] | undefined {
+  if (!history || history.length === 0) return undefined;
+  return history
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => Date.parse(a.entry.changedAt) - Date.parse(b.entry.changedAt) || a.index - b.index)
+    .map(({ entry }) => ({ status: mapBackendStatusToFrontend(entry.statusCode), changedAt: entry.changedAt }));
+}
+
 export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, currentKamName?: string): RequestItem {
   const currentEconomics = p.economics?.find((e) => e.isCurrent) ?? p.economics?.[0];
   const grossValueNum = currentEconomics ? Number(currentEconomics.grossValue ?? 0) : 0;
@@ -348,7 +359,13 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     deadline: p.workflow?.deadline ?? undefined,
     // HU 4.1/4.3/4.4 (Líder de Producto) read this — kept populated even outside detail.
     statusUpdatedAt: p.workflow?.currentStatusSince ?? undefined,
-    node: (detail.node?.name as string) ?? "Por definir",
+    // The node is optional (C-06): none is `null`, never a placeholder name.
+    node: detail.node?.name ?? null,
+    nodeId: p.nodeId ?? null,
+    center: p.center?.trim() || undefined,
+    costCenter: p.costCenter?.trim() || undefined,
+    officialNumber: p.officialNumber?.trim() || undefined,
+    statusHistory: mapStatusHistory(detail.statusHistory),
     productLeader: leaderFullName || "Por definir",
     kam: creatorFullName || currentKamName || "KAM Icesi",
     professor: professorName,

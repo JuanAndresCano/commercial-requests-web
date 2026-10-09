@@ -162,7 +162,18 @@ export interface RequestItem {
   observaciones?: string;
 
   company: string;
-  node: string;
+  /** Name of the node; `null` when the request has none (C-06: the node is optional). */
+  node: string | null;
+  /** Real id of the node (only when it comes from the API); `null` when the request has none. */
+  nodeId?: string | null;
+  /** Center the business goes through (free text), typed by the Product Leader (C-07). */
+  center?: string;
+  /** Cost center ("CENCO", free text) loaded for that center (C-07). */
+  costCenter?: string;
+  /** Official number ("CP 2026-0169"); the API only sends it once the request is delivered (C-13). */
+  officialNumber?: string;
+  /** Every change of status, oldest first (detail only); feeds "Tiempo por etapa". */
+  statusHistory?: StatusHistoryEntry[];
   productLeader: string;
   kam: string;
   professor?: string;
@@ -195,6 +206,11 @@ export interface RequestItem {
   // sobrescritos de `costing` — es el registro de lo que pasó, no el estado
   // actual del costeo.
   negotiationRounds?: NegotiationRound[];
+}
+
+export interface StatusHistoryEntry {
+  status: RequestStatus;
+  changedAt: string;
 }
 
 export interface TeamChangeEntry {

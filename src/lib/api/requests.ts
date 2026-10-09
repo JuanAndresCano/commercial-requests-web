@@ -233,13 +233,20 @@ export interface ProposalListItem {
   code: string | null;
   companyId: string;
   contactId: string | null;
-  nodeId: string;
+  /** The node is optional (C-06): a request may have none. */
+  nodeId: string | null;
   title: string | null;
   generalDescription: string | null;
   creatorId: string;
   productLeaderId: string | null;
   priority: ProposalPriority | null;
   comments: string | null;
+  /** Business center the deal goes through (free text, e.g. "Eduteka", "OEM"), typed by the Product Leader (C-07). */
+  center?: string | null;
+  /** Cost center ("CENCO", free text) loaded for that center (C-07). */
+  costCenter?: string | null;
+  /** Official number ("CP 2026-0169"); the backend only sends it once the request is delivered (C-13). */
+  officialNumber?: string | null;
   createdAt: string;
   updatedAt: string;
   company: Company;
@@ -265,7 +272,7 @@ export interface ProposalListItem {
 export interface ProposalDetail extends ProposalListItem {
   contact: ProposalContact | null;
   additionalContacts?: ProposalAdditionalContact[];
-  node: ProposalNode;
+  node: ProposalNode | null;
   creator: ProposalUserSummary;
   productLeader: ProposalUserSummary | null;
   logistics: ProposalLogistics | null;
@@ -276,6 +283,15 @@ export interface ProposalDetail extends ProposalListItem {
   // Oldest first. Optional: a backend without the assignment audit (PR #25) does not send it.
   professorAssignmentLogs?: ProfessorAssignmentLog[];
   teamChangeLogs?: ProposalTeamChangeLog[];
+  // Every change of status, oldest first (`statusCode` is the backend code: NEW, IN_PROGRESS...). Optional: a
+  // backend without it just shows no "Tiempo por etapa".
+  statusHistory?: ProposalStatusChange[];
+}
+
+/** One entry of the status history: the status the request entered and when. */
+export interface ProposalStatusChange {
+  statusCode: string;
+  changedAt: string;
 }
 
 export interface ProposalDashboardMetrics {
@@ -384,7 +400,8 @@ export interface UpdateProposalInfoPayload {
   companyEmail?: string | null;
   ciiuCode?: string | null;
   ciiuSecondary?: string[];
-  nodeId?: string;
+  /** `null` leaves the request without node (C-06). */
+  nodeId?: string | null;
   productLeaderId?: string;
   priority?: ProposalPriority;
   contactName?: string | null;
@@ -422,6 +439,17 @@ export interface UpdateProposalInfoPayload {
   observations?: string | null;
 }
 
+/** Body of PATCH /requests/:id/node: `null` removes the node (C-06). */
+export interface SetNodePayload {
+  nodeId: string | null;
+}
+
+/** Body of PATCH /requests/:id/center (C-07): a field left out is kept, `null` (or empty) clears it. */
+export interface SetCenterPayload {
+  center?: string | null;
+  costCenter?: string | null;
+}
+
 // Every code ALLOWED_TRANSITIONS in commercial-requests-backend actually uses —
 // UpdateStatusPayload.status stays a loose `string` (#7's contract), this is only
 // for Líder de Producto call sites (HU 4.3) that want the stricter union.
@@ -431,7 +459,8 @@ export type BackendStatusCode = "NEW" | "IN_PROGRESS" | "IN_COSTING" | "DELIVERE
 // IN_PROGRESS; the Líder de Producto's side, not part of #7's KAM contract.
 export interface ReassignProposalPayload {
   newProductLeaderId: string;
-  newNodeId: string;
+  /** Left out when the request has no node and none is picked. */
+  newNodeId?: string;
   reason: string;
   note?: string;
 }
@@ -486,6 +515,20 @@ export const requestsApi = {
   /** Updates the service specifications */
   updateSpecs: (id: string, data: UpdateServiceSpecsPayload) =>
     apiRequest<ProposalDetail>(`/requests/${id}/specs`, {
+      method: "PATCH",
+      body: data,
+    }),
+
+  /** Product Leader (owner) or Admin puts, changes or removes the node (C-06). */
+  setNode: (id: string, data: SetNodePayload) =>
+    apiRequest<ProposalDetail>(`/requests/${id}/node`, {
+      method: "PATCH",
+      body: data,
+    }),
+
+  /** Product Leader (owner) or Admin types the center and the cost center (C-07). */
+  setCenter: (id: string, data: SetCenterPayload) =>
+    apiRequest<ProposalDetail>(`/requests/${id}/center`, {
       method: "PATCH",
       body: data,
     }),
