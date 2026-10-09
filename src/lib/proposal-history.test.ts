@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RequestItem } from "@/lib/mock-data";
-import { findCompanyProposals, normalizeCompanyName, normalizeNit, parseHistorySearchTerm } from "./proposal-history";
+import { findCompanyProposals, normalizeCompanyName, parseHistorySearchTerm } from "./proposal-history";
 
 function req(id: string, company: string, companyNit?: string): RequestItem {
   return {
@@ -20,11 +20,12 @@ function req(id: string, company: string, companyNit?: string): RequestItem {
 }
 
 const requests = [
-  req("1", "Gases de Occidente", "890303893-6"),
-  req("2", "Gases de Occidente S.A.", "890303893-6"),
+  req("1", "Gases de Occidente", "890303893-0"),
+  req("2", "Gases de Occidente S.A.", "890303893-0"),
   req("3", "Grupo Argos", "890900266-3"),
   req("4", "Demo Corp", undefined),
   req("5", "Grupo Éxito", "890900608-9"),
+  req("6", "Banco con NIT de 9 dígitos", "890903938"),
 ];
 
 const ids = (list: RequestItem[]) => list.map((r) => r.id);
@@ -32,14 +33,6 @@ const ids = (list: RequestItem[]) => list.map((r) => r.id);
 describe("normalizeCompanyName", () => {
   it("ignores case, accents and extra spaces", () => {
     expect(normalizeCompanyName("  GRUPO   éxito ")).toBe("grupo exito");
-  });
-});
-
-describe("normalizeNit", () => {
-  it("keeps digits only", () => {
-    expect(normalizeNit("890.900.608-9")).toBe("8909006089");
-    expect(normalizeNit(undefined)).toBe("");
-    expect(normalizeNit(null)).toBe("");
   });
 });
 
@@ -60,13 +53,25 @@ describe("findCompanyProposals", () => {
   });
 
   it("matches the exact NIT comparing digits only", () => {
-    expect(ids(findCompanyProposals(requests, { nit: "890303893 6" }))).toEqual(["1", "2"]);
-    expect(ids(findCompanyProposals(requests, { nit: "8903038936" }))).toEqual(["1", "2"]);
-    expect(findCompanyProposals(requests, { nit: "890303893" })).toEqual([]);
+    expect(ids(findCompanyProposals(requests, { nit: "890303893 0" }))).toEqual(["1", "2"]);
+    expect(ids(findCompanyProposals(requests, { nit: "8903038930" }))).toEqual(["1", "2"]);
+    expect(ids(findCompanyProposals(requests, { nit: "890.303.893-0" }))).toEqual(["1", "2"]);
+  });
+
+  it("finds a company by its 9-digit NIT even though it is stored with the check digit, and the other way round", () => {
+    expect(ids(findCompanyProposals(requests, { nit: "890303893" }))).toEqual(["1", "2"]);
+    expect(ids(findCompanyProposals(requests, { nit: "890.900.608" }))).toEqual(["5"]);
+    expect(ids(findCompanyProposals(requests, { nit: "890.903.938-8" }))).toEqual(["6"]);
+    expect(ids(findCompanyProposals(requests, { nit: "890903938" }))).toEqual(["6"]);
+  });
+
+  it("does not match a partial NIT or one with a different check digit", () => {
+    expect(findCompanyProposals(requests, { nit: "89030389" })).toEqual([]);
+    expect(findCompanyProposals(requests, { nit: "890303893-6" })).toEqual([]);
   });
 
   it("combines name and NIT matches without duplicating requests", () => {
-    expect(ids(findCompanyProposals(requests, { name: "Gases de Occidente", nit: "890303893-6" }))).toEqual(["1", "2"]);
+    expect(ids(findCompanyProposals(requests, { name: "Gases de Occidente", nit: "890303893-0" }))).toEqual(["1", "2"]);
   });
 
   it("never matches requests that have no NIT when searching by NIT", () => {
@@ -76,7 +81,7 @@ describe("findCompanyProposals", () => {
 
 describe("parseHistorySearchTerm", () => {
   it("treats a numeric term as a NIT and anything else as a company name", () => {
-    expect(parseHistorySearchTerm("890.303.893-6")).toEqual({ nit: "890.303.893-6" });
+    expect(parseHistorySearchTerm("890.303.893-0")).toEqual({ nit: "890.303.893-0" });
     expect(parseHistorySearchTerm("  Grupo Argos ")).toEqual({ name: "Grupo Argos" });
     expect(parseHistorySearchTerm("Grupo 5")).toEqual({ name: "Grupo 5" });
     expect(parseHistorySearchTerm("   ")).toEqual({});
