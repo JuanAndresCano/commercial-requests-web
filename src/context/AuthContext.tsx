@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { authApi, type SessionUser } from "@/lib/api/auth";
 import { setUnauthorizedHandler } from "@/lib/api/client";
 import { isSessionActive, mapBackendRoles, msUntilExpiry } from "@/lib/session";
+import { useSessionSync } from "@/hooks/use-session-sync";
+import type { SessionConflictReason } from "@/lib/session-sync";
 import {
   MOCK_REQUESTS,
   RequestItem,
@@ -54,6 +56,11 @@ interface AuthContextType {
   /** Signs in against the backend; rejects with ApiError (401 = bad credentials). */
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /**
+   * Another tab of this browser signed in as someone else (or signed out), so the
+   * session cookie no longer belongs to the user this tab shows. Reload to continue.
+   */
+  sessionConflict: SessionConflictReason | null;
   requests: RequestItem[];
   updateRequest: (id: string, updates: Partial<RequestItem>) => void;
   deleteRequest: (id: string) => void;
@@ -75,6 +82,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User>(ANONYMOUS_USER);
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const { conflict: sessionConflict, announce } = useSessionSync(userId);
 
   const { setTheme } = useTheme();
 
@@ -86,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearSession = useCallback(() => {
     setUser(ANONYMOUS_USER);
+    setUserId(null);
     setExpiresAt(null);
     setStatus("unauthenticated");
     resetUiForNewSession();
@@ -118,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: session.email,
         node: cfg.node,
       });
+      setUserId(session.id);
       setExpiresAt(session.expiresAt);
       setStatus("authenticated");
       return true;
@@ -206,12 +217,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!applySession(session)) {
       throw new Error("La cuenta no tiene un rol habilitado en esta plataforma.");
     }
+    announce({ type: "login", userId: session.id });
   };
 
   const logout = () => {
     // Clear local state first; the request still carries the cookie and bumps
     // tokenVersion server-side so the token cannot be replayed.
     clearSession();
+    announce({ type: "logout" });
     void authApi.logout().catch(() => undefined);
   };
 
@@ -306,6 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status,
         login,
         logout,
+        sessionConflict,
         requests,
         updateRequest,
         deleteRequest,

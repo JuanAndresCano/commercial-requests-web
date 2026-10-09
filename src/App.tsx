@@ -7,6 +7,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { RequireAuth } from "@/components/RequireAuth";
+import { SessionConflictDialog } from "@/components/SessionConflictDialog";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index.tsx";
 import Login from "./pages/Login.tsx";
@@ -25,6 +26,7 @@ const App = () => (
           <TooltipProvider>
             <Toaster />
             <Sonner />
+            <SessionConflictDialog />
             <BrowserRouter
               future={{
                 v7_startTransition: true,
