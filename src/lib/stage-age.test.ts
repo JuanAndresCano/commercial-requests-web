@@ -5,6 +5,7 @@ import {
   getStageAgeDays,
   getStageAgeLabel,
   getStageStartedAt,
+  getTotalAgeLabel,
 } from "./stage-age";
 
 const NOW = new Date("2026-10-10T12:00:00.000Z");
@@ -120,5 +121,20 @@ describe("getStageAgeLabel", () => {
 
   it("returns null when the date is unusable", () => {
     expect(getStageAgeLabel({ createdAt: "" }, "nueva", NOW)).toBeNull();
+  });
+});
+
+describe("getTotalAgeLabel (days since the request was created)", () => {
+  it("counts whole days from the creation, whatever the stage", () => {
+    expect(getTotalAgeLabel({ createdAt: "2026-09-30T12:00:00.000Z" }, NOW)).toBe("Total 10 días");
+  });
+
+  it("handles zero and one day", () => {
+    expect(getTotalAgeLabel({ createdAt: "2026-10-10T08:00:00.000Z" }, NOW)).toBe("Total menos de 1 día");
+    expect(getTotalAgeLabel({ createdAt: "2026-10-09T08:00:00.000Z" }, NOW)).toBe("Total 1 día");
+  });
+
+  it("returns null when the creation date is unusable", () => {
+    expect(getTotalAgeLabel({ createdAt: "" }, NOW)).toBeNull();
   });
 });

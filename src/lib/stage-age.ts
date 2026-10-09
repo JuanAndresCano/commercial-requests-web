@@ -54,3 +54,16 @@ export function getStageAgeLabel(
   const days = getStageAgeDays(getStageStartedAt(req, displayedStage), now);
   return days === null ? null : formatStageAge(days);
 }
+
+/** Texto del total acumulado desde la creación, p. ej. "Total 12 días". */
+export function formatTotalAge(days: number): string {
+  if (days < 1) return "Total menos de 1 día";
+  if (days === 1) return "Total 1 día";
+  return `Total ${days} días`;
+}
+
+/** Total de días desde que se creó la solicitud (sin importar la etapa), o `null` si la fecha no es válida. */
+export function getTotalAgeLabel(req: Pick<RequestItem, "createdAt">, now: Date = new Date()): string | null {
+  const days = getStageAgeDays(req.createdAt, now);
+  return days === null ? null : formatTotalAge(days);
+}
