@@ -67,7 +67,7 @@ describe("requestsApi", () => {
     respond(201, { id: "req-new", title: "New Proposal" });
     const payload = {
       companyName: "Acme",
-      nodeId: "node-1",
+      productLeaderId: "leader-1",
       programName: "Training",
     };
     const created = await requestsApi.create(payload);

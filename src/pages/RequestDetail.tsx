@@ -100,6 +100,7 @@ import {
   mapProposalToRequestItem,
 } from "@/lib/proposal-adapter";
 import { cateringToPayload } from "@/lib/catering";
+import { canonicalNit, displayNit, parseNit } from "@/lib/nit";
 import { canEditProfessor } from "@/lib/professor-assignment";
 import { toProfessorInput } from "@/lib/professor-form";
 import { ApiError } from "@/lib/api/client";
@@ -405,6 +406,12 @@ export default function RequestDetail() {
   if (fullInfoDraft.contactCorreoAlternativo.trim() && !EMAIL_RE.test(fullInfoDraft.contactCorreoAlternativo.trim())) {
     fullInfoErrors.contactCorreoAlternativo = "Correo con formato inválido";
   }
+  // The NIT is only checked when it was changed, so a legacy value never blocks an unrelated edit.
+  const nitCheck = parseNit(fullInfoDraft.companyNit);
+  const nitChanged = canonicalNit(fullInfoDraft.companyNit) !== canonicalNit(req?.companyNit);
+  if (nitChanged && !nitCheck.ok) {
+    fullInfoErrors.companyNit = nitCheck.error;
+  }
   if (fullInfoDraft.companyTelefono.trim() && !PHONE_RE.test(fullInfoDraft.companyTelefono.trim())) {
     fullInfoErrors.companyTelefono = "Teléfono con formato inválido";
   }
@@ -434,7 +441,7 @@ export default function RequestDetail() {
     const payload: UpdateProposalInfoPayload = {
       programName: fullInfoDraft.title.trim(),
       priority: fullInfoDraft.urgency === "alta" ? "ALTA" : fullInfoDraft.urgency === "baja" ? "BAJA" : "MEDIA",
-      companyNit: fullInfoDraft.companyNit.trim() || null,
+      companyNit: nitCheck.ok ? nitCheck.nit || null : fullInfoDraft.companyNit.trim() || null,
       companyDescription: fullInfoDraft.companyDescripcion.trim() || null,
       companyType: fullInfoDraft.companyTipo ? COMPANY_TYPE_MAP[fullInfoDraft.companyTipo] : undefined,
       sector: fullInfoDraft.companyCiiuPrincipalDesc.trim() || null,
@@ -1104,7 +1111,7 @@ export default function RequestDetail() {
           <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
             {/* Empresa */}
             <InfoSection title="Empresa">
-              <InfoRow label="NIT" value={req.companyNit} />
+              <InfoRow label="NIT" value={req.companyNit ? displayNit(req.companyNit) : req.companyNit} />
               <InfoRow label="Dirección" value={req.companyDireccion} />
               <InfoRow label="Teléfono" value={req.companyTelefono} />
               <InfoRow label="Correo" value={req.companyCorreo} />
@@ -2130,6 +2137,7 @@ export default function RequestDetail() {
                 label="NIT"
                 value={fullInfoDraft.companyNit}
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyNit: v }))}
+                error={fullInfoErrors.companyNit}
               />
               <EditableField
                 label="Dirección"

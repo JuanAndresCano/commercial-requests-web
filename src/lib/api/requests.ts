@@ -336,7 +336,7 @@ export interface CreateProposalPayload {
   ciiuCode?: string;
   ciiuSecondary?: string[];
   nodeId?: string;
-  productLeaderId?: string;
+  productLeaderId: string;
   deliveryDays?: string;
   priority?: ProposalPriority;
   contactName?: string;
