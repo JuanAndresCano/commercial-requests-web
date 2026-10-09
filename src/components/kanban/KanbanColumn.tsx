@@ -1,8 +1,10 @@
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { STAGE_THEME } from "@/lib/kanban-theme";
 import type { BoardStage } from "@/lib/board-stages";
+import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
+import { MotionItem } from "@/components/kanban/BoardMotion";
 
 interface KanbanColumnProps<T> {
   stage: BoardStage;
@@ -59,7 +61,7 @@ export function KanbanColumn<T>({
         className="rounded-full px-2 py-0.5 text-xs font-bold text-white shrink-0"
         style={{ backgroundColor: theme.colorHex }}
       >
-        {items.length}
+        <AnimatedNumber value={items.length} />
       </span>
     </>
   );
@@ -123,7 +125,11 @@ export function KanbanColumn<T>({
             <p className="text-xs font-medium">{emptyLabel}</p>
           </div>
         ) : (
-          items.map((item) => <Fragment key={getKey(item)}>{renderItem(item)}</Fragment>)
+          items.map((item) => (
+            <MotionItem key={getKey(item)} id={getKey(item)} group={stage}>
+              {renderItem(item)}
+            </MotionItem>
+          ))
         )}
       </div>
     </div>

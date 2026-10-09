@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { STAGE_THEME } from "@/lib/kanban-theme";
 import type { BoardStage } from "@/lib/board-stages";
+import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
 
 interface StageKpiCardProps {
   stage: BoardStage;
@@ -44,7 +45,7 @@ export function StageKpiCard({
       </div>
       <div className="mt-2.5">
         <p className="font-display text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: theme.colorHex }}>
-          {count}
+          <AnimatedNumber value={count} />
         </p>
         <p className="mt-1 text-[11px] text-muted-foreground">{secondaryLine ?? (active ? activeHint : hint)}</p>
       </div>

@@ -12,6 +12,9 @@ import { RoleBadge } from "@/components/RoleBadge";
 import { RequestCard } from "@/components/RequestCard";
 import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
+import { BoardMotion } from "@/components/kanban/BoardMotion";
+import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
+import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useRequests } from "@/hooks/use-requests";
 import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
@@ -218,6 +221,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               Hola, {firstName}
             </h1>
             <RoleBadge label="KAM Icesi" />
+            <RealtimeIndicator />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Panel de seguimiento, prospección y gestión de propuestas corporativas
@@ -272,7 +276,10 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           estado del Kanban). */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-0.5 text-xs text-muted-foreground">
         <span>
-          <strong className="font-bold text-foreground">{totalCount}</strong> solicitudes en total
+          <strong className="font-bold text-foreground">
+            <AnimatedNumber value={totalCount} />
+          </strong>{" "}
+          solicitudes en total
         </span>
         <span className="text-border dark:text-icesi-border">·</span>
         <span>
@@ -701,31 +708,33 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                 </div>
               </div>
             ) : (
-              <div
-                className={cn(
-                  "grid gap-4 p-4 items-start",
-                  isolatedStage ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-4",
-                )}
-              >
-                {(isolatedStage ? [isolatedStage] : KAM_BOARD_STAGES).map((col) => (
-                  <KanbanColumn
-                    key={col}
-                    stage={col}
-                    title={KAM_STAGE_LABELS[col]}
-                    items={groupedByStatus[col] || []}
-                    getKey={(r) => r.id}
-                    isolated={!!isolatedStage}
-                    onExitIsolation={() => setIsolatedStage(null)}
-                    onHeaderClick={() => handleCardClick(col)}
-                    renderItem={(r) => (
-                      // Toda tarjeta en "en-costeo" ya pasó por kamStageOf, así que aquí solo
-                      // llegan las confirmadas por el Líder — el atajo siempre aplica, igual
-                      // que los botones de acción del tablero del Líder de Producto.
-                      <RequestCard req={r} stage={col} cta={col === "en-costeo" ? "Revisar y entregar" : undefined} />
-                    )}
-                  />
-                ))}
-              </div>
+              <BoardMotion layoutKey={[isolatedStage ?? "", searchQuery, JSON.stringify(boardFilters)].join("|")}>
+                <div
+                  className={cn(
+                    "grid gap-4 p-4 items-start",
+                    isolatedStage ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-4",
+                  )}
+                >
+                  {(isolatedStage ? [isolatedStage] : KAM_BOARD_STAGES).map((col) => (
+                    <KanbanColumn
+                      key={col}
+                      stage={col}
+                      title={KAM_STAGE_LABELS[col]}
+                      items={groupedByStatus[col] || []}
+                      getKey={(r) => r.id}
+                      isolated={!!isolatedStage}
+                      onExitIsolation={() => setIsolatedStage(null)}
+                      onHeaderClick={() => handleCardClick(col)}
+                      renderItem={(r) => (
+                        // Toda tarjeta en "en-costeo" ya pasó por kamStageOf, así que aquí solo
+                        // llegan las confirmadas por el Líder — el atajo siempre aplica, igual
+                        // que los botones de acción del tablero del Líder de Producto.
+                        <RequestCard req={r} stage={col} cta={col === "en-costeo" ? "Revisar y entregar" : undefined} />
+                      )}
+                    />
+                  ))}
+                </div>
+              </BoardMotion>
             ))}
         </div>
       </div>
