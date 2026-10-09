@@ -206,3 +206,43 @@ describe("RequestDetail: what the KAM sees (C-06, C-07, C-13)", () => {
     expect(screen.queryByTitle("Número oficial")).not.toBeInTheDocument();
   });
 });
+
+describe("RequestDetail: Tiempo por etapa", () => {
+  const history = [
+    { statusCode: "NEW", changedAt: "2026-09-01T10:00:00.000Z" },
+    { statusCode: "IN_PROGRESS", changedAt: "2026-09-04T10:00:00.000Z" },
+  ];
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(requestsApi.getNodes).mockResolvedValue(NODES);
+  });
+
+  it("lists the stages with the KAM labels", async () => {
+    authMock.user = KAM_USER;
+    load(proposal({ workflow: { currentStatus: { code: "IN_PROGRESS" } }, statusHistory: history }));
+    renderPage();
+    expect(await screen.findByText("Tiempo por etapa")).toBeInTheDocument();
+    for (const label of ["Entregada al líder", "En Proceso", "Lista para Entregar", "Entregada"]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
+    expect(screen.getByText(/actual/)).toBeInTheDocument();
+  });
+
+  it("lists the stages with the Leader labels", async () => {
+    authMock.user = LEADER_USER;
+    load(proposal({ workflow: { currentStatus: { code: "IN_PROGRESS" } }, statusHistory: history }));
+    renderPage();
+    expect(await screen.findByText("Tiempo por etapa")).toBeInTheDocument();
+    expect(screen.getAllByText("Enviada al KAM").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("En proceso de costeo").length).toBeGreaterThan(0);
+  });
+
+  it("shows no section when the backend sends no history", async () => {
+    authMock.user = KAM_USER;
+    load(proposal());
+    renderPage();
+    await screen.findByText("#REQ-2026-0002");
+    expect(screen.queryByText("Tiempo por etapa")).not.toBeInTheDocument();
+  });
+});

@@ -68,7 +68,9 @@ import {
 import { EditTeamDialog, type EditTeamParams } from "@/components/EditTeamDialog";
 import { TeamNodeEditor } from "@/components/TeamNodeEditor";
 import { CenterFields } from "@/components/CenterFields";
+import { StageTimeSection } from "@/components/StageTimeSection";
 import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
+import { getStageTimes } from "@/lib/stage-time";
 import {
   openNegotiationRound,
   closeRoundForClientDelivery,
@@ -2050,6 +2052,9 @@ export default function RequestDetail() {
                 </div>
               </div>
             </div>
+
+            {/* 3. TIEMPO POR ETAPA — días acumulados en cada etapa del rol */}
+            <StageTimeSection rows={getStageTimes(req, isKam ? "kam" : "leader")} />
           </div>
         </div>
       </div>
