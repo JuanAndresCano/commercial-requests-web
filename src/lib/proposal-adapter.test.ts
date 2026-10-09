@@ -902,6 +902,22 @@ describe("mapProposalToRequestItem - scope note of the costing (negotiationNotes
   });
 });
 
+describe("mapProposalToRequestItem - value hidden from the KAM until the Leader confirms", () => {
+  it("maps a hidden (null) value to 0, with no Pro-Cultura amount and the gate closed", () => {
+    const base = baseProposal();
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        economics: [{ ...base.economics[0], grossValue: null, readyForKam: false }] as ProposalDetail["economics"],
+      }),
+    );
+
+    expect(item.totalCostCop).toBe(0);
+    expect(item.costing?.totalOfferedCop).toBe(0);
+    expect(item.costing?.proCulturaTaxAmount).toBe(0);
+    expect(item.costing?.readyForKam).toBe(false);
+  });
+});
+
 describe("mapProposalToRequestItem - professor assignment history (HU 4.2)", () => {
   type Log = NonNullable<ProposalDetail["professorAssignmentLogs"]>[number];
   const NAME = { A: "Dra. Paula Henao", B: "Ing. Carlos Vega" };

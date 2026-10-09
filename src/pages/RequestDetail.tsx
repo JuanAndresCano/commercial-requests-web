@@ -1284,10 +1284,10 @@ export default function RequestDetail() {
                   onClick={() => setConfirmingAction("entregada")}
                   className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
                   title={
-                    !hasValidCosting
-                      ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
-                      : !req.costing?.readyForKam
-                        ? "El Líder de Producto aún no ha confirmado el envío del costeo"
+                    !req.costing?.readyForKam
+                      ? "El Líder de Producto aún no ha confirmado el envío del costeo"
+                      : !hasValidCosting
+                        ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
                         : undefined
                   }
                 >
@@ -1309,7 +1309,9 @@ export default function RequestDetail() {
                     Devolver con observaciones
                   </Button>
                 </>
-              ) : isKam && req.status === "nueva" && req.kam === user.name ? (
+              ) : isKam && req.status === "nueva" && req.kam === user.name && !req.professor ? (
+                /* Decisión del dueño (2026-10-09): con docente asignado el KAM ya no
+                   puede cancelar (mismo bloqueo que editar, C-02). */
                 <Button
                   variant="outline"
                   size="sm"
@@ -1412,8 +1414,8 @@ export default function RequestDetail() {
                   Costeo definido — pendiente de confirmación del Líder
                 </p>
                 <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
-                  El Líder de Producto ya calculó un valor ({formatCop(req.costing!.totalOfferedCop)}), pero todavía no
-                  confirma el envío. En cuanto lo haga, verás aquí la propuesta oficial y podrás enviarla al cliente.
+                  El Líder de Producto ya calculó un valor, pero todavía no confirma el envío. En cuanto lo haga, verás
+                  aquí la propuesta oficial y podrás enviarla al cliente.
                 </p>
               </div>
             ) : req.costing && req.costing.totalOfferedCop > 0 ? (
@@ -1486,8 +1488,8 @@ export default function RequestDetail() {
                 <Clock className="h-6 w-6 text-slate-400" />
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Costeo en proceso</p>
                 <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
-                  El Líder de Producto todavía no ha estructurado el valor de esta propuesta. Aquí verás el valor
-                  oficial en cuanto quede definido.
+                  El Líder de Producto todavía no ha confirmado el valor de esta propuesta. Aquí verás el valor oficial
+                  en cuanto lo confirme.
                 </p>
               </div>
             )}

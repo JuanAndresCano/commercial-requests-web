@@ -651,6 +651,38 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(cancelBtn).toBeInTheDocument();
     });
 
+    it("hides 'Cancelar solicitud' from the KAM once a professor is assigned (owner decision 2026-10-09)", async () => {
+      renderPage("REQ-2026-0005");
+
+      await screen.findByText("Propuesta Nueva con Docente");
+      expect(screen.queryByRole("button", { name: /Cancelar solicitud/i })).not.toBeInTheDocument();
+    });
+
+    it("hides 'Cancelar solicitud' for a real proposal that has a PROFESSOR assignment", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+        proposalInStatus("NEW", {
+          assignments: [
+            {
+              id: "a-1",
+              role: "PROFESSOR",
+              professor: { id: "pr-1", fullName: "Ana Torres", type: "INTERNAL" },
+            },
+          ],
+        }),
+      );
+      renderPage("REQ-2026-0002");
+
+      await screen.findByText("Equipo Asignado");
+      expect(screen.queryByRole("button", { name: /Cancelar solicitud/i })).not.toBeInTheDocument();
+    });
+
+    it("keeps 'Cancelar solicitud' for a real NEW proposal without a professor", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalInStatus("NEW"));
+      renderPage("REQ-2026-0002");
+
+      expect(await screen.findByRole("button", { name: /Cancelar solicitud/i })).toBeInTheDocument();
+    });
+
     it("opens confirmation dialog and executes cancellation and redirect without dual delete", async () => {
       renderPage("REQ-2026-0001");
 
@@ -1365,6 +1397,25 @@ describe("RequestDetail - scope note shown to the KAM (negotiationNotes)", () =>
 
     expect(await screen.findByText("Nota de alcance comercial agregada por el Líder:")).toBeInTheDocument();
     expect(screen.getByText("Incluye 2 módulos presenciales")).toBeInTheDocument();
+  });
+
+  it("never shows the value to the KAM while the costing is pending the Leader's confirmation", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(kamProposal(false, null));
+    renderPage("REQ-2026-0002");
+
+    await screen.findByText(/Costeo definido — pendiente de confirmación del Líder/);
+    expect(screen.queryByText(/25\.000\.000/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/25000000/)).not.toBeInTheDocument();
+  });
+
+  it("shows the waiting card (no value) when the API hides the value because the Leader has not confirmed", async () => {
+    const hidden = kamProposal(false, null);
+    hidden.economics = [{ ...hidden.economics![0], grossValue: null }];
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(hidden);
+    renderPage("REQ-2026-0002");
+
+    await screen.findByText("Costeo en proceso");
+    expect(screen.queryByText("Propuesta Económica para Cliente")).not.toBeInTheDocument();
   });
 
   it("does not show the note before the Product Leader confirms the send to the KAM", async () => {
