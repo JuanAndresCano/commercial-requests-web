@@ -122,6 +122,13 @@ describe("ProposalHistorySection", () => {
     expect(screen.getByText("Consultoría logística")).toBeInTheDocument();
   });
 
+  it("offers no example shortcuts", () => {
+    render(<ProposalHistorySection empresaNombre="" />);
+
+    expect(screen.queryByText("Ejemplos:")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Gases de Occidente" })).not.toBeInTheDocument();
+  });
+
   it("opens the detail modal of a proposal and closes it", () => {
     render(<ProposalHistorySection empresaNombre="Bancolombia" />);
 

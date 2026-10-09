@@ -272,19 +272,6 @@ export function ProposalHistorySection({
                 y en proceso.
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-1">
-              <span className="text-[11px] text-muted-foreground mr-1">Ejemplos:</span>
-              {["Gases de Occidente", "Bancolombia", "Grupo Argos"].map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setHistorySearchTerm(name)}
-                  className="rounded border border-border bg-card px-2 py-0.5 text-[11px] hover:border-accent hover:text-foreground transition-colors cursor-pointer"
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
           </div>
         )}
       </div>
