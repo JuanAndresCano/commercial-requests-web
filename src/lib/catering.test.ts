@@ -14,6 +14,38 @@ describe("cateringToPayload", () => {
     }
   });
 
+  it("'Sin alimentación', 'No aplica', 'Ninguna' and 'N/A' also mean no catering, ignoring case, accents and closing punctuation", () => {
+    for (const text of [
+      "Sin alimentación",
+      "sin alimentacion",
+      "SIN ALIMENTACIÓN.",
+      "  Sin   alimentación  ",
+      "No aplica",
+      "no aplica.",
+      "NO APLICA!",
+      "Ninguna",
+      "ninguna.",
+      "Ninguno",
+      "N/A",
+      "n/a",
+      "N/A.",
+      "n.a.",
+      "NA",
+    ]) {
+      expect(cateringToPayload(text), text).toEqual({ requiresCatering: false, cateringNotes: null });
+    }
+  });
+
+  it("a phrase that only contains those words is still catering with that text", () => {
+    for (const text of [
+      "Sin alimentación para el equipo, pero sí café",
+      "Ninguna restricción, almuerzo para 20",
+      "No aplica para el día 1; refrigerio el día 2",
+    ]) {
+      expect(cateringToPayload(text)).toEqual({ requiresCatering: true, cateringNotes: text });
+    }
+  });
+
   it("'Sí - …' (what the detail shows) keeps only the detail as notes", () => {
     expect(cateringToPayload("Sí - Refrigerio am y pm")).toEqual({
       requiresCatering: true,
