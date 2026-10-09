@@ -2192,7 +2192,7 @@ function Step5({
       </div>
 
       {/* Historial de propuestas de la empresa: al final, justo antes de enviar */}
-      <ProposalHistorySection empresaNombre={data.empresaNombre} />
+      <ProposalHistorySection empresaNombre={data.empresaNombre} empresaNit={data.nit} />
     </div>
   );
 }

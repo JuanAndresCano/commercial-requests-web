@@ -38,7 +38,13 @@ const mockRequests: RequestItem[] = [
     ],
   }),
   makeRequest({ id: "REQ-2026-0002", title: "Taller de analítica", status: "en-costeo" }),
-  makeRequest({ id: "REQ-2026-0003", title: "Consultoría logística", company: "Grupo Argos" }),
+  makeRequest({
+    id: "REQ-2026-0003",
+    title: "Consultoría logística",
+    company: "Grupo Argos",
+    companyNit: "890900266-3",
+  }),
+  makeRequest({ id: "REQ-2026-0004", title: "Mentoría directiva", company: "Grupo Éxito", companyNit: "890900608-9" }),
 ];
 
 const useRequestsMock = vi.fn();
@@ -87,9 +93,32 @@ describe("ProposalHistorySection", () => {
   it("invites the KAM to search when there is no company name yet", () => {
     render(<ProposalHistorySection empresaNombre="" />);
 
-    expect(screen.getByText(/Escribe en el buscador el nombre de la empresa/)).toBeInTheDocument();
+    expect(screen.getByText(/Escribe en el buscador el NIT o el nombre exacto/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText(/Buscar empresa/), { target: { value: "Argos" } });
+    fireEvent.change(screen.getByPlaceholderText(/Buscar empresa/), { target: { value: "  grupo ARGOS " } });
+    expect(screen.getByText("Consultoría logística")).toBeInTheDocument();
+  });
+
+  it("does not bring other companies when searching a single word", () => {
+    render(<ProposalHistorySection empresaNombre="" />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Buscar empresa/), { target: { value: "grupo" } });
+    expect(screen.queryByText("Consultoría logística")).not.toBeInTheDocument();
+    expect(screen.queryByText("Mentoría directiva")).not.toBeInTheDocument();
+    expect(screen.getByText(/No se encontraron propuestas registradas para/)).toBeInTheDocument();
+  });
+
+  it("finds the antecedents by the exact NIT typed in the search box", () => {
+    render(<ProposalHistorySection empresaNombre="" />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Buscar empresa/), { target: { value: "890.900.608-9" } });
+    expect(screen.getByText("Mentoría directiva")).toBeInTheDocument();
+    expect(screen.queryByText("Consultoría logística")).not.toBeInTheDocument();
+  });
+
+  it("uses the NIT of the wizard when the company name does not match", () => {
+    render(<ProposalHistorySection empresaNombre="Argos Colombia" empresaNit="890900266-3" />);
+
     expect(screen.getByText("Consultoría logística")).toBeInTheDocument();
   });
 

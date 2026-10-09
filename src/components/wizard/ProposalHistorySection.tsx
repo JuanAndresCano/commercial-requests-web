@@ -16,13 +16,21 @@ import { STATUS_META, URGENCY_META, formatCop, type RequestItem } from "@/lib/mo
 import { useAuth } from "@/context/AuthContext";
 import { useRequests } from "@/hooks/use-requests";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
+import { findCompanyProposals, parseHistorySearchTerm } from "@/lib/proposal-history";
 
 /**
  * History of proposals already delivered or in progress for the company being
  * registered. Rendered at the end of the "new request" wizard (Step 5), right
  * before submitting, so the KAM can check for antecedents or duplicates.
+ * It only matches the exact NIT or the exact company name (see proposal-history).
  */
-export function ProposalHistorySection({ empresaNombre }: { empresaNombre: string }) {
+export function ProposalHistorySection({
+  empresaNombre,
+  empresaNit = "",
+}: {
+  empresaNombre: string;
+  empresaNit?: string;
+}) {
   const { requests } = useAuth();
   const { data: apiProposals } = useRequests();
   const [historySearchTerm, setHistorySearchTerm] = useState("");
@@ -36,21 +44,16 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
     return requests;
   }, [apiProposals, requests]);
 
-  // Coincidencias de propuestas de la empresa activa o buscada
-  const activeCompanyQuery = (historySearchTerm.trim() || empresaNombre.trim()).toLowerCase();
+  // Lo escrito en el buscador reemplaza a la empresa (nombre y NIT) del asistente.
+  const searchQuery = useMemo(
+    () =>
+      historySearchTerm.trim() ? parseHistorySearchTerm(historySearchTerm) : { name: empresaNombre, nit: empresaNit },
+    [historySearchTerm, empresaNombre, empresaNit],
+  );
+  const hasQuery = Boolean(searchQuery.name?.trim() || searchQuery.nit?.replace(/\D/g, ""));
+  const consultedLabel = historySearchTerm.trim() || empresaNombre.trim() || empresaNit.trim();
 
-  const companyProposals = useMemo(() => {
-    if (!activeCompanyQuery || activeCompanyQuery.length < 2) return [];
-    const tokens = activeCompanyQuery.split(/\s+/).filter((w) => w.length >= 2);
-
-    return allRequests.filter((r) => {
-      const comp = (r.company || "").toLowerCase();
-      if (comp.includes(activeCompanyQuery) || activeCompanyQuery.includes(comp)) return true;
-      if (tokens.length > 1 && tokens.every((term) => comp.includes(term))) return true;
-      if (tokens.some((term) => term.length >= 4 && comp.includes(term))) return true;
-      return false;
-    });
-  }, [allRequests, activeCompanyQuery]);
+  const companyProposals = useMemo(() => findCompanyProposals(allRequests, searchQuery), [allRequests, searchQuery]);
 
   const deliveredProposals = useMemo(
     () => companyProposals.filter((p) => p.status === "entregada"),
@@ -87,16 +90,16 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
               </h3>
               <p className="text-xs text-muted-foreground">
                 Identifica las propuestas que Icesi ya entregó o tiene en proceso para esta empresa (ej. antecedentes o
-                evitar duplicidades).
+                evitar duplicidades). La búsqueda es por NIT exacto o nombre exacto de la empresa.
               </p>
             </div>
           </div>
 
-          {/* Buscador directo por nombre de empresa */}
+          {/* Buscador directo por NIT o nombre exacto de la empresa */}
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Buscar empresa (ej. Gases de Occidente)..."
+              placeholder="Buscar empresa por NIT o nombre exacto..."
               value={historySearchTerm}
               onChange={(e) => setHistorySearchTerm(e.target.value)}
               className="h-8.5 pl-8 pr-7 text-xs bg-secondary/30"
@@ -114,7 +117,7 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
         </div>
 
         {/* Resultados del buscador */}
-        {activeCompanyQuery ? (
+        {hasQuery ? (
           companyProposals.length > 0 ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -161,7 +164,7 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
                 </div>
 
                 <div className="text-xs text-muted-foreground">
-                  Empresa consultada: <strong className="text-foreground">{empresaNombre || historySearchTerm}</strong>
+                  Empresa consultada: <strong className="text-foreground">{consultedLabel}</strong>
                 </div>
               </div>
 
@@ -253,7 +256,7 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
           ) : (
             <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-4 text-center">
               <p className="text-xs font-medium text-foreground">
-                No se encontraron propuestas registradas para &ldquo;{empresaNombre || historySearchTerm}&rdquo;
+                No se encontraron propuestas registradas para &ldquo;{consultedLabel}&rdquo;
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 No constan propuestas previas entregadas ni solicitudes en curso para esta entidad.
@@ -265,7 +268,8 @@ export function ProposalHistorySection({ empresaNombre }: { empresaNombre: strin
             <div className="flex items-center gap-2">
               <Info className="h-4 w-4 text-muted-foreground shrink-0" />
               <span>
-                Escribe en el buscador el nombre de la empresa para consultar sus propuestas entregadas y en proceso.
+                Escribe en el buscador el NIT o el nombre exacto de la empresa para consultar sus propuestas entregadas
+                y en proceso.
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1">
