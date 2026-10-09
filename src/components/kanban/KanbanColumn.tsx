@@ -2,10 +2,10 @@ import { Fragment, type ReactNode } from "react";
 import { X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { STAGE_THEME } from "@/lib/kanban-theme";
-import type { RequestStatus } from "@/lib/mock-data";
+import type { BoardStage } from "@/lib/board-stages";
 
 interface KanbanColumnProps<T> {
-  stage: RequestStatus;
+  stage: BoardStage;
   title: string;
   description?: string;
   items: T[];
@@ -27,6 +27,8 @@ interface KanbanColumnProps<T> {
    * etapa: aislar o volver a ver todas). Sin él el encabezado queda como texto.
    */
   onHeaderClick?: () => void;
+  /** How many stages the board has (4 for the KAM, 5 for the leader); only used in the "back" label. */
+  stageCount?: number;
 }
 
 export function KanbanColumn<T>({
@@ -42,6 +44,7 @@ export function KanbanColumn<T>({
   isolated,
   onExitIsolation,
   onHeaderClick,
+  stageCount = 4,
 }: KanbanColumnProps<T>) {
   const theme = STAGE_THEME[stage];
 
@@ -79,7 +82,7 @@ export function KanbanColumn<T>({
             type="button"
             onClick={onHeaderClick}
             aria-pressed={!!isolated}
-            title={isolated ? "Volver a ver las 4 fases" : "Ver solo esta fase"}
+            title={isolated ? `Volver a ver las ${stageCount} fases` : "Ver solo esta fase"}
             className={cn(
               "block w-full p-3.5 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-icesi-blue",
               isolated && onExitIsolation && "pr-36",
@@ -101,10 +104,10 @@ export function KanbanColumn<T>({
             type="button"
             onClick={onExitIsolation}
             className="absolute right-3.5 top-3 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-            title="Volver a ver las 4 fases"
+            title={`Volver a ver las ${stageCount} fases`}
           >
             <X className="h-3 w-3" />
-            Ver las 4 fases
+            Ver las {stageCount} fases
           </button>
         )}
       </div>

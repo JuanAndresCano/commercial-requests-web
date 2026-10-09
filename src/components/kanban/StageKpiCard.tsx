@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { STAGE_THEME } from "@/lib/kanban-theme";
-import type { RequestStatus } from "@/lib/mock-data";
+import type { BoardStage } from "@/lib/board-stages";
 
 interface StageKpiCardProps {
-  stage: RequestStatus;
+  stage: BoardStage;
   label: string;
   count: number;
   active: boolean;

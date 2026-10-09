@@ -26,13 +26,9 @@ import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useReassignProposal } from "@/hooks/use-reassign-proposal";
 import { useNodes } from "@/hooks/use-nodes";
 import { useProductLeaders } from "@/hooks/use-product-leaders";
-import {
-  formatCop,
-  formatCompactCop,
-  isReadyForKamHandoff,
-  type RequestItem,
-  type RequestStatus,
-} from "@/lib/mock-data";
+import { formatCop, formatCompactCop, type RequestItem, type RequestStatus } from "@/lib/mock-data";
+import { LEADER_BOARD_STAGES, countByStage, groupByStage, leaderStageOf, type BoardStage } from "@/lib/board-stages";
+import { getLeaderStageStartedAt } from "@/lib/stage-age";
 import {
   Dialog,
   DialogContent,
@@ -78,33 +74,6 @@ function getDeadlineDisplay(
   return { text: `Vence: ${formatted}`, className: "text-muted-foreground" };
 }
 
-const KANBAN_STAGES: {
-  id: RequestStatus;
-  title: string;
-  description: string;
-}[] = [
-  {
-    id: "nueva",
-    title: "Nueva",
-    description: "Pendientes por revisar alcance y asignar docente de planta o externo",
-  },
-  {
-    id: "en-experto",
-    title: "En proceso por experto",
-    description: "Docente formulando temática, cronograma y propuesta técnica",
-  },
-  {
-    id: "en-costeo",
-    title: "En proceso de costeo",
-    description: "Simulación financiera, tarifas y cálculo de margen antes de entrega",
-  },
-  {
-    id: "entregada",
-    title: "Entregada",
-    description: "Propuestas culminadas y entregadas a la empresa o KAM comercial",
-  },
-];
-
 // `updateRequest` stays in the public prop type (Dashboard.tsx still needs to pass
 // something matching it) but this component no longer calls it — reassignment now
 // always goes through the real backend (useReassignProposal), since every proposal
@@ -120,7 +89,7 @@ export function ProductLeaderDashboard({
   // el Líder de Producto al volver del detalle de una propuesta — antes se
   // reiniciaba porque el dashboard se desmonta y remonta en cada navegación.
   const [searchQuery, setSearchQuery] = usePersistentState("icesi_lp_dashboard_search_v1", "");
-  const [activeStageFilter, setActiveStageFilter] = usePersistentState<RequestStatus | "todas">(
+  const [activeStageFilter, setActiveStageFilter] = usePersistentState<BoardStage | "todas">(
     "icesi_lp_dashboard_filter_v1",
     "todas",
   );
@@ -128,23 +97,22 @@ export function ProductLeaderDashboard({
     "icesi_lp_dashboard_sin_docente_v1",
     false,
   );
-  // Dentro de "En Costeo" hay dos situaciones muy distintas mezcladas en la
-  // misma columna: las que el Líder todavía tiene que trabajar, y las que ya
-  // confirmó y solo esperan a que el KAM las envíe al cliente. Sin este
-  // filtro, un Líder con varias solicitudes en costeo tiene que abrir tarjeta
-  // por tarjeta para saber cuáles ya no requieren su acción.
+  // Muestra solo las de la etapa derivada "Enviada al KAM": las que el Líder ya
+  // confirmó y solo esperan a que el KAM las envíe al cliente (ordenadas por
+  // las que más llevan esperando). Sigue sirviendo con todas las fases a la
+  // vista para aislar esa etapa sin salir de la vista general.
   const [onlyWaitingForKam, setOnlyWaitingForKam] = usePersistentState("icesi_lp_dashboard_esperando_kam_v1", false);
   const [viewMode, setViewMode] = usePersistentState<"kanban" | "tabla">("icesi_lp_dashboard_view_v1", "kanban");
 
   // En Kanban, las columnas ya son el filtro — la tarjeta KPI en esa vista no
   // oculta nada, sino que "aísla" esa columna a pantalla completa para revisar
   // más tarjetas cómodamente sin salir del Kanban.
-  const [isolatedStage, setIsolatedStage] = usePersistentState<RequestStatus | null>(
+  const [isolatedStage, setIsolatedStage] = usePersistentState<BoardStage | null>(
     "icesi_lp_dashboard_isolated_v1",
     null,
   );
 
-  const handleStageKpiClick = (stage: RequestStatus) => {
+  const handleStageKpiClick = (stage: BoardStage) => {
     if (viewMode === "tabla") {
       setActiveStageFilter((prev) => (prev === stage ? "todas" : stage));
     } else {
@@ -234,9 +202,13 @@ export function ProductLeaderDashboard({
   // lo que descartaría en silencio propuestas legítimas del propio Líder.
   const activeDataset = requests;
 
-  const countNuevas = activeDataset.filter((r) => r.status === "nueva").length;
-  const countEnExperto = activeDataset.filter((r) => r.status === "en-experto").length;
-  const countEnCosteo = activeDataset.filter((r) => r.status === "en-costeo").length;
+  // Etapa percibida por el Líder (ver leaderStageOf): "En costeo" y "Enviada al KAM" son
+  // columnas distintas, y cada contador coincide con su columna del Kanban.
+  const stageCounts = countByStage(activeDataset, leaderStageOf);
+  const countNuevas = stageCounts.nueva;
+  const countEnExperto = stageCounts["en-experto"];
+  const countEnCosteo = stageCounts["en-costeo"];
+  const countEnviadasKam = stageCounts["enviada-kam"];
   const entregadasList = activeDataset.filter((r) => r.status === "entregada");
   const countEntregadas = entregadasList.length;
   const entregadasValue = entregadasList.reduce(
@@ -245,12 +217,12 @@ export function ProductLeaderDashboard({
   );
 
   const sinDocenteCount = activeDataset.filter((r) => !r.professor && r.status !== "entregada").length;
-  const waitingForKamCount = activeDataset.filter(isReadyForKamHandoff).length;
+  const waitingForKamCount = countEnviadasKam;
 
   // Cada filtro solo tiene sentido operativo en la(s) etapa(s) donde puede
   // haber algo que mostrar: "Sin docente" solo antes/durante la asignación
   // (en "en-experto" en adelante ya es obligatorio, ver docs/07 gap #3), y
-  // "Esperando al KAM" solo existe dentro de "en-costeo". Fuera de ahí el
+  // "Esperando al KAM" solo existe en la etapa "Enviada al KAM". Fuera de ahí el
   // botón quedaba visible con un contador que no correspondía a lo que se
   // veía en pantalla — se oculta en vez de mostrar un filtro que no aplica.
   const missingProfessorRelevant =
@@ -259,8 +231,8 @@ export function ProductLeaderDashboard({
       : isolatedStage === null || isolatedStage === "nueva";
   const waitingForKamRelevant =
     viewMode === "tabla"
-      ? activeStageFilter === "todas" || activeStageFilter === "en-costeo"
-      : isolatedStage === null || isolatedStage === "en-costeo";
+      ? activeStageFilter === "todas" || activeStageFilter === "enviada-kam"
+      : isolatedStage === null || isolatedStage === "enviada-kam";
 
   // Con el filtro "Esperando al KAM" activo, las que más tiempo llevan
   // esperando son las que más urge revisar — se muestran primero.
@@ -277,9 +249,9 @@ export function ProductLeaderDashboard({
   // Vista Tabla: el estado sí oculta filas — ahí aporta valor real (reduce una lista larga).
   const filteredRequests = useMemo(() => {
     const result = activeDataset.filter((r) => {
-      if (activeStageFilter !== "todas" && r.status !== activeStageFilter) return false;
+      if (activeStageFilter !== "todas" && leaderStageOf(r) !== activeStageFilter) return false;
       if (onlyMissingProfessor && missingProfessorRelevant && (r.professor || r.status === "entregada")) return false;
-      if (onlyWaitingForKam && waitingForKamRelevant && !isReadyForKamHandoff(r)) return false;
+      if (onlyWaitingForKam && waitingForKamRelevant && leaderStageOf(r) !== "enviada-kam") return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -312,7 +284,7 @@ export function ProductLeaderDashboard({
   const kanbanRequests = useMemo(() => {
     const result = activeDataset.filter((r) => {
       if (onlyMissingProfessor && missingProfessorRelevant && (r.professor || r.status === "entregada")) return false;
-      if (onlyWaitingForKam && waitingForKamRelevant && !isReadyForKamHandoff(r)) return false;
+      if (onlyWaitingForKam && waitingForKamRelevant && leaderStageOf(r) !== "enviada-kam") return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -338,22 +310,7 @@ export function ProductLeaderDashboard({
   ]);
 
   // Group by status for the single unified Kanban
-  const groupedRequests = useMemo(() => {
-    const grouped: Record<RequestStatus, RequestItem[]> = {
-      nueva: [],
-      "en-experto": [],
-      "en-costeo": [],
-      entregada: [],
-      rechazada: [],
-      cancelada: [],
-    };
-    kanbanRequests.forEach((req) => {
-      if (grouped[req.status]) {
-        grouped[req.status].push(req);
-      }
-    });
-    return grouped;
-  }, [kanbanRequests]);
+  const groupedRequests = useMemo(() => groupByStage(kanbanRequests, leaderStageOf), [kanbanRequests]);
 
   const firstName = user.name ? user.name.split(" ")[0] : "";
 
@@ -415,7 +372,7 @@ export function ProductLeaderDashboard({
       </div>
 
       {/* 2. Interactive Stages / KPIs Bar with Official Icesi Colors */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StageKpiCard
           stage="nueva"
           label="1. Nuevas"
@@ -444,10 +401,19 @@ export function ProductLeaderDashboard({
           onClick={() => handleStageKpiClick("en-costeo")}
         />
         <StageKpiCard
+          stage="enviada-kam"
+          label="4. Enviadas al KAM"
+          count={countEnviadasKam}
+          hint="Esperando que el KAM las entregue"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeStageFilter === "enviada-kam" : isolatedStage === "enviada-kam"}
+          onClick={() => handleStageKpiClick("enviada-kam")}
+        />
+        <StageKpiCard
           stage="entregada"
-          label="4. Entregadas"
+          label="5. Entregadas"
           count={countEntregadas}
-          hint="Sin propuestas entregadas aún"
+          hint="Sin propuestas entregadas al cliente aún"
           secondaryLine={
             <span className="font-semibold text-[#4cb979]">
               {formatCompactCop(entregadasValue)} en valor real aprobado
@@ -518,7 +484,7 @@ export function ProductLeaderDashboard({
               onClick={() => setIsolatedStage(null)}
               className="rounded-lg border border-border bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary cursor-pointer"
             >
-              Ver las 4 fases
+              Ver las {LEADER_BOARD_STAGES.length} fases
             </button>
           )}
           <span className="text-xs text-muted-foreground">
@@ -566,14 +532,14 @@ export function ProductLeaderDashboard({
                 {onlyMissingProfessor && missingProfessorRelevant
                   ? "Ninguna de tus solicitudes activas está sin docente en este momento."
                   : onlyWaitingForKam && waitingForKamRelevant
-                    ? "Ninguna de tus solicitudes en Costeo está esperando al KAM en este momento."
+                    ? "Ninguna de tus solicitudes está enviada al KAM esperando que la entregue."
                     : "No se encontraron solicitudes con esta búsqueda."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {onlyMissingProfessor && missingProfessorRelevant
                   ? 'El filtro "Sin docente" excluye además las que ya están Entregadas.'
                   : onlyWaitingForKam && waitingForKamRelevant
-                    ? 'El filtro "Esperando al KAM" solo muestra solicitudes en Costeo que ya confirmaste como listas.'
+                    ? 'El filtro "Esperando al KAM" solo muestra las solicitudes que ya confirmaste y enviaste al KAM.'
                     : "Intenta con otro término de búsqueda."}
               </p>
               <Button
@@ -590,234 +556,244 @@ export function ProductLeaderDashboard({
               </Button>
             </div>
           )}
-          <div className={cn("grid gap-4 items-start", isolatedStage ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-4")}>
-            {(isolatedStage ? KANBAN_STAGES.filter((s) => s.id === isolatedStage) : KANBAN_STAGES).map((stage) => {
-              const stageItems = groupedRequests[stage.id];
+          <div
+            className={cn(
+              "grid gap-4 items-start",
+              isolatedStage ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-5",
+            )}
+          >
+            {(isolatedStage ? LEADER_BOARD_STAGES.filter((s) => s.id === isolatedStage) : LEADER_BOARD_STAGES).map(
+              (stage) => {
+                const stageItems = groupedRequests[stage.id];
 
-              return (
-                <KanbanColumn
-                  key={stage.id}
-                  stage={stage.id}
-                  title={stage.title}
-                  description={stage.description}
-                  items={stageItems}
-                  getKey={(req) => req.id}
-                  isolated={!!isolatedStage}
-                  onExitIsolation={() => setIsolatedStage(null)}
-                  onHeaderClick={() => handleStageKpiClick(stage.id)}
-                  renderItem={(req) => {
-                    const hasRealCosting = req.costing && req.costing.totalOfferedCop > 0;
-                    const deadlineInfo = getDeadlineDisplay(req.deadline, req.status);
-                    const stageAge = formatDistanceToNow(new Date(req.statusUpdatedAt ?? req.createdAt), {
-                      addSuffix: true,
-                      locale: es,
-                    });
+                return (
+                  <KanbanColumn
+                    key={stage.id}
+                    stage={stage.id}
+                    title={stage.title}
+                    description={stage.description}
+                    items={stageItems}
+                    getKey={(req) => req.id}
+                    isolated={!!isolatedStage}
+                    onExitIsolation={() => setIsolatedStage(null)}
+                    onHeaderClick={() => handleStageKpiClick(stage.id)}
+                    stageCount={LEADER_BOARD_STAGES.length}
+                    renderItem={(req) => {
+                      const hasRealCosting = req.costing && req.costing.totalOfferedCop > 0;
+                      const deadlineInfo = getDeadlineDisplay(req.deadline, req.status);
+                      const stageAge = formatDistanceToNow(new Date(getLeaderStageStartedAt(req, stage.id)), {
+                        addSuffix: true,
+                        locale: es,
+                      });
 
-                    return (
-                      <div className="group relative flex h-full flex-col rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
-                        {/* Alerta prioritaria: el cliente pidió ajustes — es la señal
+                      return (
+                        <div className="group relative flex h-full flex-col rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
+                          {/* Alerta prioritaria: el cliente pidió ajustes — es la señal
                       más urgente que puede tener una tarjeta, va antes que
                       cualquier otra cosa (docs/08, pregunta 13). Se renderiza
                       siempre (invisible si no aplica) para reservar el mismo
                       espacio en todas las tarjetas de la columna — así una
                       tarjeta sin el aviso no se ve más "baja"/distinta que
                       una con él (mismo criterio que RequestCard.tsx). */}
-                        <div
-                          className={cn(
-                            "flex items-center gap-1.5 border-b px-3 py-1.5",
-                            req.clientObservations
-                              ? "bg-amber-100 dark:bg-amber-950/40 border-amber-300/60 dark:border-amber-900/50"
-                              : "invisible border-transparent",
-                          )}
-                        >
-                          <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-                          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                            Cliente pidió ajustes
-                          </span>
-                        </div>
-
-                        {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
-                        <Link to={`/solicitudes/${req.id}`} className="block flex-1 p-3.5">
-                          {/* Top: ID, Company & Urgency */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <span className="text-[11px] font-medium text-foreground truncate block max-w-full">
-                                {req.company}
-                              </span>
-                              <p className="mt-1 font-sans font-bold text-xs leading-snug text-foreground group-hover:text-[#5454e9] transition-colors line-clamp-2">
-                                {req.title}
-                              </p>
-                            </div>
-                            <UrgencyBadge urgency={req.urgency} />
-                          </div>
-
-                          {/* Middle: Type + Valor cotizado (si ya hay costeo real) */}
-                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                            <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                              {req.type}
+                          <div
+                            className={cn(
+                              "flex items-center gap-1.5 border-b px-3 py-1.5",
+                              req.clientObservations
+                                ? "bg-amber-100 dark:bg-amber-950/40 border-amber-300/60 dark:border-amber-900/50"
+                                : "invisible border-transparent",
+                            )}
+                          >
+                            <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                            <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                              Cliente pidió ajustes
                             </span>
-                            {hasRealCosting && (
-                              <span className="font-mono text-[11px] font-bold text-[#4cb979]">
-                                {formatCop(req.costing!.totalOfferedCop)}
-                              </span>
-                            )}
                           </div>
 
-                          {/* Docente / Profesor status */}
-                          <div className="mt-2.5 border-t border-border dark:border-[#222434] pt-2 flex items-center justify-between text-[11px]">
-                            <span className="text-muted-foreground font-medium">Docente:</span>
-                            {req.professor ? (
-                              <span className="font-semibold text-foreground truncate max-w-[130px]">
-                                {req.professor}
-                              </span>
-                            ) : (
-                              <span className="rounded bg-[#e9683b]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#e9683b]">
-                                Sin docente
-                              </span>
-                            )}
-                          </div>
+                          {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
+                          <Link to={`/solicitudes/${req.id}`} className="block flex-1 p-3.5">
+                            {/* Top: ID, Company & Urgency */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <span className="text-[11px] font-medium text-foreground truncate block max-w-full">
+                                  {req.company}
+                                </span>
+                                <p className="mt-1 font-sans font-bold text-xs leading-snug text-foreground group-hover:text-[#5454e9] transition-colors line-clamp-2">
+                                  {req.title}
+                                </p>
+                              </div>
+                              <UrgencyBadge urgency={req.urgency} />
+                            </div>
 
-                          {/* Antigüedad en la fase actual — ayuda a detectar cuellos de botella */}
-                          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                            <Clock className="h-3 w-3 shrink-0" />
-                            <span>En esta fase {stageAge}</span>
-                          </div>
-                        </Link>
-
-                        {/* Footer: Date & Direct Actions — fuera del área de navegación */}
-                        <div className="px-3.5 pb-3.5">
-                          <div className="mt-3 pt-2 border-t border-border dark:border-[#222434] flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground min-w-0">
-                              <span className="flex items-center gap-1 shrink-0">
-                                <Calendar className="h-3 w-3 shrink-0" />
-                                {format(new Date(req.createdAt), "d MMM", { locale: es })}
+                            {/* Middle: Type + Valor cotizado (si ya hay costeo real) */}
+                            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                              <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                {req.type}
                               </span>
-                              {deadlineInfo && (
-                                <span className={cn("truncate", deadlineInfo.className)}>{deadlineInfo.text}</span>
+                              {hasRealCosting && (
+                                <span className="font-mono text-[11px] font-bold text-[#4cb979]">
+                                  {formatCop(req.costing!.totalOfferedCop)}
+                                </span>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-1">
-                              {/* Reasignar mientras la solicitud sigue en las etapas tempranas
+                            {/* Docente / Profesor status */}
+                            <div className="mt-2.5 border-t border-border dark:border-[#222434] pt-2 flex items-center justify-between text-[11px]">
+                              <span className="text-muted-foreground font-medium">Docente:</span>
+                              {req.professor ? (
+                                <span className="font-semibold text-foreground truncate max-w-[130px]">
+                                  {req.professor}
+                                </span>
+                              ) : (
+                                <span className="rounded bg-[#e9683b]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#e9683b]">
+                                  Sin docente
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Antigüedad en la fase actual — ayuda a detectar cuellos de botella */}
+                            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <Clock className="h-3 w-3 shrink-0" />
+                              <span>En esta fase {stageAge}</span>
+                            </div>
+                          </Link>
+
+                          {/* Footer: Date & Direct Actions — fuera del área de navegación */}
+                          <div className="px-3.5 pb-3.5">
+                            <div className="mt-3 pt-2 border-t border-border dark:border-[#222434] flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground min-w-0">
+                                <span className="flex items-center gap-1 shrink-0">
+                                  <Calendar className="h-3 w-3 shrink-0" />
+                                  {format(new Date(req.createdAt), "d MMM", { locale: es })}
+                                </span>
+                                {deadlineInfo && (
+                                  <span className={cn("truncate", deadlineInfo.className)}>{deadlineInfo.text}</span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                {/* Reasignar mientras la solicitud sigue en las etapas tempranas
                             (aún no entra a costeo): "Nueva" o "En Experto" (docs/03). */}
-                              {(req.status === "nueva" || req.status === "en-experto") && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenReassign(req)}
-                                  className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                                  title="Reasignar a otro líder de producto"
-                                >
-                                  <ArrowLeftRight className="h-3.5 w-3.5" />
-                                </button>
-                              )}
+                                {(req.status === "nueva" || req.status === "en-experto") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReassign(req)}
+                                    className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                                    title="Reasignar a otro líder de producto"
+                                  >
+                                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
 
-                              {/* Status Advancement Button — requiere docente asignado y confirmación */}
-                              {stage.id === "nueva" && (
-                                <Button
-                                  size="sm"
-                                  disabled={!req.professor}
-                                  onClick={() =>
-                                    setConfirmingAdvance({
-                                      reqId: req.id,
-                                      company: req.company,
-                                      title: req.title,
-                                      from: "nueva",
-                                    })
-                                  }
-                                  className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title={req.professor ? "Avanzar a En Experto" : "Asigna un docente antes de avanzar"}
-                                >
-                                  Pasar a Experto
-                                  <ChevronRight className="h-3 w-3 ml-0.5" />
-                                </Button>
-                              )}
+                                {/* Status Advancement Button — requiere docente asignado y confirmación */}
+                                {stage.id === "nueva" && (
+                                  <Button
+                                    size="sm"
+                                    disabled={!req.professor}
+                                    onClick={() =>
+                                      setConfirmingAdvance({
+                                        reqId: req.id,
+                                        company: req.company,
+                                        title: req.title,
+                                        from: "nueva",
+                                      })
+                                    }
+                                    className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title={
+                                      req.professor ? "Avanzar a En Experto" : "Asigna un docente antes de avanzar"
+                                    }
+                                  >
+                                    Pasar a Experto
+                                    <ChevronRight className="h-3 w-3 ml-0.5" />
+                                  </Button>
+                                )}
 
-                              {stage.id === "en-experto" && (
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    setConfirmingAdvance({
-                                      reqId: req.id,
-                                      company: req.company,
-                                      title: req.title,
-                                      from: "en-experto",
-                                    })
-                                  }
-                                  className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
-                                  title="Avanzar a En Costeo"
-                                >
-                                  Pasar a Costeo
-                                  <ChevronRight className="h-3 w-3 ml-0.5" />
-                                </Button>
-                              )}
+                                {stage.id === "en-experto" && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      setConfirmingAdvance({
+                                        reqId: req.id,
+                                        company: req.company,
+                                        title: req.title,
+                                        from: "en-experto",
+                                      })
+                                    }
+                                    className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
+                                    title="Avanzar a En Costeo"
+                                  >
+                                    Pasar a Costeo
+                                    <ChevronRight className="h-3 w-3 ml-0.5" />
+                                  </Button>
+                                )}
 
-                              {/* "Entregar" (enviar al cliente) es una acción exclusiva del KAM,
+                                {/* "Entregar" (enviar al cliente) es una acción exclusiva del KAM,
                             no del Líder de Producto — el trabajo del Líder termina en
                             confirmar explícitamente que el costeo está listo para el KAM
                             (docs/03). La confirmación en sí (con diálogo) vive
                             en el detalle de la solicitud — aquí solo se dirige hacia allá. */}
-                              {stage.id === "en-costeo" && !hasRealCosting && (
-                                <Button
-                                  asChild
-                                  size="sm"
-                                  className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
-                                >
-                                  <Link to={`/solicitudes/${req.id}`} title="Completar el costeo de esta propuesta">
-                                    Completar costeo
-                                    <ArrowRight className="h-3 w-3 ml-0.5" />
-                                  </Link>
-                                </Button>
-                              )}
-                              {stage.id === "en-costeo" && hasRealCosting && !isReadyForKamHandoff(req) && (
-                                <Button
-                                  asChild
-                                  size="sm"
-                                  className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
-                                >
-                                  <Link
-                                    to={`/solicitudes/${req.id}`}
-                                    title="Ir al detalle para confirmar el envío al KAM"
+                                {stage.id === "en-costeo" && !hasRealCosting && (
+                                  <Button
+                                    asChild
+                                    size="sm"
+                                    className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
                                   >
-                                    Completar envío
-                                    <ArrowRight className="h-3 w-3 ml-0.5" />
-                                  </Link>
-                                </Button>
-                              )}
-                              {stage.id === "en-costeo" && hasRealCosting && isReadyForKamHandoff(req) && (
-                                <span
-                                  className="inline-flex flex-col items-start gap-0 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]"
-                                  title="Ya confirmaste el costeo; ahora depende del KAM enviarlo al cliente"
-                                >
-                                  <span className="inline-flex items-center gap-1">
-                                    <Check className="h-3 w-3" /> Enviado al KAM
-                                  </span>
-                                  {req.costing?.costingSentAt && (
-                                    <span className="pl-4 font-medium text-muted-foreground normal-case">
-                                      hace {formatDistanceToNow(new Date(req.costing.costingSentAt), { locale: es })}
+                                    <Link to={`/solicitudes/${req.id}`} title="Completar el costeo de esta propuesta">
+                                      Completar costeo
+                                      <ArrowRight className="h-3 w-3 ml-0.5" />
+                                    </Link>
+                                  </Button>
+                                )}
+                                {stage.id === "en-costeo" && hasRealCosting && (
+                                  <Button
+                                    asChild
+                                    size="sm"
+                                    className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
+                                  >
+                                    <Link
+                                      to={`/solicitudes/${req.id}`}
+                                      title="Ir al detalle para confirmar el envío al KAM"
+                                    >
+                                      Completar envío
+                                      <ArrowRight className="h-3 w-3 ml-0.5" />
+                                    </Link>
+                                  </Button>
+                                )}
+                                {stage.id === "enviada-kam" && (
+                                  <span
+                                    className="inline-flex flex-col items-start gap-0 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]"
+                                    title="Ya confirmaste el costeo; ahora depende del KAM enviarlo al cliente"
+                                  >
+                                    <span className="inline-flex items-center gap-1">
+                                      <Check className="h-3 w-3" /> Enviado al KAM
                                     </span>
-                                  )}
-                                </span>
-                              )}
+                                    {req.costing?.costingSentAt && (
+                                      <span className="pl-4 font-medium text-muted-foreground normal-case">
+                                        hace {formatDistanceToNow(new Date(req.costing.costingSentAt), { locale: es })}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
 
-                              {/* Llegar a "Entregada" solo ocurre cuando el KAM la envía al
+                                {/* Llegar a "Entregada" solo ocurre cuando el KAM la envía al
                             cliente (acción exclusiva suya, ver comentario arriba) — así
                             que toda tarjeta en esta columna ya cerró ese paso. Insignia
                             propia (sólida, no el mismo tono suave de "Enviado al KAM")
                             porque es el cierre del flujo, no un paso intermedio. */}
-                              {stage.id === "entregada" && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#4cb979] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
-                                  <CheckCircle2 className="h-3.5 w-3.5" /> Enviado al cliente
-                                </span>
-                              )}
+                                {stage.id === "entregada" && (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#4cb979] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                                    <CheckCircle2 className="h-3.5 w-3.5" /> Enviado al cliente
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  }}
-                />
-              );
-            })}
+                      );
+                    }}
+                  />
+                );
+              },
+            )}
           </div>
         </>
       )}
@@ -915,7 +891,7 @@ export function ProductLeaderDashboard({
                           )}
                         </td>
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          <StatusBadge status={r.status} />
+                          <StatusBadge status={leaderStageOf(r)} />
                         </td>
                         <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
                           <Link

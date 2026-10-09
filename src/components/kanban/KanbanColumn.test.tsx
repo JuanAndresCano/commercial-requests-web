@@ -45,6 +45,16 @@ describe("KanbanColumn header", () => {
     expect(onHeaderClick).toHaveBeenCalledTimes(1);
   });
 
+  it("names the number of stages of the board in the way-back button", () => {
+    renderColumn({ onHeaderClick: vi.fn(), onExitIsolation: vi.fn(), isolated: true, stageCount: 5 });
+    expect(screen.getByRole("button", { name: /Ver las 5 fases/ })).toBeInTheDocument();
+  });
+
+  it("renders the derived 'Enviada al KAM' stage", () => {
+    renderColumn({ stage: "enviada-kam", title: "Enviada al KAM" });
+    expect(screen.getByRole("heading", { name: "Enviada al KAM" })).toBeInTheDocument();
+  });
+
   it("keeps 'Ver las 4 fases' as a separate button that fires once", () => {
     const onHeaderClick = vi.fn();
     const onExitIsolation = vi.fn();
