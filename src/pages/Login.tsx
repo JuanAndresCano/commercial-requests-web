@@ -29,6 +29,10 @@ export default function Login() {
         toast.error("Correo o contraseña incorrectos.", {
           description: "Verifica tus credenciales o contacta a TI si crees que esto es un error.",
         });
+      } else if (error instanceof ApiError && error.status === 429) {
+        toast.error("Demasiados intentos fallidos.", {
+          description: "Por seguridad, espera unos minutos antes de intentar de nuevo.",
+        });
       } else if (error instanceof ApiError) {
         toast.error("No pudimos iniciar tu sesión.", { description: "Intenta de nuevo en unos minutos." });
       } else {

@@ -482,13 +482,47 @@ describe("ProposalCostingModule", () => {
       setup();
       expect(screen.queryByRole("button", { name: /guardar/i })).not.toBeInTheDocument();
     });
+  });
 
-    it("saves the preset chips right away", () => {
-      const { onUpdateCosting } = setup();
-      fireEvent.click(screen.getByRole("button", { name: "35%" }));
+  describe("margin block without preset percentages", () => {
+    it("offers no predefined percentage buttons", () => {
+      setup();
+      expect(screen.queryByText(/predefinidos/i)).not.toBeInTheDocument();
+      for (const preset of ["25%", "30%", "35%", "40%"]) {
+        expect(screen.queryByRole("button", { name: preset })).not.toBeInTheDocument();
+      }
+    });
+
+    it("states in plain Spanish that the percentage is computed on the offered value, not the cost", () => {
+      setup();
+      expect(screen.getByTestId("margin-base-caption")).toHaveTextContent(
+        "El porcentaje se calcula sobre el valor final ofrecido al cliente, no sobre el costo.",
+      );
+    });
+
+    it("keeps the numbers of the reference line over the offered value", () => {
+      setup({ expectedMarginPercent: 30, totalOfferedCop: 32_000_000 });
+      expect(screen.getByText(/% de /)).toHaveTextContent(/^30% de \$\s?32\.000\.000 = \$\s?9\.600\.000$/);
+    });
+
+    it("saves a percentage typed with a comma decimal and recomputes the reference amount", () => {
+      const { onUpdateCosting } = setup({ expectedMarginPercent: 30, totalOfferedCop: 10_000_000 });
+      typeInto(percentInput(), "38,30");
+      expect(screen.getByText(/% de /)).toHaveTextContent(/^38\.3% de \$\s?10\.000\.000 = \$\s?3\.830\.000$/);
+      wait(AUTOSAVE_MS);
       expect(onUpdateCosting).toHaveBeenCalledTimes(1);
-      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 35 }));
-      expect(percentInput().value).toBe("35");
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ expectedMarginPercent: 38.3 }));
+    });
+
+    it("saves an amount typed with a comma decimal and leaves the percentage as it was", () => {
+      const { onUpdateCosting } = setup({ expectedMarginPercent: 30, totalOfferedCop: 10_000_000 });
+      typeInto(amountInput(), "1500000,50");
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(
+        expect.objectContaining({ marginAmountCop: 1_500_000.5, expectedMarginPercent: 30 }),
+      );
+      expect(percentInput().value).toBe("30");
     });
   });
 
@@ -569,7 +603,8 @@ describe("ProposalCostingModule", () => {
 
     it("invalida readyForKam al editar el % de margen después de haberlo marcado", () => {
       const { onUpdateCosting } = setup({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
-      fireEvent.click(screen.getByRole("button", { name: "35%" }));
+      typeInto(percentInput(), "35");
+      wait(AUTOSAVE_MS);
       expect(onUpdateCosting).toHaveBeenCalledWith(
         expect.objectContaining({ expectedMarginPercent: 35, readyForKam: false }),
       );
@@ -579,7 +614,51 @@ describe("ProposalCostingModule", () => {
       const { onUpdateCosting } = setup({ readyForKam: true, costingSentAt: "2026-01-10T00:00:00.000Z" });
       fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
       typeInto(screen.getByLabelText(/Nota de alcance comercial/i), "Ajuste acordado con el cliente");
-      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ readyForKam: true }));
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledWith(
+        expect.objectContaining({ readyForKam: true, negotiationNotes: "Ajuste acordado con el cliente" }),
+      );
+    });
+
+    it("saves the note once after a pause, not once per keystroke", () => {
+      const { onUpdateCosting } = setup();
+      fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+      const note = screen.getByLabelText(/Nota de alcance comercial/i);
+      typeInto(note, "A");
+      typeInto(note, "Aj");
+      typeInto(note, "Ajuste");
+      expect(onUpdateCosting).not.toHaveBeenCalled();
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ negotiationNotes: "Ajuste" }));
+    });
+
+    it("saves the note right away when the field is left", () => {
+      const { onUpdateCosting } = setup();
+      fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+      const note = screen.getByLabelText(/Nota de alcance comercial/i);
+      typeInto(note, "Ajuste");
+      fireEvent.blur(note);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+      wait(AUTOSAVE_MS);
+      expect(onUpdateCosting).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves a note still pending when the module goes away", () => {
+      const onUpdateCosting = vi.fn();
+      const view = render(<ProposalCostingModule request={makeRequest({})} onUpdateCosting={onUpdateCosting} />);
+      fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
+      typeInto(screen.getByLabelText(/Nota de alcance comercial/i), "Ajuste");
+      view.unmount();
+      expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ negotiationNotes: "Ajuste" }));
+    });
+
+    it("does not overwrite a note being typed when the saved costing is refreshed", () => {
+      const { rerenderWith } = setup({ negotiationNotes: "Vieja" });
+      const note = screen.getByLabelText(/Nota de alcance comercial/i) as HTMLTextAreaElement;
+      typeInto(note, "Escribiendo una nota nueva");
+      rerenderWith({ negotiationNotes: "Vieja" });
+      expect(note.value).toBe("Escribiendo una nota nueva");
     });
 
     it("editing the note does not push a value still being typed", () => {
@@ -587,6 +666,7 @@ describe("ProposalCostingModule", () => {
       typeInto(totalInput(), "9.000.000");
       fireEvent.click(screen.getByText(/Agregar nota de alcance/i));
       typeInto(screen.getByLabelText(/Nota de alcance comercial/i), "Ajuste");
+      fireEvent.blur(screen.getByLabelText(/Nota de alcance comercial/i));
       expect(onUpdateCosting).toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 1_000_000 }));
       expect(onUpdateCosting).not.toHaveBeenCalledWith(expect.objectContaining({ totalOfferedCop: 9_000_000 }));
     });

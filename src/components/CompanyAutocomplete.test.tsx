@@ -43,7 +43,7 @@ describe("CompanyAutocomplete", () => {
     type("890900");
 
     expect(await screen.findByText("Bancolombia S.A.")).toBeInTheDocument();
-    expect(screen.getByText("NIT: 890900608-9")).toBeInTheDocument();
+    expect(screen.getByText("NIT: 890.900.608-9")).toBeInTheDocument();
     expect(mockedSearch).toHaveBeenCalledWith("890900");
   });
 

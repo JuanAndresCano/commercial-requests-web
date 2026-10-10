@@ -1,8 +1,16 @@
 import { cn } from "@/lib/utils";
-import { STATUS_META, URGENCY_META, type RequestStatus, type Urgency } from "@/lib/mock-data";
+import { STATUS_META, URGENCY_META, type Urgency } from "@/lib/mock-data";
+import type { BoardStage } from "@/lib/board-stages";
 
-export function StatusBadge({ status, className }: { status: RequestStatus; className?: string }) {
-  const m = STATUS_META[status];
+// "Enviada al KAM" is derived on the client (see leaderStageOf), so it has no STATUS_META entry.
+const SENT_TO_KAM_META = {
+  label: "Enviada al KAM",
+  tone: "bg-[#2b9eb3]/15 text-[#1f7f91] dark:text-[#2b9eb3] border-[#2b9eb3]/30",
+  dot: "bg-[#2b9eb3]",
+};
+
+export function StatusBadge({ status, className }: { status: BoardStage; className?: string }) {
+  const m = status === "enviada-kam" ? SENT_TO_KAM_META : STATUS_META[status];
   return (
     <span
       className={cn(

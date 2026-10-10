@@ -63,7 +63,7 @@ src/
 ### Journey KAM
 - `KamCommandCenter.tsx` — dashboard con KPIs clicables + tabla de actividad.
 - `NewRequest.tsx` — wizard completo, incluye subcomponentes internos `Step1`..`Step5`, `Field`, `RadioGroup`, `SectionHeader`, `SuccessScreen` (todos definidos dentro del mismo archivo, no exportados aparte).
-- `RequestDetail.tsx` (rama KAM) — tarjeta de propuesta económica de solo lectura, tarjeta "Equipo Asignado", sección colapsable "Información completa de la solicitud" (editable solo por el KAM dueño mientras el estado es "Nueva", vía modal con 6 pestañas). También ve (compartida con Líder de Producto) la tarjeta lateral "Especificaciones del Servicio", que ya lee los datos reales capturados en el wizard (`horas`, `modalidad`, `participantes`) — el gap que documentaba valores hardcodeados ("60 horas", "Híbrida") ya está resuelto.
+- `RequestDetail.tsx` (rama KAM) — tarjeta de propuesta económica de solo lectura, tarjeta "Equipo Asignado", sección colapsable "Información completa de la solicitud" (editable solo por el KAM dueño mientras el estado es "Nueva" y no haya docente asignado, vía modal con 6 pestañas). También ve (compartida con Líder de Producto) la tarjeta lateral "Especificaciones del Servicio", que ya lee los datos reales capturados en el wizard (`horas`, `modalidad`, `participantes`) — el gap que documentaba valores hardcodeados ("60 horas", "Híbrida") ya está resuelto.
 
 ### Journey Líder de Producto
 - `ProductLeaderDashboard.tsx` — Kanban de 4 columnas con KPIs-filtro y acciones de avance inline.

@@ -10,9 +10,6 @@ import {
   Layers,
   Calendar,
   Send,
-  Phone,
-  Mail,
-  User,
   Check,
   MessageSquare,
   ArrowLeftRight,
@@ -53,14 +50,13 @@ import {
   ExternalProfessorData,
   REQUEST_TYPES,
   URGENCY_META,
-  NODES,
-  NODE_DEFAULT_LEADERS,
   type RequestType,
   type Urgency,
   type NegotiationRound,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
+import { AdvisorContactDialog } from "@/components/costing/AdvisorContactDialog";
 import { ProposalCostingModule } from "@/components/costing/ProposalCostingModule";
 import { ProposalDocumentsSection } from "@/components/costing/ProposalDocumentsSection";
 import {
@@ -69,7 +65,18 @@ import {
   REASSIGN_REASON_TO_BACKEND,
   type ReassignConfirmParams,
 } from "@/components/ReassignLeaderDialog";
-import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
+import { EditTeamDialog, type EditTeamParams } from "@/components/EditTeamDialog";
+import { TeamNodeEditor } from "@/components/TeamNodeEditor";
+import { CenterFields } from "@/components/CenterFields";
+import { StageTimeSection } from "@/components/StageTimeSection";
+import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
+import { getStageTimes } from "@/lib/stage-time";
+import {
+  openNegotiationRound,
+  closeRoundForClientDelivery,
+  rejectRoundWithObservations,
+  getRoundChanges,
+} from "@/lib/negotiation";
 import { toast } from "sonner";
 import { useRequestDetail } from "@/hooks/use-request-detail";
 import { useUpdateRequestInfo } from "@/hooks/use-update-request-info";
@@ -82,6 +89,8 @@ import { useMarkReadyForKam } from "@/hooks/use-mark-ready-for-kam";
 import { useReassignProposal } from "@/hooks/use-reassign-proposal";
 import { useUpdateServiceSpecs } from "@/hooks/use-update-service-specs";
 import { useUpsertCosting } from "@/hooks/use-upsert-costing";
+import { useSetRequestNode } from "@/hooks/use-set-request-node";
+import { useSetRequestCenter } from "@/hooks/use-set-request-center";
 import { useNodes } from "@/hooks/use-nodes";
 import { useProductLeaders } from "@/hooks/use-product-leaders";
 import {
@@ -90,18 +99,12 @@ import {
   modalityToBackend,
   mapProposalToRequestItem,
 } from "@/lib/proposal-adapter";
+import { cateringToPayload } from "@/lib/catering";
+import { canonicalNit, displayNit, parseNit } from "@/lib/nit";
 import { canEditProfessor } from "@/lib/professor-assignment";
+import { toProfessorInput } from "@/lib/professor-form";
 import { ApiError } from "@/lib/api/client";
-import type { UpdateProposalInfoPayload, RequestType as ApiRequestType, CompanyType } from "@/lib/api/requests";
-
-const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
-  Capacitación: "CAPACITACION",
-  Consultoría: "CONSULTORIA",
-  Mentoría: "MENTORIA",
-  Investigación: "INVESTIGACION",
-  "Proyectos Especiales (Eventos)": "SPECIAL_PROJECTS",
-  Otro: "OTHER",
-};
+import type { UpdateProposalInfoPayload, CompanyType, SetCenterPayload } from "@/lib/api/requests";
 
 const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
   Privada: "PRIVADA",
@@ -142,7 +145,6 @@ export default function RequestDetail() {
   const deleteRequestMutation = useDeleteRequest();
   const updateStatusMutation = useUpdateRequestStatus();
   const { data: dbNodes } = useNodes();
-  const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
 
   const role = user.role;
   const isKam = role === "kam";
@@ -189,11 +191,12 @@ export default function RequestDetail() {
   const reassignProposalReal = useReassignProposal();
   const updateSpecsReal = useUpdateServiceSpecs();
   const upsertCostingReal = useUpsertCosting();
+  const setNodeReal = useSetRequestNode();
+  const setCenterReal = useSetRequestCenter();
   const lastSentCosting = useRef<ProposalCosting | null>(null);
-  // Only a connected Product Leader can reassign, so only fetch this directory for
-  // that case — /users is Product-Leader/Admin-only on the backend, and a KAM (or a
-  // mock proposal) opening this page would otherwise fire a request that's certain to 403.
-  const productLeadersQuery = useProductLeaders(Boolean(apiProposal) && isLeader);
+  // The Product Leader directory feeds the Leader's reassignment and the KAM's team
+  // correction (GET /users allows PRODUCT_LEADER, ADMIN and KAM); never for a mock proposal.
+  const productLeadersQuery = useProductLeaders(Boolean(apiProposal) && (isLeader || isKam));
 
   // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
   // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
@@ -205,6 +208,7 @@ export default function RequestDetail() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
@@ -298,10 +302,11 @@ export default function RequestDetail() {
   const wasRejectedByClient = (req?.negotiationRounds ?? []).some(
     (r) => r.clientResponse === "rechazada" || (r.clientResponse as string) === "CHANGES_REQUESTED",
   );
+  // UAT C-02: once the Líder assigns a professor the KAM can no longer add or
+  // edit information (the expert would be confused). The lock follows the
+  // assignment, not the status: a professor can already be assigned in "Nueva".
   const canEditFullInfo =
-    (isKam &&
-      req?.kam === user.name &&
-      (req?.status === "nueva" || (req?.status === "en-costeo" && wasRejectedByClient))) ||
+    (isKam && req?.kam === user.name && !req?.professor && req?.status === "nueva") ||
     (role === "lider-producto" &&
       req?.productLeader === user.name &&
       req?.status === "en-costeo" &&
@@ -312,12 +317,6 @@ export default function RequestDetail() {
   const emptyFullInfoDraft = {
     title: "",
     urgency: "media" as Urgency,
-    type: "Capacitación" as RequestType,
-    tipoOtro: "",
-    node: "",
-    nodeId: "",
-    productLeader: "",
-    productLeaderId: "",
     companyNit: "",
     companyDireccion: "",
     companyTelefono: "",
@@ -355,23 +354,9 @@ export default function RequestDetail() {
 
   const handleStartEditFullInfo = () => {
     if (!req) return;
-    const rawNodeName = (apiProposal?.node?.name as string) || (req.node !== "Por definir" ? req.node : "");
-    const rawLeaderName =
-      req.productLeader && req.productLeader !== "Por definir"
-        ? req.productLeader
-        : rawNodeName && NODE_DEFAULT_LEADERS[rawNodeName]
-          ? NODE_DEFAULT_LEADERS[rawNodeName]
-          : "";
-
     const initial: typeof emptyFullInfoDraft = {
       title: req.title,
       urgency: req.urgency,
-      type: req.type,
-      tipoOtro: req.tipoOtro ?? "",
-      node: rawNodeName,
-      nodeId: (apiProposal?.nodeId || apiProposal?.node?.id) ?? "",
-      productLeader: rawLeaderName,
-      productLeaderId: (apiProposal?.productLeaderId || apiProposal?.productLeader?.id) ?? "",
       companyNit: req.companyNit ?? "",
       companyDireccion: req.companyDireccion ?? "",
       companyTelefono: req.companyTelefono ?? "",
@@ -421,6 +406,12 @@ export default function RequestDetail() {
   if (fullInfoDraft.contactCorreoAlternativo.trim() && !EMAIL_RE.test(fullInfoDraft.contactCorreoAlternativo.trim())) {
     fullInfoErrors.contactCorreoAlternativo = "Correo con formato inválido";
   }
+  // The NIT is only checked when it was changed, so a legacy value never blocks an unrelated edit.
+  const nitCheck = parseNit(fullInfoDraft.companyNit);
+  const nitChanged = canonicalNit(fullInfoDraft.companyNit) !== canonicalNit(req?.companyNit);
+  if (nitChanged && !nitCheck.ok) {
+    fullInfoErrors.companyNit = nitCheck.error;
+  }
   if (fullInfoDraft.companyTelefono.trim() && !PHONE_RE.test(fullInfoDraft.companyTelefono.trim())) {
     fullInfoErrors.companyTelefono = "Teléfono con formato inválido";
   }
@@ -446,43 +437,38 @@ export default function RequestDetail() {
       return;
     }
 
-    const matchedNode = dbNodes?.find(
-      (n) => n.name.toLowerCase() === (fullInfoDraft.node || "").toLowerCase() || n.id === fullInfoDraft.nodeId,
-    );
-    const resolvedNodeId =
-      matchedNode?.id ||
-      (fullInfoDraft.node && fullInfoDraft.node !== "Por definir" ? fullInfoDraft.nodeId : undefined);
-
+    // An emptied field goes as null so the backend clears it (omitting it kept the old value).
     const payload: UpdateProposalInfoPayload = {
       programName: fullInfoDraft.title.trim(),
       priority: fullInfoDraft.urgency === "alta" ? "ALTA" : fullInfoDraft.urgency === "baja" ? "BAJA" : "MEDIA",
-      nodeId: resolvedNodeId,
-      productLeaderId: fullInfoDraft.productLeaderId || undefined,
-      requestType: REQUEST_TYPE_MAP[fullInfoDraft.type],
-      requestTypeOther: fullInfoDraft.type === "Otro" ? fullInfoDraft.tipoOtro.trim() || undefined : undefined,
-      companyNit: fullInfoDraft.companyNit.trim() || undefined,
-      companyDescription: fullInfoDraft.companyDescripcion.trim() || undefined,
+      companyNit: nitCheck.ok ? nitCheck.nit || null : fullInfoDraft.companyNit.trim() || null,
+      companyDescription: fullInfoDraft.companyDescripcion.trim() || null,
       companyType: fullInfoDraft.companyTipo ? COMPANY_TYPE_MAP[fullInfoDraft.companyTipo] : undefined,
-      sector: fullInfoDraft.companyCiiuPrincipalDesc.trim() || undefined,
-      website: fullInfoDraft.companyWeb.trim() || undefined,
-      contactName: fullInfoDraft.applicant.trim() || undefined,
-      contactRole: fullInfoDraft.contactCargo.trim() || undefined,
-      contactArea: fullInfoDraft.contactArea.trim() || undefined,
-      contactPhone: fullInfoDraft.contactTelefono.trim() || undefined,
-      contactEmail: fullInfoDraft.contactCorreo.trim() || undefined,
-      needDescription: fullInfoDraft.necesidad.trim() || undefined,
-      competencies: fullInfoDraft.competencias.trim() || undefined,
-      successMetrics: fullInfoDraft.exito.trim() || undefined,
-      expectedResults: fullInfoDraft.resultados.trim() || undefined,
-      participantArea: fullInfoDraft.areaParticipantes.trim() || undefined,
-      requiresCatering: Boolean(fullInfoDraft.alimentacion.trim()),
-      cateringNotes: fullInfoDraft.alimentacion.trim() || undefined,
+      sector: fullInfoDraft.companyCiiuPrincipalDesc.trim() || null,
+      website: fullInfoDraft.companyWeb.trim() || null,
+      companyAddress: fullInfoDraft.companyDireccion.trim() || null,
+      companyPhone: fullInfoDraft.companyTelefono.trim() || null,
+      companyEmail: fullInfoDraft.companyCorreo.trim() || null,
+      ciiuCode: fullInfoDraft.companyCiiuPrincipal.trim() || null,
+      contactName: fullInfoDraft.applicant.trim() || null,
+      contactRole: fullInfoDraft.contactCargo.trim() || null,
+      contactArea: fullInfoDraft.contactArea.trim() || null,
+      contactPhone: fullInfoDraft.contactTelefono.trim() || null,
+      contactEmail: fullInfoDraft.contactCorreo.trim() || null,
+      contactSecondaryPhone: fullInfoDraft.contactTelefonoSecundario.trim() || null,
+      contactAlternativeEmail: fullInfoDraft.contactCorreoAlternativo.trim() || null,
+      needDescription: fullInfoDraft.necesidad.trim() || null,
+      competencies: fullInfoDraft.competencias.trim() || null,
+      successMetrics: fullInfoDraft.exito.trim() || null,
+      expectedResults: fullInfoDraft.resultados.trim() || null,
+      participantArea: fullInfoDraft.areaParticipantes.trim() || null,
+      ...cateringToPayload(fullInfoDraft.alimentacion),
       hasPreviousTraining: fullInfoDraft.formacionPrevia === "Sí",
       previousTraining: fullInfoDraft.formacionPrevia || undefined,
-      previousTrainingDescription: fullInfoDraft.descFormacion.trim() || undefined,
-      previousTrainingCompany: fullInfoDraft.empresaPrevia.trim() || undefined,
-      previousTrainingDate: fullInfoDraft.fechaPrevia || undefined,
-      observations: fullInfoDraft.observaciones.trim() || undefined,
+      previousTrainingDescription: fullInfoDraft.descFormacion.trim() || null,
+      previousTrainingCompany: fullInfoDraft.empresaPrevia.trim() || null,
+      previousTrainingDate: fullInfoDraft.fechaPrevia || null,
+      observations: fullInfoDraft.observaciones.trim() || null,
     };
 
     if (apiProposal) {
@@ -504,10 +490,6 @@ export default function RequestDetail() {
     updateRequest(req.id, {
       ...fullInfoDraft,
       title: fullInfoDraft.title.trim(),
-      node: fullInfoDraft.node || "Por definir",
-      productLeader: fullInfoDraft.productLeader || "Por definir",
-      type: fullInfoDraft.type,
-      tipoOtro: fullInfoDraft.tipoOtro.trim() || undefined,
       formacionPrevia: fullInfoDraft.formacionPrevia || undefined,
       fullInfoUpdatedAt: new Date().toISOString(),
       // Cuando lo edita el Líder (tras un rechazo, ver docs/03 B.7) puede
@@ -538,7 +520,7 @@ export default function RequestDetail() {
         {
           id: req.id,
           newProductLeaderId: newLeader,
-          newNodeId: newNode,
+          newNodeId: newNode || undefined,
           reason: backendReason,
           note: notes.trim() || undefined,
         },
@@ -572,6 +554,48 @@ export default function RequestDetail() {
   }));
   const nodeOptions = dbNodes?.map((n) => ({ id: n.id, label: n.name }));
 
+  // Decisión del dueño (2026-10-07): el KAM corrige el nodo o el líder mientras la
+  // solicitud sigue "Entregada al líder" (nueva) y sin docente — la misma ventana en
+  // la que edita la información (C-02). Queda en el historial del equipo.
+  const canKamEditTeam = isKam && canEditFullInfo && Boolean(apiProposal);
+
+  const handleConfirmEditTeam = async ({ nodeId, productLeaderId }: EditTeamParams) => {
+    if (!apiProposal) return;
+    try {
+      await updateInfoMutation.mutateAsync({ id: apiProposal.id, data: { nodeId, productLeaderId } });
+      toast.success("Nodo y líder actualizados");
+      setIsEditTeamOpen(false);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar el nodo o el líder");
+    }
+  };
+
+  // C-06 / C-07 — el Líder dueño pone o quita el nodo y escribe el centro y el CENCO desde "Equipo
+  // Asignado" (el backend responde 403 a cualquier otro rol). Solo con solicitud real.
+  const canLeaderEditTeamData = role === "lider-producto" && Boolean(apiProposal);
+
+  const handleSaveNode = (patch: { nodeId: string | null }) => {
+    if (!apiProposal) return;
+    setNodeReal.mutate(
+      { id: apiProposal.id, ...patch },
+      {
+        onSuccess: () => toast.success(patch.nodeId ? "Nodo actualizado" : "Se quitó el nodo de la solicitud"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo actualizar el nodo"),
+      },
+    );
+  };
+
+  const handleSaveCenter = (patch: SetCenterPayload) => {
+    if (!apiProposal) return;
+    setCenterReal.mutate(
+      { id: apiProposal.id, ...patch },
+      {
+        onSuccess: () => toast.success("Centro y CENCO guardados"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar el centro"),
+      },
+    );
+  };
+
   // HU 5.2 — con backend los documentos vienen de `apiProposal.attachments` (el backend ya
   // filtró por rol: el KAM nunca recibe los internos); sin backend, del mock local.
   const apiDocuments = apiProposal ? splitAttachments(apiProposal.attachments ?? []) : null;
@@ -591,7 +615,9 @@ export default function RequestDetail() {
   const nextRoundNumber = negotiationRounds.length + 1;
   const lastRejectedRound = [...negotiationRounds].reverse().find((round) => round.clientResponse === "rechazada");
 
-  const handleSaveAssignment = (
+  // Resolves when the assignment is saved and rejects when it fails: the modal shows the error and
+  // stays open, so a failed save is never taken for a done one.
+  const handleSaveAssignment = async (
     professorName: string,
     type: "planta" | "externo",
     externalData?: ExternalProfessorData,
@@ -599,19 +625,12 @@ export default function RequestDetail() {
   ) => {
     if (!req) return;
     if (apiProposal) {
-      // `professorId` was already real (ProfessorPicker searches/registers against the
-      // backend directory, HU 2.2) — it just never reached the actual assignment call.
-      if (!professorId) {
-        toast.error("No se pudo identificar el profesor seleccionado");
-        return;
-      }
-      assignProfessorReal.mutate(
-        { id: req.id, professorId },
-        {
-          onSuccess: () => toast.success("Docente/asesor asignado"),
-          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo asignar"),
-        },
-      );
+      // A picked directory entry goes by id; typed data goes as `professor` and the backend creates or
+      // reuses it and assigns it in the same request. Either way the status does not change.
+      await assignProfessorReal.mutateAsync({
+        id: req.id,
+        target: professorId ? { professorId } : { professor: toProfessorInput(professorName, type, externalData) },
+      });
       return;
     }
     // El indicador de "asesor externo" del costeo ya no es un campo propio:
@@ -621,20 +640,22 @@ export default function RequestDetail() {
     assignProfessorDetailed(req.id, professorName, type, externalData);
   };
 
-  // HU 5.1: the offered value and both contribution margins round-trip to the backend
-  // (Pro-Cultura stays a client-side reference). Each save creates a new economics row,
-  // so nothing is sent unless the total or a margin actually changed (the scope note is
-  // not persisted). A margin the form holds empty is sent as null so it clears; 0 stays 0.
+  // HU 5.1: the offered value, both contribution margins and the "Nota de alcance comercial"
+  // round-trip to the backend (Pro-Cultura stays a client-side reference). Each save creates a
+  // new economics row, so nothing is sent unless one of them actually changed. A margin the form
+  // holds empty is sent as null so it clears; 0 stays 0; an empty note is sent as null too.
   // While a save is in flight `req.costing` is still the old row, so it is compared with what
-  // that save sent instead: an edit of the note must not send the same values again.
+  // that save sent instead: the same values must not go out twice.
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
     if (!req) return;
     if (apiProposal) {
       const current = upsertCostingReal.isPending && lastSentCosting.current ? lastSentCosting.current : req.costing;
+      const negotiationNotes = newCosting.negotiationNotes?.trim() || null;
       const unchanged =
         newCosting.totalOfferedCop === current?.totalOfferedCop &&
         newCosting.expectedMarginPercent === current?.expectedMarginPercent &&
-        newCosting.marginAmountCop === current?.marginAmountCop;
+        newCosting.marginAmountCop === current?.marginAmountCop &&
+        negotiationNotes === (current?.negotiationNotes?.trim() || null);
       if (unchanged) return;
       lastSentCosting.current = newCosting;
       upsertCostingReal.mutate(
@@ -643,6 +664,7 @@ export default function RequestDetail() {
           totalCost: newCosting.totalOfferedCop,
           marginPercentage: newCosting.expectedMarginPercent ?? null,
           marginAmount: newCosting.marginAmountCop ?? null,
+          negotiationNotes,
         },
         {
           // The backend's 400 messages are English validator output: show one generic Spanish text.
@@ -739,6 +761,17 @@ export default function RequestDetail() {
     updateStatus(req.id, "en-experto");
     toast.success("Propuesta pasada a: En proceso por experto");
     setConfirmingAction(null);
+  };
+
+  // Used by "Guardar y avanzar a experto" in the assignment form: same transition as the header button, but it
+  // resolves or rejects so the form can report a failure. The confirmation lives in the form itself.
+  const handleAdvanceAfterAssign = async () => {
+    if (!req) return;
+    if (apiProposal) {
+      await updateStatusMutation.mutateAsync({ id: req.id, data: { status: "IN_PROGRESS" } });
+      return;
+    }
+    updateStatus(req.id, "en-experto");
   };
 
   const handleMoveToCosteo = () => {
@@ -997,6 +1030,170 @@ export default function RequestDetail() {
     );
   }
 
+  // C-22: the full request information always sits at the top of the main column, in every stage, so the
+  // product lead finds it in the same place (it was at the bottom and she could not find it).
+  const fullInfoSection = (
+    <div className="pt-1">
+      <h2 className="mb-2.5 px-0.5 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        Detalle completo de la solicitud
+      </h2>
+
+      <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 p-5",
+            showFullInfo && "border-b border-border dark:border-[#252838]",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setShowFullInfo((v) => !v)}
+            className="flex flex-1 min-w-0 items-center gap-3 text-left"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/70 dark:bg-secondary/20">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-foreground">Información completa de la solicitud</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                {fullInfoCompleteness.filled} de {fullInfoCompleteness.total} campos diligenciados
+                {req.fullInfoUpdatedAt &&
+                  ` · Editado ${formatDistanceToNow(new Date(req.fullInfoUpdatedAt), { addSuffix: true, locale: es })}`}
+              </p>
+            </div>
+          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {canEditFullInfo && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleStartEditFullInfo}
+                className="h-8 px-3 text-xs font-semibold border-[#5454e9]/30 text-[#5454e9] dark:text-[#865cf0] hover:bg-[#5454e9]/10"
+              >
+                <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                Editar información
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowFullInfo((v) => !v)}
+              aria-label={showFullInfo ? "Contraer sección" : "Expandir sección"}
+              className="rounded-lg p-2 text-muted-foreground hover:bg-secondary/70 dark:hover:bg-secondary/20 transition-colors"
+            >
+              <ChevronDown className={cn("h-4 w-4 transition-transform", showFullInfo && "rotate-180")} />
+            </button>
+          </div>
+        </div>
+
+        {!showFullInfo && (
+          <div
+            data-testid="full-info-summary"
+            className="space-y-1 border-t border-border dark:border-[#252838] px-5 py-3 text-xs"
+          >
+            <p className="text-muted-foreground">
+              <span className="font-semibold text-foreground">{req.company}</span>
+              {req.applicant ? ` · Contacto: ${req.applicant}` : ""}
+            </p>
+            {req.necesidad?.trim() && <p className="line-clamp-2 text-muted-foreground">{req.necesidad.trim()}</p>}
+            <button
+              type="button"
+              onClick={() => setShowFullInfo(true)}
+              className="font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+            >
+              Ver información completa
+            </button>
+          </div>
+        )}
+
+        {showFullInfo && (
+          <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
+            {/* Empresa */}
+            <InfoSection title="Empresa">
+              <InfoRow label="NIT" value={req.companyNit ? displayNit(req.companyNit) : req.companyNit} />
+              <InfoRow label="Dirección" value={req.companyDireccion} />
+              <InfoRow label="Teléfono" value={req.companyTelefono} />
+              <InfoRow label="Correo" value={req.companyCorreo} />
+              <InfoRow
+                label="CIIU principal"
+                value={
+                  req.companyCiiuPrincipal
+                    ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}`
+                    : undefined
+                }
+              />
+              <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
+              <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
+              <InfoRow label="Sitio web" value={req.companyWeb} />
+              <InfoRow label="Descripción" value={req.companyDescripcion} block />
+            </InfoSection>
+
+            {/* Contacto */}
+            <InfoSection title="Contacto del cliente">
+              <InfoRow label="Nombre" value={req.applicant} />
+              <InfoRow label="Cargo" value={req.contactCargo} />
+              <InfoRow label="Área o dependencia" value={req.contactArea} />
+              <InfoRow label="Teléfono" value={req.contactTelefono} />
+              <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
+              <InfoRow label="Correo" value={req.contactCorreo} />
+              <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
+
+              {req.additionalContacts && req.additionalContacts.length > 0 && (
+                <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Contactos adicionales
+                  </span>
+                  {req.additionalContacts.map((c) => (
+                    <div
+                      key={c.id}
+                      className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5"
+                    >
+                      <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
+                      {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
+                      {(c.telefono || c.correo) && (
+                        <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </InfoSection>
+
+            {/* Diagnóstico del requerimiento */}
+            <InfoSection title="Diagnóstico del requerimiento">
+              <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
+              <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
+              <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
+              <InfoRow label="Resultados esperados" value={req.resultados} block />
+              <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
+              <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
+            </InfoSection>
+
+            {/* Formación previa */}
+            <InfoSection title="Formación previa">
+              <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
+              {req.formacionPrevia === "Sí" && (
+                <>
+                  <InfoRow label="Descripción" value={req.descFormacion} block />
+                  <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
+                  <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
+                </>
+              )}
+            </InfoSection>
+
+            {/* Observaciones */}
+            <div className="lg:col-span-2">
+              <InfoSection title="Observaciones del KAM">
+                <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
+              </InfoSection>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <AppShell>
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -1023,6 +1220,7 @@ export default function RequestDetail() {
               {/* Fila de metadatos inline sutiles: Empresa, Contacto, Código REQ y Badges discretos */}
               <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-muted-foreground">
                 <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.code ?? req.id}</span>
+                <OfficialNumberBadge officialNumber={req.officialNumber} className="text-xs" />
 
                 <span className="text-border dark:text-[#252838]">·</span>
 
@@ -1129,10 +1327,10 @@ export default function RequestDetail() {
                   onClick={() => setConfirmingAction("entregada")}
                   className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
                   title={
-                    !hasValidCosting
-                      ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
-                      : !req.costing?.readyForKam
-                        ? "El Líder de Producto aún no ha confirmado el envío del costeo"
+                    !req.costing?.readyForKam
+                      ? "El Líder de Producto aún no ha confirmado el envío del costeo"
+                      : !hasValidCosting
+                        ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
                         : undefined
                   }
                 >
@@ -1154,7 +1352,9 @@ export default function RequestDetail() {
                     Devolver con observaciones
                   </Button>
                 </>
-              ) : isKam && req.status === "nueva" && req.kam === user.name ? (
+              ) : isKam && req.status === "nueva" && req.kam === user.name && !req.professor ? (
+                /* Decisión del dueño (2026-10-09): con docente asignado el KAM ya no
+                   puede cancelar (mismo bloqueo que editar, C-02). */
                 <Button
                   variant="outline"
                   size="sm"
@@ -1221,6 +1421,8 @@ export default function RequestDetail() {
               </div>
             )}
 
+            {fullInfoSection}
+
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
               req.status === "en-costeo" || req.status === "entregada" ? (
@@ -1232,13 +1434,15 @@ export default function RequestDetail() {
                    con Dianis (docs/08, pregunta 7: "todo se hace en el
                    momento del costeo", sin valores parciales antes de esa
                    fase). Se oculta por completo hasta llegar a "En Costeo". */
-                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 p-8 text-center">
-                  <Clock className="h-6 w-6 text-slate-400" />
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Costeo aún no disponible</p>
-                  <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
-                    El módulo de costeo se habilita cuando la solicitud llegue a "En Costeo" — todavía hay trabajo
-                    previo por completar (asignar docente, avanzar a "En Experto").
-                  </p>
+                <div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 px-4 py-3">
+                  <Clock className="h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Costeo aún no disponible</p>
+                    <p className="text-xs text-slate-500 dark:text-muted-foreground">
+                      El módulo de costeo se habilita cuando la solicitud llegue a "En Costeo" — todavía hay trabajo
+                      previo por completar (asignar docente, avanzar a "En Experto").
+                    </p>
+                  </div>
                 </div>
               )
             ) : hasValidCosting && !req.costing?.readyForKam ? (
@@ -1253,8 +1457,8 @@ export default function RequestDetail() {
                   Costeo definido — pendiente de confirmación del Líder
                 </p>
                 <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
-                  El Líder de Producto ya calculó un valor ({formatCop(req.costing!.totalOfferedCop)}), pero todavía no
-                  confirma el envío. En cuanto lo haga, verás aquí la propuesta oficial y podrás enviarla al cliente.
+                  El Líder de Producto ya calculó un valor, pero todavía no confirma el envío. En cuanto lo haga, verás
+                  aquí la propuesta oficial y podrás enviarla al cliente.
                 </p>
               </div>
             ) : req.costing && req.costing.totalOfferedCop > 0 ? (
@@ -1327,8 +1531,8 @@ export default function RequestDetail() {
                 <Clock className="h-6 w-6 text-slate-400" />
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Costeo en proceso</p>
                 <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
-                  El Líder de Producto todavía no ha estructurado el valor de esta propuesta. Aquí verás el valor
-                  oficial en cuanto quede definido.
+                  El Líder de Producto todavía no ha confirmado el valor de esta propuesta. Aquí verás el valor oficial
+                  en cuanto lo confirme.
                 </p>
               </div>
             )}
@@ -1361,7 +1565,7 @@ export default function RequestDetail() {
                     const isRejected =
                       round.clientResponse === "rechazada" || (round.clientResponse as string) === "CHANGES_REQUESTED";
                     const isCurrentRound = isPending && idx === negotiationRounds.length - 1;
-                    const scopeDiffs = getScopeDiffs(round, negotiationRounds[idx - 1]);
+                    const scopeDiffs = getRoundChanges(round, negotiationRounds[idx - 1]);
                     return (
                       <div
                         key={round.id}
@@ -1436,7 +1640,7 @@ export default function RequestDetail() {
                         {scopeDiffs.length > 0 && (
                           <div className="rounded-lg border border-border dark:border-[#252838] bg-secondary/30 dark:bg-secondary/10 p-2.5 space-y-1">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                              Cambios de alcance frente a la ronda anterior
+                              Cambios frente a la ronda anterior
                             </span>
                             <ul className="space-y-0.5">
                               {scopeDiffs.map((diff) => (
@@ -1664,26 +1868,51 @@ export default function RequestDetail() {
               </h3>
 
               <div className="space-y-3.5 text-xs">
-                {/* Nodo Temático */}
-                <div className="space-y-0.5">
-                  <span className="text-[11px] font-medium text-muted-foreground">Nodo Temático</span>
-                  <p className="font-semibold text-foreground leading-snug">{req.node}</p>
-                </div>
+                {/* Nodo Temático — opcional: sin nodo dice "Sin nodo"; el Líder dueño lo pone o lo quita */}
+                <TeamNodeEditor
+                  nodeName={req.node}
+                  nodeId={req.nodeId}
+                  nodeOptions={nodeOptions}
+                  editable={canLeaderEditTeamData}
+                  saving={setNodeReal.isPending}
+                  onSave={handleSaveNode}
+                  headerAction={
+                    canKamEditTeam ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditTeamOpen(true)}
+                        aria-label="Cambiar nodo temático"
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
+                      >
+                        Cambiar
+                      </button>
+                    ) : undefined
+                  }
+                />
 
                 {/* Líder de Producto */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Líder de Producto</span>
-                    {role === "lider-producto" &&
-                      (req.status === "nueva" || req.status === "en-experto" || req.status === "en-costeo") && (
-                        <button
-                          type="button"
-                          onClick={() => setIsReassignModalOpen(true)}
-                          className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <ArrowLeftRight className="h-3 w-3" /> Reasignar
-                        </button>
-                      )}
+                    {role === "lider-producto" && (req.status === "nueva" || req.status === "en-experto") && (
+                      <button
+                        type="button"
+                        onClick={() => setIsReassignModalOpen(true)}
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <ArrowLeftRight className="h-3 w-3" /> Reasignar
+                      </button>
+                    )}
+                    {canKamEditTeam && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditTeamOpen(true)}
+                        aria-label="Cambiar líder de producto"
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
+                      >
+                        Cambiar
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-foreground">{req.productLeader}</p>
@@ -1691,11 +1920,45 @@ export default function RequestDetail() {
                   </div>
                 </div>
 
+                {/* Historial de cambios de nodo / líder (corrección del KAM o reasignación) */}
+                {req.teamHistory && req.teamHistory.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Historial de nodo y líder
+                    </span>
+                    <ul className="space-y-1">
+                      {[...req.teamHistory].reverse().map((entry) => (
+                        <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                          {entry.field === "nodo" ? "Nodo" : "Líder"}:{" "}
+                          {entry.previous && <span className="line-through">{entry.previous}</span>}
+                          {entry.previous && " → "}
+                          <span className="font-medium text-foreground">{entry.next}</span> · {entry.changedBy} ·{" "}
+                          {new Date(entry.changedAt).toLocaleDateString("es-CO", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                          {entry.reason && <> · Motivo: {entry.reason}</>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* KAM asignado */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <span className="text-[11px] font-medium text-muted-foreground">KAM Responsable</span>
                   <p className="font-semibold text-foreground">{req.kam}</p>
                 </div>
+
+                {/* Centro y CENCO (texto libre): el Líder dueño los escribe; el KAM los ve solo si tienen valor */}
+                <CenterFields
+                  center={req.center}
+                  costCenter={req.costCenter}
+                  editable={canLeaderEditTeamData}
+                  saving={setCenterReal.isPending}
+                  onSave={handleSaveCenter}
+                />
 
                 {/* Docente / Asesor asignado */}
                 <div className="space-y-1.5 pt-2 border-t border-border dark:border-[#252838]">
@@ -1736,24 +1999,26 @@ export default function RequestDetail() {
                           )}
                         </div>
 
-                        {/* Botón rápido de contacto para asesor externo */}
-                        {req.professorType === "externo" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsContactAdvisorModalOpen(true)}
-                            className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                            title="Ver datos de contacto del asesor externo"
-                          >
-                            Contacto
-                          </Button>
-                        )}
+                        {/* Botón rápido de contacto: el KAM ve los datos de contacto, nunca la identificación */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsContactAdvisorModalOpen(true)}
+                          className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                          title="Ver datos de contacto del docente o asesor"
+                        >
+                          Contacto
+                        </Button>
                       </div>
 
-                      {/* Subtítulo si tiene empresa */}
-                      {req.professorType === "externo" && req.externalProfessorData?.empresaConsultora && (
+                      {/* Subtítulo: empresa del asesor externo o facultad del docente de planta */}
+                      {(req.professorType === "externo"
+                        ? req.externalProfessorData?.empresaConsultora
+                        : req.externalProfessorData?.facultad) && (
                         <p className="text-[11px] text-muted-foreground">
-                          {req.externalProfessorData.empresaConsultora}
+                          {req.professorType === "externo"
+                            ? req.externalProfessorData?.empresaConsultora
+                            : req.externalProfessorData?.facultad}
                         </p>
                       )}
                     </div>
@@ -1794,155 +2059,15 @@ export default function RequestDetail() {
                 </div>
               </div>
             </div>
+
+            {/* 3. TIEMPO POR ETAPA — días acumulados en cada etapa del rol */}
+            <StageTimeSection rows={getStageTimes(req, isKam ? "kam" : "leader")} />
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* INFORMACIÓN COMPLETA DE LA SOLICITUD (todo lo que diligenció el KAM) */}
-      {/* ========================================================================= */}
-      <div className="pt-1">
-        <h2 className="mb-2.5 px-0.5 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Detalle completo de la solicitud
-        </h2>
-
-        <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
-          <div
-            className={cn(
-              "flex items-center justify-between gap-3 p-5",
-              showFullInfo && "border-b border-border dark:border-[#252838]",
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => setShowFullInfo((v) => !v)}
-              className="flex flex-1 min-w-0 items-center gap-3 text-left"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/70 dark:bg-secondary/20">
-                <ClipboardList className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-foreground">Información completa de la solicitud</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                  {fullInfoCompleteness.filled} de {fullInfoCompleteness.total} campos diligenciados
-                  {req.fullInfoUpdatedAt &&
-                    ` · Editado ${formatDistanceToNow(new Date(req.fullInfoUpdatedAt), { addSuffix: true, locale: es })}`}
-                </p>
-              </div>
-            </button>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {canEditFullInfo && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleStartEditFullInfo}
-                  className="h-8 px-3 text-xs font-semibold border-[#5454e9]/30 text-[#5454e9] dark:text-[#865cf0] hover:bg-[#5454e9]/10"
-                >
-                  <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-                  Editar información
-                </Button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowFullInfo((v) => !v)}
-                aria-label={showFullInfo ? "Contraer sección" : "Expandir sección"}
-                className="rounded-lg p-2 text-muted-foreground hover:bg-secondary/70 dark:hover:bg-secondary/20 transition-colors"
-              >
-                <ChevronDown className={cn("h-4 w-4 transition-transform", showFullInfo && "rotate-180")} />
-              </button>
-            </div>
-          </div>
-
-          {showFullInfo && (
-            <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
-              {/* Empresa */}
-              <InfoSection title="Empresa">
-                <InfoRow label="NIT" value={req.companyNit} />
-                <InfoRow label="Dirección" value={req.companyDireccion} />
-                <InfoRow label="Teléfono" value={req.companyTelefono} />
-                <InfoRow label="Correo" value={req.companyCorreo} />
-                <InfoRow
-                  label="CIIU principal"
-                  value={
-                    req.companyCiiuPrincipal
-                      ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}`
-                      : undefined
-                  }
-                />
-                <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
-                <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
-                <InfoRow label="Sitio web" value={req.companyWeb} />
-                <InfoRow label="Descripción" value={req.companyDescripcion} block />
-              </InfoSection>
-
-              {/* Contacto */}
-              <InfoSection title="Contacto del cliente">
-                <InfoRow label="Nombre" value={req.applicant} />
-                <InfoRow label="Cargo" value={req.contactCargo} />
-                <InfoRow label="Área o dependencia" value={req.contactArea} />
-                <InfoRow label="Teléfono" value={req.contactTelefono} />
-                <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
-                <InfoRow label="Correo" value={req.contactCorreo} />
-                <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
-
-                {req.additionalContacts && req.additionalContacts.length > 0 && (
-                  <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Contactos adicionales
-                    </span>
-                    {req.additionalContacts.map((c) => (
-                      <div
-                        key={c.id}
-                        className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5"
-                      >
-                        <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
-                        {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
-                        {(c.telefono || c.correo) && (
-                          <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </InfoSection>
-
-              {/* Diagnóstico del requerimiento */}
-              <InfoSection title="Diagnóstico del requerimiento">
-                <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
-                <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
-                <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
-                <InfoRow label="Resultados esperados" value={req.resultados} block />
-                <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
-                <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
-              </InfoSection>
-
-              {/* Formación previa */}
-              <InfoSection title="Formación previa">
-                <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
-                {req.formacionPrevia === "Sí" && (
-                  <>
-                    <InfoRow label="Descripción" value={req.descFormacion} block />
-                    <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
-                    <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
-                  </>
-                )}
-              </InfoSection>
-
-              {/* Observaciones */}
-              <div className="lg:col-span-2">
-                <InfoSection title="Observaciones del KAM">
-                  <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
-                </InfoSection>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* MODAL: EDITAR INFORMACIÓN COMPLETA (KAM, solo mientras "Nueva") */}
+      {/* MODAL: EDITAR INFORMACIÓN COMPLETA (KAM, solo mientras "Nueva" y sin docente asignado) */}
       {/* ========================================================================= */}
       <Dialog open={isEditingFullInfo} onOpenChange={(open) => !open && handleCloseFullInfoModal()}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -1952,7 +2077,7 @@ export default function RequestDetail() {
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               {isKam
-                ? 'Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva".'
+                ? 'Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva" y no tenga docente asignado.'
                 : "Corrige el alcance de la solicitud (por ejemplo la necesidad del cliente) — disponible porque el cliente ya devolvió esta propuesta pidiendo ajustes."}
             </DialogDescription>
           </DialogHeader>
@@ -2005,88 +2130,6 @@ export default function RequestDetail() {
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="general-tipo-select" className="text-[11px] text-muted-foreground">
-                  Tipo de requerimiento
-                </Label>
-                <Select
-                  value={fullInfoDraft.type}
-                  onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, type: v as RequestType }))}
-                >
-                  <SelectTrigger id="general-tipo-select" className="h-8 text-xs">
-                    <SelectValue placeholder="Seleccionar tipo de requerimiento" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {REQUEST_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {fullInfoDraft.type === "Otro" && (
-                <EditableField
-                  label="Especificación del tipo de servicio"
-                  value={fullInfoDraft.tipoOtro}
-                  onChange={(v) => setFullInfoDraft((d) => ({ ...d, tipoOtro: v }))}
-                />
-              )}
-
-              <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-2.5 mt-2">
-                <div className="flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5 text-accent" />
-                  <span className="text-xs font-semibold text-foreground">Asignación Académica Institucional</span>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="general-nodo-select" className="text-[11px] text-muted-foreground">
-                    Nodo Asignado
-                  </Label>
-                  <Select
-                    value={fullInfoDraft.node || "none"}
-                    onValueChange={(v) => {
-                      const val = v === "none" ? "" : v;
-                      const matched = dbNodes?.find((n) => n.name === val || n.id === val);
-                      const leaderName = val && NODE_DEFAULT_LEADERS[val] ? NODE_DEFAULT_LEADERS[val] : "";
-                      setFullInfoDraft((d) => ({
-                        ...d,
-                        node: val,
-                        nodeId: matched?.id || (val ? d.nodeId : ""),
-                        productLeader: leaderName || d.productLeader,
-                      }));
-                    }}
-                  >
-                    <SelectTrigger id="general-nodo-select" className="h-8 text-xs">
-                      <SelectValue placeholder="Seleccionar nodo temático (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none" className="text-muted-foreground italic">
-                        -- Por definir / Sin asignar --
-                      </SelectItem>
-                      {availableNodes.map((n) => (
-                        <SelectItem key={n} value={n}>
-                          {n}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <EditableField
-                    label="Líder de Producto"
-                    value={fullInfoDraft.productLeader}
-                    onChange={(v) => setFullInfoDraft((d) => ({ ...d, productLeader: v }))}
-                  />
-                  {fullInfoDraft.node && NODE_DEFAULT_LEADERS[fullInfoDraft.node] && (
-                    <p className="text-[10px] text-accent flex items-center gap-1 mt-0.5">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Sugerido por nodo: {NODE_DEFAULT_LEADERS[fullInfoDraft.node]}
-                    </p>
-                  )}
-                </div>
-              </div>
             </TabsContent>
 
             <TabsContent value="empresa" className="space-y-2.5 pt-4">
@@ -2094,6 +2137,7 @@ export default function RequestDetail() {
                 label="NIT"
                 value={fullInfoDraft.companyNit}
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyNit: v }))}
+                error={fullInfoErrors.companyNit}
               />
               <EditableField
                 label="Dirección"
@@ -2301,114 +2345,30 @@ export default function RequestDetail() {
         onClose={() => setIsAssignModalOpen(false)}
         request={req}
         onSaveAssignment={handleSaveAssignment}
+        onAdvanceToExpert={req.status === "nueva" ? handleAdvanceAfterAssign : undefined}
       />
 
       {/* ========================================================================= */}
-      {/* MODAL RÁPIDO DE CONTACTO: ASESOR EXTERNO */}
+      {/* MODAL RÁPIDO DE CONTACTO: DOCENTE / ASESOR */}
       {/* ========================================================================= */}
-      <Dialog open={isContactAdvisorModalOpen} onOpenChange={setIsContactAdvisorModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-xl border border-slate-200/80 p-6 shadow-lg dark:border-border dark:bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <User className="h-4 w-4 text-primary" />
-              Contacto del Asesor Externo
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              {isLeader
-                ? "Datos de contacto rápido para coordinación académica y administrativa."
-                : "Datos de contacto del asesor externo en modo solo lectura."}
-            </DialogDescription>
-          </DialogHeader>
+      <AdvisorContactDialog
+        open={isContactAdvisorModalOpen}
+        onOpenChange={setIsContactAdvisorModalOpen}
+        request={req}
+        isLeader={isLeader}
+        canChange={canEditProfessor(req.status)}
+        onChange={() => setIsAssignModalOpen(true)}
+      />
 
-          <div className="space-y-3 pt-2 text-xs">
-            <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3.5 space-y-2.5 dark:border-border dark:bg-secondary/20">
-              <div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                  Nombre Completo
-                </span>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {req.externalProfessorData?.nombre || req.professor}
-                </p>
-              </div>
-
-              {req.externalProfessorData?.empresaConsultora && (
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                    Empresa / Consultora
-                  </span>
-                  <p className="font-medium text-slate-800 dark:text-slate-200">
-                    {req.externalProfessorData.empresaConsultora}
-                  </p>
-                </div>
-              )}
-
-              {req.externalProfessorData?.correo && (
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Correo Electrónico
-                    </span>
-                    <a
-                      href={`mailto:${req.externalProfessorData.correo}`}
-                      className="text-primary hover:underline font-medium flex items-center gap-1.5"
-                    >
-                      <Mail className="h-3 w-3" />
-                      {req.externalProfessorData.correo}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {req.externalProfessorData?.telefono && (
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Teléfono de Contacto
-                    </span>
-                    <a
-                      href={`tel:${req.externalProfessorData.telefono}`}
-                      className="text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1.5 hover:text-primary"
-                    >
-                      <Phone className="h-3 w-3" />
-                      {req.externalProfessorData.telefono}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {req.externalProfessorData?.perfil && (
-                <div className="pt-1">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                    Perfil Profesional
-                  </span>
-                  <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
-                    {req.externalProfessorData.perfil}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              {isLeader && canEditProfessor(req.status) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs font-medium"
-                  onClick={() => {
-                    setIsContactAdvisorModalOpen(false);
-                    setIsAssignModalOpen(true);
-                  }}
-                >
-                  Editar datos
-                </Button>
-              )}
-              <Button size="sm" className="h-8 text-xs font-medium" onClick={() => setIsContactAdvisorModalOpen(false)}>
-                Cerrar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Modal: el KAM corrige nodo o líder (nueva y sin docente) */}
+      <EditTeamDialog
+        request={isEditTeamOpen ? req : null}
+        onOpenChange={setIsEditTeamOpen}
+        onConfirm={handleConfirmEditTeam}
+        nodeOptions={nodeOptions}
+        leaderOptions={leaderOptions}
+        saving={updateInfoMutation.isPending}
+      />
 
       {/* Modal Reasignar Líder de Producto */}
       <ReassignLeaderDialog
@@ -2725,27 +2685,6 @@ function getFullInfoCompleteness(req: RequestItem): { filled: number; total: num
 // alguno cambió respecto a la ronda anterior, el historial lo muestra como
 // parte del resumen de la ronda ("Participantes: 15-20 → 9-12"). La ronda 1
 // nunca tiene con qué compararse, así que no muestra diffs.
-const SCOPE_DIFF_FIELDS: { key: keyof NegotiationRound; label: string }[] = [
-  { key: "participantes", label: "Participantes" },
-  { key: "modalidad", label: "Modalidad" },
-  { key: "horas", label: "Horas" },
-  { key: "type", label: "Tipo de servicio" },
-  { key: "necesidad", label: "Necesidad" },
-];
-
-function getScopeDiffs(round: NegotiationRound, previousRound?: NegotiationRound): string[] {
-  if (!previousRound) return [];
-  const diffs: string[] = [];
-  for (const { key, label } of SCOPE_DIFF_FIELDS) {
-    const prevValue = previousRound[key];
-    const newValue = round[key];
-    if (prevValue !== undefined && newValue !== undefined && prevValue !== newValue) {
-      diffs.push(`${label}: ${prevValue} → ${newValue}`);
-    }
-  }
-  return diffs;
-}
-
 function EditableField({
   label,
   value,

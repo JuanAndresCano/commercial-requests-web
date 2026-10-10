@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ShieldCheck, MessageSquare, ChevronUp, GraduationCap, Calculator } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { useCostingDraft } from "@/hooks/use-costing-draft";
+import { COSTING_AUTOSAVE_DELAY_MS, useCostingDraft } from "@/hooks/use-costing-draft";
 import { calculateProCulturaReference, formatCopPreview, isLikelyFraction, PRO_CULTURA_PERCENT } from "@/lib/currency";
 import { formatCop, RequestItem, ProposalCosting, calculateCosting } from "@/lib/mock-data";
 
@@ -39,6 +39,11 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
   );
   const { total: totalOfferedCop, percent: marginPercent, amount: marginAmountCop } = draft.values;
   const [negotiationNotes, setNegotiationNotes] = useState<string>(initialCosting.negotiationNotes ?? "");
+  // The scope note is saved like the numbers: after a pause in typing, on leaving the field, and when the
+  // module goes away. Each save is a costing version on the backend, so it must not go out once per key.
+  const notesRef = useRef(negotiationNotes);
+  const notePendingRef = useRef(false);
+  const noteTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Gate de envío al KAM (docs/04) — se preserva tal cual al
   // guardar cambios que no afectan el valor final ni el margen, y se
   // invalida (vuelve a false) si el Líder vuelve a tocar esos campos.
@@ -53,7 +58,8 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
   // Sync state when request prop changes
   useEffect(() => {
     if (request.costing) {
-      setNegotiationNotes(request.costing.negotiationNotes ?? "");
+      // A refetch must not overwrite a note that is still being typed (not saved yet).
+      if (!notePendingRef.current) setNegotiationNotes(request.costing.negotiationNotes ?? "");
       setReadyForKam(request.costing.readyForKam ?? false);
       setCostingSentAt(request.costing.costingSentAt);
       if (request.costing.negotiationNotes?.trim()) {
@@ -99,6 +105,23 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
     onUpdateCosting(updatedCosting);
   };
 
+  const saveNote = () => {
+    clearTimeout(noteTimerRef.current);
+    if (!notePendingRef.current) return;
+    notePendingRef.current = false;
+    // Solo lo ya guardado: un valor a medio escribir no debe adelantarse al autoguardado.
+    const saved = draft.committed();
+    triggerSave(saved.total, saved.percent, saved.amount, notesRef.current);
+  };
+  const saveNoteRef = useRef(saveNote);
+  saveNoteRef.current = saveNote;
+  useEffect(
+    () => () => {
+      saveNoteRef.current();
+    },
+    [],
+  );
+
   // Un valor negativo, no numérico o un % fuera de 0–100 no se guarda ni se
   // corrige en silencio: el campo lo avisa y conserva lo último guardado.
   const percentSuggestion =
@@ -116,7 +139,9 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
     : request.professorType === "planta"
       ? request.professor || "Docente de planta sin nombre registrado"
       : "Sin docente o asesor asignado todavía";
-  const advisorSubtitle = isExternalAdvisor ? request.externalProfessorData?.empresaConsultora : undefined;
+  const advisorSubtitle = isExternalAdvisor
+    ? request.externalProfessorData?.empresaConsultora
+    : request.externalProfessorData?.facultad;
   // Referencia informativa (docs/04): nunca sobreescribe el margen manual,
   // solo ayuda a detectar de un vistazo si el % y el valor en $ "cuadran".
   const marginReferenceAmount = Math.round((totalOfferedCop * (marginPercent ?? 0)) / 100);
@@ -293,36 +318,21 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                   cuando "no cuadran". */}
               <div className="flex items-center gap-1.5 rounded-md bg-slate-50 dark:bg-white/5 px-2 py-1">
                 <Calculator className="h-3 w-3 shrink-0 text-slate-400" />
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-                  {marginPercent ?? 0}% de {formatCop(totalOfferedCop)} ={" "}
-                  <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
-                    {formatCop(marginReferenceAmount)}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            {/* Chips tipo pill minimalistas en tono slate suave */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-slate-400 mr-1 hidden sm:inline">Predefinidos:</span>
-              {[25, 30, 35, 40].map((preset) => {
-                const isActive = marginPercent === preset;
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => draft.applyValue("percent", preset)}
-                    disabled={isReadOnly}
-                    className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                      isActive
-                        ? "bg-slate-900 text-white shadow-xs dark:bg-primary dark:text-primary-foreground font-semibold"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200/70 dark:bg-secondary/60 dark:text-slate-300 dark:hover:bg-secondary"
-                    }`}
+                <div className="space-y-0.5">
+                  <p
+                    data-testid="margin-base-caption"
+                    className="text-[11px] text-slate-500 dark:text-muted-foreground leading-snug"
                   >
-                    {preset}%
-                  </button>
-                );
-              })}
+                    El porcentaje se calcula sobre el valor final ofrecido al cliente, no sobre el costo.
+                  </p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                    {marginPercent ?? 0}% de {formatCop(totalOfferedCop)} ={" "}
+                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
+                      {formatCop(marginReferenceAmount)}
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
           <p className="text-[11px] text-slate-400">
@@ -425,10 +435,12 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
               value={negotiationNotes}
               onChange={(e) => {
                 setNegotiationNotes(e.target.value);
-                // Solo lo ya guardado: un valor a medio escribir no debe adelantarse al autoguardado.
-                const saved = draft.committed();
-                triggerSave(saved.total, saved.percent, saved.amount, e.target.value);
+                notesRef.current = e.target.value;
+                notePendingRef.current = true;
+                clearTimeout(noteTimerRef.current);
+                noteTimerRef.current = setTimeout(() => saveNoteRef.current(), COSTING_AUTOSAVE_DELAY_MS);
               }}
+              onBlur={saveNote}
               placeholder="Ej: Se incluye ajuste de alcance en 2 módulos presenciales acordado con el cliente..."
               className="text-xs resize-none bg-white dark:bg-background border-slate-200 dark:border-border"
               disabled={isReadOnly}

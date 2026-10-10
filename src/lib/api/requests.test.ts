@@ -35,7 +35,6 @@ describe("requestsApi", () => {
     respond(200, []);
     await requestsApi.list({
       q: "bancolombia",
-      role: "KAM",
       status: "nueva",
       urgency: "urgente",
       type: "CAPACITACION",
@@ -43,17 +42,17 @@ describe("requestsApi", () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("q=bancolombia");
-    expect(String(url)).toContain("role=KAM");
+    expect(String(url)).not.toContain("role=");
     expect(String(url)).toContain("status=nueva");
     expect(String(url)).toContain("urgency=urgente");
     expect(String(url)).toContain("type=CAPACITACION");
     expect(init).toMatchObject({ method: "GET", credentials: "include" });
   });
 
-  it("lists with role and status filters url-encoded", async () => {
+  it("never sends a role: the backend takes it from the session token", async () => {
     respond(200, []);
-    await requestsApi.list({ role: "PRODUCT_LEADER", status: "nueva" });
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\?role=PRODUCT_LEADER&status=nueva$/);
+    await requestsApi.list({ status: "nueva" });
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\?status=nueva$/);
   });
 
   it("gets proposal by ID", async () => {
@@ -68,7 +67,7 @@ describe("requestsApi", () => {
     respond(201, { id: "req-new", title: "New Proposal" });
     const payload = {
       companyName: "Acme",
-      nodeId: "node-1",
+      productLeaderId: "leader-1",
       programName: "Training",
     };
     const created = await requestsApi.create(payload);
@@ -126,10 +125,19 @@ describe("requestsApi", () => {
 
   it("assigns a directory professor with a PATCH to /professor", async () => {
     respond(200, {});
-    await requestsApi.assignProfessor("p1", "prof-1");
+    await requestsApi.assignProfessor("p1", { professorId: "prof-1" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/requests\/p1\/professor$/);
     expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ professorId: "prof-1" }) });
+  });
+
+  it("assigns a typed professor in the same PATCH, without a professorId", async () => {
+    respond(200, {});
+    const professor = { fullName: "Luis Mora", type: "EXTERNAL" as const, company: "Mora SAS", email: "luis@mora.co" };
+    await requestsApi.assignProfessor("p1", { professor });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/professor$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ professor }) });
   });
 
   it("reassigns with a PATCH to /reassign", async () => {
@@ -170,6 +178,39 @@ describe("requestsApi", () => {
     expect(body).toEqual({ totalCost: 1000 });
     expect("marginPercentage" in body).toBe(false);
     expect("marginAmount" in body).toBe(false);
+  });
+
+  it("sets the node with PATCH /requests/:id/node", async () => {
+    respond(200, { id: "p1", nodeId: "n-1", node: { id: "n-1", name: "Nodo" } });
+    await requestsApi.setNode("p1", { nodeId: "n-1" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/node$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ nodeId: "n-1" }) });
+  });
+
+  it("removes the node by sending an explicit null", async () => {
+    respond(200, { id: "p1", nodeId: null, node: null });
+    await requestsApi.setNode("p1", { nodeId: null });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nodeId: null });
+  });
+
+  it("saves the center and the cost center with PATCH /requests/:id/center", async () => {
+    respond(200, { id: "p1" });
+    await requestsApi.setCenter("p1", { center: "Eduteka", costCenter: "CC-1234" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/center$/);
+    expect(init).toMatchObject({ method: "PATCH" });
+    expect(JSON.parse(init.body as string)).toEqual({ center: "Eduteka", costCenter: "CC-1234" });
+  });
+
+  it("clears a center field with null and leaves an omitted one out of the body", async () => {
+    respond(200, { id: "p1" });
+    await requestsApi.setCenter("p1", { center: null });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({ center: null });
+    expect("costCenter" in body).toBe(false);
   });
 
   it("surfaces errors as ApiError instances", async () => {

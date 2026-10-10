@@ -15,8 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface SidebarContentProps {
-  /** Show the text labels next to the icons (always true inside the mobile drawer). */
-  expanded: boolean;
+  /**
+   * Show the text labels next to the icons. `true` inside the mobile drawer; when
+   * omitted, the labels appear while the pointer is over the rail (its `group`).
+   */
+  expanded?: boolean;
   onLogout: () => void;
   /** Called after a link is followed, e.g. to close the mobile drawer. */
   onNavigate?: () => void;
@@ -24,6 +27,12 @@ interface SidebarContentProps {
 
 const LABEL_TRANSITION =
   "transition-[max-width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]";
+
+// Literal class names so Tailwind generates them (same widths as the prototype).
+const LABEL_WIDTH = {
+  user: { open: "max-w-[140px]", hover: "group-hover:max-w-[140px]" },
+  item: { open: "max-w-[160px]", hover: "group-hover:max-w-[160px]" },
+} as const;
 
 /** Nav links, user menu and controls of the side menu; the links come from the session role. */
 export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarContentProps) {
@@ -40,15 +49,16 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
         .toUpperCase()
     : user.roleLabel.slice(0, 2).toUpperCase();
 
-  const labelClass = (maxWidth: string) =>
+  const labelClass = (width: keyof typeof LABEL_WIDTH) =>
     cn(
       "overflow-hidden whitespace-nowrap",
       LABEL_TRANSITION,
-      expanded ? `${maxWidth} opacity-100` : "max-w-0 opacity-0",
+      expanded ? `${LABEL_WIDTH[width].open} opacity-100` : "max-w-0 opacity-0",
+      expanded === undefined && [LABEL_WIDTH[width].hover, "group-hover:opacity-100 group-hover:delay-75"],
     );
 
   return (
-    <div className="flex h-full w-full flex-col justify-between overflow-hidden py-4 select-none">
+    <div className="flex h-full w-full flex-col justify-between overflow-hidden py-4 text-white select-none">
       <div className="flex w-full flex-col gap-4 px-2">
         <Link
           to="/dashboard"
@@ -64,22 +74,19 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-0.5 whitespace-nowrap transition-colors hover:bg-sidebar-accent"
+              className="flex h-10 w-full items-center gap-3 rounded-lg px-0.5 whitespace-nowrap transition-colors hover:bg-white/5"
               title={`${user.name} (${user.roleLabel})`}
               aria-label="Menú de usuario y rol"
             >
-              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-accent text-xs font-bold text-sidebar-accent-foreground">
+              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-sidebar-accent text-xs font-bold text-white">
                 {initials}
                 <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-icesi-green ring-2 ring-sidebar" />
               </span>
               <span
-                className={cn(
-                  "flex flex-col items-start justify-center gap-0.5 leading-tight",
-                  labelClass("max-w-[140px]"),
-                )}
+                className={cn("flex flex-col items-start justify-center gap-0.5 leading-tight", labelClass("user"))}
               >
                 <span className="max-w-[140px] truncate text-xs font-bold">{user.name}</span>
-                <span className="text-[10px] text-muted-foreground">{user.roleLabel}</span>
+                <span className="text-[10px] text-zinc-400">{user.roleLabel}</span>
               </span>
             </button>
           </DropdownMenuTrigger>
@@ -99,7 +106,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="my-1 h-px w-full bg-sidebar-border" />
+        <div className="my-1 h-px w-full bg-white/10" />
 
         <nav aria-label="Navegación principal" className="flex w-full flex-col gap-2">
           {navItems.map((item) => {
@@ -115,13 +122,13 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
                   "relative flex h-11 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap transition-colors",
                   active
                     ? "bg-icesi-yellow font-bold text-black shadow-md"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    : "text-zinc-400 hover:bg-white/10 hover:text-white",
                 )}
                 title={item.label}
                 aria-label={item.label}
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                <span className={cn("text-sm font-semibold", labelClass("max-w-[160px]"))}>{item.label}</span>
+                <span className={cn("text-sm font-semibold", labelClass("item"))}>{item.label}</span>
               </Link>
             );
           })}
@@ -130,18 +137,20 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
 
       <div className="flex w-full flex-col gap-2.5 px-2">
         <ThemeToggle
-          showLabel={expanded}
-          className="h-11 w-full justify-start gap-3 whitespace-nowrap px-2.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          showLabel
+          labelClassName={labelClass("item")}
+          onDark
+          className="h-11 w-full justify-start gap-3 whitespace-nowrap px-2.5"
         />
         <button
           type="button"
           onClick={onLogout}
-          className="flex h-10 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap text-sidebar-foreground/70 transition-all hover:bg-destructive/15 hover:text-destructive"
+          className="flex h-10 w-full items-center gap-3 rounded-lg px-2.5 whitespace-nowrap text-zinc-400 transition-all hover:bg-red-500/20 hover:text-red-400"
           title="Cerrar sesión"
           aria-label="Cerrar sesión"
         >
           <LogOut className="h-4 w-4 shrink-0" />
-          <span className={cn("text-sm font-semibold", labelClass("max-w-[160px]"))}>Cerrar sesión</span>
+          <span className={cn("text-sm font-semibold", labelClass("item"))}>Cerrar sesión</span>
         </button>
       </div>
     </div>

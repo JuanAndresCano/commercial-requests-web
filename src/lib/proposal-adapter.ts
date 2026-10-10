@@ -4,6 +4,8 @@ import type {
   ProposalDetail,
   NegotiationRound,
   ProfessorAssignmentLog,
+  ProposalTeamChangeLog,
+  ProposalStatusChange,
   RequestType as BackendRequestType,
   ProposalPriority,
   ProgramModality as BackendProgramModality,
@@ -11,8 +13,11 @@ import type {
 import type {
   ExternalProfessorData,
   ProfessorAssignmentLogEntry,
+  TeamChangeEntry,
+  StatusHistoryEntry,
   RequestItem,
   RequestStatus,
+  NegotiationRound as FrontendNegotiationRound,
   Urgency,
   RequestType as FrontendRequestType,
 } from "./mock-data";
@@ -124,12 +129,19 @@ export function modalityToBackend(label: string): BackendProgramModality | undef
   return MODALITY_TO_BACKEND[label];
 }
 
+/** Shows the stored bounds the way the wizard words them: "N - M", or "Más de N" when there is no upper bound. */
+function participantsLabel(min: unknown, max: unknown): string | undefined {
+  if (typeof min !== "number") return undefined;
+  return typeof max === "number" ? `${min} - ${max}` : `Más de ${min}`;
+}
+
 /** Parses the front's fixed participant range strings ("1 - 5", "Más de 25", ...) into
  * the min/max integers the backend stores. Any string outside that fixed set (there
  * shouldn't be one — it comes from a closed Select) maps to undefined rather than guess. */
-export function parseParticipantsRange(range: string): { min?: number; max?: number } {
+export function parseParticipantsRange(range: string): { min?: number; max?: number | null } {
+  // Open-ended: the null max clears any previous upper bound when this is sent as an edit.
   const moreThan = /^Más de (\d+)/.exec(range);
-  if (moreThan) return { min: Number(moreThan[1]) };
+  if (moreThan) return { min: Number(moreThan[1]), max: null };
   const between = /^(\d+)\s*-\s*(\d+)/.exec(range);
   if (between) return { min: Number(between[1]), max: Number(between[2]) };
   return {};
@@ -141,6 +153,88 @@ function decimalToNumber(value: string | number | null | undefined): number | un
   if (value === null || value === undefined) return undefined;
   const num = Number(value);
   return Number.isFinite(num) ? num : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type RoundScope = Pick<
+  FrontendNegotiationRound,
+  | "participantes"
+  | "modalidad"
+  | "horas"
+  | "type"
+  | "necesidad"
+  | "deadline"
+  | "competencias"
+  | "exito"
+  | "resultados"
+  | "areaParticipantes"
+  | "alimentacion"
+  | "formacionPrevia"
+  | "hasScopeSnapshot"
+>;
+
+/** "Sí - notas" / "Sí" / "No" — the label the live request shows for catering. */
+function cateringLabel(requiresCatering: boolean | null | undefined, notes: string | null | undefined): string {
+  return requiresCatering ? (notes ? `Sí - ${notes}` : "Sí") : "No";
+}
+
+/** Backend free text ("Si", "No se"...) to the wizard's three options; anything else stays undefined. */
+function previousTrainingLabel(value: unknown): "Sí" | "No" | "No sé" | undefined {
+  if (value === "Si" || value === "Sí") return "Sí";
+  if (value === "No") return "No";
+  if (value === "No sé" || value === "No se") return "No sé";
+  return undefined;
+}
+
+const textOrUndefined = (value: unknown) => (typeof value === "string" && value.trim() ? value : undefined);
+
+/** The scope the backend froze when the Product Leader pressed "Enviar a KAM" (`scopeSnapshot`, JSON),
+ * in the labels the round history compares: the same ones the live request fields use. Anything that is
+ * missing, null or not of the expected shape stays undefined — a round without a snapshot (legacy, or a
+ * proposal without a program) simply has no scope to diff, exactly like the prototype's first round. */
+function mapScopeSnapshot(raw: unknown): RoundScope {
+  if (!isRecord(raw)) return { hasScopeSnapshot: false };
+  const {
+    requestType,
+    programModality,
+    totalHours,
+    minParticipants,
+    maxParticipants,
+    generalDescription,
+    programDescription,
+    requiresCatering,
+    cateringNotes,
+    deadline,
+  } = raw;
+  return {
+    hasScopeSnapshot: true,
+    deadline: textOrUndefined(deadline),
+    competencias: textOrUndefined(raw.competencies),
+    exito: textOrUndefined(raw.successMetrics),
+    resultados: textOrUndefined(raw.expectedResults),
+    areaParticipantes: textOrUndefined(raw.participantArea),
+    // Older snapshots did not freeze catering: unknown, not "No".
+    alimentacion:
+      typeof requiresCatering === "boolean"
+        ? cateringLabel(requiresCatering, textOrUndefined(cateringNotes))
+        : undefined,
+    formacionPrevia: previousTrainingLabel(raw.previousTraining),
+    participantes: participantsLabel(minParticipants, maxParticipants),
+    modalidad:
+      typeof programModality === "string" && programModality in MODALITY_MAP
+        ? MODALITY_MAP[programModality as BackendProgramModality]
+        : undefined,
+    horas: typeof totalHours === "number" ? String(totalHours) : undefined,
+    type:
+      typeof requestType === "string" && (Object.values(REQUEST_TYPE_TO_BACKEND) as string[]).includes(requestType)
+        ? mapBackendTypeToFrontend(requestType as BackendRequestType)
+        : undefined,
+    // Same source as the live field: the program description, else the general one.
+    necesidad: textOrUndefined(programDescription) ?? textOrUndefined(generalDescription),
+  };
 }
 
 const toFrontendProfessorType = (type: "STAFF" | "EXTERNAL"): "planta" | "externo" =>
@@ -165,6 +259,39 @@ function mapProfessorHistory(logs: ProfessorAssignmentLog[] | undefined): Profes
     }));
 }
 
+/** Spanish label of the reassignment reason codes (same five options as the Leader's dialog). */
+const REASSIGN_REASON_LABELS: Record<string, string> = {
+  NOT_MATCHING_NODE: "Temática no afín / Corresponde a otro nodo",
+  KAM_ASSIGNMENT_ERROR: "Asignada por error por el KAM",
+  WORKLOAD_REDISTRIBUTION: "Redistribución por sobrecarga operativa",
+  SPECIFIC_EXPERTISE_NEEDED: "Especialidad técnica específica",
+  OTHER: "Otro motivo",
+};
+
+function mapTeamHistory(logs: ProposalTeamChangeLog[] | undefined): TeamChangeEntry[] | undefined {
+  if (!logs || logs.length === 0) return undefined;
+  return [...logs]
+    .sort((a, b) => Date.parse(a.changedAt) - Date.parse(b.changedAt))
+    .map((l) => ({
+      id: l.id,
+      field: l.field === "NODE" ? "nodo" : "lider",
+      previous: l.previousName ?? undefined,
+      next: l.newName,
+      changedBy: [l.changedBy.firstName, l.changedBy.lastName].filter(Boolean).join(" ") || "Usuario",
+      changedAt: l.changedAt,
+      reason: l.reason ? (REASSIGN_REASON_LABELS[l.reason] ?? l.reason) : undefined,
+    }));
+}
+
+/** Backend status codes to front statuses, oldest first. The API order is not trusted. */
+function mapStatusHistory(history: ProposalStatusChange[] | undefined): StatusHistoryEntry[] | undefined {
+  if (!history || history.length === 0) return undefined;
+  return history
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => Date.parse(a.entry.changedAt) - Date.parse(b.entry.changedAt) || a.index - b.index)
+    .map(({ entry }) => ({ status: mapBackendStatusToFrontend(entry.statusCode), changedAt: entry.changedAt }));
+}
+
 export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, currentKamName?: string): RequestItem {
   const currentEconomics = p.economics?.find((e) => e.isCurrent) ?? p.economics?.[0];
   const grossValueNum = currentEconomics ? Number(currentEconomics.grossValue ?? 0) : 0;
@@ -174,18 +301,20 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
   const professorName = professorAssignment?.professor?.fullName ?? professorAssignment?.rawName ?? undefined;
   const professorType = professorAssignment?.professor?.type === "EXTERNAL" ? "externo" : "planta";
 
-  // HU 4.2 (Líder de Producto, not in #7) — only populated for an external advisor.
-  const externalProfessorData: ExternalProfessorData | undefined =
-    professorType === "externo" && professorAssignment?.professor
-      ? {
-          nombre: professorAssignment.professor.fullName,
-          identificacion: professorAssignment.professor.identityDocument ?? undefined,
-          empresaConsultora: professorAssignment.professor.company ?? undefined,
-          correo: professorAssignment.professor.email ?? undefined,
-          telefono: professorAssignment.professor.phone ?? undefined,
-          perfil: professorAssignment.professor.profile ?? undefined,
-        }
-      : undefined;
+  // HU 4.2 — the typed data of the assigned professor/advisor, of either kind. The KAM's payload carries
+  // the contact fields but never `identityDocument`, so `identificacion` stays empty for the KAM.
+  const assignedProfessor = professorAssignment?.professor;
+  const externalProfessorData: ExternalProfessorData | undefined = assignedProfessor
+    ? {
+        nombre: assignedProfessor.fullName,
+        identificacion: assignedProfessor.identityDocument ?? undefined,
+        facultad: assignedProfessor.faculty ?? undefined,
+        empresaConsultora: assignedProfessor.company ?? undefined,
+        correo: assignedProfessor.email ?? undefined,
+        telefono: assignedProfessor.phone ?? undefined,
+        perfil: assignedProfessor.profile ?? undefined,
+      }
+    : undefined;
 
   const leaderFullName = p.productLeader
     ? `${p.productLeader.firstName ?? ""} ${p.productLeader.lastName ?? ""}`.trim()
@@ -206,14 +335,14 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
   // The API order is not a contract: the detail sends every round, the list only the
   // latest. Ascending by roundNumber, so "the last one" is always the current round.
   const rounds = [...(p.negotiationRounds ?? [])].sort((a, b) => a.roundNumber - b.roundNumber);
-  const latestRound = rounds[rounds.length - 1];
-  // The notice only lives while the proposal is back in costing with the client's latest
-  // answer being "changes requested": a redelivery (new PENDING round, DELIVERED) or a
-  // REJECTED closes it, even though the old round keeps its CHANGES_REQUESTED forever.
-  const returnedNote =
-    status === "en-costeo" && latestRound?.clientResponse === "CHANGES_REQUESTED"
-      ? (latestRound.clientNote ?? undefined)
-      : undefined;
+  // The prototype sets the client's note when the KAM returns the proposal and clears it only when the
+  // KAM redelivers it to the client (status back to "entregada"). Pressing "Enviar a KAM" opens a new
+  // PENDING round but does NOT clear it. So while the proposal is in costing it is the note of the
+  // highest-numbered CHANGES_REQUESTED round — not necessarily the latest round. The list sends that
+  // round on purpose (latest + latest returned).
+  const returnedRound =
+    status === "en-costeo" ? [...rounds].reverse().find((r) => r.clientResponse === "CHANGES_REQUESTED") : undefined;
+  const returnedNote = returnedRound?.clientNote ?? undefined;
   // List rounds carry three fields; only the detail's full rounds feed the history panel.
   const fullRounds = p.negotiationRounds && rounds.every((r): r is NegotiationRound => "id" in r) ? rounds : undefined;
 
@@ -230,13 +359,20 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     deadline: p.workflow?.deadline ?? undefined,
     // HU 4.1/4.3/4.4 (Líder de Producto) read this — kept populated even outside detail.
     statusUpdatedAt: p.workflow?.currentStatusSince ?? undefined,
-    node: (detail.node?.name as string) ?? "Por definir",
+    // The node is optional (C-06): none is `null`, never a placeholder name.
+    node: detail.node?.name ?? null,
+    nodeId: p.nodeId ?? null,
+    center: p.center?.trim() || undefined,
+    costCenter: p.costCenter?.trim() || undefined,
+    officialNumber: p.officialNumber?.trim() || undefined,
+    statusHistory: mapStatusHistory(detail.statusHistory),
     productLeader: leaderFullName || "Por definir",
     kam: creatorFullName || currentKamName || "KAM Icesi",
     professor: professorName,
     professorType,
     externalProfessorData,
     professorHistory: mapProfessorHistory(detail.professorAssignmentLogs),
+    teamHistory: mapTeamHistory(detail.teamChangeLogs),
     totalCostCop: grossValueNum,
     costing: {
       totalOfferedCop: grossValueNum,
@@ -244,16 +380,13 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
       marginAmountCop: decimalToNumber(currentEconomics?.estimatedMargin),
       proCulturaTaxPercent: proCultura.applies ? PRO_CULTURA_PERCENT : 0,
       proCulturaTaxAmount: proCultura.amount,
+      negotiationNotes: currentEconomics?.negotiationNotes ?? undefined,
       readyForKam: isReady,
       costingSentAt: currentEconomics?.readyForKamAt ?? undefined,
     },
     clientObservations: returnedNote,
-    // "N - M" only when both ends are known (HU 4.5's specs Select is a closed set of
-    // fixed ranges, e.g. "Más de 25" — this mapper doesn't guess an open-ended one).
-    participantes:
-      p.program?.minParticipants != null && p.program?.maxParticipants != null
-        ? `${p.program.minParticipants} - ${p.program.maxParticipants}`
-        : undefined,
+    // "N - M", or "Más de N" for the open-ended option of the closed Select (HU 4.5).
+    participantes: participantsLabel(p.program?.minParticipants, p.program?.maxParticipants),
     // Spanish label, not the raw backend code — HU 4.5's Select and modalityToBackend
     // round-trip on this exact label.
     modalidad: p.program?.programModality ? MODALITY_MAP[p.program.programModality] : undefined,
@@ -265,6 +398,22 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     companyTipo: p.company?.type ?? undefined,
     companyDescripcion: p.company?.description ?? undefined,
     companyWeb: p.company?.website ?? undefined,
+    companyDireccion: p.company?.address ?? undefined,
+    companyTelefono: p.company?.phone ?? undefined,
+    companyCorreo: p.company?.email ?? undefined,
+    companyCiiuPrincipal: p.company?.ciiuCode ?? undefined,
+    companyCiiuPrincipalDesc: p.company?.sector ?? undefined,
+    companyCiiusSecundarios: p.company?.ciiuSecondary,
+    contactTelefonoSecundario: detail.contact?.secondaryPhone ?? undefined,
+    contactCorreoAlternativo: detail.contact?.alternativeEmail ?? undefined,
+    additionalContacts: detail.additionalContacts?.map((c) => ({
+      id: c.id,
+      nombre: c.name ?? "",
+      cargo: c.role ?? "",
+      area: c.area ?? "",
+      telefono: c.phone ?? "",
+      correo: c.email ?? "",
+    })),
     contactCargo: detail.contact?.role ?? undefined,
     contactArea: detail.contact?.areaDependency ?? undefined,
     contactTelefono: detail.contact?.phone ?? undefined,
@@ -274,19 +423,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
     exito: p.program?.successMetrics ?? undefined,
     resultados: p.program?.expectedResults ?? undefined,
     areaParticipantes: p.program?.participantArea ?? undefined,
-    alimentacion: p.program?.requiresCatering
-      ? p.program?.cateringNotes
-        ? `Sí - ${p.program.cateringNotes}`
-        : "Sí"
-      : "No",
-    formacionPrevia:
-      p.program?.previousTraining === "Si" || p.program?.previousTraining === "Sí"
-        ? "Sí"
-        : p.program?.previousTraining === "No"
-          ? "No"
-          : p.program?.previousTraining === "No sé" || p.program?.previousTraining === "No se"
-            ? "No sé"
-            : undefined,
+    alimentacion: cateringLabel(p.program?.requiresCatering, p.program?.cateringNotes),
+    formacionPrevia: previousTrainingLabel(p.program?.previousTraining),
     descFormacion: p.program?.previousTrainingDetail ?? undefined,
     empresaPrevia: p.program?.previousTrainingCompany ?? undefined,
     fechaPrevia: p.program?.previousTrainingDate ? p.program.previousTrainingDate.slice(0, 10) : undefined,
@@ -304,7 +442,8 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
         sentToClientAt: nr.sentToClientAt ?? undefined,
         clientResponse: isRejected ? "rechazada" : "pendiente",
         clientObservation: nr.clientNote ?? undefined,
-        clientRespondedAt: undefined,
+        clientRespondedAt: nr.clientRespondedAt ?? undefined,
+        ...mapScopeSnapshot(nr.scopeSnapshot),
       };
     }),
   };
