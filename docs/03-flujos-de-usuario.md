@@ -1,5 +1,14 @@
 # Flujos de usuario (user journeys)
 
+> **Actualización 2026-10-09 (cierre del UAT).** Decisiones del dueño del producto que prevalecen sobre este documento donde lo contradigan:
+> - **Crear:** el **líder de producto es obligatorio** y lo elige el KAM; el **nodo es opcional** (casilla vacía que nunca se rellena sola). El asistente ya no sugiere el líder a partir del nodo.
+> - **Editar y cancelar (KAM):** solo en "Nueva" **y sin docente asignado**. En esa misma ventana puede corregir nodo y líder, con historial visible.
+> - **Precio:** el KAM no ve el valor ofertado ni la nota de alcance hasta que el Líder confirma "Enviar a KAM".
+> - **Líder:** escribe **centro y CENCO** en texto libre. Su tablero tiene una quinta columna **"Enviada al KAM"**; el KAM ve "Entregada al líder" hasta que hay docente y "En proceso" después.
+> - **Entrega:** la solicitud entregada recibe número oficial **"CP/CT AAAA-NNNN"**.
+> - **Tableros en vivo:** se refrescan solos con eventos del servidor (con respaldo por sondeo) y muestran "Lleva N días en esta etapa" y "Total N días".
+> - Detalle de cada decisión y su motivo: `PARIDAD-LOGICA-NEGOCIO.md` (repositorio del backend, `workspace/docs/`, tabla "Diferencias deliberadas").
+
 Este documento describe, pantalla por pantalla, los dos recorridos prioritarios: **crear y hacer seguimiento a una solicitud (KAM)** y **triage + costeo de una solicitud (Líder de Producto)**. Las rutas están definidas en `src/App.tsx`.
 
 ## Mapa de rutas
@@ -36,13 +45,13 @@ Wizard de 5 pasos con stepper clicable (se puede saltar hacia atrás libremente;
 
 1. **Paso 1 — Empresa** (`empresaNombre` y `tipoEmpresa` **obligatorios**): buscador con autocompletado contra empresas con convenio existente (`MOCK_COMPANIES`) — al seleccionar una, rellena NIT, dirección, teléfono, correo, CIIU, web y tipo de empresa, **todo editable después**. También se puede escribir una empresa nueva desde cero. Incluye chips de "empresas frecuentes" como atajo de un clic.
 2. **Paso 2 — Contacto** (100% opcional): datos del interlocutor principal + posibilidad de agregar múltiples contactos adicionales (para empresas con varios tomadores de decisión/áreas).
-3. **Paso 3 — Requerimiento** (`nombreReq` y `tipoReq` **obligatorios**; `tipoReqOtro` obligatorio solo si el tipo es "Otro"): aquí se elige el Nodo temático — **opcional, pero si se deja en blanco la solicitud queda con Líder de Producto "Por definir" y no le aparece a nadie real** — el tipo de servicio, y hay una sección "avanzada" colapsable con diagnóstico opcional (necesidad, competencias a fortalecer, resultados esperados, horas, modalidad, participantes, etc.).
+3. **Paso 3 — Requerimiento** (`nombreReq` y `tipoReq` **obligatorios**; `tipoReqOtro` obligatorio solo si el tipo es "Otro"): aquí se elige el Nodo temático — **opcional y siempre vacío por defecto** (el Líder de Producto, en cambio, es **obligatorio** al crear; *Actualización 2026-10-09*) — el tipo de servicio, y hay una sección "avanzada" colapsable con diagnóstico opcional (necesidad, competencias a fortalecer, resultados esperados, horas, modalidad, participantes, etc.).
 4. **Paso 4 — Formación previa** (`formacionPrevia` y `urgencia` **obligatorios**): si la empresa ya ha tomado servicios similares antes, y el nivel de urgencia de la solicitud.
 5. **Paso 5 — Observaciones y Documentos** (100% opcional): notas libres + adjuntar archivos. Al final del paso, justo antes de enviar, se muestra el historial de propuestas entregadas y en proceso de la misma empresa (con filtro por estado y modal de detalle), para detectar antecedentes o duplicidades.
 
 Al final: botón **"Enviar solicitud a Líder de Producto"**. Son **6 los campos con validación dura** (razón social, naturaleza jurídica, título, tipo de requerimiento + su descripción si es "Otro", formación previa, urgencia) — si falta alguno, salta automáticamente al paso correspondiente con un toast de error y resalta el campo. Todo lo demás es opcional.
 
-Al enviar: se crea el `RequestItem` con `status: "nueva"` siempre, sin costeo ni docente, y `productLeader` = el líder elegido manualmente, o el sugerido por nodo, o `"Por definir"` si no se eligió nodo. Se limpia el borrador guardado. Se muestra una pantalla de éxito (`SuccessScreen`) antes de volver al tablero.
+Al enviar: se crea el `RequestItem` con `status: "nueva"` siempre, sin costeo ni docente, y `productLeader` = el líder elegido por el KAM (obligatorio desde el 2026-10-09; ya no se sugiere a partir del nodo). Se limpia el borrador guardado. Se muestra una pantalla de éxito (`SuccessScreen`) antes de volver al tablero.
 
 ### A.4 — Seguimiento
 El KAM no tiene que hacer nada más hasta que la propuesta avance. Se entera de que algo está listo por:
@@ -62,11 +71,11 @@ Más abajo, la sección colapsable **"Información completa de la solicitud"** (
 
 **Acciones disponibles según el estado, todas arriba a la derecha:**
 - `en-costeo`: botón **"Enviar a cliente"** → cambia el estado a `entregada`. **Deshabilitado si el costeo aún no tiene un valor mayor a $0, o si el Líder de Producto todavía no confirmó explícitamente el envío** (ver B.4 — ya no basta con que exista un valor, el Líder debe darle "Enviar a KAM" primero).
-- `nueva` (y la solicitud es suya): botón **"Cancelar solicitud"** → abre un diálogo que exige un **motivo obligatorio** (chips predefinidos o texto libre; el botón de confirmar queda deshabilitado sin motivo) y la marca como cancelada (cancelación lógica, no se elimina físicamente). (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
+- `nueva` y sin docente asignado (y la solicitud es suya): botón **"Cancelar solicitud"** → abre un diálogo que exige un **motivo obligatorio** (chips predefinidos o texto libre; el botón de confirmar queda deshabilitado sin motivo) y la marca como cancelada (cancelación lógica, no se elimina físicamente). (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
 - `entregada`: insignia sólida **"Propuesta Entregada"** + botón **"Devolver con observaciones"** (ver A.7).
 
 ### A.6 — Editar su propia solicitud (solo mientras "Nueva" y sin docente asignado)
-Si la solicitud sigue en "Nueva", es suya y el Líder de Producto aún no le asignó docente, aparece un botón **"Editar información"** junto a "Información completa de la solicitud". Abre un modal con 6 pestañas (General, Empresa, Contacto, Diagnóstico, Formación, Otros) que cubre prácticamente todos los campos capturados en el wizard, incluyendo título y urgencia (que antes no se podían corregir desde ningún lado). Valida formato de correos/teléfonos, no deja guardar el título vacío, y si se intenta cerrar con cambios sin guardar pide confirmación. **En cuanto el Líder asigna un docente, el botón desaparece** aunque la solicitud siga en "Nueva" (el experto no debe ver información que cambia por debajo); el backend lo rechaza también (400). Si el KAM necesita corregir algo después, por ahora lo hace el Líder (`08`, pregunta 19). "Cancelar solicitud" no se ve afectado por esta regla.
+Si la solicitud sigue en "Nueva", es suya y el Líder de Producto aún no le asignó docente, aparece un botón **"Editar información"** junto a "Información completa de la solicitud". Abre un modal con 6 pestañas (General, Empresa, Contacto, Diagnóstico, Formación, Otros) que cubre prácticamente todos los campos capturados en el wizard, incluyendo título y urgencia (que antes no se podían corregir desde ningún lado). Valida formato de correos/teléfonos, no deja guardar el título vacío, y si se intenta cerrar con cambios sin guardar pide confirmación. **En cuanto el Líder asigna un docente, el botón desaparece** aunque la solicitud siga en "Nueva" (el experto no debe ver información que cambia por debajo); el backend lo rechaza también (400). Si el KAM necesita corregir algo después, por ahora lo hace el Líder (`08`, pregunta 19). *Actualización 2026-10-09:* "Cancelar solicitud" **sí** sigue ahora la misma regla: con docente asignado el KAM no puede cancelar (el backend responde 400; ADMIN conserva el permiso).
 
 ### A.7 — Si el cliente pide ajustes después de entregada
 Desde el detalle de una solicitud `entregada`, el KAM puede hacer clic en **"Devolver con observaciones"**: abre un modal para escribir la nota del cliente, y al confirmar:

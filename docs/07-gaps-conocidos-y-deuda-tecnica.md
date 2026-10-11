@@ -1,5 +1,7 @@
 # Gaps conocidos y deuda técnica del prototipo
 
+> **Deuda abierta tras el UAT (2026-10-09).** Además de lo que describe este documento (el prototipo): `npm audit` reporta hallazgos altos en dependencias de producción (cadena de `tailwindcss` y `react-router`) y hace fallar el paso de auditoría del CI; el estado `REJECTED` existe en el backend sin pantalla; la tarifa Pro-Cultura (1,5 %) se calcula solo en el front (pregunta 12 de `08`, C-12 de la bitácora del UAT); quedan colores hexadecimales fijos que el lint marca como avisos; el catálogo de centros por nodo lo debe entregar el negocio; y el rol ADMIN no existía en el prototipo. Las decisiones abiertas están en la columna "¿Decisión pendiente?" de la tabla "Diferencias deliberadas" de `PARIDAD-LOGICA-NEGOCIO.md` (repositorio del backend, `workspace/docs/`, tabla "Diferencias deliberadas").
+
 Inventario de huecos funcionales, placeholders sin conectar y atajos propios de un prototipo de UX. El propósito de este documento es que **ningún agente confunda estos comportamientos con reglas de negocio intencionales** al usarlos como referencia para el desarrollo real.
 
 ## 🔴 Funcionales (afectan lógica de negocio, no solo estética)
