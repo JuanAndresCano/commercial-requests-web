@@ -1,4 +1,5 @@
 import type { RequestStatus } from "@/lib/mock-data";
+import type { BoardStage } from "@/lib/board-stages";
 
 // Paleta única de las 4 fases del pipeline (colores oficiales Icesi), compartida
 // por el Kanban del Líder de Producto, el Kanban del KAM y el Tablero de Solicitudes
@@ -12,7 +13,7 @@ export interface StageTheme {
   pulse?: boolean;
 }
 
-export const STAGE_THEME: Record<RequestStatus, StageTheme> = {
+export const STAGE_THEME: Record<BoardStage, StageTheme> = {
   nueva: {
     colorHex: "#5454e9",
     borderTopClass: "border-t-4 border-t-[#5454e9]",
@@ -31,6 +32,14 @@ export const STAGE_THEME: Record<RequestStatus, StageTheme> = {
     borderTopClass: "border-t-4 border-t-[#865cf0]",
     activeCardClass: "border-[#865cf0] ring-2 ring-[#865cf0]/30 bg-[#865cf0]/5 dark:bg-[#865cf0]/10",
     inactiveHoverClass: "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#865cf0]/50",
+  },
+  // Derived stage of the product leader board only (no real status behind it): sits between
+  // "En costeo" and "Entregada", so it gets its own teal instead of repeating a pipeline colour.
+  "enviada-kam": {
+    colorHex: "#2b9eb3",
+    borderTopClass: "border-t-4 border-t-[#2b9eb3]",
+    activeCardClass: "border-[#2b9eb3] ring-2 ring-[#2b9eb3]/30 bg-[#2b9eb3]/5 dark:bg-[#2b9eb3]/10",
+    inactiveHoverClass: "border-border dark:border-[#252838] bg-card dark:bg-[#141622] hover:border-[#2b9eb3]/50",
   },
   entregada: {
     colorHex: "#4cb979",

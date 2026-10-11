@@ -71,7 +71,7 @@ interface ProductLeaderDashboardConnectedProps {
 }
 
 function ProductLeaderDashboardConnected({ user, updateRequest }: ProductLeaderDashboardConnectedProps) {
-  const { data: proposals, isLoading, isError, refetch } = useRequests({ role: "PRODUCT_LEADER" });
+  const { data: proposals, isLoading, isError, refetch } = useRequests();
   const requests = proposals?.map((p) => mapProposalToRequestItem(p));
   const updateProposalStatus = useUpdateRequestStatus();
 

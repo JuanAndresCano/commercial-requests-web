@@ -28,6 +28,8 @@ describe("proposal documents mapping (HU 5.2)", () => {
     expect(documentTypeFromName("a.pdf")).toBe("pdf");
     expect(documentTypeFromName("a.XLSX")).toBe("excel");
     expect(documentTypeFromName("a.csv")).toBe("excel");
+    expect(documentTypeFromName("Costeo.xlsm")).toBe("excel");
+    expect(documentTypeFromName("COSTEO.XLSM")).toBe("excel");
     expect(documentTypeFromName("a.zip")).toBe("archive");
     expect(documentTypeFromName("a.docx")).toBe("doc");
   });

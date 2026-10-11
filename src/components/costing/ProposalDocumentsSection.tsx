@@ -20,7 +20,8 @@ type DocumentCategory = ProposalDocument["category"];
 // Mirrors the backend limits (ATTACHMENT_MAX_BYTES and the allowed types); the backend
 // stays the authority, this only saves a round trip for an obvious mistake.
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "zip"];
+// .xlsm (Excel with macros) is internal-only: the client-facing tab keeps CLIENT_KAM_EXTENSIONS.
+const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "xlsm", "csv", "zip"];
 const CLIENT_KAM_EXTENSIONS = ["pdf", "doc", "docx"];
 
 interface ProposalDocumentsSectionProps {
@@ -66,7 +67,7 @@ export function ProposalDocumentsSection({
       return;
     }
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      toast.error("Tipo de archivo no permitido (usa PDF, Word, Excel, CSV o ZIP)");
+      toast.error("Tipo de archivo no permitido (usa PDF, Word, Excel (.xlsx, .xls, .xlsm), CSV o ZIP)");
       return;
     }
     if (file.size === 0) {
@@ -399,7 +400,7 @@ export function ProposalDocumentsSection({
                   <input
                     ref={internalFileInputRef}
                     type="file"
-                    accept=".xlsx,.xls,.csv,.pdf,.docx,.doc"
+                    accept=".xlsx,.xls,.xlsm,.csv,.pdf,.docx,.doc"
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files?.[0]) {
@@ -411,7 +412,7 @@ export function ProposalDocumentsSection({
                   <div className="flex items-center justify-center gap-2 text-xs">
                     <UploadCloud className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                     <span className="font-medium text-slate-700 dark:text-slate-200">
-                      Subir archivo interno (.xlsx, .pdf, .docx)
+                      Subir archivo interno (.xlsx, .xlsm, .pdf, .docx)
                     </span>
                     <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o selecciona</span>
                   </div>

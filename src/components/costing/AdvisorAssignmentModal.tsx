@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,148 +7,173 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RequestItem, ExternalProfessorData } from "@/lib/mock-data";
-import { GraduationCap, Briefcase, UserCheck, Check, Mail, Phone, Building, User } from "@/components/icons";
+import { GraduationCap, Briefcase, UserCheck, Check, Mail, Phone, Building } from "@/components/icons";
 import { toast } from "sonner";
-import { ProfessorPicker } from "@/components/ProfessorPicker";
-import { useRegisterExternalProfessor } from "@/hooks/use-professor-search";
+import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api/client";
-import type { Professor } from "@/lib/api/professors";
+import type { Professor, ProfessorType } from "@/lib/api/professors";
+import {
+  EMPTY_PROFESSOR_FORM,
+  professorToFormValues,
+  toProfessorData,
+  validateProfessorForm,
+  type ProfessorFormErrors,
+  type ProfessorFormValues,
+} from "@/lib/professor-form";
+import { ProfessorNameField } from "./ProfessorNameField";
 
 interface AdvisorAssignmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   request: RequestItem;
   /**
-   * `professorId` is the id of the professor directory entry. The board still keeps
-   * the assignment locally (by name), so callers may ignore it until it talks to the API.
+   * Called with what the product leader typed or picked. `professorId` is set only when she picked an entry
+   * of the directory; otherwise the page sends the typed data and the backend creates or reuses the entry.
+   * May return a promise: the modal stays open (and disabled) until it settles, and a rejection is shown
+   * as an error toast without closing it.
    */
   onSaveAssignment: (
     professorName: string,
     type: "planta" | "externo",
-    externalData?: ExternalProfessorData,
+    data?: ExternalProfessorData,
     professorId?: string,
-  ) => void;
+  ) => void | Promise<void>;
+  /**
+   * Only given while the request is still "nueva": it adds a "Guardar y avanzar a experto" button that saves the
+   * assignment and then moves the request on, so the leader does it in one click. "Solo guardar" keeps the stage.
+   */
+  onAdvanceToExpert?: () => void | Promise<void>;
 }
 
-export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignment }: AdvisorAssignmentModalProps) {
-  const [activeTab, setActiveTab] = useState<"planta" | "externo">(
-    request.professorType === "externo" ? "externo" : "planta",
-  );
-  const registerExternal = useRegisterExternalProfessor();
+const KINDS: { value: ProfessorType; label: string; icon: typeof GraduationCap }[] = [
+  { value: "STAFF", label: "Profesor de planta (Icesi)", icon: GraduationCap },
+  { value: "EXTERNAL", label: "Consultor / docente externo", icon: Briefcase },
+];
 
-  // Planta: the pick comes from the directory; the current assignment (if any) is only shown.
-  const [selectedStaff, setSelectedStaff] = useState<Professor | null>(null);
-  const currentPlantaProf = request.professorType === "planta" ? request.professor : undefined;
+function describeSaveError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 403) return "No tienes permiso para asignar el docente de esta solicitud.";
+    if (error.status === 409) {
+      return "La solicitud ya no permite cambiar el docente o asesor. Recarga la página e intenta de nuevo.";
+    }
+  }
+  return "No pudimos asignar el docente o asesor. Revisa los datos e intenta de nuevo.";
+}
 
-  // Externo: either a registered advisor picked from the directory (id set) or a new one typed by hand.
-  const [selectedExternalId, setSelectedExternalId] = useState<string | null>(null);
-  const [externoNombre, setExternoNombre] = useState(
-    request.externalProfessorData?.nombre ?? (request.professorType === "externo" ? (request.professor ?? "") : ""),
-  );
-  const [externoIdentificacion, setExternoIdentificacion] = useState(
-    request.externalProfessorData?.identificacion ?? "",
-  );
-  const [externoEmpresa, setExternoEmpresa] = useState(request.externalProfessorData?.empresaConsultora ?? "");
-  const [externoCorreo, setExternoCorreo] = useState(request.externalProfessorData?.correo ?? "");
-  const [externoTelefono, setExternoTelefono] = useState(request.externalProfessorData?.telefono ?? "");
-  const [externoPerfil, setExternoPerfil] = useState(request.externalProfessorData?.perfil ?? "");
+export function AdvisorAssignmentModal({
+  isOpen,
+  onClose,
+  request,
+  onSaveAssignment,
+  onAdvanceToExpert,
+}: AdvisorAssignmentModalProps) {
+  const [values, setValues] = useState<ProfessorFormValues>(EMPTY_PROFESSOR_FORM);
+  // The directory entry whose data fills the form; while set, the fields are read-only.
+  const [selected, setSelected] = useState<Professor | null>(null);
+  const [errors, setErrors] = useState<ProfessorFormErrors>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [focusName, setFocusName] = useState(false);
 
-  // Sync state when request changes or modal opens
+  // Every time the modal opens the form starts empty: the backend never updates an existing entry, so the
+  // current assignment is only shown as a hint, never loaded as editable data.
   useEffect(() => {
     if (isOpen) {
-      setSelectedStaff(null);
-      setSelectedExternalId(null);
-      if (request.professorType === "externo") {
-        setActiveTab("externo");
-        setExternoNombre(request.externalProfessorData?.nombre ?? request.professor ?? "");
-        setExternoIdentificacion(request.externalProfessorData?.identificacion ?? "");
-        setExternoEmpresa(request.externalProfessorData?.empresaConsultora ?? "");
-        setExternoCorreo(request.externalProfessorData?.correo ?? "");
-        setExternoTelefono(request.externalProfessorData?.telefono ?? "");
-        setExternoPerfil(request.externalProfessorData?.perfil ?? "");
-      } else {
-        setActiveTab("planta");
-      }
+      setValues(EMPTY_PROFESSOR_FORM);
+      setSelected(null);
+      setErrors({});
+      setFocusName(false);
     }
-  }, [isOpen, request]);
+  }, [isOpen]);
 
-  // Picking a registered advisor fills its contact fields; the 4 contact inputs are then
-  // disabled (see below) since `createExternal` has no update path — editing them here
-  // would look saved (toast) but never reach the backend.
-  const handleSelectExternal = (professor: Professor) => {
-    setSelectedExternalId(professor.id);
-    setExternoNombre(professor.fullName);
-    setExternoEmpresa(professor.company ?? "");
-    setExternoIdentificacion(professor.identityDocument ?? "");
-    setExternoCorreo(professor.email ?? "");
-    setExternoTelefono(professor.phone ?? "");
-    setExternoPerfil(professor.profile ?? "");
+  const readOnly = selected !== null;
+  const disabled = isSaving;
+
+  const setField = <K extends keyof ProfessorFormValues>(key: K, value: ProfessorFormValues[K]) => {
+    setValues((current) => ({ ...current, [key]: value }));
+    if (key === "fullName" || key === "email") setErrors((current) => ({ ...current, [key]: undefined }));
   };
 
-  const handleSave = async () => {
-    if (activeTab === "planta") {
-      if (selectedStaff) {
-        onSaveAssignment(selectedStaff.fullName, "planta", undefined, selectedStaff.id);
-        toast.success(`Docente de planta ${selectedStaff.fullName} asignado con éxito`);
-        onClose();
-      } else if (currentPlantaProf) {
-        // Nothing new picked: keep the current assignment.
-        onClose();
-      } else {
-        toast.error("Por favor selecciona un profesor de planta");
-      }
+  const handleSelect = (professor: Professor) => {
+    setSelected(professor);
+    setValues(professorToFormValues(professor));
+    setErrors({});
+  };
+
+  // "Cambiar": drop the picked entry and type again from scratch (the kind stays as it was).
+  const handleClearSelection = () => {
+    setSelected(null);
+    setValues((current) => ({ ...EMPTY_PROFESSOR_FORM, type: current.type }));
+    setErrors({});
+    setFocusName(true);
+  };
+
+  const handleKindKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (readOnly || disabled) return;
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const next: ProfessorType = values.type === "STAFF" ? "EXTERNAL" : "STAFF";
+    setField("type", next);
+    document.getElementById(`advisor-kind-${next}`)?.focus();
+  };
+
+  const submit = async (advance: boolean) => {
+    if (isSaving) return;
+
+    const found = validateProfessorForm(values);
+    setErrors(found);
+    const firstError = found.fullName ?? found.email;
+    if (firstError) {
+      toast.error(firstError);
       return;
     }
 
-    if (!externoNombre.trim()) {
-      toast.error("Ingresa el nombre completo del consultor o docente externo");
+    const kind = values.type === "STAFF" ? "planta" : "externo";
+    const data = toProfessorData(values);
+    setIsSaving(true);
+    try {
+      await onSaveAssignment(data.nombre, kind, data, selected?.id);
+    } catch (error) {
+      toast.error(describeSaveError(error));
+      setIsSaving(false);
       return;
     }
-
-    // A new external advisor is registered once in the directory so it can be reused next time.
-    let professorId = selectedExternalId ?? undefined;
-    if (!professorId) {
+    if (advance && onAdvanceToExpert) {
       try {
-        const created = await registerExternal.mutateAsync({
-          fullName: externoNombre.trim(),
-          company: externoEmpresa.trim() || undefined,
-          identityDocument: externoIdentificacion.trim() || undefined,
-          email: externoCorreo.trim() || undefined,
-          phone: externoTelefono.trim() || undefined,
-          profile: externoPerfil.trim() || undefined,
-        });
-        professorId = created.id;
-      } catch (error) {
+        await onAdvanceToExpert();
+      } catch {
+        // The professor is already saved: say so, and let the leader advance from the detail page.
+        setIsSaving(false);
         toast.error(
-          error instanceof ApiError && error.status === 409
-            ? "Ese consultor ya está registrado en el directorio. Búscalo arriba para seleccionarlo."
-            : "No pudimos registrar al consultor en el directorio. Intenta de nuevo.",
+          `${data.nombre} quedó asignado, pero no se pudo avanzar a "En proceso por experto". Inténtalo desde el botón de la solicitud.`,
         );
+        onClose();
         return;
       }
+      setIsSaving(false);
+      toast.success(`${data.nombre} asignado y solicitud en "En proceso por experto"`);
+      onClose();
+      return;
     }
-
-    const extData: ExternalProfessorData = {
-      nombre: externoNombre.trim(),
-      identificacion: externoIdentificacion.trim() || undefined,
-      empresaConsultora: externoEmpresa.trim() || undefined,
-      correo: externoCorreo.trim() || undefined,
-      telefono: externoTelefono.trim() || undefined,
-      perfil: externoPerfil.trim() || undefined,
-    };
-    onSaveAssignment(externoNombre.trim(), "externo", extData, professorId);
-    toast.success(`Consultor externo ${externoNombre.trim()} registrado y asignado con éxito`);
+    setIsSaving(false);
+    toast.success(`${data.nombre} asignado como docente o asesor`);
     onClose();
   };
 
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    void submit(false);
+  };
+
+  const readOnlyClass = readOnly ? "bg-muted/40" : undefined;
+  const isStaff = values.type === "STAFF";
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isSaving && onClose()}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2 text-primary">
@@ -156,195 +181,232 @@ export function AdvisorAssignmentModal({ isOpen, onClose, request, onSaveAssignm
             <DialogTitle className="text-lg">Asignación del Docente / Consultor</DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
-            Asigna el líder técnico para el diseño y ejecución de esta propuesta. Puedes seleccionar un profesor de
-            planta de la Universidad Icesi o registrar un consultor/docente externo especializado.
+            Escribe los datos del docente o asesor que liderará esta propuesta. Si ya está en el directorio, elígelo
+            mientras escribes el nombre y se reutiliza su registro sin modificarlo.{" "}
+            {onAdvanceToExpert
+              ? "Puedes guardar y avanzar a experto de una vez, o solo guardar."
+              : "Guardar asigna el docente; el estado de la solicitud no cambia."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-2">
-          <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "planta" | "externo")} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="planta" className="flex items-center gap-2 text-xs">
-                <GraduationCap className="h-3.5 w-3.5" />
-                Profesor de Planta (Icesi)
-              </TabsTrigger>
-              <TabsTrigger value="externo" className="flex items-center gap-2 text-xs">
-                <Briefcase className="h-3.5 w-3.5" />
-                Consultor / Docente Externo
-              </TabsTrigger>
-            </TabsList>
+        <form id="advisor-assignment-form" onSubmit={handleSubmit} noValidate className="mt-2 space-y-3.5">
+          {request.professor && (
+            <p className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+              Asignado actualmente: <strong className="text-foreground">{request.professor}</strong>
+              {request.professorType === "externo" ? " (externo)" : " (planta)"}. Al guardar se reemplaza y queda en el
+              historial.
+            </p>
+          )}
 
-            {/* TAB 1: PROFESOR DE PLANTA */}
-            <TabsContent value="planta" className="space-y-4 pt-4">
-              <div className="rounded-lg border border-border bg-card p-3.5 text-xs text-muted-foreground">
-                <p className="font-semibold text-foreground">Cuerpo docente Universidad Icesi</p>
-                <p className="mt-0.5">
-                  Selecciona uno de los profesores de planta vinculados para liderar académicamente la propuesta.
-                </p>
-              </div>
+          <div role="radiogroup" aria-label="Tipo de docente o asesor" className="grid grid-cols-2 gap-1.5">
+            {KINDS.map(({ value, label, icon: Icon }) => {
+              const checked = values.type === value;
+              return (
+                <button
+                  key={value}
+                  id={`advisor-kind-${value}`}
+                  type="button"
+                  role="radio"
+                  aria-checked={checked}
+                  tabIndex={checked ? 0 : -1}
+                  disabled={readOnly || disabled}
+                  onClick={() => setField("type", value)}
+                  onKeyDown={handleKindKeyDown}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed",
+                    checked
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-accent/10",
+                    !checked && (readOnly || disabled) && "opacity-50",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
-              <ProfessorPicker
-                type="STAFF"
-                label="Profesor de Planta disponible *"
-                selectedId={selectedStaff?.id}
-                onSelect={setSelectedStaff}
-              />
+          {readOnly && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-accent/20 bg-accent/5 px-3 py-2 text-xs">
+              <span className="text-muted-foreground">
+                Registro existente del directorio: sus datos se muestran sin edición.
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={handleClearSelection} disabled={disabled}>
+                Cambiar
+              </Button>
+            </div>
+          )}
 
-              {/* Selected (or current) prof preview card */}
-              {(selectedStaff || currentPlantaProf) && (
-                <div className="rounded-md border border-accent/20 bg-accent/5 p-3 text-xs">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <GraduationCap className="h-4 w-4 text-accent" />
-                    <span>
-                      {selectedStaff ? "Docente seleccionado" : "Docente asignado actualmente"}:{" "}
-                      <strong className="text-foreground">{selectedStaff?.fullName ?? currentPlantaProf}</strong>
-                    </span>
-                  </div>
-                  <p className="mt-1 text-muted-foreground">
-                    Institución: Universidad Icesi
-                    {selectedStaff?.faculty ? ` · Facultad: ${selectedStaff.faculty}` : ""} · Nodo: {request.node}
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* TAB 2: CONSULTOR / DOCENTE EXTERNO */}
-            <TabsContent value="externo" className="space-y-3.5 pt-4">
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-900 dark:text-amber-200">
-                <p className="font-semibold">Registro de Consultor o Asesor Externo</p>
-                <p className="mt-0.5 text-muted-foreground">
-                  Ingresa directamente los datos del profesional externo para emitir contratos y respaldar la propuesta
-                  comercial.
-                </p>
-              </div>
-
-              <ProfessorPicker type="EXTERNAL" selectedId={selectedExternalId} onSelect={handleSelectExternal} />
-
-              <p className="text-[11px] text-muted-foreground">
-                ¿No aparece? Captura sus datos abajo y quedará registrado en el directorio para próximas asignaciones.
-              </p>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2 space-y-1.5">
-                  <Label htmlFor="ext-name" className="text-xs font-semibold">
-                    Nombre completo del Consultor / Docente *
-                  </Label>
-                  <div className="relative">
-                    <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="ext-name"
-                      placeholder="Ej: Ing. Mauricio Restrepo Zuluaga"
-                      className="pl-8 text-xs"
-                      value={externoNombre}
-                      onChange={(e) => {
-                        setExternoNombre(e.target.value);
-                        setSelectedExternalId(null);
-                      }}
-                    />
-                  </div>
-                </div>
-
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              {readOnly ? (
                 <div className="space-y-1.5">
-                  <Label htmlFor="ext-id" className="text-xs font-semibold">
-                    Cédula / Identificación / NIT
+                  <Label htmlFor="advisor-name-selected" className="text-xs font-semibold">
+                    Nombre completo *
                   </Label>
                   <Input
-                    id="ext-id"
-                    placeholder="Ej: CC 94.456.789 o Pasaporte"
-                    className="text-xs"
-                    value={externoIdentificacion}
-                    onChange={(e) => setExternoIdentificacion(e.target.value)}
-                    disabled={!!selectedExternalId}
+                    id="advisor-name-selected"
+                    readOnly
+                    value={values.fullName}
+                    className={cn("text-xs", readOnlyClass)}
                   />
                 </div>
+              ) : (
+                <ProfessorNameField
+                  value={values.fullName}
+                  onChange={(name) => setField("fullName", name)}
+                  onSelect={handleSelect}
+                  disabled={disabled}
+                  error={errors.fullName}
+                  autoFocus={focusName}
+                />
+              )}
+            </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="ext-empresa" className="text-xs font-semibold">
-                    Firma consultora o Institución
-                  </Label>
-                  <div className="relative">
-                    <Building className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="ext-empresa"
-                      placeholder="Ej: McKinsey, Valora Consultoría, Independiente"
-                      className="pl-8 text-xs"
-                      value={externoEmpresa}
-                      onChange={(e) => {
-                        setExternoEmpresa(e.target.value);
-                        setSelectedExternalId(null);
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="ext-email" className="text-xs font-semibold">
-                    Correo electrónico
-                  </Label>
-                  <div className="relative">
-                    <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="ext-email"
-                      type="email"
-                      placeholder="correo@consultoria.com"
-                      className="pl-8 text-xs"
-                      value={externoCorreo}
-                      onChange={(e) => setExternoCorreo(e.target.value)}
-                      disabled={!!selectedExternalId}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="ext-phone" className="text-xs font-semibold">
-                    Teléfono / WhatsApp
-                  </Label>
-                  <div className="relative">
-                    <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="ext-phone"
-                      placeholder="+57 315 123 4567"
-                      className="pl-8 text-xs"
-                      value={externoTelefono}
-                      onChange={(e) => setExternoTelefono(e.target.value)}
-                      disabled={!!selectedExternalId}
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2 space-y-1.5">
-                  <Label htmlFor="ext-perfil" className="text-xs font-semibold">
-                    Especialidad / Perfil Profesional
-                  </Label>
-                  <Textarea
-                    id="ext-perfil"
-                    rows={2}
-                    placeholder="Ej: Especialista en Transformación Digital, automatización robótica de procesos y arquitectura en nube con más de 12 años de experiencia."
-                    className="text-xs resize-none"
-                    value={externoPerfil}
-                    onChange={(e) => setExternoPerfil(e.target.value)}
-                    disabled={!!selectedExternalId}
+            {isStaff ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="advisor-faculty" className="text-xs font-semibold">
+                  Facultad
+                </Label>
+                <div className="relative">
+                  <Building className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="advisor-faculty"
+                    placeholder="Ej: Ingeniería"
+                    className={cn("pl-8 text-xs", readOnlyClass)}
+                    value={values.faculty}
+                    readOnly={readOnly}
+                    disabled={disabled}
+                    onChange={(e) => setField("faculty", e.target.value)}
                   />
                 </div>
-
-                {selectedExternalId && (
-                  <p className="sm:col-span-2 text-[11px] text-muted-foreground">
-                    Estos datos pertenecen al registro existente del directorio; no se editan desde aquí.
-                  </p>
-                )}
               </div>
-            </TabsContent>
-          </Tabs>
-        </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="advisor-company" className="text-xs font-semibold">
+                  Firma consultora o Institución
+                </Label>
+                <div className="relative">
+                  <Building className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="advisor-company"
+                    placeholder="Ej: Valora Consultoría, Independiente"
+                    className={cn("pl-8 text-xs", readOnlyClass)}
+                    value={values.company}
+                    readOnly={readOnly}
+                    disabled={disabled}
+                    onChange={(e) => setField("company", e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="advisor-id" className="text-xs font-semibold">
+                Cédula / Identificación / NIT
+              </Label>
+              <Input
+                id="advisor-id"
+                placeholder="Ej: CC 94.456.789 o Pasaporte"
+                className={cn("text-xs", readOnlyClass)}
+                value={values.identityDocument}
+                readOnly={readOnly}
+                disabled={disabled}
+                onChange={(e) => setField("identityDocument", e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="advisor-email" className="text-xs font-semibold">
+                Correo electrónico
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="advisor-email"
+                  type="email"
+                  placeholder="correo@dominio.com"
+                  className={cn("pl-8 text-xs", readOnlyClass)}
+                  value={values.email}
+                  readOnly={readOnly}
+                  disabled={disabled}
+                  aria-invalid={errors.email ? true : undefined}
+                  aria-describedby={errors.email ? "advisor-email-error" : undefined}
+                  onChange={(e) => setField("email", e.target.value)}
+                />
+              </div>
+              {errors.email && (
+                <p id="advisor-email-error" role="alert" className="text-[11px] font-medium text-destructive">
+                  {errors.email}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="advisor-phone" className="text-xs font-semibold">
+                Teléfono / WhatsApp
+              </Label>
+              <div className="relative">
+                <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="advisor-phone"
+                  placeholder="+57 315 123 4567"
+                  className={cn("pl-8 text-xs", readOnlyClass)}
+                  value={values.phone}
+                  readOnly={readOnly}
+                  disabled={disabled}
+                  onChange={(e) => setField("phone", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label htmlFor="advisor-profile" className="text-xs font-semibold">
+                Especialidad / Perfil profesional
+              </Label>
+              <Textarea
+                id="advisor-profile"
+                rows={2}
+                placeholder="Ej: Especialista en transformación digital y automatización de procesos."
+                className={cn("text-xs resize-none", readOnlyClass)}
+                value={values.profile}
+                readOnly={readOnly}
+                disabled={disabled}
+                onChange={(e) => setField("profile", e.target.value)}
+              />
+            </div>
+          </div>
+        </form>
+
+        {onAdvanceToExpert && (
+          <p className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+            <strong className="text-foreground">Guardar y avanzar a experto:</strong> el docente asignado queda como
+            responsable de formular la temática y el cronograma antes del costeo. <strong>Solo guardar</strong> asigna
+            el docente y no cambia la etapa.
+          </p>
+        )}
 
         <DialogFooter className="mt-4 gap-2 sm:gap-0">
-          <Button variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={disabled}>
             Cancelar
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={registerExternal.isPending}>
-            <Check className="h-4 w-4 mr-1" />
-            Guardar asignación
-          </Button>
+          {onAdvanceToExpert ? (
+            <>
+              <Button type="submit" form="advisor-assignment-form" variant="outline" size="sm" disabled={disabled}>
+                Solo guardar
+              </Button>
+              <Button type="button" size="sm" disabled={disabled} onClick={() => void submit(true)}>
+                <Check className="h-4 w-4 mr-1" />
+                {isSaving ? "Guardando…" : "Guardar y avanzar a experto"}
+              </Button>
+            </>
+          ) : (
+            <Button type="submit" form="advisor-assignment-form" size="sm" disabled={disabled}>
+              <Check className="h-4 w-4 mr-1" />
+              {isSaving ? "Guardando…" : "Guardar asignación"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

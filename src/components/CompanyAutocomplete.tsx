@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCompanySearch } from "@/hooks/use-company-search";
 import type { Company } from "@/lib/api/companies";
-import { formatNit } from "@/lib/company";
+import { formatNit } from "@/lib/nit";
 import { fuzzyFilter } from "@/lib/fuzzy";
 
 interface CompanyAutocompleteProps {

@@ -108,3 +108,42 @@ describe("returned-with-observations notice on the Kanban cards (HU 5.4)", () =>
     expect(noticeIsVisible(cardOf("Propuesta sin rondas"))).toBe(false);
   });
 });
+
+describe("Kanban layout shared by the Leader and the KAM", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  const renderLeader = () =>
+    renderWithProviders(
+      <ProductLeaderDashboard
+        requests={requests}
+        user={{ name: "Juan Corrales", email: "lp@icesi.edu.co", roleLabel: "Líder de Producto" }}
+        updateRequest={vi.fn()}
+        updateStatus={vi.fn()}
+      />,
+    );
+
+  it("lets the Leader isolate a stage by clicking its column header, and come back", () => {
+    renderLeader();
+    expect(screen.getByRole("heading", { name: "Nueva" })).toBeInTheDocument();
+
+    const columnHeader = () =>
+      screen.getByRole("heading", { name: "En proceso de costeo" }).closest("button") as HTMLElement;
+    fireEvent.click(columnHeader());
+    expect(columnHeader()).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("heading", { name: "Nueva" })).not.toBeInTheDocument();
+
+    fireEvent.click(columnHeader());
+    expect(screen.getByRole("heading", { name: "Nueva" })).toBeInTheDocument();
+  });
+
+  it("stretches every card to the row height so the action footer sits at the bottom", () => {
+    renderLeader();
+    expect(cardOf("Propuesta devuelta")).toHaveClass("flex", "h-full", "flex-col");
+
+    renderWithProviders(<KamCommandCenter requests={requests} userName="KAM Icesi" />);
+    const kamCard = screen.getAllByText("Propuesta reentregada").at(-1)?.closest("a") as HTMLElement;
+    expect(kamCard).toHaveClass("flex", "h-full", "flex-col");
+  });
+});

@@ -1,4 +1,5 @@
-const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api/v1";
+/** Base URL of the API; also the origin of the real-time stream (see use-realtime). */
+export const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api/v1";
 
 export class ApiError extends Error {
   constructor(

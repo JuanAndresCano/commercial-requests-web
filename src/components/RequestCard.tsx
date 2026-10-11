@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
-import { Calendar, User, ArrowUpRight, AlertCircle, ArrowRight } from "@/components/icons";
+import { Calendar, User, ArrowUpRight, AlertCircle, ArrowRight, Clock } from "@/components/icons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { UrgencyBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
-import type { RequestItem } from "@/lib/mock-data";
+import type { RequestItem, RequestStatus } from "@/lib/mock-data";
+import { getStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
+import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
 
 interface RequestCardProps {
   req: RequestItem;
@@ -16,13 +18,22 @@ interface RequestCardProps {
    * navega al detalle, así que no es un enlace independiente.
    */
   cta?: string;
+  /**
+   * Etapa con la que se muestra la tarjeta (para el KAM, la columna donde cae,
+   * ver `kamStageOf`). Define desde cuándo se cuenta "lleva N días en esta
+   * etapa"; si no se pasa, se usa el estado real de la solicitud.
+   */
+  stage?: RequestStatus;
 }
 
-export function RequestCard({ req, cta }: RequestCardProps) {
+export function RequestCard({ req, cta, stage }: RequestCardProps) {
+  const stageAgeLabel = getStageAgeLabel(req, stage ?? req.status);
+  const totalAgeLabel = getTotalAgeLabel(req);
+
   return (
     <Link
       to={`/solicitudes/${req.id}`}
-      className="group block rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-2xs transition-all hover:border-[#5454e9]/40 hover:shadow-md dark:hover:bg-[#171926] overflow-hidden"
+      className="group flex h-full flex-col rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-2xs transition-all hover:border-[#5454e9]/40 hover:shadow-md dark:hover:bg-[#171926] overflow-hidden"
     >
       {/* El cliente pidió ajustes — el KAM habla directo con el cliente, así
           que necesita ver esta señal igual que el Líder de Producto. Se
@@ -41,9 +52,11 @@ export function RequestCard({ req, cta }: RequestCardProps) {
         <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
       </div>
 
-      <div className="p-3.5">
+      {/* flex-1: in a row of cards (isolated stage grid) the CTA stays at the bottom of every card. */}
+      <div className="flex-1 p-3.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
+            <OfficialNumberBadge officialNumber={req.officialNumber} className="mb-1" />
             <span className="text-[11px] font-medium text-foreground truncate block max-w-full">{req.company}</span>
             <h3 className="mt-1 line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-foreground group-hover:text-[#5454e9] transition-colors font-sans">
               {req.title}
@@ -83,6 +96,19 @@ export function RequestCard({ req, cta }: RequestCardProps) {
               <span>{format(new Date(req.createdAt), "d MMM", { locale: es })}</span>
             </div>
           </div>
+
+          {stageAgeLabel && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Clock className="h-3 w-3 shrink-0" />
+              <span>{stageAgeLabel}</span>
+            </div>
+          )}
+          {totalAgeLabel && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Clock className="h-3 w-3 shrink-0" />
+              <span>{totalAgeLabel}</span>
+            </div>
+          )}
         </div>
       </div>
 

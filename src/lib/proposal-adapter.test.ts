@@ -378,7 +378,8 @@ describe("mapProposalToRequestItem (HU 4.1-4.5, Líder de Producto)", () => {
     const item = mapProposalToRequestItem(baseProposal());
     expect(item.professor).toBe("Dra. Paula Henao");
     expect(item.professorType).toBe("planta");
-    expect(item.externalProfessorData).toBeUndefined();
+    // Both kinds carry the typed data now (a planta professor has at least its name and, if known, faculty).
+    expect(item.externalProfessorData).toMatchObject({ nombre: "Dra. Paula Henao" });
 
     const external = mapProposalToRequestItem(
       baseProposal({
@@ -415,6 +416,46 @@ describe("mapProposalToRequestItem (HU 4.1-4.5, Líder de Producto)", () => {
       correo: "carlos.vega@consultores.com",
       telefono: "+57 315 123 4567",
       perfil: "Especialista en transformación digital.",
+    });
+  });
+
+  it("maps a planta professor's faculty and contact fields, and leaves the identity empty for the KAM", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        assignments: [
+          {
+            id: "as-3",
+            proposalId: "9c858901-8a57-4791-81fe-4c455b099bc9",
+            userId: null,
+            professorId: "prof-3",
+            role: "PROFESSOR",
+            rawName: null,
+            isMapped: true,
+            createdAt: "2026-09-15T00:00:00.000Z",
+            // The KAM's payload: contact fields yes, `identityDocument` is not even present.
+            professor: {
+              id: "prof-3",
+              fullName: "Nohra Villegas",
+              type: "STAFF",
+              faculty: "Ingeniería",
+              company: null,
+              email: "nohra@icesi.edu.co",
+              phone: "+57 300 000 0000",
+              profile: "Optimización.",
+            },
+          },
+        ],
+      }),
+    );
+    expect(item.professorType).toBe("planta");
+    expect(item.externalProfessorData).toEqual({
+      nombre: "Nohra Villegas",
+      identificacion: undefined,
+      facultad: "Ingeniería",
+      empresaConsultora: undefined,
+      correo: "nohra@icesi.edu.co",
+      telefono: "+57 300 000 0000",
+      perfil: "Optimización.",
     });
   });
 
@@ -502,9 +543,16 @@ describe("mapProposalToRequestItem (HU 4.1-4.5, Líder de Producto)", () => {
     expect(item.participantes).toBe("5 - 15");
   });
 
-  it("leaves participantes undefined for an open-ended range (no maxParticipants)", () => {
+  it("shows an open-ended range (no maxParticipants) as 'Más de N'", () => {
     const item = mapProposalToRequestItem(
       baseProposal({ program: { ...baseProposal().program!, minParticipants: 25, maxParticipants: null } }),
+    );
+    expect(item.participantes).toBe("Más de 25");
+  });
+
+  it("leaves participantes undefined when there is no minimum", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({ program: { ...baseProposal().program!, minParticipants: null, maxParticipants: 10 } }),
     );
     expect(item.participantes).toBeUndefined();
   });
@@ -614,10 +662,28 @@ describe("mapProposalToRequestItem - returned-with-observations notice (HU 5.4)"
     }
   });
 
-  it("clears the notice after a new PENDING round, in either order", () => {
+  // Prototype behaviour: the client's note stays until the KAM redelivers (status back to entregada);
+  // "Enviar a KAM" opens a new PENDING round but does not clear it.
+  it("keeps the notice after a new PENDING round (Enviar a KAM), in either order", () => {
     const input = [round(1, "CHANGES_REQUESTED", "vieja"), round(2, "PENDING")];
-    expect(mapProposalToRequestItem(withRounds(input)).clientObservations).toBeUndefined();
-    expect(mapProposalToRequestItem(withRounds([...input].reverse())).clientObservations).toBeUndefined();
+    expect(mapProposalToRequestItem(withRounds(input)).clientObservations).toBe("vieja");
+    expect(mapProposalToRequestItem(withRounds([...input].reverse())).clientObservations).toBe("vieja");
+  });
+
+  it("shows the note of the highest-numbered CHANGES_REQUESTED round, not of an older one", () => {
+    const input = [
+      round(1, "CHANGES_REQUESTED", "vieja"),
+      round(2, "PENDING"),
+      round(3, "CHANGES_REQUESTED", "nueva"),
+      round(4, "PENDING"),
+    ];
+    for (const rounds of [input, [...input].reverse()]) {
+      expect(mapProposalToRequestItem(withRounds(rounds)).clientObservations).toBe("nueva");
+    }
+  });
+
+  it("shows no notice while the proposal has never been returned", () => {
+    expect(mapProposalToRequestItem(withRounds([round(1, "PENDING")])).clientObservations).toBeUndefined();
   });
 
   it("clears the notice after the redelivery (status DELIVERED) even if a round still says CHANGES_REQUESTED", () => {
@@ -646,7 +712,14 @@ describe("mapProposalToRequestItem - returned-with-observations notice (HU 5.4)"
       expect(item.clientObservations).toBe("Ajustar alcance");
     });
 
-    it("shows no notice when the latest round is PENDING or the status is not en-costeo", () => {
+    it("keeps the notice of the returned round the list sends next to a newer PENDING one", () => {
+      const item = mapProposalToRequestItem(
+        listItem([thin(3, "PENDING", null), thin(2, "CHANGES_REQUESTED", "Ajustar alcance")]),
+      );
+      expect(item.clientObservations).toBe("Ajustar alcance");
+    });
+
+    it("shows no notice when the only round is PENDING or the status is not en-costeo", () => {
       expect(mapProposalToRequestItem(listItem([thin(3, "PENDING", null)])).clientObservations).toBeUndefined();
       expect(
         mapProposalToRequestItem(listItem([thin(2, "CHANGES_REQUESTED", "x")], "DELIVERED")).clientObservations,
@@ -664,6 +737,184 @@ describe("mapProposalToRequestItem - returned-with-observations notice (HU 5.4)"
         expect(item.clientObservations).toBeUndefined();
       }
     });
+  });
+});
+
+describe("mapProposalToRequestItem - negotiation history of the detail (prototype's 'Historial de Negociación')", () => {
+  const detailRound = (overrides: Record<string, unknown> = {}) => ({
+    id: "r1",
+    proposalId: "9c858901-8a57-4791-81fe-4c455b099bc9",
+    roundNumber: 1,
+    offeredValue: "30000000",
+    marginAmount: "9000000",
+    marginPercentage: "30",
+    scopeSnapshot: null,
+    leaderNote: null,
+    sentToKamAt: "2026-09-21T00:00:00.000Z",
+    sentToClientAt: null,
+    clientResponse: "PENDING" as const,
+    clientNote: null,
+    ...overrides,
+  });
+  const withRounds = (rounds: unknown[]) =>
+    baseProposal({ negotiationRounds: rounds as ProposalDetail["negotiationRounds"] });
+
+  it("maps when the round was delivered to the client and when it came back", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([
+        detailRound({
+          sentToClientAt: "2026-09-22T00:00:00.000Z",
+          clientResponse: "CHANGES_REQUESTED",
+          clientNote: "Reducir",
+          clientRespondedAt: "2026-09-25T00:00:00.000Z",
+        }),
+      ]),
+    );
+    expect(item.negotiationRounds?.[0]).toMatchObject({
+      sentToClientAt: "2026-09-22T00:00:00.000Z",
+      clientRespondedAt: "2026-09-25T00:00:00.000Z",
+      clientResponse: "rechazada",
+    });
+  });
+
+  it("leaves the dates undefined for a round that was not delivered or returned (or a backend without clientRespondedAt)", () => {
+    const item = mapProposalToRequestItem(withRounds([detailRound()]));
+    expect(item.negotiationRounds?.[0].sentToClientAt).toBeUndefined();
+    expect(item.negotiationRounds?.[0].clientRespondedAt).toBeUndefined();
+  });
+
+  it("maps the scope snapshot into the labels the live request uses, so the round diff compares like with like", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([
+        detailRound({
+          scopeSnapshot: {
+            requestType: "CONSULTORIA",
+            requestTypeOther: null,
+            programType: "CURSO",
+            programModality: "PRESENCIAL_CLIENTE",
+            totalHours: 40,
+            minParticipants: 15,
+            maxParticipants: 20,
+            generalDescription: "Necesidad original",
+          },
+        }),
+      ]),
+    );
+    expect(item.negotiationRounds?.[0]).toMatchObject({
+      participantes: "15 - 20",
+      modalidad: "Presencial en sede cliente",
+      horas: "40",
+      type: "Consultoría",
+      necesidad: "Necesidad original",
+    });
+  });
+
+  it("leaves a scope field undefined when the snapshot lacks it, and the whole scope when there is no snapshot", () => {
+    const partial = mapProposalToRequestItem(
+      withRounds([detailRound({ scopeSnapshot: { totalHours: null, minParticipants: null, maxParticipants: null } })]),
+    );
+    expect(partial.negotiationRounds?.[0]).toMatchObject({
+      participantes: undefined,
+      modalidad: undefined,
+      horas: undefined,
+      type: undefined,
+      necesidad: undefined,
+    });
+    for (const scopeSnapshot of [null, "texto", [1, 2]]) {
+      const item = mapProposalToRequestItem(withRounds([detailRound({ scopeSnapshot })]));
+      expect(item.negotiationRounds?.[0].horas).toBeUndefined();
+      expect(item.negotiationRounds?.[0].type).toBeUndefined();
+    }
+  });
+
+  it("shows an open-ended participant range of a round snapshot as 'Más de N'", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([detailRound({ scopeSnapshot: { minParticipants: 25, maxParticipants: null } })]),
+    );
+    expect(item.negotiationRounds?.[0].participantes).toBe("Más de 25");
+  });
+
+  it("maps every other adjustable field of the snapshot with the same rules as the live request", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([
+        detailRound({
+          scopeSnapshot: {
+            generalDescription: "Descripción general",
+            programDescription: "Necesidad ajustada",
+            competencies: "Liderazgo",
+            successMetrics: "NPS > 80",
+            expectedResults: "Plan de acción",
+            participantArea: "Operaciones",
+            requiresCatering: true,
+            cateringNotes: "Refrigerio",
+            previousTraining: "Si",
+            deadline: "2026-11-30T05:00:00.000Z",
+          },
+        }),
+      ]),
+    );
+    expect(item.negotiationRounds?.[0]).toMatchObject({
+      hasScopeSnapshot: true,
+      necesidad: "Necesidad ajustada",
+      competencias: "Liderazgo",
+      exito: "NPS > 80",
+      resultados: "Plan de acción",
+      areaParticipantes: "Operaciones",
+      alimentacion: "Sí - Refrigerio",
+      formacionPrevia: "Sí",
+      deadline: "2026-11-30T05:00:00.000Z",
+    });
+  });
+
+  it("marks a round without a snapshot, and leaves unknown catering/training undefined instead of 'No'", () => {
+    const none = mapProposalToRequestItem(withRounds([detailRound({ scopeSnapshot: null })]));
+    expect(none.negotiationRounds?.[0].hasScopeSnapshot).toBe(false);
+    const old = mapProposalToRequestItem(withRounds([detailRound({ scopeSnapshot: { totalHours: 40 } })]));
+    expect(old.negotiationRounds?.[0]).toMatchObject({
+      hasScopeSnapshot: true,
+      alimentacion: undefined,
+      formacionPrevia: undefined,
+    });
+  });
+
+  it("ignores a snapshot code it does not know instead of showing the raw backend code", () => {
+    const item = mapProposalToRequestItem(
+      withRounds([detailRound({ scopeSnapshot: { requestType: "NEW_TYPE", programModality: "TELEPATHY" } })]),
+    );
+    expect(item.negotiationRounds?.[0].type).toBeUndefined();
+    expect(item.negotiationRounds?.[0].modalidad).toBeUndefined();
+  });
+});
+
+describe("mapProposalToRequestItem - scope note of the costing (negotiationNotes)", () => {
+  const withNotes = (negotiationNotes: string | null | undefined) => {
+    const base = baseProposal();
+    return baseProposal({ economics: [{ ...base.economics[0], negotiationNotes }] as ProposalDetail["economics"] });
+  };
+
+  it("maps the note of the current economics row into costing.negotiationNotes", () => {
+    expect(mapProposalToRequestItem(withNotes("Alcance acordado")).costing?.negotiationNotes).toBe("Alcance acordado");
+  });
+
+  it("has no note when the row has none (null) or the backend does not send it", () => {
+    expect(mapProposalToRequestItem(withNotes(null)).costing?.negotiationNotes).toBeUndefined();
+    expect(mapProposalToRequestItem(withNotes(undefined)).costing?.negotiationNotes).toBeUndefined();
+  });
+});
+
+describe("mapProposalToRequestItem - value hidden from the KAM until the Leader confirms", () => {
+  it("maps a hidden (null) value to 0, with no Pro-Cultura amount and the gate closed", () => {
+    const base = baseProposal();
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        economics: [{ ...base.economics[0], grossValue: null, readyForKam: false }] as ProposalDetail["economics"],
+      }),
+    );
+
+    expect(item.totalCostCop).toBe(0);
+    expect(item.costing?.totalOfferedCop).toBe(0);
+    expect(item.costing?.proCulturaTaxAmount).toBe(0);
+    expect(item.costing?.readyForKam).toBe(false);
   });
 });
 
@@ -844,12 +1095,180 @@ describe("mapProposalToRequestItem - professor assignment history (HU 4.2)", () 
   });
 });
 
+describe("mapProposalToRequestItem - company and contact details the wizard collects", () => {
+  it("maps the company address, phone, e-mail and CIIU codes, with the CIIU description from the sector", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        company: {
+          ...baseProposal().company,
+          address: "Calle 1 # 2-3",
+          phone: "6025551234",
+          email: "info@acme.co",
+          ciiuCode: "6412",
+          ciiuSecondary: ["6419", "6492"],
+          sector: "Bancos",
+        },
+      }),
+    );
+    expect(item).toMatchObject({
+      companyDireccion: "Calle 1 # 2-3",
+      companyTelefono: "6025551234",
+      companyCorreo: "info@acme.co",
+      companyCiiuPrincipal: "6412",
+      companyCiiuPrincipalDesc: "Bancos",
+      companyCiiusSecundarios: ["6419", "6492"],
+    });
+  });
+
+  it("maps the contact's secondary phone and alternative e-mail", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        contact: { ...baseProposal().contact!, secondaryPhone: "3105550000", alternativeEmail: "alt@acme.co" },
+      }),
+    );
+    expect(item).toMatchObject({ contactTelefonoSecundario: "3105550000", contactCorreoAlternativo: "alt@acme.co" });
+  });
+
+  it("maps the additional contacts in order", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        additionalContacts: [
+          { id: "a1", name: "Ana", role: "Gerente", area: "RRHH", phone: "300", email: "ana@acme.co", position: 0 },
+          { id: "a2", name: "Luis", role: null, area: null, phone: null, email: null, position: 1 },
+        ],
+      }),
+    );
+    expect(item.additionalContacts).toEqual([
+      { id: "a1", nombre: "Ana", cargo: "Gerente", area: "RRHH", telefono: "300", correo: "ana@acme.co" },
+      { id: "a2", nombre: "Luis", cargo: "", area: "", telefono: "", correo: "" },
+    ]);
+  });
+
+  it("leaves them undefined for a backend that does not send them", () => {
+    const item = mapProposalToRequestItem(baseProposal());
+    expect(item.companyDireccion).toBeUndefined();
+    expect(item.companyCiiusSecundarios).toBeUndefined();
+    expect(item.additionalContacts).toBeUndefined();
+  });
+});
+
 describe("parseParticipantsRange", () => {
   it("parses a closed range", () => {
     expect(parseParticipantsRange("6 - 10")).toEqual({ min: 6, max: 10 });
   });
 
-  it("parses the open-ended 'Más de N' option with no max", () => {
-    expect(parseParticipantsRange("Más de 25")).toEqual({ min: 25 });
+  it("parses the open-ended 'Más de N' option with a null max, so an edit clears the old upper bound", () => {
+    expect(parseParticipantsRange("Más de 25")).toEqual({ min: 25, max: null });
+  });
+});
+
+describe("mapProposalToRequestItem - node and leader change history", () => {
+  it("maps the team change log oldest first, with who changed it and the reassignment reason in Spanish", () => {
+    const item = mapProposalToRequestItem(
+      baseProposal({
+        teamChangeLogs: [
+          {
+            id: "t2",
+            field: "NODE",
+            previousName: "IA+ Tech Digital",
+            newName: "Salud Global",
+            reason: "NOT_MATCHING_NODE",
+            changedAt: "2026-10-07T12:00:00.000Z",
+            changedBy: { id: "ldp", firstName: "Laura", lastName: "Diaz" },
+          },
+          {
+            id: "t1",
+            field: "PRODUCT_LEADER",
+            previousName: "Laura Diaz",
+            newName: "Diana Romero",
+            reason: null,
+            changedAt: "2026-10-06T12:00:00.000Z",
+            changedBy: { id: "kam", firstName: "Diana", lastName: "Martínez" },
+          },
+        ],
+      } as Partial<ProposalDetail>),
+    );
+    expect(item.teamHistory).toEqual([
+      {
+        id: "t1",
+        field: "lider",
+        previous: "Laura Diaz",
+        next: "Diana Romero",
+        changedBy: "Diana Martínez",
+        changedAt: "2026-10-06T12:00:00.000Z",
+        reason: undefined,
+      },
+      {
+        id: "t2",
+        field: "nodo",
+        previous: "IA+ Tech Digital",
+        next: "Salud Global",
+        changedBy: "Laura Diaz",
+        changedAt: "2026-10-07T12:00:00.000Z",
+        reason: "Temática no afín / Corresponde a otro nodo",
+      },
+    ]);
+  });
+
+  it("has no history when the backend sends none", () => {
+    expect(mapProposalToRequestItem(baseProposal()).teamHistory).toBeUndefined();
+  });
+});
+
+describe("mapProposalToRequestItem (optional node, center, official number, status history)", () => {
+  it("maps a request without node to node null instead of a placeholder", () => {
+    const mapped = mapProposalToRequestItem(baseProposal({ nodeId: null, node: null }));
+    expect(mapped.node).toBeNull();
+    expect(mapped.nodeId).toBeNull();
+  });
+
+  it("keeps the node name and id when there is one", () => {
+    const mapped = mapProposalToRequestItem(baseProposal());
+    expect(mapped.node).toBe("IA+ Tech Digital");
+    expect(mapped.nodeId).toBe("n1");
+  });
+
+  it("maps center, cost center and official number, with null as absent", () => {
+    const filled = mapProposalToRequestItem(
+      baseProposal({ center: "Eduteka", costCenter: "CC-1234", officialNumber: "CP 2026-0169" }),
+    );
+    expect(filled.center).toBe("Eduteka");
+    expect(filled.costCenter).toBe("CC-1234");
+    expect(filled.officialNumber).toBe("CP 2026-0169");
+
+    const empty = mapProposalToRequestItem(baseProposal({ center: null, costCenter: null, officialNumber: null }));
+    expect(empty.center).toBeUndefined();
+    expect(empty.costCenter).toBeUndefined();
+    expect(empty.officialNumber).toBeUndefined();
+  });
+
+  it("maps the status history to front statuses and keeps it ascending", () => {
+    const mapped = mapProposalToRequestItem(
+      baseProposal({
+        statusHistory: [
+          { statusCode: "NEW", changedAt: "2026-09-01T10:00:00.000Z" },
+          { statusCode: "IN_PROGRESS", changedAt: "2026-09-03T10:00:00.000Z" },
+          { statusCode: "IN_COSTING", changedAt: "2026-09-05T10:00:00.000Z" },
+        ],
+      }),
+    );
+    expect(mapped.statusHistory).toEqual([
+      { status: "nueva", changedAt: "2026-09-01T10:00:00.000Z" },
+      { status: "en-experto", changedAt: "2026-09-03T10:00:00.000Z" },
+      { status: "en-costeo", changedAt: "2026-09-05T10:00:00.000Z" },
+    ]);
+  });
+
+  it("sorts an out-of-order history and has none when the backend sends none", () => {
+    const mapped = mapProposalToRequestItem(
+      baseProposal({
+        statusHistory: [
+          { statusCode: "IN_PROGRESS", changedAt: "2026-09-03T10:00:00.000Z" },
+          { statusCode: "NEW", changedAt: "2026-09-01T10:00:00.000Z" },
+        ],
+      }),
+    );
+    expect(mapped.statusHistory?.map((h) => h.status)).toEqual(["nueva", "en-experto"]);
+    expect(mapProposalToRequestItem(baseProposal()).statusHistory).toBeUndefined();
   });
 });

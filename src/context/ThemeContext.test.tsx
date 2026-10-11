@@ -38,17 +38,20 @@ describe("ThemeProvider", () => {
     expect(document.documentElement).not.toHaveClass("dark");
   });
 
-  it("prefers the stored choice from localStorage", () => {
+  it("opens in light mode even if dark was remembered before, and drops that key", () => {
     window.localStorage.setItem("icesi_theme_mode", "dark");
-    expect(mountProvider().current.theme).toBe("dark");
+    expect(mountProvider().current.theme).toBe("light");
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(window.localStorage.getItem("icesi_theme_mode")).toBeNull();
   });
 
-  it("toggles and persists the selected mode", () => {
+  it("toggles dark mode for the current page without remembering it", () => {
     const theme = mountProvider();
     expect(theme.current.theme).toBe("light");
     act(() => theme.current.toggleTheme());
     expect(theme.current.theme).toBe("dark");
-    expect(window.localStorage.getItem("icesi_theme_mode")).toBe("dark");
+    expect(document.documentElement).toHaveClass("dark");
+    expect(window.localStorage.getItem("icesi_theme_mode")).toBeNull();
   });
 });
 

@@ -1,5 +1,8 @@
 # Preguntas abiertas para validar con Líder de Producto
 
+> **Actualización 2026-10-09 (cierre del UAT).** Resuelto por el dueño del producto: el bloqueo de edición del KAM con docente asignado queda confirmado (pregunta 19) y el KAM **tampoco cancela** con docente asignado; el valor ofertado y la nota de alcance se muestran al KAM solo tras "Enviar a KAM"; al crear, líder obligatorio y nodo opcional.
+> **Siguen abiertas** (detalle en `PARIDAD-LOGICA-NEGOCIO.md` (repositorio del backend, `workspace/docs/`, tabla "Diferencias deliberadas")): si el rol ADMIN se mantiene en el modelo final; si se conserva el cálculo automático de 5 días hábiles de entrega; el catálogo de centros por nodo; si la mentoría sin certificado también es "CP"; qué significa la columna "Enviada al KAM" en el tablero del KAM; si el contador "Total" debe congelarse al entregar; la tarifa Pro-Cultura (C-12); y si los datos nuevos de una empresa que ya existe (mismo NIT) deben actualizarse.
+
 Este documento acumula preguntas de negocio/UX que van surgiendo mientras se
 construye el prototipo, y que **no puede responder el equipo de diseño/desarrollo
 por su cuenta** — necesitan una decisión de producto o de la Líder de Producto.
@@ -562,6 +565,18 @@ Nodo' son el mismo cargo?"
 
 ---
 
+## 19. Con docente asignado, ¿cómo corrige el KAM un error en la información de la solicitud?
+
+**Estado:** 🔴 Abierta — acuerdo de la UAT del 2026-09-29 implementado con una respuesta provisional
+
+**Contexto:** En la UAT, la Líder de Producto y el KAM acordaron que, una vez la Líder asigna un docente, el KAM **no** puede agregar ni editar información de la propuesta (el experto se confunde si el contenido cambia). Como el docente ya se puede asignar en "Nueva", el bloqueo se aplica **al asignar**, no al cambiar de estado.
+
+**Decisión provisional implementada:** el botón "Editar información" del KAM desaparece cuando hay docente asignado (y el backend rechaza el cambio con 400). El Líder de Producto dueño y ADMIN conservan la edición, así que por ahora **el Líder corrige los errores del KAM**. "Cancelar solicitud" no se bloqueó en ese momento (la bitácora solo habla de agregar información); **desde el 2026-10-09 sí se bloquea con docente asignado**.
+
+**Preguntas:** ¿el Líder debería poder "liberar" la edición para el KAM, o el KAM le pide el cambio por otro canal? ¿El KAM debe seguir pudiendo cancelar con docente asignado? **(Resuelto el 2026-10-09: no puede.)** Efecto lateral a confirmar: en "En Costeo" siempre hay docente, así que el KAM tampoco edita tras un rechazo del cliente (pregunta 16 / B.7).
+
+---
+
 ## Confirmado e implementado en este ciclo
 
 _(Feedback de la Líder de Producto que ya se validó contra el código y quedó
@@ -633,7 +648,7 @@ una pregunta abierta.)_
 - **El KAM puede editar la información de su propia solicitud** (empresa,
   contacto, diagnóstico, formación previa, observaciones) **mientras esté en
   "Nueva"** (preguntas 4 y 8).
-- **El KAM puede cancelar su propia solicitud mientras esté en "Nueva"**
+- **El KAM puede cancelar su propia solicitud mientras esté en "Nueva" y sin docente asignado (desde el 2026-10-09)**
   (pregunta 14).
 - **El KAM puede devolver una propuesta "Entregada" a costeo con
   observaciones del cliente** (pregunta 13).
@@ -675,6 +690,8 @@ ronda del 2026-09-15, o son decisiones nuevas tomadas sin ella (ver ronda
 2026-09-19/20 arriba) — repreguntar con ejemplos concretos, no descripciones
 abstractas.)_
 
+- **Pregunta 19 (nueva):** con docente asignado el KAM ya no edita; ¿cómo corrige
+  un error? Hoy lo corrige el Líder (ver pregunta 19 arriba).
 - **Pregunta 17 (nueva):** ¿una empresa histórica del mismo nombre y sin NIT
   debe fusionarse con la que llega con NIT, o quedan separadas? Hoy quedan
   separadas; el código no decide por nombre.

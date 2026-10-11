@@ -44,15 +44,15 @@ El nodo es **opcional** al crear la solicitud ("por definir" es válido), y el L
 
 Cuando el Líder de Producto asigna quién ejecutará la propuesta académica, elige entre dos caminos con implicaciones distintas:
 
-- **Docente de planta**: profesor vinculado a Icesi, se elige de una lista cerrada (facultad interna). No requiere datos de contacto adicionales — ya están en el directorio institucional.
-- **Consultor/docente externo**: profesional fuera de la universidad. Requiere capturar una ficha completa: nombre, identificación, firma consultora/institución, correo, teléfono, perfil profesional. Marcar "externo" **activa automáticamente** el interruptor "¿Requiere asesor externo?" en el módulo de costeo, porque un externo normalmente implica honorarios adicionales que afectan el costo base.
+- **Docente de planta**: profesor vinculado a Icesi. La Líder digita sus datos (solo el nombre es obligatorio; facultad, identificación, correo, teléfono y perfil son opcionales) o elige una entrada ya existente del directorio.
+- **Consultor/docente externo**: profesional fuera de la universidad. Misma ficha, con firma consultora/institución en lugar de facultad: nombre, identificación, correo, teléfono, perfil profesional. Marcar "externo" **activa automáticamente** el interruptor "¿Requiere asesor externo?" en el módulo de costeo, porque un externo normalmente implica honorarios adicionales que afectan el costo base.
 
 ## Costeo financiero (la lógica más sensible del dominio)
 
 El costeo se construye así, en este orden:
 
 1. **Costo Base Directo (COP)** — lo que le cuesta a la universidad ejecutar el servicio (honorarios, materiales, logística). Lo ingresa manualmente el Líder de Producto.
-2. **Margen de Contribución (%)** — porcentaje de utilidad esperado sobre el costo base. Hay atajos predefinidos (25%, 30%, 35%, 40%) pero es editable libremente.
+2. **Margen de Contribución (%)** — porcentaje de utilidad esperado sobre el costo base. Es editable libremente (ya no hay atajos de porcentaje predefinidos: confundían a la Líder en la UAT). En la pantalla de costeo actual, el % se aplica sobre el **valor final ofrecido al cliente**, no sobre el costo (referencia "X% de $Y = $Z").
    - `montoMargen = costoBase × (margen / 100)`
 3. **Estampilla Pro-Cultura** — impuesto legal colombiano que aplica **únicamente cuando el tipo de servicio es "Capacitación"**. Es un **1.5% fijo sobre el costo base**, calculado y mostrado automáticamente (no editable). Para cualquier otro tipo de servicio es $0 y no aparece en el desglose.
    - `estampilla = esCapacitación ? costoBase × 0.015 : 0`

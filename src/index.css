@@ -64,13 +64,14 @@
     --shadow-lg: 0 10px 24px hsl(220 30% 15% / 0.1);
     --shadow-glow: 0 0 16px rgba(84, 84, 233, 0.25);
 
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 228 25% 15%;
+    /* The side menu is black in both themes (same values as .dark). */
+    --sidebar-background: 240 18% 5%; /* #090a0e pitch dark sidebar rail */
+    --sidebar-foreground: 0 0% 96%;
     --sidebar-primary: 240 78% 62%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 14% 94%;
-    --sidebar-accent-foreground: 228 25% 15%;
-    --sidebar-border: 220 14% 88%;
+    --sidebar-accent: 232 16% 16%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 232 14% 17%;
     --sidebar-ring: 240 78% 62%;
   }
 

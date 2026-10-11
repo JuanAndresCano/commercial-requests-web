@@ -8,6 +8,16 @@
 > vigentes**, pero la persistencia en `localStorage` y el login simulado se van a reemplazar.
 > Reglas de código y de trabajo: [`AGENTS.md`](../AGENTS.md) y [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
+> **Actualización (2026-10-09, cierre del UAT).** Varias reglas cambiaron por decisión del
+> dueño del producto tras las pruebas con usuarios: el KAM no edita ni cancela con docente
+> asignado; no ve el valor ofertado hasta que el Líder confirma "Enviar a KAM"; al crear, el
+> líder es obligatorio y el nodo opcional; el centro y el CENCO son texto libre; la solicitud
+> entregada lleva número oficial "CP/CT AAAA-NNNN"; los tableros se actualizan en vivo. La lista
+> completa, con su motivo y las decisiones todavía abiertas, está en la tabla "Diferencias
+> deliberadas" de [`PARIDAD-LOGICA-NEGOCIO.md`](../../commercial-requests-backend/workspace/docs/PARIDAD-LOGICA-NEGOCIO.md)
+> (repositorio del backend). Donde un documento de esta carpeta contradiga esa tabla, **manda
+> la tabla**; los puntos corregidos aquí están marcados con "Actualización 2026-10-09".
+
 ## ⚠️ Qué es (y qué NO es) esta documentación
 
 Lo que sigue documenta **el prototipo de UX/UI** tal como se validó (React + TypeScript + Vite + Tailwind + shadcn/ui, con datos simulados y persistencia en `localStorage`) — es la referencia de **reglas de negocio y experiencia validadas**, no un esquema del backend final.

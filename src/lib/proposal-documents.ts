@@ -17,7 +17,7 @@ export function formatFileSize(bytes: number | null): string {
 export function documentTypeFromName(fileName: string): ProposalDocument["type"] {
   const ext = fileName.split(".").pop()?.toLowerCase();
   if (ext === "pdf") return "pdf";
-  if (ext === "xlsx" || ext === "xls" || ext === "csv") return "excel";
+  if (ext === "xlsx" || ext === "xls" || ext === "xlsm" || ext === "csv") return "excel";
   if (ext === "zip") return "archive";
   return "doc";
 }

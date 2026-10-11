@@ -1,11 +1,13 @@
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { STAGE_THEME } from "@/lib/kanban-theme";
-import type { RequestStatus } from "@/lib/mock-data";
+import type { BoardStage } from "@/lib/board-stages";
+import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
+import { MotionItem } from "@/components/kanban/BoardMotion";
 
 interface KanbanColumnProps<T> {
-  stage: RequestStatus;
+  stage: BoardStage;
   title: string;
   description?: string;
   items: T[];
@@ -22,6 +24,13 @@ interface KanbanColumnProps<T> {
    */
   isolated?: boolean;
   onExitIsolation?: () => void;
+  /**
+   * Hace clicable todo el encabezado (mismo efecto que la tarjeta KPI de la
+   * etapa: aislar o volver a ver todas). Sin él el encabezado queda como texto.
+   */
+  onHeaderClick?: () => void;
+  /** How many stages the board has (4 for the KAM, 5 for the leader); only used in the "back" label. */
+  stageCount?: number;
 }
 
 export function KanbanColumn<T>({
@@ -36,8 +45,26 @@ export function KanbanColumn<T>({
   columnRef,
   isolated,
   onExitIsolation,
+  onHeaderClick,
+  stageCount = 4,
 }: KanbanColumnProps<T>) {
   const theme = STAGE_THEME[stage];
+
+  const headerContent = (
+    <>
+      <span
+        className={cn("h-2.5 w-2.5 rounded-full shrink-0", theme.pulse && "animate-pulse")}
+        style={{ backgroundColor: theme.colorHex }}
+      />
+      <h3 className="font-bold text-sm text-foreground font-sans truncate">{title}</h3>
+      <span
+        className="rounded-full px-2 py-0.5 text-xs font-bold text-white shrink-0"
+        style={{ backgroundColor: theme.colorHex }}
+      >
+        <AnimatedNumber value={items.length} />
+      </span>
+    </>
+  );
 
   return (
     <div
@@ -50,34 +77,41 @@ export function KanbanColumn<T>({
       )}
       style={isolated ? { boxShadow: `0 0 0 2px ${theme.colorHex}33` } : undefined}
     >
-      <div className="p-3.5 border-b border-border dark:border-[#202230] bg-secondary/30 dark:bg-[#161826]">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={cn("h-2.5 w-2.5 rounded-full shrink-0", theme.pulse && "animate-pulse")}
-              style={{ backgroundColor: theme.colorHex }}
-            />
-            <h3 className="font-bold text-sm text-foreground font-sans truncate">{title}</h3>
-            <span
-              className="rounded-full px-2 py-0.5 text-xs font-bold text-white shrink-0"
-              style={{ backgroundColor: theme.colorHex }}
-            >
-              {items.length}
-            </span>
+      <div className="relative border-b border-border dark:border-[#202230] bg-secondary/30 dark:bg-[#161826]">
+        {onHeaderClick ? (
+          // The whole header area (title, counter and description) isolates the stage.
+          <button
+            type="button"
+            onClick={onHeaderClick}
+            aria-pressed={!!isolated}
+            title={isolated ? `Volver a ver las ${stageCount} fases` : "Ver solo esta fase"}
+            className={cn(
+              "block w-full p-3.5 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-icesi-blue",
+              isolated && onExitIsolation && "pr-36",
+            )}
+          >
+            <span className="flex items-center gap-2 min-w-0">{headerContent}</span>
+            {description && (
+              <span className="mt-1 block text-[11px] text-muted-foreground line-clamp-1">{description}</span>
+            )}
+          </button>
+        ) : (
+          <div className={cn("p-3.5", isolated && onExitIsolation && "pr-36")}>
+            <div className="flex items-center gap-2 min-w-0">{headerContent}</div>
+            {description && <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">{description}</p>}
           </div>
-          {isolated && onExitIsolation && (
-            <button
-              type="button"
-              onClick={onExitIsolation}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              title="Volver a ver las 4 fases"
-            >
-              <X className="h-3 w-3" />
-              Ver las 4 fases
-            </button>
-          )}
-        </div>
-        {description && <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">{description}</p>}
+        )}
+        {isolated && onExitIsolation && (
+          <button
+            type="button"
+            onClick={onExitIsolation}
+            className="absolute right-3.5 top-3 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            title={`Volver a ver las ${stageCount} fases`}
+          >
+            <X className="h-3 w-3" />
+            Ver las {stageCount} fases
+          </button>
+        )}
       </div>
 
       <div
@@ -91,7 +125,11 @@ export function KanbanColumn<T>({
             <p className="text-xs font-medium">{emptyLabel}</p>
           </div>
         ) : (
-          items.map((item) => <Fragment key={getKey(item)}>{renderItem(item)}</Fragment>)
+          items.map((item) => (
+            <MotionItem key={getKey(item)} id={getKey(item)} group={stage}>
+              {renderItem(item)}
+            </MotionItem>
+          ))
         )}
       </div>
     </div>

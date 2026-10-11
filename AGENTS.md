@@ -80,7 +80,9 @@ rules govern the integration:
 ## Non-negotiable business rules
 
 1. **The KAM never receives the base cost or the contribution margin.** Only the
-   total offered value and, for "Capacitación", the Pro-Cultura stamp. The backend
+   total offered value and, for "Capacitación", the Pro-Cultura stamp. The offered
+   value (and the scope note) reaches the KAM **only after the LP confirmed
+   "Enviar a KAM"**; until then the API returns `null` for both. The backend
    enforces it; the client must not request, compute or display those fields for a KAM.
 2. A KAM sees only their own requests; an LP only the requests assigned to them.
 3. Pipeline: `nueva` → `en-experto` → `en-costeo` → `entregada`.
@@ -90,10 +92,15 @@ rules govern the integration:
      exclusively to the KAM (see `docs/02-roles-y-permisos.md`, confirmed with
      the product lead; the LP only does "Enviar a KAM").
    - The KAM may return an `entregada` request to `en-costeo` with client observations.
-4. The KAM edits or cancels their own request only while it is `nueva`.
-   The LP reassigns only while `nueva` or `en-experto`, with a structured reason.
-   Reassigning from `en-experto` resets the request to `nueva` and clears the
-   assigned professor (the new LP restarts the flow).
+4. The KAM edits their own request only while it is `nueva` **and has no professor
+   assigned**. In that same window the KAM can also correct the node and the leader
+   (every change is kept in a visible team history). The KAM cancels their own
+   request only while it is `nueva` **and has no professor assigned**, with a
+   mandatory reason; ADMIN keeps both permissions. The LP reassigns only while
+   `nueva` or `en-experto`, with a structured reason. Reassigning from `en-experto`
+   resets the request to `nueva` and clears the assigned professor (the new LP
+   restarts the flow). _(Updated 2026-10-09 by decision of the product owner; see
+   `../commercial-requests-backend/workspace/docs/PARIDAD-LOGICA-NEGOCIO.md`.)_
 5. Money is never negative; margin is 0–100. The costing formula lives only in
    `src/lib/costing.ts` (client-side preview); the backend is the authority.
    Do **not** change the Pro-Cultura rate: it is an open question (docs/08, Q12).
@@ -109,9 +116,12 @@ rules govern the integration:
    at least one client rejection** (`wasRejectedByClient === true`). Before any
    rejection, that section is read-only for the LP (it belongs to the KAM).
    See `docs/03-flujos-de-usuario.md`, section B.7.
-9. The node field (`nodeId`) is mandatory when creating a request. It belongs in
-   Step 3 of the wizard (Requerimiento del Servicio), not Step 1. Do not assign
-   `dbNodes[0]` as a silent default — require explicit selection.
+9. The **Product Leader is mandatory** when creating a request and the KAM picks
+   them explicitly. The node (`nodeId`) is **optional**: an empty field that never
+   fills itself — do not preselect `dbNodes[0]` and do not derive the leader from
+   the node. The owner LP (or ADMIN) can set or remove the node later; the center
+   and the cost center are free text filled in by the LP. _(Updated 2026-10-09 by
+   decision of the product owner; supersedes the previous "node mandatory" rule.)_
 
 ## Code rules
 
