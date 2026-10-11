@@ -38,6 +38,242 @@ export const NODE_DEFAULT_LEADERS: Record<string, string> = {
   "Competitividad Organizacional, Economías Creativas": "María Camila Restrepo",
   "Salud Global, Calidad de Vida": "Sebastián Vélez",
 };
+/**
+ * Data of the assigned professor/advisor, of either kind (the name is historical: it started for externals).
+ * `identificacion` is only known to the product leader; the KAM's payload never carries it.
+ */
+export interface ExternalProfessorData {
+  nombre: string;
+  identificacion?: string;
+  /** Faculty of a planta professor. */
+  facultad?: string;
+  /** Company or institution of an external advisor. */
+  empresaConsultora?: string;
+  correo?: string;
+  telefono?: string;
+  perfil?: string;
+}
+
+export interface ProposalDocument {
+  id: string;
+  name: string;
+  size: string;
+  date: string;
+  type: "pdf" | "doc" | "excel" | "sheet" | "archive";
+  category: "client_kam" | "internal_costing";
+  uploadedBy?: string;
+  tag?: string;
+  // Only set for real (backend) documents; mock documents behave as downloadable/deletable.
+  downloadable?: boolean;
+  canDelete?: boolean;
+}
+
+export interface ClientContact {
+  id: string;
+  nombre: string;
+  cargo: string;
+  telefono: string;
+  correo: string;
+  area: string;
+}
+
+export interface ProposalCosting {
+  // Margen de Contribución en pesos — input manual e independiente (docs/04,
+  // Requisito 1). Es informativo: no tiene que cuadrar matemáticamente con
+  // `expectedMarginPercent` ni con `totalOfferedCop`.
+  // undefined = sin margen registrado (el backend lo guarda como null); 0 es un valor real.
+  marginAmountCop?: number;
+  expectedMarginPercent?: number; // e.g. 30 (%) — manual, informativo
+  proCulturaTaxPercent: number; // 1.5% if Capacitación, 0% otherwise
+  // Estampilla Pro-Cultura: fila de referencia calculada sobre el valor
+  // final ya digitado. Nunca se suma ni se resta de `totalOfferedCop` — el
+  // equipo ya la contempla en el Excel externo del que sale ese valor.
+  proCulturaTaxAmount: number;
+  // Valor Final de la Propuesta (COP) — único campo operativo real. Ya no se
+  // deriva de una base + margen: el Líder lo digita directamente.
+  totalOfferedCop: number;
+  negotiationNotes?: string;
+  // Gate explícito del Líder de Producto (docs/04): mientras
+  // sea false, el KAM no puede enviar la propuesta al cliente aunque ya haya
+  // un valor ofertado > 0. Se invalida automáticamente (vuelve a false) si
+  // el Líder vuelve a editar el valor final o el margen tras haberlo marcado.
+  readyForKam: boolean;
+  // ISO timestamp de cuándo se marcó `readyForKam = true` por última vez —
+  // permite mostrar "esperando hace X días" y ordenar por antigüedad en el
+  // tablero del Líder. Se limpia junto con `readyForKam` si se invalida.
+  costingSentAt?: string;
+}
+
+export interface RequestItem {
+  id: string;
+  /** Human-readable business code (e.g. "REQ-2026-0042"), distinct from `id` (UUID). */
+  code?: string;
+  title: string;
+  applicant: string;
+  type: RequestType;
+  createdAt: string; // ISO
+  deadline?: string; // ISO
+  status: RequestStatus;
+  urgency: Urgency;
+  participantes?: string; // Cupo proyectado, diligenciado por el KAM (ej. "15 - 20")
+  modalidad?: string; // Presencial / Virtual / Híbrida, diligenciado por el KAM
+  horas?: string; // Intensidad horaria estimada, diligenciada por el KAM
+  tipoOtro?: string; // Descripción libre cuando type === "Otro"
+
+  // Datos completos de la empresa, diligenciados por el KAM en el wizard
+  // (paso 1) — "company" arriba sigue siendo solo el nombre, por compatibilidad
+  // con el resto de la app.
+  companyNit?: string;
+  companyDireccion?: string;
+  companyTelefono?: string;
+  companyCorreo?: string;
+  companyCiiuPrincipal?: string;
+  companyCiiuPrincipalDesc?: string;
+  companyCiiusSecundarios?: string[];
+  companyTipo?: string;
+  companyDescripcion?: string;
+  companyWeb?: string;
+
+  // Contacto del cliente (paso 2). "applicant" arriba sigue siendo solo el
+  // nombre del contacto principal, por compatibilidad.
+  contactTelefono?: string;
+  contactTelefonoSecundario?: string;
+  contactCorreo?: string;
+  contactCorreoAlternativo?: string;
+  contactCargo?: string;
+  contactArea?: string;
+  additionalContacts?: ClientContact[];
+
+  // Diagnóstico del requerimiento (paso 3)
+  alimentacion?: string;
+  necesidad?: string;
+  competencias?: string;
+  exito?: string;
+  resultados?: string;
+  areaParticipantes?: string;
+
+  // Formación previa (paso 4)
+  formacionPrevia?: "Sí" | "No" | "No sé";
+  descFormacion?: string;
+  empresaPrevia?: string;
+  fechaPrevia?: string;
+
+  // Observaciones finales (paso 5)
+  observaciones?: string;
+
+  company: string;
+  /** Name of the node; `null` when the request has none (C-06: the node is optional). */
+  node: string | null;
+  /** Real id of the node (only when it comes from the API); `null` when the request has none. */
+  nodeId?: string | null;
+  /** Center the business goes through (free text), typed by the Product Leader (C-07). */
+  center?: string;
+  /** Cost center ("CENCO", free text) loaded for that center (C-07). */
+  costCenter?: string;
+  /** Official number ("CP 2026-0169"); the API only sends it once the request is delivered (C-13). */
+  officialNumber?: string;
+  /** Every change of status, oldest first (detail only); feeds "Tiempo por etapa". */
+  statusHistory?: StatusHistoryEntry[];
+  productLeader: string;
+  kam: string;
+  professor?: string;
+  professorType?: "planta" | "externo";
+  externalProfessorData?: ExternalProfessorData;
+  professorHistory?: ProfessorAssignmentLogEntry[];
+  /** Cambios de nodo o de Líder de Producto, del más antiguo al más reciente. */
+  teamHistory?: TeamChangeEntry[];
+  totalCostCop?: number;
+  costing?: ProposalCosting;
+  clientKamDocuments?: ProposalDocument[];
+  internalCostingDocuments?: ProposalDocument[];
+
+  // Observaciones del cliente cuando pide ajustes tras una entrega — el KAM
+  // "devuelve" la propuesta a costeo con esta nota (docs/08, pregunta 13).
+  clientObservations?: string;
+
+  // ISO timestamp de la última vez que el KAM guardó cambios en "Información
+  // completa de la solicitud" — para que el Líder note si algo cambió.
+  fullInfoUpdatedAt?: string;
+
+  // ISO timestamp de la última vez que cambió `status` — permite mostrar
+  // "lleva X días en esta fase" en el Kanban del Líder para detectar cuellos
+  // de botella. Se actualiza automáticamente en AuthContext.updateRequest.
+  statusUpdatedAt?: string;
+
+  // Historial de rondas de negociación comercial (docs/04): cada vez que el
+  // Líder envía un valor final al KAM se abre una ronda nueva. Vive en
+  // RequestItem (no en ProposalCosting) porque sobrevive a los sucesivos
+  // sobrescritos de `costing` — es el registro de lo que pasó, no el estado
+  // actual del costeo.
+  negotiationRounds?: NegotiationRound[];
+}
+
+export interface StatusHistoryEntry {
+  status: RequestStatus;
+  changedAt: string;
+}
+
+export interface TeamChangeEntry {
+  id: string;
+  field: "nodo" | "lider";
+  previous?: string;
+  next: string;
+  changedBy: string;
+  changedAt: string;
+  /** Motivo de la reasignación del Líder; vacío cuando el KAM corrigió el dato. */
+  reason?: string;
+}
+
+export interface ProfessorAssignmentLogEntry {
+  id: string; // `${requestId}-doc${n}`
+  previousProfessor?: string;
+  previousProfessorType?: "planta" | "externo";
+  newProfessor: string;
+  newProfessorType: "planta" | "externo";
+  changedBy: string;
+  changedAt: string;
+  statusAtChange: RequestStatus;
+}
+
+// No existe "aceptada" explícita: el sistema no tiene hoy un evento real de
+// "el cliente aceptó" — solo "fue entregada" (vigente mientras nadie la
+// devuelva). Inventar un estado "aceptada" sería fabricar un dato que nadie
+// confirma.
+export type ClientResponse = "pendiente" | "rechazada" | "PENDING" | "CHANGES_REQUESTED";
+
+export interface NegotiationRound {
+  id: string; // `${requestId}-r${roundNumber}`
+  roundNumber: number; // 1, 2, 3...
+  totalOfferedCop: number; // snapshot del valor final en esta ronda
+  marginAmountCop: number;
+  expectedMarginPercent: number;
+  leaderNote?: string; // obligatoria desde la ronda 2
+  sentToKamAt: string; // ISO — cuando el Líder confirmó "Enviar a KAM"
+  sentToClientAt?: string; // ISO — cuando el KAM efectivamente la entregó
+  clientResponse: ClientResponse;
+  clientObservation?: string; // solo si clientResponse === "rechazada"
+  clientRespondedAt?: string; // ISO — cuando el KAM registró la devolución
+  // Snapshot de alcance vigente al momento del envío (docs/04) — además del
+  // precio, cada ronda congela estos campos tal como estaban en `req` (no en
+  // `req.costing`) cuando el Líder confirmó "Enviar a KAM". Permite mostrar
+  // qué cambió de alcance entre rondas, no solo el valor ofertado.
+  participantes?: string;
+  modalidad?: string;
+  horas?: string;
+  type?: RequestType;
+  necesidad?: string;
+  // Además de los 5 del prototipo, todo lo que el Líder puede ajustar entre
+  // rondas (decisión del dueño, 2026-10-07), para listar cada cambio.
+  deadline?: string; // ISO
+  competencias?: string;
+  exito?: string;
+  resultados?: string;
+  areaParticipantes?: string;
+  alimentacion?: string;
+  formacionPrevia?: string;
+  /** false cuando la ronda no congeló el alcance (datos antiguos): solo se compara el precio. */
+  hasScopeSnapshot?: boolean;
+}
 
 /**
  * Arma un `ProposalCosting` a partir del valor final de la propuesta
@@ -500,7 +736,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     horas: "48",
     modalidad: "Presencial en sede cliente",
     participantes: "20 - 25",
-    companyNit: "890303893-6",
+    companyNit: "890303893-0",
     companyDireccion: "Avenida 2 Norte # 7N-55, Cali",
     companyTelefono: "(602) 418 7300",
     companyCorreo: "contacto@gdo.com.co",
@@ -600,7 +836,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     horas: "100",
     modalidad: "Híbrida",
     participantes: "6 - 10",
-    companyNit: "890303893-6",
+    companyNit: "890303893-0",
     companyDireccion: "Avenida 2 Norte # 7N-55, Cali",
     companyTelefono: "(602) 418 7300",
     companyCorreo: "contacto@gdo.com.co",
@@ -651,7 +887,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     horas: "20",
     modalidad: "Presencial en sede cliente",
     participantes: "11 - 15",
-    companyNit: "890303893-6",
+    companyNit: "890303893-0",
     companyDireccion: "Avenida 2 Norte # 7N-55, Cali",
     companyTelefono: "(602) 418 7300",
     companyCorreo: "contacto@gdo.com.co",

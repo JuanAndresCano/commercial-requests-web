@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { professorsApi, type NewExternalProfessor, type ProfessorType } from "@/lib/api/professors";
+import { useQuery } from "@tanstack/react-query";
+import { professorsApi, type ProfessorType } from "@/lib/api/professors";
 
 const DEBOUNCE_MS = 250;
 
@@ -13,30 +13,31 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-/** Debounced search of the professor directory; an empty term lists the first entries. */
-export function useProfessorSearch(term: string, type: ProfessorType) {
-  const query = useDebouncedValue(term.trim(), DEBOUNCE_MS);
+interface ProfessorSearchOptions {
+  /** Restricts the search to one kind; omitted, the whole directory is searched. */
+  type?: ProfessorType;
+  /** The search only runs once the term has this many characters (default 0: an empty term lists the first entries). */
+  minChars?: number;
+}
+
+/** Debounced search of the professor directory. */
+export function useProfessorSearch(term: string, { type, minChars = 0 }: ProfessorSearchOptions = {}) {
+  const trimmed = term.trim();
+  const query = useDebouncedValue(trimmed, DEBOUNCE_MS);
+  const enabled = query.length >= minChars;
 
   const result = useQuery({
-    queryKey: ["professors", type, query],
+    queryKey: ["professors", type ?? "ALL", query],
     queryFn: () => professorsApi.list({ q: query || undefined, type }),
     staleTime: 30_000,
+    enabled,
   });
 
   return {
-    professors: result.data ?? [],
+    professors: enabled ? (result.data ?? []) : [],
     // Also true while the user is still typing and the debounce has not fired.
-    isSearching: term.trim() !== query || result.isFetching,
-    isError: result.isError,
-    hasSearched: result.isSuccess && term.trim() === query,
+    isSearching: trimmed.length >= minChars && (trimmed !== query || result.isFetching),
+    isError: enabled && result.isError,
+    hasSearched: enabled && result.isSuccess && trimmed === query,
   };
-}
-
-/** Registers an external advisor in the directory and refreshes the searches. */
-export function useRegisterExternalProfessor() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (data: NewExternalProfessor) => professorsApi.createExternal(data),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["professors"] }),
-  });
 }

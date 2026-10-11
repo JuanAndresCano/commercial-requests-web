@@ -37,24 +37,28 @@ describe("professorsApi", () => {
     expect(init).toMatchObject({ method: "GET", credentials: "include" });
   });
 
-  it("registers an external advisor with a POST body", async () => {
-    respond(201, { id: "p1", fullName: "Ana Ruiz", type: "EXTERNAL" });
-    const created = await professorsApi.createExternal({ fullName: "Ana Ruiz", company: "Consultores SAS" });
+  it("creates a professor of either kind with a POST body and reports it was created", async () => {
+    respond(201, { id: "p1", fullName: "Ana Ruiz", type: "EXTERNAL", reused: false });
+    const created = await professorsApi.create({ fullName: "Ana Ruiz", type: "EXTERNAL", company: "Consultores SAS" });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/professors$/);
     expect(init).toMatchObject({
       method: "POST",
-      body: JSON.stringify({ fullName: "Ana Ruiz", company: "Consultores SAS" }),
+      body: JSON.stringify({ fullName: "Ana Ruiz", type: "EXTERNAL", company: "Consultores SAS" }),
     });
-    expect(created.id).toBe("p1");
+    expect(created).toMatchObject({ id: "p1", reused: false });
   });
 
-  it("surfaces a duplicate as an ApiError 409", async () => {
-    respond(409, { message: 'The external advisor "Ana Ruiz" is already registered' });
-    await expect(professorsApi.createExternal({ fullName: "Ana Ruiz" })).rejects.toMatchObject({
-      status: 409,
-    });
-    await expect(professorsApi.createExternal({ fullName: "Ana Ruiz" })).rejects.toBeInstanceOf(ApiError);
+  it("tells when the backend reused an existing professor (200) instead of creating it", async () => {
+    respond(200, { id: "s1", fullName: "Nohra Villegas", type: "STAFF", reused: true });
+    const saved = await professorsApi.create({ fullName: "nohra villegas", type: "STAFF" });
+    expect(saved.reused).toBe(true);
+  });
+
+  it("surfaces a validation error as an ApiError 400", async () => {
+    respond(400, { message: "fullName should not be empty" });
+    await expect(professorsApi.create({ fullName: "", type: "STAFF" })).rejects.toMatchObject({ status: 400 });
+    await expect(professorsApi.create({ fullName: "", type: "STAFF" })).rejects.toBeInstanceOf(ApiError);
   });
 });

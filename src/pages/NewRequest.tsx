@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -14,7 +14,6 @@ import {
   X,
   Bell,
   Calendar,
-  Search,
   Plus,
   Trash2,
   UploadCloud,
@@ -27,9 +26,6 @@ import {
   ChevronUp,
   SlidersHorizontal,
   Users,
-  History,
-  Clock,
-  Eye,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,81 +34,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
   NODES,
   PRODUCT_LEADERS,
-  NODE_DEFAULT_LEADERS,
   REQUEST_TYPES,
-  STATUS_META,
-  URGENCY_META,
-  formatCop,
   type RequestType,
   type Urgency,
-  type RequestItem,
   type ClientContact,
 } from "@/lib/mock-data";
 import type { Company } from "@/lib/api/companies";
-import { companyTypeLabel, formatNit } from "@/lib/company";
+import { companyTypeLabel } from "@/lib/company";
+import { displayNit, formatNit, parseNit } from "@/lib/nit";
+import { buildCreateProposalPayload } from "@/lib/create-proposal-payload";
+import { leaderDisplayName, resolveNodeId, resolveProductLeaderId, toLeaderOptions } from "@/lib/wizard-assignment";
+import { restoreDraftData } from "@/lib/wizard-draft";
 import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
+import { ProposalHistorySection } from "@/components/wizard/ProposalHistorySection";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { useCreateProposal } from "@/hooks/use-create-proposal";
 import { useNodes } from "@/hooks/use-nodes";
 import { useProductLeaders } from "@/hooks/use-product-leaders";
-import { useRequests } from "@/hooks/use-requests";
 import { attachmentsApi } from "@/lib/api/attachments";
-import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
-
-import type {
-  CreateProposalPayload,
-  CompanyType,
-  ProposalPriority,
-  RequestType as ApiRequestType,
-  ProgramModality,
-} from "@/lib/api/requests";
-
-const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
-  Pública: "PUBLICA",
-  Privada: "PRIVADA",
-  Mixta: "MIXTA",
-  "Sin ánimo de lucro": "SIN_ANIMO_LUCRO",
-  PUBLICA: "PUBLICA",
-  PRIVADA: "PRIVADA",
-  MIXTA: "MIXTA",
-  SIN_ANIMO_LUCRO: "SIN_ANIMO_LUCRO",
-};
-
-const PRIORITY_MAP: Record<string, ProposalPriority> = {
-  alta: "ALTA",
-  media: "MEDIA",
-  baja: "BAJA",
-  ALTA: "ALTA",
-  MEDIA: "MEDIA",
-  BAJA: "BAJA",
-};
-
-const REQUEST_TYPE_MAP: Record<string, ApiRequestType> = {
-  Capacitación: "CAPACITACION",
-  Consultoría: "CONSULTORIA",
-  Mentoría: "MENTORIA",
-  Investigación: "INVESTIGACION",
-  "Proyectos Especiales (Eventos)": "SPECIAL_PROJECTS",
-  Otro: "OTHER",
-};
-
-const MODALITY_MAP: Record<string, ProgramModality> = {
-  "Presencial en campus Icesi": "PRESENCIAL_ICESI",
-  "Presencial en sede cliente": "PRESENCIAL_CLIENTE",
-  "Virtual sincrónica": "VIRTUAL",
-  Híbrida: "HIBRIDA",
-};
 
 const STEPS = [
   { id: 1, title: "Empresa", icon: Building2 },
@@ -127,6 +69,8 @@ export interface AttachedFile {
   name: string;
   size: string;
   type: string;
+  /** Archivo real para subir al backend. No sobrevive al borrador en localStorage (se serializa como {}). */
+  file?: File;
 }
 
 export interface RequestFormData {
@@ -155,8 +99,8 @@ export interface RequestFormData {
   contactosAdicionales: ClientContact[]; // Múltiples contactos en la empresa
 
   // Paso 3 - Requerimiento del Servicio
-  nodo: string; // Opcional
-  ldp: string; // Líder de producto asignado
+  nodo: string; // Opcional y suelto: elegirlo no cambia el líder. Arranca vacío.
+  ldp: string; // Obligatorio — líder de producto que atiende la solicitud. Arranca vacío.
   nombreReq: string; // Obligatorio
   tipoReq: RequestType | ""; // Obligatorio — arranca vacío, sin preselección
   tipoReqOtro: string; // Obligatorio condicional si tipoReq === 'Otro'
@@ -181,6 +125,8 @@ export interface RequestFormData {
   observaciones: string;
   archivos: AttachedFile[]; // 100% opcional
 }
+
+const LEADER_REQUIRED_MESSAGE = "Selecciona el Líder de Producto que atenderá la solicitud para continuar.";
 
 const DRAFT_STORAGE_KEY = "icesi_kam_new_request_draft_v1";
 
@@ -287,8 +233,10 @@ export default function NewRequest() {
       const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed?.data) {
-          setData(parsed.data);
+        // Un borrador de una versión anterior puede no tener todos los campos actuales (p. ej. el líder).
+        const restored = restoreDraftData(parsed?.data, initialFormData);
+        if (restored) {
+          setData(restored);
           toast.success("Borrador recuperado correctamente");
         }
       }
@@ -334,8 +282,9 @@ export default function NewRequest() {
   // Mapa campo -> id del elemento en pantalla, para el auto-scroll de validación
   const FIELD_SCROLL_TARGETS: Record<string, string> = {
     empresaNombre: "empresa-nombre",
+    nit: "empresa-nit",
     tipoEmpresa: "tipo-empresa-group",
-    nodo: "nodo-select",
+    ldp: "ldp-select",
     nombreReq: "nombre-req",
     tipoReq: "tipo-req",
     tipoReqOtro: "tipo-otro-input",
@@ -354,12 +303,14 @@ export default function NewRequest() {
       if (!data.tipoEmpresa) {
         newErrors.tipoEmpresa = "Selecciona la naturaleza jurídica de la empresa para continuar.";
       }
+      const nit = parseNit(data.nit);
+      if (!nit.ok) newErrors.nit = nit.error;
     } else if (currentStep === 2) {
       // Paso 2 (Contactos) es 100% opcional según directriz de Líder de Producto
       return true;
     } else if (currentStep === 3) {
-      if (!data.nodo) {
-        newErrors.nodo = "Selecciona un nodo temático para continuar.";
+      if (!data.ldp) {
+        newErrors.ldp = LEADER_REQUIRED_MESSAGE;
       }
       if (!data.nombreReq.trim()) {
         newErrors.nombreReq = "Ingresa un título o nombre de la propuesta para continuar.";
@@ -416,7 +367,25 @@ export default function NewRequest() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
+  // Al salir del campo NIT: si es válido se muestra con formato (y con su dígito de verificación); si no, se marca.
+  const commitNit = () => {
+    const nit = parseNit(data.nit);
+    if (!nit.ok) {
+      setFieldErrors((prev) => ({ ...prev, nit: nit.error }));
+    } else if (nit.nit) {
+      setData((prev) => ({ ...prev, nit: formatNit(nit.nit) }));
+    }
+  };
+
   const handleFinish = async (kind: "draft" | "sent") => {
+    // El NIT es opcional, pero si se escribió debe ser un NIT real: aplica a cualquier envío.
+    const nit = parseNit(data.nit);
+    if (!nit.ok) {
+      toast.error(nit.error);
+      setFieldErrors((prev) => ({ ...prev, nit: nit.error }));
+      setStep(1);
+      return;
+    }
     if (kind === "sent") {
       if (!data.empresaNombre.trim()) {
         toast.error("Por favor ingresa o busca la Razón Social de la empresa en el Paso 1.");
@@ -436,12 +405,9 @@ export default function NewRequest() {
         setStep(1);
         return;
       }
-      if (!data.nodo) {
-        toast.error("Por favor selecciona un nodo temático en el Paso 3.");
-        setFieldErrors((prev) => ({
-          ...prev,
-          nodo: "Selecciona un nodo temático para continuar.",
-        }));
+      if (!data.ldp) {
+        toast.error("Por favor selecciona el Líder de Producto en el Paso 3.");
+        setFieldErrors((prev) => ({ ...prev, ldp: LEADER_REQUIRED_MESSAGE }));
         setStep(3);
         return;
       }
@@ -487,95 +453,52 @@ export default function NewRequest() {
       ? data.nombreReq.trim()
       : `${data.tipoReq === "Otro" && data.tipoReqOtro ? data.tipoReqOtro : data.tipoReq || "Solicitud"} - ${data.empresaNombre || "Empresa Aliada"}`;
 
-    // Resolve matching nodeId from backend catalogue if assigned
-    const matchedNode = dbNodes?.find(
-      (n) => n.name.toLowerCase() === (data.nodo || "").toLowerCase() || n.id === data.nodo,
-    );
-    const resolvedNodeId = matchedNode?.id;
+    // El líder es obligatorio y debe existir en el directorio del backend; el nodo es opcional.
+    const resolvedProductLeaderId = resolveProductLeaderId(data.ldp, dbLeaders);
+    if (!resolvedProductLeaderId) {
+      const message = data.ldp
+        ? "No se pudo identificar al Líder de Producto elegido. Selecciónalo de nuevo en el Paso 3."
+        : LEADER_REQUIRED_MESSAGE;
+      toast.error(message);
+      setFieldErrors((prev) => ({ ...prev, ldp: message }));
+      setStep(3);
+      return;
+    }
+    const resolvedNodeId = resolveNodeId(data.nodo, dbNodes);
+    if (data.nodo && !resolvedNodeId) {
+      toast.error("No se pudo identificar el nodo elegido. Selecciónalo de nuevo en el Paso 3 o quítalo.");
+      setStep(3);
+      return;
+    }
 
-    // Resolve matching productLeaderId from backend directory if assigned
-    const matchedLeader = dbLeaders?.find((u) => {
-      const fullName = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
-      return (
-        u.id === data.ldp ||
-        (data.ldp && fullName.toLowerCase() === data.ldp.toLowerCase()) ||
-        (data.ldp && u.email.toLowerCase() === data.ldp.toLowerCase())
-      );
-    });
-    const resolvedProductLeaderId =
-      matchedLeader?.id || (dbLeaders?.some((u) => u.id === data.ldp) ? data.ldp : undefined);
-
-    const primaryContact = data.contactoNombre.trim()
-      ? {
-          name: data.contactoNombre.trim(),
-          email: data.correo.trim() || undefined,
-          phone: data.telefono.trim() || undefined,
-          role: data.cargo.trim() || undefined,
-          area: data.area.trim() || undefined,
-        }
-      : data.contactosAdicionales.length > 0 && data.contactosAdicionales[0].nombre.trim()
-        ? {
-            name: data.contactosAdicionales[0].nombre.trim(),
-            email: data.contactosAdicionales[0].correo?.trim() || undefined,
-            phone: data.contactosAdicionales[0].telefono?.trim() || undefined,
-            role: data.contactosAdicionales[0].cargo?.trim() || undefined,
-            area: data.contactosAdicionales[0].area?.trim() || undefined,
-          }
-        : undefined;
-
-    const payload: CreateProposalPayload = {
-      companyName: data.empresaNombre.trim() || "Empresa Aliada",
-      companyNit: data.nit.trim() || undefined,
-      companyDescription: data.descripcion.trim() || undefined,
-      companyType: data.tipoEmpresa ? COMPANY_TYPE_MAP[data.tipoEmpresa] : undefined,
-      sector: data.ciiuPrincipalDesc.trim() || undefined,
-      website: data.web.trim() || undefined,
+    const payload = buildCreateProposalPayload(data, {
+      title: finalTitle,
       nodeId: resolvedNodeId,
       productLeaderId: resolvedProductLeaderId,
-      priority: data.urgencia ? PRIORITY_MAP[data.urgencia] : undefined,
-      contactName: primaryContact?.name,
-      contactEmail: primaryContact?.email,
-      contactPhone: primaryContact?.phone,
-      contactRole: primaryContact?.role,
-      contactArea: primaryContact?.area,
-      requestType: data.tipoReq ? REQUEST_TYPE_MAP[data.tipoReq] : undefined,
-      requestTypeOther: data.tipoReq === "Otro" ? data.tipoReqOtro.trim() || undefined : undefined,
-      participantRange: data.participantes.trim() || undefined,
-      programName: finalTitle,
-      needDescription: data.necesidad.trim() || undefined,
-      estimatedHours: data.horas ? parseInt(data.horas, 10) || undefined : undefined,
-      modality: data.modalidad ? MODALITY_MAP[data.modalidad] : undefined,
-      requiresCatering: Boolean(data.alimentacion?.trim()),
-      cateringNotes: data.alimentacion?.trim() || undefined,
-      expectedResults: data.resultados.trim() || undefined,
-      successMetrics: data.exito.trim() || undefined,
-      competencies: data.competencias.trim() || undefined,
-      participantArea: data.areaParticipantes.trim() || undefined,
-      hasPreviousTraining: data.formacionPrevia === "Sí",
-      previousTraining: data.formacionPrevia || undefined,
-      previousTrainingDescription: data.descFormacion.trim() || undefined,
-      previousTrainingCompany: data.empresaPrevia.trim() || undefined,
-      previousTrainingDate: data.fechaPrevia.trim() || undefined,
-      observations: data.observaciones.trim() || undefined,
-      attachments: data.archivos.map((f) => ({ fileName: f.name })),
-    };
+    });
 
     try {
       const createdProposal = await createProposal.mutateAsync(payload);
 
       // UI-006: Subir archivos físicos reales al backend si se adjuntaron en el formulario
       if (createdProposal?.id && data.archivos && data.archivos.length > 0) {
+        // Un borrador restaurado conserva solo los metadatos: sin File real no hay nada que subir.
+        const uploadable = data.archivos.filter((a) => a.file instanceof File);
+        let uploadFailed = uploadable.length < data.archivos.length;
         try {
           await Promise.all(
-            data.archivos.map((file) =>
+            uploadable.map((a) =>
               attachmentsApi.upload(createdProposal.id, {
-                file,
-                category: "INTERNAL",
+                file: a.file as File,
+                category: "CLIENT_FACING",
               }),
             ),
           );
         } catch (uploadErr) {
           console.warn("Algunos adjuntos no pudieron subirse al almacenamiento:", uploadErr);
+          uploadFailed = true;
+        }
+        if (uploadFailed) {
           toast.warning("La solicitud fue creada, pero algunos documentos no pudieron subirse automáticamente.");
         }
       }
@@ -734,7 +657,7 @@ export default function NewRequest() {
 
         {/* Step container */}
         <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-8 shadow-xs">
-          {step === 1 && <Step1 data={data} update={update} errors={fieldErrors} />}
+          {step === 1 && <Step1 data={data} update={update} errors={fieldErrors} onNitBlur={commitNit} />}
           {step === 2 && <Step2 data={data} update={update} />}
           {step === 3 && <Step3 data={data} update={update} errors={fieldErrors} />}
           {step === 4 && <Step4 data={data} update={update} errors={fieldErrors} />}
@@ -914,10 +837,12 @@ function Step1({
   data,
   update,
   errors,
+  onNitBlur,
 }: {
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
   errors: Record<string, string>;
+  onNitBlur: () => void;
 }) {
   const [matchedCompany, setMatchedCompany] = useState<Company | null>(null);
 
@@ -1006,16 +931,24 @@ function Step1({
         <Field
           label="NIT de la Empresa"
           showOptionalBadge
-          hint="Número de Identificación Tributaria (opcional si aún no se tiene)"
+          hint={
+            !errors.nit
+              ? "9 dígitos; el dígito de verificación se calcula solo (opcional si aún no se tiene)"
+              : undefined
+          }
           id="empresa-nit"
         >
-          <Input
-            id="empresa-nit"
-            placeholder="Ej. 890900608-9 (opcional)"
-            value={data.nit}
-            onChange={(e) => update("nit", e.target.value)}
-            className="font-mono text-sm"
-          />
+          <FieldErrorFrame show={!!errors.nit}>
+            <Input
+              id="empresa-nit"
+              placeholder="Ej. 890.903.938-8 (opcional)"
+              value={data.nit}
+              onChange={(e) => update("nit", e.target.value)}
+              onBlur={onNitBlur}
+              className="font-mono text-sm"
+            />
+          </FieldErrorFrame>
+          {errors.nit && <FieldErrorText>{errors.nit}</FieldErrorText>}
         </Field>
 
         <Field label="Dirección corporativa" hint="Sede principal de la organización" id="empresa-dir">
@@ -1436,13 +1369,7 @@ function Step3({
   const { data: dbNodes } = useNodes();
   const { data: dbLeaders } = useProductLeaders();
   const availableNodes = dbNodes && dbNodes.length > 0 ? dbNodes.map((n) => n.name) : NODES;
-  const availableLeaders =
-    dbLeaders && dbLeaders.length > 0
-      ? dbLeaders.map((u) => ({
-          id: u.id,
-          name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email,
-        }))
-      : PRODUCT_LEADERS.map((name) => ({ id: "", name }));
+  const availableLeaders = toLeaderOptions(dbLeaders, PRODUCT_LEADERS);
 
   // Autofoco + scroll suave al campo de texto al elegir "Otro", sin clics extra
   const otroInputRef = useRef<HTMLInputElement>(null);
@@ -1494,156 +1421,52 @@ function Step3({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
-              label="Nodo Asignado"
+              label="Líder de Producto"
               required
-              hint={!errors.nodo ? "Nodo temático de la Universidad Icesi" : undefined}
-              id="nodo-select"
+              hint={!errors.ldp ? "Quien atiende la solicitud y define hacia dónde va" : undefined}
+              id="ldp-select"
             >
-              <FieldErrorFrame show={!!errors.nodo}>
-                <Select
-                  value={data.nodo}
-                  onValueChange={(v) => {
-                    update("nodo", v);
-                    // Asociación inteligente por Nodo: preselecciona automáticamente el líder sugerido para este nodo
-                    if (v && NODE_DEFAULT_LEADERS[v]) {
-                      const defLeaderName = NODE_DEFAULT_LEADERS[v];
-                      const matchedInDb = dbLeaders?.find(
-                        (u) =>
-                          `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim().toLowerCase() ===
-                          defLeaderName.toLowerCase(),
-                      );
-                      update("ldp", matchedInDb ? matchedInDb.id || defLeaderName : defLeaderName);
-                    }
-                  }}
-                >
-                  <SelectTrigger id="nodo-select" className="bg-card">
-                    <SelectValue placeholder="Selecciona un nodo temático" />
+              <FieldErrorFrame show={!!errors.ldp}>
+                <Select value={data.ldp} onValueChange={(v) => update("ldp", v)}>
+                  <SelectTrigger id="ldp-select" className="bg-card">
+                    <SelectValue placeholder="Seleccionar líder de producto" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableNodes.map((n) => (
-                      <SelectItem key={n} value={n}>
-                        {n}
+                    {availableLeaders.map((leader) => (
+                      <SelectItem key={leader.id || leader.name} value={leader.id || leader.name}>
+                        {leader.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </FieldErrorFrame>
-              {errors.nodo && <FieldErrorText>{errors.nodo}</FieldErrorText>}
+              {errors.ldp && <FieldErrorText>{errors.ldp}</FieldErrorText>}
             </Field>
 
-            {(() => {
-              const defLeaderName = data.nodo ? NODE_DEFAULT_LEADERS[data.nodo] : "";
-              const foundSuggested = dbLeaders?.find(
-                (u) =>
-                  `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim().toLowerCase() ===
-                  (defLeaderName || "").toLowerCase(),
-              );
-              const suggestedLeaderValue = foundSuggested ? foundSuggested.id || defLeaderName : defLeaderName;
-              const suggestedLeaderDisplay = foundSuggested
-                ? `${foundSuggested.firstName ?? ""} ${foundSuggested.lastName ?? ""}`.trim() || foundSuggested.email
-                : defLeaderName;
-
-              const isDefaultSuggested = Boolean(
-                suggestedLeaderDisplay && (data.ldp === suggestedLeaderDisplay || data.ldp === suggestedLeaderValue),
-              );
-              const isCustomLeader = Boolean(
-                data.ldp &&
-                suggestedLeaderDisplay &&
-                data.ldp !== suggestedLeaderDisplay &&
-                data.ldp !== suggestedLeaderValue,
-              );
-
-              return (
-                <Field
-                  label="Líder de Producto sugerido"
-                  id="ldp-select"
-                  badge={
-                    isDefaultSuggested ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent shrink-0">
-                        <Sparkles className="h-3 w-3 text-accent" />
-                        Sugerido por nodo
-                      </span>
-                    ) : isCustomLeader ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/80 px-2 py-0.5 text-[11px] font-medium text-muted-foreground shrink-0">
-                        Personalizado
-                      </span>
-                    ) : (
-                      <span className="text-xs font-normal text-muted-foreground shrink-0">Opcional</span>
-                    )
-                  }
-                  hint={
-                    isDefaultSuggested ? (
-                      <span className="flex items-center gap-1.5 text-accent font-medium">
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-accent" />
-                        Preseleccionado automáticamente según el nodo temático asignado
-                      </span>
-                    ) : isCustomLeader ? (
-                      <span className="flex items-center gap-1.5 flex-wrap">
-                        <span>
-                          Líder sugerido por el nodo: <strong>{suggestedLeaderDisplay}</strong>.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => update("ldp", suggestedLeaderValue)}
-                          className="text-accent underline font-medium hover:text-accent/80 transition-colors"
-                        >
-                          Restablecer sugerido
-                        </button>
-                      </span>
-                    ) : suggestedLeaderDisplay ? (
-                      <span className="flex items-center gap-1.5 flex-wrap">
-                        <span>
-                          Sugerido para este nodo: <strong>{suggestedLeaderDisplay}</strong>.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => update("ldp", suggestedLeaderValue)}
-                          className="text-accent underline font-medium hover:text-accent/80 transition-colors"
-                        >
-                          Aplicar sugerido
-                        </button>
-                      </span>
-                    ) : (
-                      "Responsable técnico sugerido (se preseleccionará automáticamente al asignar el nodo)"
-                    )
-                  }
-                >
-                  <Select value={data.ldp || ""} onValueChange={(v) => update("ldp", v === "none" ? "" : v)}>
-                    <SelectTrigger id="ldp-select" className="bg-card">
-                      <SelectValue placeholder="Seleccionar líder sugerido (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {data.ldp && (
-                        <SelectItem value="none" className="text-muted-foreground italic">
-                          -- Sin líder sugerido (opcional / por definir) --
-                        </SelectItem>
-                      )}
-                      {availableLeaders.map((leader) => {
-                        const isThisSuggested = Boolean(
-                          suggestedLeaderDisplay &&
-                          (leader.name === suggestedLeaderDisplay || leader.id === suggestedLeaderValue),
-                        );
-                        return (
-                          <SelectItem
-                            key={leader.id || leader.name}
-                            value={leader.id || leader.name}
-                            extra={
-                              isThisSuggested ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-accent/20 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent shrink-0">
-                                  <Sparkles className="h-2.5 w-2.5" /> Sugerido
-                                </span>
-                              ) : null
-                            }
-                          >
-                            {leader.name}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              );
-            })()}
+            <Field
+              label="Nodo"
+              showOptionalBadge
+              hint="Nodo temático de la Universidad Icesi, adicional al líder (no lo cambia)"
+              id="nodo-select"
+            >
+              <Select value={data.nodo} onValueChange={(v) => update("nodo", v === "none" ? "" : v)}>
+                <SelectTrigger id="nodo-select" className="bg-card">
+                  <SelectValue placeholder="Seleccionar nodo (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {data.nodo && (
+                    <SelectItem value="none" className="text-muted-foreground italic">
+                      -- Sin nodo --
+                    </SelectItem>
+                  )}
+                  {availableNodes.map((n) => (
+                    <SelectItem key={n} value={n}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
         </div>
 
@@ -1972,50 +1795,6 @@ function Step4({
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
   errors: Record<string, string>;
 }) {
-  const { requests } = useAuth();
-  const { data: apiProposals } = useRequests();
-  const [historySearchTerm, setHistorySearchTerm] = useState("");
-  const [proposalTab, setProposalTab] = useState<"todas" | "entregadas" | "en_proceso">("todas");
-  const [selectedProposalModal, setSelectedProposalModal] = useState<RequestItem | null>(null);
-
-  const allRequests = useMemo(() => {
-    if (apiProposals && apiProposals.length > 0) {
-      return apiProposals.map((p) => mapProposalToRequestItem(p));
-    }
-    return requests;
-  }, [apiProposals, requests]);
-
-  // Coincidencias de propuestas de la empresa activa o buscada
-  const activeCompanyQuery = (historySearchTerm.trim() || data.empresaNombre.trim()).toLowerCase();
-
-  const companyProposals = useMemo(() => {
-    if (!activeCompanyQuery || activeCompanyQuery.length < 2) return [];
-    const tokens = activeCompanyQuery.split(/\s+/).filter((w) => w.length >= 2);
-
-    return allRequests.filter((r) => {
-      const comp = (r.company || "").toLowerCase();
-      if (comp.includes(activeCompanyQuery) || activeCompanyQuery.includes(comp)) return true;
-      if (tokens.length > 1 && tokens.every((term) => comp.includes(term))) return true;
-      if (tokens.some((term) => term.length >= 4 && comp.includes(term))) return true;
-      return false;
-    });
-  }, [allRequests, activeCompanyQuery]);
-
-  const deliveredProposals = useMemo(
-    () => companyProposals.filter((p) => p.status === "entregada"),
-    [companyProposals],
-  );
-  const inProgressProposals = useMemo(
-    () => companyProposals.filter((p) => p.status !== "entregada"),
-    [companyProposals],
-  );
-
-  const displayedProposals = useMemo(() => {
-    if (proposalTab === "entregadas") return deliveredProposals;
-    if (proposalTab === "en_proceso") return inProgressProposals;
-    return companyProposals;
-  }, [proposalTab, deliveredProposals, inProgressProposals, companyProposals]);
-
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -2160,326 +1939,6 @@ function Step4({
             {errors.urgencia && <FieldErrorText>{errors.urgencia}</FieldErrorText>}
           </Field>
         </div>
-
-        {/* 3. Buscador de propuestas entregadas y en proceso de la empresa */}
-        <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0]">
-                <History className="h-4 w-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  Buscador de Propuestas Entregadas y en Proceso
-                  {companyProposals.length > 0 && (
-                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
-                      {companyProposals.length} encontrada{companyProposals.length !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Identifica las propuestas que Icesi ya entregó o tiene en proceso para esta empresa (ej. antecedentes
-                  o evitar duplicidades).
-                </p>
-              </div>
-            </div>
-
-            {/* Buscador directo por nombre de empresa */}
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar empresa (ej. Gases de Occidente)..."
-                value={historySearchTerm}
-                onChange={(e) => setHistorySearchTerm(e.target.value)}
-                className="h-8.5 pl-8 pr-7 text-xs bg-secondary/30"
-              />
-              {historySearchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setHistorySearchTerm("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Resultados del buscador */}
-          {activeCompanyQuery ? (
-            companyProposals.length > 0 ? (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-muted-foreground font-medium">Filtrar estado:</span>
-                    <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/30">
-                      <button
-                        type="button"
-                        onClick={() => setProposalTab("todas")}
-                        className={cn(
-                          "rounded-md px-2.5 py-1 text-xs transition-colors",
-                          proposalTab === "todas"
-                            ? "bg-card text-foreground shadow-2xs font-semibold"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        Todas ({companyProposals.length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProposalTab("entregadas")}
-                        className={cn(
-                          "rounded-md px-2.5 py-1 text-xs transition-colors",
-                          proposalTab === "entregadas"
-                            ? "bg-[#865cf0]/15 text-[#7344e8] dark:text-[#865cf0] shadow-2xs font-semibold"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        Entregadas ({deliveredProposals.length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProposalTab("en_proceso")}
-                        className={cn(
-                          "rounded-md px-2.5 py-1 text-xs transition-colors",
-                          proposalTab === "en_proceso"
-                            ? "bg-[#4cb979]/15 text-[#2d8f55] dark:text-[#4cb979] shadow-2xs font-semibold"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        En Proceso ({inProgressProposals.length})
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    Empresa consultada:{" "}
-                    <strong className="text-foreground">{data.empresaNombre || historySearchTerm}</strong>
-                  </div>
-                </div>
-
-                {/* Lista de propuestas encontradas */}
-                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
-                  {displayedProposals.map((item) => {
-                    const statusInfo = STATUS_META[item.status];
-                    const urgencyInfo = URGENCY_META[item.urgency];
-                    const hasClientDocs = item.clientKamDocuments && item.clientKamDocuments.length > 0;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="group rounded-lg border border-border bg-card p-3.5 transition-all hover:border-accent/40 hover:shadow-2xs"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                          <div className="space-y-1.5 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-foreground">{item.id}</span>
-                              <span
-                                className={cn(
-                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border",
-                                  statusInfo.tone,
-                                )}
-                              >
-                                <span className={cn("h-1.5 w-1.5 rounded-full", statusInfo.dot)} />
-                                {statusInfo.label}
-                              </span>
-                              <span
-                                className={cn(
-                                  "inline-flex items-center rounded-full px-1.5 py-0.2 text-[10px] font-medium border",
-                                  urgencyInfo.tone,
-                                )}
-                              >
-                                Urgencia: {urgencyInfo.label}
-                              </span>
-                              <span className="text-[11px] text-muted-foreground font-medium bg-secondary px-2 py-0.5 rounded">
-                                {item.type}
-                              </span>
-                            </div>
-
-                            <h4 className="text-sm font-semibold text-foreground truncate">{item.title}</h4>
-
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                              <span>
-                                Empresa: <strong className="text-foreground">{item.company}</strong>
-                              </span>
-                              <span>
-                                Nodo: <strong className="text-foreground">{item.node}</strong>
-                              </span>
-                              <span>
-                                Líder: <strong className="text-foreground">{item.productLeader}</strong>
-                              </span>
-                              <span>
-                                Valor:{" "}
-                                <strong className="text-foreground font-mono">
-                                  {formatCop(item.totalCostCop ?? 0)}
-                                </strong>
-                              </span>
-                              {item.deadline && (
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" /> Entrega: {item.deadline}
-                                </span>
-                              )}
-                              {hasClientDocs && (
-                                <span className="text-accent font-medium flex items-center gap-1">
-                                  <FileText className="h-3 w-3" /> {item.clientKamDocuments!.length} doc(s)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center pt-1 sm:pt-0">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedProposalModal(item)}
-                              className="h-8 text-xs font-semibold gap-1.5"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              Ver detalle
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-4 text-center">
-                <p className="text-xs font-medium text-foreground">
-                  No se encontraron propuestas registradas para &ldquo;{data.empresaNombre || historySearchTerm}&rdquo;
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  No constan propuestas previas entregadas ni solicitudes en curso para esta entidad.
-                </p>
-              </div>
-            )
-          ) : (
-            <div className="rounded-lg border border-dashed border-border/80 bg-secondary/15 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <Info className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span>
-                  Escribe en el buscador el nombre de la empresa para consultar sus propuestas entregadas y en proceso.
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="text-[11px] text-muted-foreground mr-1">Ejemplos:</span>
-                {["Gases de Occidente", "Bancolombia", "Grupo Argos"].map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setHistorySearchTerm(name)}
-                    className="rounded border border-border bg-card px-2 py-0.5 text-[11px] hover:border-accent hover:text-foreground transition-colors cursor-pointer"
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Modal de Detalle de Propuesta */}
-        <Dialog
-          open={!!selectedProposalModal}
-          onOpenChange={(open) => {
-            if (!open) setSelectedProposalModal(null);
-          }}
-        >
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-bold text-muted-foreground">{selectedProposalModal?.id}</span>
-                {selectedProposalModal && (
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border",
-                      STATUS_META[selectedProposalModal.status].tone,
-                    )}
-                  >
-                    <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[selectedProposalModal.status].dot)} />
-                    {STATUS_META[selectedProposalModal.status].label}
-                  </span>
-                )}
-              </div>
-              <DialogTitle className="text-base font-bold text-foreground mt-1">
-                {selectedProposalModal?.title}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
-                Empresa: <strong className="text-foreground">{selectedProposalModal?.company}</strong>
-              </DialogDescription>
-            </DialogHeader>
-
-            {selectedProposalModal && (
-              <div className="space-y-4 py-2 text-xs">
-                <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-secondary/30 p-3">
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Tipo de Requerimiento</span>
-                    <span className="font-semibold text-foreground">{selectedProposalModal.type}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Nivel de Urgencia</span>
-                    <span className="font-semibold text-foreground capitalize">{selectedProposalModal.urgency}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Nodo Asignado</span>
-                    <span className="font-semibold text-foreground">{selectedProposalModal.node}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Líder de Producto</span>
-                    <span className="font-semibold text-foreground">{selectedProposalModal.productLeader}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">KAM a cargo</span>
-                    <span className="font-semibold text-foreground">{selectedProposalModal.kam}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Valor de la Oferta</span>
-                    <span className="font-bold text-foreground font-mono text-sm">
-                      {formatCop(selectedProposalModal.totalCostCop ?? 0)}
-                    </span>
-                  </div>
-                </div>
-
-                {selectedProposalModal.clientKamDocuments && selectedProposalModal.clientKamDocuments.length > 0 && (
-                  <div className="space-y-1.5">
-                    <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5 text-accent" /> Documentos de la propuesta
-                    </span>
-                    <div className="space-y-1">
-                      {selectedProposalModal.clientKamDocuments.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="flex items-center justify-between p-2 rounded-md border border-border bg-card text-xs"
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <span className="font-medium text-foreground truncate">{doc.name}</span>
-                            <span className="text-muted-foreground text-[10px]">({doc.size})</span>
-                          </div>
-                          <span className="text-[10px] text-muted-foreground font-mono">{doc.date}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedProposalModal(null)}
-                className="text-xs"
-              >
-                Cerrar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );
@@ -2494,6 +1953,7 @@ function Step5({
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
 }) {
+  const { data: dbLeaders } = useProductLeaders();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -2504,6 +1964,7 @@ function Step5({
       name: f.name,
       size: `${(f.size / (1024 * 1024)).toFixed(2)} MB`,
       type: f.type || "document",
+      file: f,
     }));
     update("archivos", [...data.archivos, ...newFiles]);
     toast.success(`${newFiles.length} archivo(s) añadido(s) exitosamente.`);
@@ -2628,7 +2089,7 @@ function Step5({
             <dt className="text-muted-foreground">Empresa / Razón Social:</dt>
             <dd className="font-semibold text-foreground truncate">{data.empresaNombre || "Sin especificar"}</dd>
             <dt className="text-muted-foreground mt-1">NIT:</dt>
-            <dd className="font-mono text-foreground">{data.nit || "No registrado"}</dd>
+            <dd className="font-mono text-foreground">{data.nit ? displayNit(data.nit) : "No registrado"}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Contacto:</dt>
@@ -2639,8 +2100,12 @@ function Step5({
                 ? ` (+${data.contactosAdicionales.length} adicional${data.contactosAdicionales.length > 1 ? "es" : ""})`
                 : ""}
             </dd>
-            <dt className="text-muted-foreground mt-1">Nodo Asignado:</dt>
-            <dd className="font-medium text-accent truncate">{data.nodo || "Sin asignar"}</dd>
+            <dt className="text-muted-foreground mt-1">Líder de Producto:</dt>
+            <dd className="font-medium text-accent truncate">
+              {leaderDisplayName(data.ldp, dbLeaders) || "Sin asignar"}
+            </dd>
+            <dt className="text-muted-foreground mt-1">Nodo:</dt>
+            <dd className="font-medium text-foreground truncate">{data.nodo || "Sin nodo"}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Tipo de Requerimiento:</dt>
@@ -2654,6 +2119,9 @@ function Step5({
           </div>
         </dl>
       </div>
+
+      {/* Historial de propuestas de la empresa: al final, justo antes de enviar */}
+      <ProposalHistorySection empresaNombre={data.empresaNombre} empresaNit={data.nit} />
     </div>
   );
 }
@@ -2675,7 +2143,7 @@ function SuccessScreen({ kind, onClose }: { kind: "draft" | "sent"; onClose: () 
           <p className="mt-2 text-sm text-muted-foreground">
             {isDraft
               ? "Tu borrador comercial fue almacenado. Puedes retomarlo o editarlo cuando desees."
-              : "La solicitud fue vinculada al Nodo Asignado y notificada al Líder de Producto para formulación."}
+              : "La solicitud fue registrada y notificada al Líder de Producto para formulación."}
           </p>
 
           {!isDraft && (

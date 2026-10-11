@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NewRequest from "./NewRequest";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { requestsApi } from "@/lib/api/requests";
+import { attachmentsApi } from "@/lib/api/attachments";
 
 // Mock select component for headless jsdom environment
 const SelectContext = React.createContext<(val: string) => void>(() => {});
@@ -52,6 +54,12 @@ vi.mock("@/lib/api/requests", () => ({
   },
 }));
 
+vi.mock("@/lib/api/attachments", () => ({
+  attachmentsApi: {
+    upload: vi.fn().mockResolvedValue({}),
+  },
+}));
+
 vi.mock("@/lib/api/companies", () => ({
   companiesApi: {
     search: vi.fn().mockResolvedValue([]),
@@ -73,6 +81,7 @@ vi.mock("@/lib/api/users", () => ({
 }));
 
 const mockedRequestsApi = vi.mocked(requestsApi);
+const mockedAttachmentsApi = vi.mocked(attachmentsApi);
 
 function renderNewRequest() {
   const queryClient = new QueryClient({
@@ -85,12 +94,31 @@ function renderNewRequest() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <AuthProvider>
-          <NewRequest />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <NewRequest />
+          </AuthProvider>
+        </ThemeProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+// The product leader is mandatory in step 3 and the node is an optional, independent extra.
+async function chooseLeader() {
+  // Wait for the backend directory: until then the list is the offline fallback and gets replaced when it loads.
+  await waitFor(() => expect(document.querySelector('[data-value="leader-uuid-1"]')).not.toBeNull());
+  fireEvent.click(document.querySelector('[data-value="leader-uuid-1"]') as HTMLElement);
+}
+
+function goToStep3() {
+  renderNewRequest();
+  fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+    target: { value: "Empresa Test S.A.S" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+  fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+  fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
 }
 
 describe("NewRequest Wizard (HU 3.2)", () => {
@@ -148,6 +176,37 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     });
   });
 
+  it("blocks step 1 when the NIT check digit does not match and says which one it should be", () => {
+    renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa Test S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.change(screen.getByLabelText(/NIT de la Empresa/i), { target: { value: "890903938-5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    expect(screen.getAllByText(/El dígito de verificación no coincide \(debería ser 8\)/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/1\. Datos de la Empresa/i)).toBeInTheDocument();
+  });
+
+  it("shows a valid NIT formatted when leaving the field and a 9-digit one gets its check digit", () => {
+    renderNewRequest();
+    const nit = screen.getByLabelText(/NIT de la Empresa/i) as HTMLInputElement;
+    fireEvent.change(nit, { target: { value: "890903938" } });
+    fireEvent.blur(nit);
+    expect(nit.value).toBe("890.903.938-8");
+  });
+
+  it("does not validate the NIT when it is empty (it is optional)", () => {
+    renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa Test S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText(/2\. Contacto del Cliente/i)).toBeInTheDocument();
+  });
+
   it("renders the wizard header and first step (Empresa)", () => {
     renderNewRequest();
     expect(screen.getByText("Registro de Solicitud Comercial")).toBeInTheDocument();
@@ -182,7 +241,8 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
     expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
 
-    // Step 3: Select nodo, fill title and select type
+    // Step 3: Select the leader (mandatory) and a node (optional), fill title and select type
+    await chooseLeader();
     const nodeOption = await screen.findByRole("option", { name: /Gestión de Innovación/i });
     fireEvent.click(nodeOption);
 
@@ -196,6 +256,9 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     // Step 3 -> Step 4
     fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
     expect(screen.getByText(/4\. Formación Previa/i)).toBeInTheDocument();
+
+    // The proposal history no longer appears mid-form (C-16): it lives in Step 5
+    expect(screen.queryByText(/Buscador de Propuestas Entregadas y en Proceso/i)).not.toBeInTheDocument();
 
     // Step 4: Fill formacion previa (No) and urgency (Alta -> Alto)
     const prevNo = screen.getByRole("button", { name: "No" });
@@ -211,6 +274,10 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     // Step 5: Submit request
     const submitBtn = screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i });
     expect(submitBtn).toBeInTheDocument();
+
+    // The proposal history is shown at the end of the form, right before the submit button
+    const historyHeading = screen.getByText(/Buscador de Propuestas Entregadas y en Proceso/i);
+    expect(historyHeading.compareDocumentPosition(submitBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -221,6 +288,7 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(callPayload.companyName).toBe("Empresa Test S.A.S");
     expect(callPayload.companyType).toBe("PRIVADA");
     expect(callPayload.nodeId).toBe("node-uuid-2");
+    expect(callPayload.productLeaderId).toBe("leader-uuid-1");
     expect(callPayload.programName).toBe("Capacitación en IA para Directivos");
     expect(callPayload.requestType).toBe("CAPACITACION");
     expect(callPayload.priority).toBe("ALTA");
@@ -232,7 +300,7 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     });
   }, 20000);
 
-  it("resolves and attaches productLeaderId to payload when node with suggested leader is selected (UI-001)", async () => {
+  it("sends the leader and the node the KAM picked, each on its own (UI-001)", async () => {
     renderNewRequest();
 
     // Step 1: Fill company name and type
@@ -247,8 +315,9 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     // Step 2 -> Step 3
     fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
 
-    // Step 3: Select node that maps to Juan Pablo Corrales Arenas -> leader-uuid-1
-    const nodeOption = await screen.findByRole("option", { name: /Inteligencia Artificial y Tecnologías Digitales/i });
+    // Step 3: pick the leader and, separately, a node that used to drag a different leader along
+    await chooseLeader();
+    const nodeOption = await screen.findByRole("option", { name: /Gestión de Innovación/i });
     fireEvent.click(nodeOption);
 
     const titleInput = screen.getByLabelText(/Título o nombre de la propuesta/i);
@@ -278,7 +347,133 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     });
 
     const callPayload = mockedRequestsApi.create.mock.calls[0][0];
-    expect(callPayload.nodeId).toBe("node-uuid-1");
+    expect(callPayload.nodeId).toBe("node-uuid-2");
     expect(callPayload.productLeaderId).toBe("leader-uuid-1");
+  }, 20000);
+
+  it("starts step 3 with no leader and no node chosen, and without any node suggestion", async () => {
+    goToStep3();
+    expect(await screen.findByText("Seleccionar líder de producto")).toBeInTheDocument();
+    expect(screen.getByText("Seleccionar nodo (opcional)")).toBeInTheDocument();
+    expect(screen.queryByText(/sugerido/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Restablecer/i)).not.toBeInTheDocument();
+  });
+
+  it("requires the leader to leave step 3, even with a node chosen, and never drags one from the other", async () => {
+    goToStep3();
+    fireEvent.click(await screen.findByRole("option", { name: /Inteligencia Artificial y Tecnologías Digitales/i }));
+    fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "Taller" } });
+    fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    // The node that used to suggest Juan Pablo Corrales Arenas does not choose him any more
+    expect(screen.getAllByText(/Selecciona el Líder de Producto que atenderá la solicitud/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
+    expect(mockedRequestsApi.create).not.toHaveBeenCalled();
+
+    // Choosing the leader afterwards leaves the node as it was and lets the KAM continue
+    await chooseLeader();
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText(/4\. Formación Previa/i)).toBeInTheDocument();
+  });
+
+  it("lets the KAM send the request with a leader and no node", async () => {
+    goToStep3();
+    await chooseLeader();
+    fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "Taller" } });
+    fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: "No" }));
+    fireEvent.click(screen.getByRole("button", { name: /Alto/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    // The summary names the leader and says there is no node
+    expect(screen.getByText("Líder de Producto:")).toBeInTheDocument();
+    expect(screen.getAllByText("Juan Pablo Corrales Arenas").length).toBeGreaterThan(0);
+    expect(screen.getByText("Sin nodo")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i }));
+    await waitFor(() => expect(mockedRequestsApi.create).toHaveBeenCalledTimes(1));
+    const payload = mockedRequestsApi.create.mock.calls[0][0];
+    expect(payload.productLeaderId).toBe("leader-uuid-1");
+    expect(payload.nodeId).toBeUndefined();
+  }, 20000);
+
+  // Data-loss regressions found on 2026-10-08: "Más de 25" was dropped by the backend and "No" in the catering
+  // field was saved as "Sí - No". What the wizard sends must carry both intact.
+  it("sends 'Más de 25' as the participant range and 'No' catering as no catering", async () => {
+    renderNewRequest();
+
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa Test S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    await chooseLeader();
+    fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "Taller" } });
+    fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+    fireEvent.click(screen.getByText(/Cupo, intensidad horaria, modalidad, logística y objetivos esperados/));
+    fireEvent.click(screen.getByRole("option", { name: /Más de 25 participantes/ }));
+    fireEvent.change(screen.getByLabelText(/Servicio de alimentación y logística/i), { target: { value: "No" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: "No" }));
+    fireEvent.click(screen.getByRole("button", { name: /Alto/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i }));
+
+    await waitFor(() => expect(mockedRequestsApi.create).toHaveBeenCalledTimes(1));
+    const payload = mockedRequestsApi.create.mock.calls[0][0];
+    expect(payload.participantRange).toBe("Más de 25");
+    expect(payload.requiresCatering).toBe(false);
+    expect(payload.cateringNotes).toBeUndefined();
+  }, 20000);
+
+  it("uploads the real File object, not its metadata, after the proposal is created (UI-006)", async () => {
+    const { container } = renderNewRequest();
+
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa con Adjunto S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    await chooseLeader();
+    fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), {
+      target: { value: "Capacitación con adjunto" },
+    });
+    fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: "No" }));
+    fireEvent.click(screen.getByRole("button", { name: /Alto/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+    const pdf = new File(["contenido"], "cotizacion.pdf", { type: "application/pdf" });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [pdf] } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i }));
+
+    await waitFor(() => {
+      expect(mockedAttachmentsApi.upload).toHaveBeenCalledTimes(1);
+    });
+
+    const [proposalId, payload] = mockedAttachmentsApi.upload.mock.calls[0];
+    expect(proposalId).toBe("prop-123");
+    expect(payload.file).toBeInstanceOf(File);
+    expect(payload.file.name).toBe("cotizacion.pdf");
+    expect(payload.category).toBe("CLIENT_FACING");
+
+    // The create endpoint whitelists its fields and rejects unknown ones (400
+    // "property attachments should not exist"): files only travel in the upload.
+    const createPayload = mockedRequestsApi.create.mock.calls[0][0];
+    expect(createPayload).not.toHaveProperty("attachments");
+    expect(mockedRequestsApi.create.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedAttachmentsApi.upload.mock.invocationCallOrder[0],
+    );
   }, 20000);
 });

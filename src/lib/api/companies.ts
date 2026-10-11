@@ -12,7 +12,14 @@ export interface Company {
   website: string | null;
   area: string | null;
   type: CompanyType | null;
+  /** Description of the main CIIU activity. */
   sector: string | null;
+  // Optional: older backends and the search endpoint may not send them.
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  ciiuCode?: string | null;
+  ciiuSecondary?: string[];
 }
 
 export const companiesApi = {

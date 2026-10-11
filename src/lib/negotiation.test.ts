@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { openNegotiationRound, closeRoundForClientDelivery, rejectRoundWithObservations } from "@/lib/negotiation";
+import {
+  openNegotiationRound,
+  closeRoundForClientDelivery,
+  rejectRoundWithObservations,
+  getRoundChanges,
+} from "@/lib/negotiation";
 import type { NegotiationRound, ProposalCosting } from "@/lib/mock-data";
 
 const NOW = "2026-01-15T10:00:00.000Z";
@@ -184,5 +189,70 @@ describe("rejectRoundWithObservations", () => {
     const result = rejectRoundWithObservations(rounds, undefined, "obs", NOW);
 
     expect(result.costing).toBeUndefined();
+  });
+});
+
+describe("getRoundChanges (what changed against the previous round)", () => {
+  const round = (overrides: Partial<NegotiationRound>): NegotiationRound => ({
+    id: "r",
+    roundNumber: 2,
+    totalOfferedCop: 52_000_000,
+    marginAmountCop: 1_000_000,
+    expectedMarginPercent: 30,
+    sentToKamAt: "2026-10-06T00:00:00.000Z",
+    clientResponse: "pendiente",
+    hasScopeSnapshot: true,
+    horas: "40",
+    ...overrides,
+  });
+
+  it("returns nothing for the first round", () => {
+    expect(getRoundChanges(round({ roundNumber: 1 }))).toEqual([]);
+  });
+
+  it("lists the offered value first, then every scope field that changed", () => {
+    const changes = getRoundChanges(
+      round({
+        roundNumber: 3,
+        totalOfferedCop: 520_030_000,
+        horas: "44",
+        participantes: "20 - 25",
+        modalidad: "Virtual",
+      }),
+      round({}),
+    );
+    expect(changes[0]).toMatch(/^Valor ofertado: \$\s?52\.000\.000 → \$\s?520\.030\.000$/);
+    expect(changes).toContain("Horas: 40 → 44");
+    expect(changes).toContain("Participantes: Sin definir → 20 - 25");
+    expect(changes).toContain("Modalidad: Sin definir → Virtual");
+  });
+
+  it("covers the other adjustable fields and a field that was cleared", () => {
+    const changes = getRoundChanges(
+      round({ competencias: "Liderazgo", alimentacion: "No", deadline: "2026-12-01T05:00:00.000Z" }),
+      round({
+        competencias: "Comunicación",
+        alimentacion: "Sí - Refrigerio",
+        exito: "NPS",
+        deadline: "2026-11-30T05:00:00.000Z",
+      }),
+    );
+    expect(changes).toContain("Competencias: Comunicación → Liderazgo");
+    expect(changes).toContain("Alimentación: Sí - Refrigerio → No");
+    expect(changes).toContain("Indicadores de éxito: NPS → Sin definir");
+    expect(changes).toContain("Fecha de entrega: 30 nov 2026 → 1 dic 2026");
+  });
+
+  it("does not report a change when only the margin moved (the KAM never sees it)", () => {
+    expect(getRoundChanges(round({ marginAmountCop: 9, expectedMarginPercent: 99 }), round({}))).toEqual([]);
+  });
+
+  it("compares only the price when a round has no scope snapshot (older data)", () => {
+    const changes = getRoundChanges(
+      round({ totalOfferedCop: 1, horas: "44" }),
+      round({ hasScopeSnapshot: false, horas: undefined }),
+    );
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatch(/^Valor ofertado/);
   });
 });
