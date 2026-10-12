@@ -1,5 +1,5 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import Login from "./Login";
@@ -18,9 +18,9 @@ vi.mock("@/context/ThemeContext", () => ({
 
 function submitCredentials() {
   render(
-    <MemoryRouter>
+    <TestRouter>
       <Login />
-    </MemoryRouter>,
+    </TestRouter>,
   );
   fireEvent.change(document.getElementById("usuario") as HTMLElement, { target: { value: "kam@icesi.edu.co" } });
   fireEvent.change(document.getElementById("contrasena") as HTMLElement, { target: { value: "una-clave" } });
