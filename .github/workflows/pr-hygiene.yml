@@ -1,0 +1,63 @@
+# Checks that do not depend on business logic: commit format (Husky can be skipped with
+# --no-verify, CI cannot) and leaked secrets. Mark `commits` and `secrets` as required
+# status checks alongside `verify`.
+name: PR hygiene
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: hygiene-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  commits:
+    name: commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Squash merge turns the PR title into the commit on develop, so it must be valid.
+      - name: PR title follows Conventional Commits
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$PR_TITLE" | npx --no -- commitlint
+
+      - name: Commits follow Conventional Commits
+        run: >-
+          npx --no -- commitlint
+          --from "${{ github.event.pull_request.base.sha }}"
+          --to "${{ github.event.pull_request.head.sha }}"
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Run the open-source scanner directly: the official GitHub Action needs a license
+      # for organisation repos.
+      - name: Scan the PR's commits for secrets
+        run: >-
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest detect
+          --source /repo --redact --no-banner
+          --log-opts "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
