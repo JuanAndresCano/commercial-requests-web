@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { getTestRoute, matchRoute, resetTestRouter, subscribeTestRouter } from "./next-navigation-mock";
 
 interface TestRouterProps {
   /** Starting location, e.g. "/solicitudes/REQ-1". Defaults to "/". */
@@ -14,21 +14,16 @@ interface TestRouterProps {
 }
 
 /**
- * The single place tests get their router from. Today it is a MemoryRouter; when the app moves
- * to Next.js this file swaps to a mock of `next/navigation` and the tests stay untouched.
+ * The single place tests get their router from. `next/navigation` and `next/link` are replaced by an
+ * in-memory router in src/test/setup.ts; this component only sets its starting location and route table.
  */
 export function TestRouter({ route = "/", routes, children }: TestRouterProps) {
-  return (
-    <MemoryRouter initialEntries={[route]}>
-      {routes ? (
-        <Routes>
-          {Object.entries(routes).map(([path, element]) => (
-            <Route key={path} path={path} element={element} />
-          ))}
-        </Routes>
-      ) : (
-        children
-      )}
-    </MemoryRouter>
-  );
+  useState(() => {
+    resetTestRouter(route, routes ? Object.keys(routes) : []);
+    return true;
+  });
+  const { pathname } = useSyncExternalStore(subscribeTestRouter, getTestRoute);
+  if (!routes) return <>{children}</>;
+  const hit = matchRoute(pathname, Object.keys(routes));
+  return <>{hit ? routes[hit.pattern] : null}</>;
 }

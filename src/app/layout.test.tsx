@@ -18,7 +18,7 @@ describe("root layout (replaces index.html)", () => {
     expect(viewport).toMatchObject({ width: "device-width", initialScale: 1 });
   });
 
-  it("renders an es document with the Google Fonts links and the children in the body", () => {
+  it("renders an es document with the Google Fonts links and an empty server-side body", () => {
     const html = renderToStaticMarkup(
       <RootLayout>
         <main>contenido</main>
@@ -29,6 +29,8 @@ describe("root layout (replaces index.html)", () => {
     expect(html).toContain('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>');
     expect(html).toContain("family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600;1,700");
     expect(html).toContain("family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");
-    expect(html).toContain("<body><main>contenido</main></body>");
+    // Providers are client-only (ssr: false), so the server sends an empty body, like Vite's empty #root.
+    expect(html).toContain("<body></body>");
+    expect(html).not.toContain("contenido");
   });
 });
