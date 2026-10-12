@@ -10,12 +10,12 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import { RequireAuth } from "@/components/RequireAuth";
 import { SessionConflictDialog } from "@/components/SessionConflictDialog";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import Index from "./pages/Index.tsx";
-import Login from "./pages/Login.tsx";
-import Dashboard from "./pages/Dashboard.tsx";
-import NewRequest from "./pages/NewRequest.tsx";
-import RequestDetail from "./pages/RequestDetail.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import Index from "./views/Index.tsx";
+import Login from "./views/Login.tsx";
+import Dashboard from "./views/Dashboard.tsx";
+import NewRequest from "./views/NewRequest.tsx";
+import RequestDetail from "./views/RequestDetail.tsx";
+import NotFound from "./views/NotFound.tsx";
 
 const queryClient = new QueryClient();
 
