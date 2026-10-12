@@ -39,7 +39,11 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$PR_TITLE" | npx --no -- commitlint
 
+      # Work PRs (into develop) only. A release PR (develop -> main) carries the whole history
+      # that was already reviewed, including commits that predate this check; their messages
+      # cannot be rewritten, so linting them would keep every release red.
       - name: Commits follow Conventional Commits
+        if: github.base_ref == 'develop'
         run: >-
           npx --no -- commitlint
           --from "${{ github.event.pull_request.base.sha }}"
