@@ -12,7 +12,7 @@ import tseslint from "typescript-eslint";
  * is held to them by CI. Changing this file requires CODEOWNERS review.
  */
 export default tseslint.config(
-  { ignores: ["dist", "coverage", "node_modules"] },
+  { ignores: ["dist", "coverage", "node_modules", ".next", "next-env.d.ts"] },
   {
     linterOptions: { reportUnusedDisableDirectives: "error" },
   },
@@ -92,6 +92,12 @@ export default tseslint.config(
   {
     // Context providers export their hook next to the provider by design.
     files: ["src/context/**/*.{ts,tsx}"],
+    rules: { "react-refresh/only-export-components": "off" },
+  },
+  {
+    // Next.js route files export `metadata` / `viewport` next to the component by design,
+    // and Fast Refresh does not apply to them. Scoped to src/app only.
+    files: ["src/app/**/*.{ts,tsx}"],
     rules: { "react-refresh/only-export-components": "off" },
   },
   {
