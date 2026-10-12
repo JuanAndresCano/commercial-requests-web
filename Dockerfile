@@ -9,8 +9,8 @@ RUN HUSKY=0 npm ci
 COPY . .
 # Relative on purpose: in every environment the web and the API share one host
 # (the reverse proxy routes /api/* to the backend), so one image works everywhere.
-ARG VITE_API_URL=/api/v1
-ENV VITE_API_URL=$VITE_API_URL
+ARG NEXT_PUBLIC_API_URL=/api/v1
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
