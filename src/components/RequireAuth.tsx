@@ -1,9 +1,15 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { useEffect, type ReactNode } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "@/lib/app-router";
 
 /** Keeps signed-out visitors away from the private routes. */
-export function RequireAuth() {
+export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.replace("/login");
+  }, [status, router]);
 
   if (status === "loading") {
     return (
@@ -12,8 +18,6 @@ export function RequireAuth() {
       </div>
     );
   }
-  if (status === "unauthenticated") {
-    return <Navigate to="/login" replace />;
-  }
-  return <Outlet />;
+  if (status === "unauthenticated") return null;
+  return <>{children}</>;
 }

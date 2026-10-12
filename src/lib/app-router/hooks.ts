@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import {
-  useLocation,
-  useNavigate,
-  useParams as useRouterParams,
-  useSearchParams as useRouterSearchParams,
-} from "react-router-dom";
+  useParams as useNextParams,
+  usePathname as useNextPathname,
+  useRouter as useNextRouter,
+  useSearchParams as useNextSearchParams,
+} from "next/navigation";
 
-/** Same shape as `useRouter()` from `next/navigation` (the subset the app uses). */
+/** The subset of the Next.js router the app uses. */
 export interface AppRouter {
   push: (href: string) => void;
   replace: (href: string) => void;
@@ -14,29 +14,28 @@ export interface AppRouter {
 }
 
 export function useRouter(): AppRouter {
-  const navigate = useNavigate();
+  const router = useNextRouter();
   return useMemo(
     () => ({
-      push: (href: string) => navigate(href),
-      replace: (href: string) => navigate(href, { replace: true }),
-      back: () => navigate(-1),
+      push: (href: string) => router.push(href),
+      replace: (href: string) => router.replace(href),
+      back: () => router.back(),
     }),
-    [navigate],
+    [router],
   );
 }
 
-/** Current path without query string, like `usePathname()` from `next/navigation`. */
+/** Current path without the query string. */
 export function usePathname(): string {
-  return useLocation().pathname;
+  return useNextPathname();
 }
 
-/** Read-only query params, like `useSearchParams()` from `next/navigation` (no setter). */
-export function useSearchParams(): URLSearchParams {
-  const [params] = useRouterSearchParams();
-  return params;
+/** Read-only query params. */
+export function useSearchParams() {
+  return useNextSearchParams();
 }
 
-/** Route params, like `useParams()` from `next/navigation`. */
+/** Route params of the current dynamic segment, e.g. `{ id }` under `/solicitudes/[id]`. */
 export function useParams<T extends Record<string, string | undefined> = Record<string, string | undefined>>(): T {
-  return useRouterParams() as T;
+  return useNextParams() as T;
 }
