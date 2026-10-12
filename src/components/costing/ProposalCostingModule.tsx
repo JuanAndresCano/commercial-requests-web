@@ -1,54 +1,56 @@
-import { useState, useEffect } from "react";
-import { RotateCcw, ShieldCheck, MessageSquare, Sparkles, ExternalLink, ChevronUp } from "@/components/icons";
+import { useState, useEffect, useRef } from "react";
+import { ShieldCheck, MessageSquare, ChevronUp, GraduationCap, Calculator } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { COSTING_AUTOSAVE_DELAY_MS, useCostingDraft } from "@/hooks/use-costing-draft";
+import { calculateProCulturaReference, formatCopPreview, isLikelyFraction, PRO_CULTURA_PERCENT } from "@/lib/currency";
 import { formatCop, RequestItem, ProposalCosting, calculateCosting } from "@/lib/mock-data";
-import { toast } from "sonner";
 
 interface ProposalCostingModuleProps {
   request: RequestItem;
   onUpdateCosting: (newCosting: ProposalCosting) => void;
-  onOpenAdvisorModal: () => void;
   isReadOnly?: boolean;
 }
 
-export function ProposalCostingModule({
-  request,
-  onUpdateCosting,
-  onOpenAdvisorModal,
-  isReadOnly = false,
-}: ProposalCostingModuleProps) {
+export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = false }: ProposalCostingModuleProps) {
   const reqType = request.type;
   const isCapacitacion = reqType === "Capacitación";
 
   // Valores iniciales: si el Líder ya guardó un costeo real se usa ese; si
-  // no, arranca en blanco (0) para que el Líder escriba el costo real — no
+  // no, arranca en blanco (0) para que el Líder escriba el valor real — no
   // se sugiere un monto que pueda confundirse con un valor ya definido.
   const initialCosting = request.costing ?? calculateCosting(request.type, 0, 30);
 
-  const [baseCostCop, setBaseCostCop] = useState<number>(initialCosting.baseCostCop);
-  const [marginPercent, setMarginPercent] = useState<number>(initialCosting.expectedMarginPercent ?? 30);
-  const [requiresExternalAdvisor, setRequiresExternalAdvisor] = useState<boolean>(
-    initialCosting.requiresExternalAdvisor ?? request.professorType === "externo",
+  // El campo que antes era "Costo Base Directo" ahora captura directamente
+  // el Valor Final de la Propuesta — ya no hay un cálculo hacia adelante de
+  // base → total (docs/04). Margen en plata: input manual e independiente, ya
+  // no derivado de baseCostCop * marginPercent. Los tres campos son texto en
+  // formato es-CO ("$32.000.000", "30%"): el hook los interpreta y guarda solo
+  // tras una pausa al escribir o al salir del campo (no una vez por tecla).
+  const draft = useCostingDraft(
+    {
+      total: initialCosting.totalOfferedCop,
+      percent: initialCosting.expectedMarginPercent,
+      amount: initialCosting.marginAmountCop,
+    },
+    (saved) => triggerSave(saved.total, saved.percent, saved.amount, negotiationNotes, true),
   );
-  const [externalAdvisorDetails, setExternalAdvisorDetails] = useState<string>(
-    initialCosting.externalAdvisorDetails ?? "",
-  );
-  const [totalOfferedCop, setTotalOfferedCop] = useState<number>(initialCosting.totalOfferedCop);
+  const { total: totalOfferedCop, percent: marginPercent, amount: marginAmountCop } = draft.values;
   const [negotiationNotes, setNegotiationNotes] = useState<string>(initialCosting.negotiationNotes ?? "");
+  // The scope note is saved like the numbers: after a pause in typing, on leaving the field, and when the
+  // module goes away. Each save is a costing version on the backend, so it must not go out once per key.
+  const notesRef = useRef(negotiationNotes);
+  const notePendingRef = useRef(false);
+  const noteTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Gate de envío al KAM (docs/04) — se preserva tal cual al
+  // guardar cambios que no afectan el valor final ni el margen, y se
+  // invalida (vuelve a false) si el Líder vuelve a tocar esos campos.
+  const [readyForKam, setReadyForKam] = useState<boolean>(initialCosting.readyForKam ?? false);
+  const [costingSentAt, setCostingSentAt] = useState<string | undefined>(initialCosting.costingSentAt);
 
-  // Collapsible sections for custom adjustment and note
-  const [showNegotiationAdjustment, setShowNegotiationAdjustment] = useState<boolean>(
-    Boolean(
-      initialCosting.totalOfferedCop &&
-      initialCosting.suggestedTotalCop &&
-      initialCosting.totalOfferedCop !== initialCosting.suggestedTotalCop,
-    ),
-  );
+  // Collapsible section for the scope/negotiation note
   const [showNoteField, setShowNoteField] = useState<boolean>(
     Boolean(initialCosting.negotiationNotes && initialCosting.negotiationNotes.trim().length > 0),
   );
@@ -56,111 +58,93 @@ export function ProposalCostingModule({
   // Sync state when request prop changes
   useEffect(() => {
     if (request.costing) {
-      setBaseCostCop(request.costing.baseCostCop);
-      setMarginPercent(request.costing.expectedMarginPercent);
-      setRequiresExternalAdvisor(request.costing.requiresExternalAdvisor);
-      setExternalAdvisorDetails(request.costing.externalAdvisorDetails ?? "");
-      setTotalOfferedCop(request.costing.totalOfferedCop);
-      setNegotiationNotes(request.costing.negotiationNotes ?? "");
+      // A refetch must not overwrite a note that is still being typed (not saved yet).
+      if (!notePendingRef.current) setNegotiationNotes(request.costing.negotiationNotes ?? "");
+      setReadyForKam(request.costing.readyForKam ?? false);
+      setCostingSentAt(request.costing.costingSentAt);
       if (request.costing.negotiationNotes?.trim()) {
         setShowNoteField(true);
-      }
-      if (request.costing.suggestedTotalCop && request.costing.totalOfferedCop !== request.costing.suggestedTotalCop) {
-        setShowNegotiationAdjustment(true);
       }
     }
   }, [request.costing]);
 
-  // Financial calculations
-  const marginAmount = Math.round(baseCostCop * (marginPercent / 100));
-  const subtotalWithMargin = baseCostCop + marginAmount;
-
-  // Conditional Pro-Cultura Tax (1.5% only for Capacitación)
-  const proCulturaTaxAmount = isCapacitacion ? Math.round(baseCostCop * 0.015) : 0;
-  const calculatedTotalCop = Math.round(baseCostCop + marginAmount + proCulturaTaxAmount);
+  // Referencia informativa: 1.5% solo para Capacitación, calculada sobre el
+  // valor final ya digitado. Nunca se suma ni se resta de `totalOfferedCop`
+  // — el equipo ya la contempla en el Excel externo del que sale ese valor
+  // (docs/04).
+  const proCulturaTaxAmount = calculateProCulturaReference(totalOfferedCop, reqType).amount;
 
   const triggerSave = (
-    newBase: number,
-    newMargin: number,
-    newOffered: number,
-    newExternal: boolean,
-    newExtDetails: string,
+    newTotalOffered: number,
+    newMarginPercent: number | undefined,
+    newMarginAmountCop: number | undefined,
     newNotes: string,
+    // Requisito 2: editar el valor final o el margen invalida el "Enviado
+    // al KAM" previo — el Líder debe volver a confirmarlo explícitamente.
+    invalidateReadyForKam: boolean = false,
   ) => {
-    const updatedTaxAmount = isCapacitacion ? Math.round(newBase * 0.015) : 0;
-    const updatedSuggested = Math.round(newBase + newBase * (newMargin / 100) + updatedTaxAmount);
+    const updatedTaxAmount = calculateProCulturaReference(newTotalOffered, reqType).amount;
+    const nextReadyForKam = invalidateReadyForKam ? false : readyForKam;
+    const nextCostingSentAt = invalidateReadyForKam ? undefined : costingSentAt;
+    if (invalidateReadyForKam && readyForKam) {
+      setReadyForKam(false);
+      setCostingSentAt(undefined);
+    }
 
     const updatedCosting: ProposalCosting = {
-      requiresExternalAdvisor: newExternal,
-      externalAdvisorDetails: newExtDetails,
-      baseCostCop: newBase,
-      expectedMarginPercent: newMargin,
-      proCulturaTaxPercent: isCapacitacion ? 1.5 : 0,
+      marginAmountCop: newMarginAmountCop,
+      expectedMarginPercent: newMarginPercent,
+      proCulturaTaxPercent: isCapacitacion ? PRO_CULTURA_PERCENT : 0,
       proCulturaTaxAmount: updatedTaxAmount,
-      suggestedTotalCop: updatedSuggested,
-      totalOfferedCop: newOffered,
+      totalOfferedCop: newTotalOffered,
       negotiationNotes: newNotes,
+      readyForKam: nextReadyForKam,
+      costingSentAt: nextCostingSentAt,
     };
 
     onUpdateCosting(updatedCosting);
   };
 
-  // `min`/`max` en el <Input> solo afectan las flechitas del navegador — si
-  // se escribe o pega un valor directamente, no bloquean nada. Sin este
-  // clamp se podía guardar un costo base o margen negativo sin ningún aviso.
-  const handleBaseCostChange = (rawVal: number) => {
-    const val = Math.max(0, rawVal);
-    setBaseCostCop(val);
-    const newTax = isCapacitacion ? Math.round(val * 0.015) : 0;
-    const newSuggested = Math.round(val + val * (marginPercent / 100) + newTax);
-    const newOffered = totalOfferedCop === calculatedTotalCop ? newSuggested : totalOfferedCop;
-    setTotalOfferedCop(newOffered);
-    triggerSave(val, marginPercent, newOffered, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
+  const saveNote = () => {
+    clearTimeout(noteTimerRef.current);
+    if (!notePendingRef.current) return;
+    notePendingRef.current = false;
+    // Solo lo ya guardado: un valor a medio escribir no debe adelantarse al autoguardado.
+    const saved = draft.committed();
+    triggerSave(saved.total, saved.percent, saved.amount, notesRef.current);
   };
+  const saveNoteRef = useRef(saveNote);
+  saveNoteRef.current = saveNote;
+  useEffect(
+    () => () => {
+      saveNoteRef.current();
+    },
+    [],
+  );
 
-  const handleMarginChange = (rawVal: number) => {
-    const val = Math.min(100, Math.max(0, rawVal));
-    setMarginPercent(val);
-    const newTax = isCapacitacion ? Math.round(baseCostCop * 0.015) : 0;
-    const newSuggested = Math.round(baseCostCop + baseCostCop * (val / 100) + newTax);
-    const newOffered = totalOfferedCop === calculatedTotalCop ? newSuggested : totalOfferedCop;
-    setTotalOfferedCop(newOffered);
-    triggerSave(baseCostCop, val, newOffered, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
-  };
+  // Un valor negativo, no numérico o un % fuera de 0–100 no se guarda ni se
+  // corrige en silencio: el campo lo avisa y conserva lo último guardado.
+  const percentSuggestion =
+    marginPercent !== undefined && isLikelyFraction(marginPercent)
+      ? String(Math.round(marginPercent * 10000) / 100).replace(".", ",")
+      : null;
 
-  const handleOfferedChange = (rawVal: number) => {
-    const val = Math.max(0, rawVal);
-    setTotalOfferedCop(val);
-    triggerSave(baseCostCop, marginPercent, val, requiresExternalAdvisor, externalAdvisorDetails, negotiationNotes);
-  };
-
-  const handleRequiresExternalChange = (checked: boolean) => {
-    setRequiresExternalAdvisor(checked);
-    triggerSave(baseCostCop, marginPercent, totalOfferedCop, checked, externalAdvisorDetails, negotiationNotes);
-    if (checked && request.professorType !== "externo") {
-      toast.info("Requiere asesor externo seleccionado. Puedes registrar sus datos en un clic.", {
-        action: {
-          label: "Registrar Asesor",
-          onClick: onOpenAdvisorModal,
-        },
-      });
-    }
-  };
-
-  const handleSyncOfferedWithCalculated = () => {
-    setTotalOfferedCop(calculatedTotalCop);
-    triggerSave(
-      baseCostCop,
-      marginPercent,
-      calculatedTotalCop,
-      requiresExternalAdvisor,
-      externalAdvisorDetails,
-      negotiationNotes,
-    );
-    toast.success("Valor Total sincronizado con el cálculo estándar");
-  };
-
-  const differenceWithCalculated = totalOfferedCop - calculatedTotalCop;
+  // Indicador de solo lectura del asesor del servicio (docs/07, gap #11):
+  // ya no es un switch independiente — se deriva directamente del
+  // docente/asesor realmente asignado en "Equipo Asignado", para que nunca
+  // pueda contradecir esa asignación.
+  const isExternalAdvisor = request.professorType === "externo";
+  const advisorDisplayName = isExternalAdvisor
+    ? request.externalProfessorData?.nombre || request.professor || "Asesor externo sin nombre registrado"
+    : request.professorType === "planta"
+      ? request.professor || "Docente de planta sin nombre registrado"
+      : "Sin docente o asesor asignado todavía";
+  const advisorSubtitle = isExternalAdvisor
+    ? request.externalProfessorData?.empresaConsultora
+    : request.externalProfessorData?.facultad;
+  // Referencia informativa (docs/04): nunca sobreescribe el margen manual,
+  // solo ayuda a detectar de un vistazo si el % y el valor en $ "cuadran".
+  const marginReferenceAmount = Math.round((totalOfferedCop * (marginPercent ?? 0)) / 100);
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card">
@@ -171,7 +155,7 @@ export function ProposalCostingModule({
             Costeo Financiero
           </h2>
           <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">
-            Estructuración directa de costos y márgenes de la propuesta comercial
+            Registro directo del valor final de la propuesta comercial
           </p>
         </div>
 
@@ -184,144 +168,177 @@ export function ProposalCostingModule({
       </div>
 
       <div className="mt-5 space-y-5">
-        {/* 1. FILA SUPERIOR: COSTO BASE DIRECTO + SWITCH ELEGANTE ASESOR EXTERNO */}
+        {/* 1. FILA SUPERIOR: VALOR FINAL DE LA PROPUESTA + SWITCH ELEGANTE ASESOR EXTERNO */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-          {/* Costo Base Directo (7 cols) */}
+          {/* Valor Final de la Propuesta (7 cols) */}
           <div className="md:col-span-7 space-y-1.5">
             <Label
-              htmlFor="base-cost-input"
+              htmlFor="total-offered-input"
               className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-muted-foreground"
             >
-              Costo Base Directo (COP)
+              Valor Final de la Propuesta (COP)
             </Label>
             <div className="relative">
               <span className="absolute left-3 top-2.5 text-xs font-mono text-slate-400">$</span>
               <Input
-                id="base-cost-input"
-                type="number"
-                step="500000"
-                min="0"
-                value={baseCostCop || ""}
-                onChange={(e) => handleBaseCostChange(Number(e.target.value) || 0)}
+                id="total-offered-input"
+                type="text"
+                inputMode="decimal"
+                value={draft.texts.total}
+                onChange={(e) => draft.setText("total", e.target.value)}
+                onBlur={() => draft.blur("total")}
                 placeholder="0"
                 className="pl-7 font-mono text-sm h-9 bg-slate-50/50 border-slate-200 focus-visible:ring-1 focus-visible:ring-primary dark:bg-background dark:border-border"
                 disabled={isReadOnly}
               />
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">Equivale a {formatCop(baseCostCop)} COP</p>
+            {draft.invalid.total ? (
+              <p className="text-[11px] text-destructive font-mono">
+                Valor no válido, no se guardó. Escribe solo números, por ejemplo $32.000.000
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-400 font-mono">
+                Equivale a {formatCopPreview(totalOfferedCop)} COP — valor oficial para presentación al cliente
+              </p>
+            )}
           </div>
 
-          {/* Switch inline Asesor Externo (5 cols) */}
+          {/* Indicador de solo lectura del asesor del servicio (5 cols) —
+              derivado del docente/asesor realmente asignado, ya no un switch
+              independiente que se podía contradecir con esa asignación
+              (docs/07, gap #11). */}
           <div className="md:col-span-5 space-y-2">
-            <div className="flex items-center justify-between rounded-lg border border-slate-200/80 bg-slate-50/40 p-2.5 dark:border-border dark:bg-secondary/20">
-              <div className="space-y-0.5">
-                <Label
-                  htmlFor="external-advisor-switch"
-                  className="text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer block"
-                >
-                  ¿Requiere asesor externo?
-                </Label>
-                <span className="text-[11px] text-slate-500 dark:text-muted-foreground block">
-                  {requiresExternalAdvisor ? "Sí, consultor externo" : "No, docente planta"}
-                </span>
-              </div>
-              <Switch
-                id="external-advisor-switch"
-                checked={requiresExternalAdvisor}
-                onCheckedChange={handleRequiresExternalChange}
-                disabled={isReadOnly}
-              />
-            </div>
-
-            {/* Input sutil de nombre sin crear otra caja gigante */}
-            {requiresExternalAdvisor && (
-              <div className="space-y-1 pt-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-medium text-slate-600 dark:text-slate-300">Nombre o empresa consultora:</span>
-                  <button
-                    type="button"
-                    onClick={onOpenAdvisorModal}
-                    className="text-primary hover:underline font-medium inline-flex items-center gap-0.5"
-                  >
-                    Detalles <ExternalLink className="h-2.5 w-2.5" />
-                  </button>
+            <Label className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-muted-foreground">
+              Asesor del Servicio
+            </Label>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50/40 p-2.5 dark:border-border dark:bg-secondary/20">
+              <div className="min-w-0 flex items-start gap-2">
+                <GraduationCap className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+                <div className="min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {advisorDisplayName}
+                    </span>
+                    {request.professorType && (
+                      <Badge
+                        variant="outline"
+                        className={
+                          isExternalAdvisor
+                            ? "text-[10px] px-1.5 py-0 h-4 border-[#e9683b]/30 bg-[#e9683b]/10 text-[#e9683b] font-semibold shrink-0"
+                            : "text-[10px] px-1.5 py-0 h-4 border-[#5454e9]/30 bg-[#5454e9]/10 text-[#5454e9] dark:text-[#865cf0] font-semibold shrink-0"
+                        }
+                      >
+                        {isExternalAdvisor ? "Externo" : "Planta"}
+                      </Badge>
+                    )}
+                  </div>
+                  {advisorSubtitle && (
+                    <span className="text-[11px] text-slate-500 dark:text-muted-foreground block truncate">
+                      {advisorSubtitle}
+                    </span>
+                  )}
                 </div>
-                <Input
-                  value={externalAdvisorDetails}
-                  onChange={(e) => {
-                    setExternalAdvisorDetails(e.target.value);
-                    triggerSave(
-                      baseCostCop,
-                      marginPercent,
-                      totalOfferedCop,
-                      requiresExternalAdvisor,
-                      e.target.value,
-                      negotiationNotes,
-                    );
-                  }}
-                  placeholder="Ej: Ing. Jorge Mendoza (Consultoría TIC)"
-                  className="h-8 text-xs bg-white dark:bg-background border-slate-200 dark:border-border"
-                  disabled={isReadOnly}
-                />
               </div>
-            )}
+              {/* Ya no es editable desde acá (hallazgo 2026-09-25): este módulo solo
+                  se muestra en "en-costeo"/"entregada", es decir, siempre después
+                  de que el proceso pasó por "En proceso por experto" — cambiar el
+                  docente en ese punto sin dejar rastro fue el bug encontrado. El
+                  historial completo vive en la tarjeta "Docente / Asesor". */}
+              <span
+                className="text-muted-foreground text-[11px] inline-flex items-center gap-0.5 shrink-0 italic"
+                title='No editable desde el costeo: la solicitud ya pasó por "En proceso por experto"'
+              >
+                No editable
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Derivado del docente/asesor asignado en "Equipo Asignado" — ya no es un campo independiente del costeo.
+            </p>
           </div>
         </div>
 
-        {/* 2. FILA MEDIA: MARGEN DE CONTRIBUCIÓN CON INPUT PORCENTUAL Y CHIPS PILL EN TONO SLATE SUAVE */}
+        {/* 2. FILA MEDIA: MARGEN DE CONTRIBUCIÓN — % Y $ SON CAMPOS MANUALES E INDEPENDIENTES */}
         <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-border">
-          <div className="flex items-center justify-between">
-            <Label
-              htmlFor="margin-percent-input"
-              className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-muted-foreground"
-            >
-              Margen de Contribución
-            </Label>
-            <span className="text-xs font-mono font-medium text-slate-600 dark:text-slate-300">
-              +{formatCop(marginAmount)} COP
-            </span>
-          </div>
+          <Label className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-muted-foreground">
+            Margen de Contribución
+          </Label>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             {/* Input porcentual */}
-            <div className="relative w-full sm:w-36">
+            <div className="relative w-full sm:w-32">
               <Input
                 id="margin-percent-input"
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                value={marginPercent || ""}
-                onChange={(e) => handleMarginChange(Number(e.target.value) || 0)}
+                type="text"
+                inputMode="decimal"
+                value={draft.texts.percent}
+                onChange={(e) => draft.setText("percent", e.target.value)}
+                onBlur={() => draft.blur("percent")}
                 className="pr-7 font-mono text-sm h-9 bg-slate-50/50 border-slate-200 focus-visible:ring-1 focus-visible:ring-primary dark:bg-background dark:border-border"
                 disabled={isReadOnly}
               />
               <span className="absolute right-3 top-2.5 text-xs font-mono text-slate-400">%</span>
+              {/* Espacio fijo de dos líneas (el error de rango se parte en dos en esta columna
+                  angosta) y un solo mensaje a la vez, el error antes que la sugerencia: así al
+                  aparecer o desaparecer un mensaje nada de alrededor se mueve. */}
+              <div
+                data-testid="margin-percent-message"
+                aria-live="polite"
+                className="mt-1 min-h-[2.75em] text-[11px] leading-snug"
+              >
+                {draft.invalid.percent ? (
+                  <p className="text-destructive">El % debe estar entre 0 y 100, no se guardó</p>
+                ) : percentSuggestion ? (
+                  <p className="text-amber-700 dark:text-amber-400">¿quisiste decir {percentSuggestion} %?</p>
+                ) : null}
+              </div>
             </div>
 
-            {/* Chips tipo pill minimalistas en tono slate suave */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-slate-400 mr-1 hidden sm:inline">Predefinidos:</span>
-              {[25, 30, 35, 40].map((preset) => {
-                const isActive = marginPercent === preset;
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => handleMarginChange(preset)}
-                    disabled={isReadOnly}
-                    className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                      isActive
-                        ? "bg-slate-900 text-white shadow-xs dark:bg-primary dark:text-primary-foreground font-semibold"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200/70 dark:bg-secondary/60 dark:text-slate-300 dark:hover:bg-secondary"
-                    }`}
+            {/* Input de margen en plata (manual, independiente del %) */}
+            <div className="w-full sm:w-48 space-y-1">
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-xs font-mono text-slate-400">$</span>
+                <Input
+                  id="margin-amount-input"
+                  type="text"
+                  inputMode="decimal"
+                  value={draft.texts.amount}
+                  onChange={(e) => draft.setText("amount", e.target.value)}
+                  onBlur={() => draft.blur("amount")}
+                  placeholder="0"
+                  className="pl-7 font-mono text-sm h-9 bg-slate-50/50 border-slate-200 focus-visible:ring-1 focus-visible:ring-primary dark:bg-background dark:border-border"
+                  disabled={isReadOnly}
+                />
+              </div>
+              {draft.invalid.amount && (
+                <p className="text-[11px] text-destructive leading-snug">Valor no válido, no se guardó</p>
+              )}
+              {/* Referencia calculada, no editable y no guardada (docs/04):
+                  el margen manual y el valor final siguen siendo campos
+                  independientes — esto es solo para detectar de un vistazo
+                  cuando "no cuadran". */}
+              <div className="flex items-center gap-1.5 rounded-md bg-slate-50 dark:bg-white/5 px-2 py-1">
+                <Calculator className="h-3 w-3 shrink-0 text-slate-400" />
+                <div className="space-y-0.5">
+                  <p
+                    data-testid="margin-base-caption"
+                    className="text-[11px] text-slate-500 dark:text-muted-foreground leading-snug"
                   >
-                    {preset}%
-                  </button>
-                );
-              })}
+                    El porcentaje se calcula sobre el valor final ofrecido al cliente, no sobre el costo.
+                  </p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                    {marginPercent ?? 0}% de {formatCop(totalOfferedCop)} ={" "}
+                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
+                      {formatCop(marginReferenceAmount)}
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
+          <p className="text-[11px] text-slate-400">
+            El % y el valor en pesos son campos informativos independientes — no se recalculan entre sí ni afectan el
+            valor final de la propuesta.
+          </p>
         </div>
 
         {/* 3. DESGLOSE FINANCIERO INLINE EN UNA TABLA / LISTA LIMPIA DE RESUMEN */}
@@ -331,34 +348,37 @@ export function ProposalCostingModule({
           </div>
 
           <div className="divide-y divide-slate-200/60 dark:divide-border text-xs">
-            {/* 1. Costo Base Directo */}
-            <div className="flex items-center justify-between py-2">
-              <span className="text-slate-600 dark:text-slate-400">Costo Base Directo</span>
-              <span className="font-mono font-medium text-slate-900 dark:text-slate-100">{formatCop(baseCostCop)}</span>
-            </div>
-
-            {/* 2. Margen de Contribución */}
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-600 dark:text-slate-400">Margen de Contribución</span>
-                <span className="text-[11px] text-slate-400">({marginPercent}%)</span>
+            {/* 1. Valor Final de la Propuesta (manual) */}
+            <div className="flex items-center justify-between pt-1 pb-2">
+              <div>
+                <span className="text-xs uppercase tracking-wider font-semibold text-slate-900 dark:text-slate-100 block">
+                  Valor Final de la Propuesta
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-muted-foreground block">
+                  Valor oficial para presentación al cliente (COP)
+                </span>
               </div>
-              <span className="font-mono font-medium text-emerald-700 dark:text-emerald-400">
-                +{formatCop(marginAmount)}
+              <span className="font-mono text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 shrink-0">
+                {formatCop(totalOfferedCop)}
               </span>
             </div>
 
-            {/* 3. Subtotal */}
-            <div className="flex items-center justify-between py-2 font-medium">
-              <span className="text-slate-700 dark:text-slate-300">Subtotal con Margen</span>
-              <span className="font-mono text-slate-900 dark:text-slate-100">{formatCop(subtotalWithMargin)}</span>
+            {/* 2. Margen de Contribución (% + $, ambos manuales) */}
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-600 dark:text-slate-400">Margen de Contribución</span>
+                <span className="text-[11px] text-slate-400">({marginPercent ?? 0}%)</span>
+              </div>
+              <span className="font-mono font-medium text-emerald-700 dark:text-emerald-400">
+                {formatCop(marginAmountCop ?? 0)}
+              </span>
             </div>
 
-            {/* 4. Estampilla Pro-Cultura (1.5%) - Solo visible si es Capacitación con badge sutil */}
+            {/* 3. Referencia Pro-Cultura (1.5%) - Solo visible si es Capacitación, informativa */}
             {isCapacitacion && (
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-slate-600 dark:text-slate-400">Estampilla Pro-Cultura (1.5%)</span>
+                  <span className="text-slate-600 dark:text-slate-400">Referencia Pro-Cultura (1.5%)</span>
                   <Badge
                     variant="outline"
                     className="text-[10px] px-1.5 py-0 h-4 border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 font-normal"
@@ -367,121 +387,41 @@ export function ProposalCostingModule({
                   </Badge>
                 </div>
                 <span className="font-mono font-medium text-amber-700 dark:text-amber-300">
-                  +{formatCop(proCulturaTaxAmount)}
+                  {formatCop(proCulturaTaxAmount)}
                 </span>
               </div>
-            )}
-
-            {/* 5. Total Final Ofertado (destacado con tipografía clara y limpia, sin bordes pesados) */}
-            <div className="flex items-center justify-between pt-3 pb-1">
-              <div>
-                <span className="text-xs uppercase tracking-wider font-semibold text-slate-900 dark:text-slate-100 block">
-                  Total Final Ofertado
-                </span>
-                <span className="text-[11px] text-slate-500 dark:text-muted-foreground block">
-                  Valor oficial para presentación al cliente (COP)
-                </span>
-              </div>
-
-              <div className="text-right">
-                <span className="font-mono text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 block">
-                  {formatCop(totalOfferedCop)}
-                </span>
-                {differenceWithCalculated !== 0 ? (
-                  <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                    Ajuste: {differenceWithCalculated > 0 ? "+" : ""}
-                    {formatCop(differenceWithCalculated)}
-                  </span>
-                ) : (
-                  <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
-                    <ShieldCheck className="h-3 w-3" /> Cálculo estándar
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* AJUSTES OPCIONALES DE NEGOCIACIÓN Y NOTA (Limpios y colapsables) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-slate-500">
-          <div className="flex items-center gap-3">
-            {!showNegotiationAdjustment ? (
-              <button
-                type="button"
-                onClick={() => setShowNegotiationAdjustment(true)}
-                className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors text-xs inline-flex items-center gap-1"
-              >
-                <Sparkles className="h-3 w-3" /> Personalizar valor ofertado
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowNegotiationAdjustment(false)}
-                className="text-slate-400 hover:text-slate-600 text-xs inline-flex items-center gap-1"
-              >
-                <ChevronUp className="h-3 w-3" /> Ocultar personalización
-              </button>
-            )}
-
-            <span>·</span>
-
-            {!showNoteField ? (
-              <button
-                type="button"
-                onClick={() => setShowNoteField(true)}
-                className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors text-xs inline-flex items-center gap-1"
-              >
-                <MessageSquare className="h-3 w-3" /> + Agregar nota de alcance
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowNoteField(false)}
-                className="text-slate-400 hover:text-slate-600 text-xs inline-flex items-center gap-1"
-              >
-                <ChevronUp className="h-3 w-3" /> Ocultar nota
-              </button>
             )}
           </div>
 
-          {totalOfferedCop !== calculatedTotalCop && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleSyncOfferedWithCalculated}
-              className="h-7 px-2 text-xs text-primary hover:text-primary/80 font-medium"
-            >
-              <RotateCcw className="h-3 w-3 mr-1" />
-              Sincronizar a {formatCop(calculatedTotalCop)}
-            </Button>
+          {isCapacitacion && (
+            <p className="text-[11px] text-slate-400 flex items-start gap-1.5 pt-1">
+              <ShieldCheck className="h-3 w-3 shrink-0 mt-0.5" />
+              Referencia Pro-Cultura (1.5%): {formatCop(proCulturaTaxAmount)} — ya debe estar contemplado en tu valor
+              final. No se suma ni se resta automáticamente.
+            </p>
           )}
         </div>
 
-        {/* Custom total offered field when expanded */}
-        {showNegotiationAdjustment && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3 text-xs space-y-1.5 dark:border-border dark:bg-secondary/20">
-            <Label htmlFor="custom-offered-input" className="text-xs font-medium text-slate-700 dark:text-slate-300">
-              Valor ofertado acordado (ajuste manual):
-            </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-2 text-xs font-mono text-slate-400">$</span>
-              <Input
-                id="custom-offered-input"
-                type="number"
-                step="100000"
-                min="0"
-                value={totalOfferedCop || ""}
-                onChange={(e) => handleOfferedChange(Number(e.target.value) || 0)}
-                className="pl-7 font-mono text-sm h-8 bg-white dark:bg-background border-slate-200 dark:border-border"
-                disabled={isReadOnly}
-              />
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Permite modificar el valor total en caso de descuentos comerciales acordados con el cliente.
-            </p>
-          </div>
-        )}
+        {/* NOTA DE ALCANCE / NEGOCIACIÓN (colapsable) */}
+        <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-500">
+          {!showNoteField ? (
+            <button
+              type="button"
+              onClick={() => setShowNoteField(true)}
+              className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors text-xs inline-flex items-center gap-1"
+            >
+              <MessageSquare className="h-3 w-3" /> + Agregar nota de alcance
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowNoteField(false)}
+              className="text-slate-400 hover:text-slate-600 text-xs inline-flex items-center gap-1"
+            >
+              <ChevronUp className="h-3 w-3" /> Ocultar nota
+            </button>
+          )}
+        </div>
 
         {/* Custom note field when expanded */}
         {showNoteField && (
@@ -495,15 +435,12 @@ export function ProposalCostingModule({
               value={negotiationNotes}
               onChange={(e) => {
                 setNegotiationNotes(e.target.value);
-                triggerSave(
-                  baseCostCop,
-                  marginPercent,
-                  totalOfferedCop,
-                  requiresExternalAdvisor,
-                  externalAdvisorDetails,
-                  e.target.value,
-                );
+                notesRef.current = e.target.value;
+                notePendingRef.current = true;
+                clearTimeout(noteTimerRef.current);
+                noteTimerRef.current = setTimeout(() => saveNoteRef.current(), COSTING_AUTOSAVE_DELAY_MS);
               }}
+              onBlur={saveNote}
               placeholder="Ej: Se incluye ajuste de alcance en 2 módulos presenciales acordado con el cliente..."
               className="text-xs resize-none bg-white dark:bg-background border-slate-200 dark:border-border"
               disabled={isReadOnly}

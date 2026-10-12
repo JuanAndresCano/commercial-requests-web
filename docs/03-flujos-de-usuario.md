@@ -1,5 +1,14 @@
 # Flujos de usuario (user journeys)
 
+> **Actualización 2026-10-09 (cierre del UAT).** Decisiones del dueño del producto que prevalecen sobre este documento donde lo contradigan:
+> - **Crear:** el **líder de producto es obligatorio** y lo elige el KAM; el **nodo es opcional** (casilla vacía que nunca se rellena sola). El asistente ya no sugiere el líder a partir del nodo.
+> - **Editar y cancelar (KAM):** solo en "Nueva" **y sin docente asignado**. En esa misma ventana puede corregir nodo y líder, con historial visible.
+> - **Precio:** el KAM no ve el valor ofertado ni la nota de alcance hasta que el Líder confirma "Enviar a KAM".
+> - **Líder:** escribe **centro y CENCO** en texto libre. Su tablero tiene una quinta columna **"Enviada al KAM"**; el KAM ve "Entregada al líder" hasta que hay docente y "En proceso" después.
+> - **Entrega:** la solicitud entregada recibe número oficial **"CP/CT AAAA-NNNN"**.
+> - **Tableros en vivo:** se refrescan solos con eventos del servidor (con respaldo por sondeo) y muestran "Lleva N días en esta etapa" y "Total N días".
+> - Detalle de cada decisión y su motivo: `PARIDAD-LOGICA-NEGOCIO.md` (repositorio del backend, `workspace/docs/`, tabla "Diferencias deliberadas").
+
 Este documento describe, pantalla por pantalla, los dos recorridos prioritarios: **crear y hacer seguimiento a una solicitud (KAM)** y **triage + costeo de una solicitud (Líder de Producto)**. Las rutas están definidas en `src/App.tsx`.
 
 ## Mapa de rutas
@@ -26,50 +35,53 @@ Este documento describe, pantalla por pantalla, los dos recorridos prioritarios:
 ### A.2 — Punto de partida: `KamCommandCenter`
 El KAM aterriza en su centro de comando, filtrado siempre a **sus propias solicitudes** (no ve las de otros KAMs). Desde aquí tiene tres caminos típicos:
 - **Crear algo nuevo** → botón "Nueva Solicitud" (esquina superior derecha, también disponible en la barra lateral y en la topbar global de `AppShell`).
-- **Revisar el pipeline existente** → 4 tarjetas KPI (Nueva / En Proceso / Lista para Entregar / Entregada) que filtran la tabla, o la tabla directamente.
+- **Revisar el pipeline existente** → 4 tarjetas KPI (Entregada al líder / En Proceso / Lista para Entregar / Entregada) que filtran la tabla, o la tabla directamente. Además, tres filtros combinables (Líder de Producto, empresa, tipo de solicitud) junto al buscador.
 - **Escanear visualmente** → toggle a vista Kanban (mismas 4 columnas, mismos colores que la tabla).
 
-En Kanban, un clic en una tarjeta KPI **no oculta nada** (las columnas ya son el filtro) — aísla esa columna a pantalla completa, con las tarjetas en cuadrícula de hasta 3 por fila, para revisarlas más cómodo sin perder el contexto visual del Kanban. Un botón "Ver las 4 fases" regresa a la vista completa.
+En Kanban, un clic en una tarjeta KPI **no oculta nada** (las columnas ya son el filtro) — aísla esa columna a pantalla completa, con las tarjetas en cuadrícula de hasta 3 por fila, para revisarlas más cómodo sin perder el contexto visual del Kanban. Un botón "Ver las 4 fases" regresa a la vista completa. El mismo efecto se obtiene haciendo clic en el encabezado de cualquier columna del Kanban.
 
 ### A.3 — Registrar una nueva solicitud (`/solicitudes/nueva`)
 Wizard de 5 pasos con stepper clicable (se puede saltar hacia atrás libremente; hacia adelante valida el paso actual). Guardado automático en `localStorage` en cada cambio (si hay contenido significativo), con banner de recuperación de borrador si se detecta uno al entrar.
 
 1. **Paso 1 — Empresa** (`empresaNombre` y `tipoEmpresa` **obligatorios**): buscador con autocompletado contra empresas con convenio existente (`MOCK_COMPANIES`) — al seleccionar una, rellena NIT, dirección, teléfono, correo, CIIU, web y tipo de empresa, **todo editable después**. También se puede escribir una empresa nueva desde cero. Incluye chips de "empresas frecuentes" como atajo de un clic.
 2. **Paso 2 — Contacto** (100% opcional): datos del interlocutor principal + posibilidad de agregar múltiples contactos adicionales (para empresas con varios tomadores de decisión/áreas).
-3. **Paso 3 — Requerimiento** (`nombreReq` y `tipoReq` **obligatorios**; `tipoReqOtro` obligatorio solo si el tipo es "Otro"): aquí se elige el Nodo temático — **opcional, pero si se deja en blanco la solicitud queda con Líder de Producto "Por definir" y no le aparece a nadie real** — el tipo de servicio, y hay una sección "avanzada" colapsable con diagnóstico opcional (necesidad, competencias a fortalecer, resultados esperados, horas, modalidad, participantes, etc.).
+3. **Paso 3 — Requerimiento** (`nombreReq` y `tipoReq` **obligatorios**; `tipoReqOtro` obligatorio solo si el tipo es "Otro"): aquí se elige el Nodo temático — **opcional y siempre vacío por defecto** (el Líder de Producto, en cambio, es **obligatorio** al crear; *Actualización 2026-10-09*) — el tipo de servicio, y hay una sección "avanzada" colapsable con diagnóstico opcional (necesidad, competencias a fortalecer, resultados esperados, horas, modalidad, participantes, etc.).
 4. **Paso 4 — Formación previa** (`formacionPrevia` y `urgencia` **obligatorios**): si la empresa ya ha tomado servicios similares antes, y el nivel de urgencia de la solicitud.
-5. **Paso 5 — Observaciones y Documentos** (100% opcional): notas libres + adjuntar archivos.
+5. **Paso 5 — Observaciones y Documentos** (100% opcional): notas libres + adjuntar archivos. Al final del paso, justo antes de enviar, se muestra el historial de propuestas entregadas y en proceso de la misma empresa (con filtro por estado y modal de detalle), para detectar antecedentes o duplicidades.
 
 Al final: botón **"Enviar solicitud a Líder de Producto"**. Son **6 los campos con validación dura** (razón social, naturaleza jurídica, título, tipo de requerimiento + su descripción si es "Otro", formación previa, urgencia) — si falta alguno, salta automáticamente al paso correspondiente con un toast de error y resalta el campo. Todo lo demás es opcional.
 
-Al enviar: se crea el `RequestItem` con `status: "nueva"` siempre, sin costeo ni docente, y `productLeader` = el líder elegido manualmente, o el sugerido por nodo, o `"Por definir"` si no se eligió nodo. Se limpia el borrador guardado. Se muestra una pantalla de éxito (`SuccessScreen`) antes de volver al tablero.
+Al enviar: se crea el `RequestItem` con `status: "nueva"` siempre, sin costeo ni docente, y `productLeader` = el líder elegido por el KAM (obligatorio desde el 2026-10-09; ya no se sugiere a partir del nodo). Se limpia el borrador guardado. Se muestra una pantalla de éxito (`SuccessScreen`) antes de volver al tablero.
 
 ### A.4 — Seguimiento
 El KAM no tiene que hacer nada más hasta que la propuesta avance. Se entera de que algo está listo por:
-- El **banner verde** en su dashboard ("¡Tienes N propuestas listas para entregar!") cuando alguna solicitud llega a `en-costeo`.
-- La tarjeta KPI "Lista para Entregar".
-- La columna "Estado" en la tabla (4 badges de color, uno por estado real — ya no fusiona "Nueva" y "En Proceso" en un solo badge como antes).
+- El **banner verde** en su dashboard ("¡Tienes N propuestas listas para entregar!") — solo cuenta lo que el Líder ya confirmó con "Enviar a KAM" (`readyForKam`), no basta con que la solicitud haya llegado a `en-costeo` (ver B.4).
+- La tarjeta KPI "Lista para Entregar" (mismo criterio; una `en-costeo` sin confirmar aparece bajo "En Proceso").
+- La columna "Estado" en la tabla (4 badges de color, uno por estado real — ya no fusiona "Nueva" y "En Proceso" en un solo badge como antes; el estado `nueva` se rotula "Entregada al líder" para el KAM). Debajo se indica "Lleva N días en esta etapa" (también en las tarjetas del Kanban).
 
 ### A.5 — Ver el detalle y confirmar entrega (`/solicitudes/:id`)
 Desde la tabla o el Kanban, clic en una solicitud lleva al detalle. Para el KAM, la columna principal muestra:
 - Un **banner ámbar** si la solicitud tiene observaciones de un cliente que pidió ajustes (ver A.7).
-- Una **tarjeta de propuesta económica de solo lectura**: Valor Total Ofertado grande y destacado, con badge "Aprobado por Líder", más — solo si el tipo es "Capacitación" — la Estampilla Pro-Cultura. **No ve Costo Base Directo ni Margen de Contribución** (información interna del Líder). Si todavía no hay costeo real, ve un aviso "Costeo en proceso".
-- La nota de negociación del Líder, si existe.
+- Una **tarjeta de propuesta económica de solo lectura**: Valor Final de la Propuesta grande y destacado, más — solo si el tipo es "Capacitación" — la referencia informativa de Estampilla Pro-Cultura. **No ve el Margen de Contribución** (información interna del Líder). Si todavía no hay costeo real, ve un aviso "Costeo en proceso".
+- La nota de negociación del Líder, si existe, y el **Historial de Negociación** (ver B.4) si ya hubo más de una ronda.
 
 En la columna lateral: "Especificaciones del Servicio" (de solo lectura para el KAM), "Equipo Asignado" (Nodo, Líder de Producto, KAM, Docente/Asesor — con botón de contacto rápido si el docente es externo).
 
-Más abajo, la sección colapsable **"Información completa de la solicitud"** (empresa, contacto, diagnóstico, formación previa, observaciones) — de solo lectura, con un contador "X de Y campos diligenciados" siempre visible en el encabezado, aunque esté colapsada.
+Más abajo, la sección colapsable **"Información completa de la solicitud"** (empresa, contacto, diagnóstico, formación previa, observaciones) — de solo lectura para el KAM una vez sale de "Nueva" o en cuanto el Líder le asigna docente (ver A.6 y B.7 sobre cuándo puede editarla el Líder), con un contador "X de Y campos diligenciados" siempre visible en el encabezado, aunque esté colapsada.
 
 **Acciones disponibles según el estado, todas arriba a la derecha:**
-- `en-costeo`: botón **"Enviar a cliente"** → cambia el estado a `entregada`. **Deshabilitado si el costeo aún no tiene un valor mayor a $0.**
-- `nueva` (y la solicitud es suya): botón **"Cancelar solicitud"** → la elimina por completo, con confirmación.
-- `entregada`: badge "Propuesta Entregada" + botón **"Devolver con observaciones"** (ver A.7).
+- `en-costeo`: botón **"Enviar a cliente"** → cambia el estado a `entregada`. **Deshabilitado si el costeo aún no tiene un valor mayor a $0, o si el Líder de Producto todavía no confirmó explícitamente el envío** (ver B.4 — ya no basta con que exista un valor, el Líder debe darle "Enviar a KAM" primero).
+- `nueva` y sin docente asignado (y la solicitud es suya): botón **"Cancelar solicitud"** → abre un diálogo que exige un **motivo obligatorio** (chips predefinidos o texto libre; el botón de confirmar queda deshabilitado sin motivo) y la marca como cancelada (cancelación lógica, no se elimina físicamente). (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
+- `entregada`: insignia sólida **"Propuesta Entregada"** + botón **"Devolver con observaciones"** (ver A.7).
 
-### A.6 — Editar su propia solicitud (solo mientras "Nueva")
-Si la solicitud sigue en "Nueva" y es suya, aparece un botón **"Editar información"** junto a "Información completa de la solicitud". Abre un modal con 6 pestañas (General, Empresa, Contacto, Diagnóstico, Formación, Otros) que cubre prácticamente todos los campos capturados en el wizard, incluyendo título y urgencia (que antes no se podían corregir desde ningún lado). Valida formato de correos/teléfonos, no deja guardar el título vacío, y si se intenta cerrar con cambios sin guardar pide confirmación.
+### A.6 — Editar su propia solicitud (solo mientras "Nueva" y sin docente asignado)
+Si la solicitud sigue en "Nueva", es suya y el Líder de Producto aún no le asignó docente, aparece un botón **"Editar información"** junto a "Información completa de la solicitud". Abre un modal con 6 pestañas (General, Empresa, Contacto, Diagnóstico, Formación, Otros) que cubre prácticamente todos los campos capturados en el wizard, incluyendo título y urgencia (que antes no se podían corregir desde ningún lado). Valida formato de correos/teléfonos, no deja guardar el título vacío, y si se intenta cerrar con cambios sin guardar pide confirmación. **En cuanto el Líder asigna un docente, el botón desaparece** aunque la solicitud siga en "Nueva" (el experto no debe ver información que cambia por debajo); el backend lo rechaza también (400). Si el KAM necesita corregir algo después, por ahora lo hace el Líder (`08`, pregunta 19). *Actualización 2026-10-09:* "Cancelar solicitud" **sí** sigue ahora la misma regla: con docente asignado el KAM no puede cancelar (el backend responde 400; ADMIN conserva el permiso).
 
 ### A.7 — Si el cliente pide ajustes después de entregada
-Desde el detalle de una solicitud `entregada`, el KAM puede hacer clic en **"Devolver con observaciones"**: abre un modal para escribir la nota del cliente, y al confirmar la solicitud vuelve a `en-costeo` con esa nota visible (banner ámbar) tanto para el KAM como para el Líder de Producto, incluyendo en la tarjeta del Kanban del Líder. Al volver a marcarse `entregada`, la nota se limpia automáticamente.
+Desde el detalle de una solicitud `entregada`, el KAM puede hacer clic en **"Devolver con observaciones"**: abre un modal para escribir la nota del cliente, y al confirmar:
+- La solicitud vuelve a `en-costeo` con esa nota visible (banner ámbar) tanto para el KAM como para el Líder de Producto, incluyendo en la tarjeta del Kanban del Líder. Al volver a marcarse `entregada`, la nota se limpia automáticamente.
+- La ronda de negociación que estaba pendiente en el **Historial de Negociación** (ver B.4) queda registrada como **rechazada**, con la observación del cliente y la fecha.
+- El gate de envío al KAM se resetea (`readyForKam` vuelve a `false`) — el botón "Enviar a cliente" del KAM se deshabilita otra vez hasta que el Líder confirme el ajuste. Si es la segunda vez (o más) que se reenvía, el Líder debe escribir obligatoriamente un motivo del ajuste (ver B.4).
 
 ---
 
@@ -79,39 +91,54 @@ Desde el detalle de una solicitud `entregada`, el KAM puede hacer clic en **"Dev
 Igual que el KAM pero seleccionando la tarjeta "Líder de Producto" en `/login`.
 
 ### B.2 — Punto de partida: `ProductLeaderDashboard`
-Aterriza en su Kanban de 4 columnas (vista por defecto, a diferencia del KAM que arranca en Tabla), filtrado siempre a **sus propias solicitudes** (no hay toggle a "Todas"). Ve de inmediato cuántas tiene en cada etapa gracias a las 4 tarjetas KPI en la parte superior, más el filtro rápido "Sin docente (N)" para encontrar lo pendiente de asignar.
+Aterriza en su Kanban de 4 columnas (vista por defecto, a diferencia del KAM que arranca en Tabla), filtrado siempre a **sus propias solicitudes** (no hay toggle a "Todas"). Si tiene solicitudes nuevas sin revisar, ve primero un banner "¡Tienes N solicitudes nuevas por revisar!" (espejo del banner del KAM) con un botón "Ver nuevas". Debajo, ve de inmediato cuántas tiene en cada etapa gracias a las 4 tarjetas KPI, más el filtro rápido "Sin docente (N)" para encontrar lo pendiente de asignar.
 
 ### B.3 — Triage de una solicitud nueva
 1. En la columna **"Nueva"**, cada tarjeta muestra si tiene o no docente asignado ("Sin docente" en naranja si no), su antigüedad en la fase, y la fecha límite coloreada si está por vencer o vencida.
-2. Clic en la tarjeta → `/solicitudes/:id`.
-3. En la columna lateral "Equipo Asignado" → sección "Docente / Asesor" → botón **"Asignar"** abre `AdvisorAssignmentModal`.
-4. En el modal, dos pestañas:
-   - **Profesor de Planta**: selecciona de una lista cerrada de facultad interna (`ICESI_FACULTY`), con vista previa de departamento.
-   - **Consultor/Docente Externo**: formulario completo (nombre obligatorio; identificación, firma consultora, correo, teléfono, perfil opcionales). Al guardar como externo, automáticamente se activa el flag "requiere asesor externo" en el costeo (aunque el valor de sus honorarios no se registra en la plataforma — va en el documento de costeo externo, confirmado con Dianis).
-5. Guardar asignación → toast de confirmación → vuelve al detalle con el docente ya reflejado.
+2. Clic en la tarjeta → `/solicitudes/:id`. Si todavía no hay docente asignado, arriba de todo en la columna principal aparece un aviso explícito **"Siguiente paso: asigna un docente o asesor"** con un botón "Asignar ahora" que abre el modal directo, sin tener que subir a la cabecera a buscar el botón deshabilitado (antes la única pista era un tooltip sobre ese botón, invisible para alguien nuevo en la app).
+3. Ese mismo botón, o el de "Asignar"/"Cambiar" en la columna lateral "Equipo Asignado" → sección "Docente / Asesor", abren `AdvisorAssignmentModal`.
+4. El modal es **un solo formulario** para los dos tipos (ya no hay pestañas ni lista cerrada): la Líder **digita** los datos del docente o asesor.
+   - Un selector **Profesor de planta / Consultor externo** define el tipo. Campos iguales para ambos: **nombre completo (el único obligatorio)**, **facultad** (planta) o **firma consultora/institución** (externo), cédula/identificación/NIT, correo (con validación de formato), teléfono y especialidad/perfil. Los 34 docentes de planta del seed siguen en el directorio.
+   - Al escribir el nombre (desde 2 letras) el campo **sugiere** entradas del directorio, sin distinguir mayúsculas ni tildes. Si elige una sugerencia, el formulario se llena con sus datos y se muestran **solo lectura**, con un botón **"Cambiar"** que limpia todo para escribir de nuevo. Si el nombre no coincide con nada, se **crea una entrada nueva** al guardar. Si el docente ya existía, el backend **reutiliza** su registro; nunca lo modifica.
+   - Al guardar, el cliente hace **una sola** petición: `PATCH /requests/:id/professor` con `{professorId}` (eligió una sugerencia) o `{professor: {...}}` (escribió los datos; el backend crea o reutiliza y asigna en el mismo paso). Mientras guarda, el formulario se deshabilita; si falla, un toast de error explica y el modal sigue abierto.
+   - El costeo (B.4) refleja automáticamente que el asesor es externo — ya no es un switch independiente que se pueda desincronizar, es un indicador derivado directamente de esta asignación (el valor de sus honorarios sigue sin registrarse en la plataforma — va en el documento de costeo externo, confirmado con Dianis).
+5. Guardar asignación → toast de confirmación → vuelve al detalle con el docente ya reflejado. **Guardar solo asigna: no cambia el estado** — avanzar sigue siendo el botón aparte "Pasar a Experto".
+   - En la tarjeta "Docente / Asesor", el botón **"Contacto"** (visible para la Líder y para el KAM, con cualquier tipo de docente) abre los datos registrados: la Líder ve todo lo que digitó, **incluida la identificación**; el KAM ve nombre, facultad o empresa, correo, teléfono y perfil, **nunca la identificación** (el backend no se la envía).
 6. Avanza el estado con el botón **"Pasar a Experto"** (deshabilitado sin docente asignado) — desde el Kanban o el detalle, ambos con un diálogo de confirmación que muestra la empresa y el título de la solicitud antes de ejecutar.
+7. **El docente/asesor solo se puede cambiar mientras la solicitud está en "Nueva" o "En Experto".** Una vez avanza a "En Costeo" o "Entregada", los tres puntos de la interfaz donde antes se podía editar (tarjeta "Docente / Asesor", indicador de asesor dentro del costeo, modal rápido de contacto) muestran "No editable" en su lugar. Todo cambio, sin importar en qué momento se hizo, queda en un **historial de asignación** visible bajo la tarjeta "Docente / Asesor" (docente anterior, nuevo, quién y cuándo) — hallazgo del 2026-09-25: antes un cambio de docente no dejaba ningún rastro, a diferencia del costeo. ⚠️ El bloqueo total es una decisión de Tomás sin confirmar con Dianis (`08`, pregunta 18).
 
 ### B.4 — Costeo de la propuesta
-1. Cuando la propuesta está madura, el Líder de Producto avanza a `en-costeo` (botón "Pasar a Costeo", con el mismo diálogo de confirmación).
-2. En el detalle, el módulo `ProposalCostingModule` (columna principal, solo visible para este rol) permite en tiempo real:
-   - Ingresar **Costo Base Directo** (input numérico en COP, no acepta negativos).
-   - Activar el switch **"¿Requiere asesor externo?"** (con campo de nombre/empresa consultora si se activa).
-   - Ajustar el **Margen de Contribución** (input % con chips predefinidos 25/30/35/40%, acotado entre 0 y 100).
-   - Ver el **desglose financiero** en vivo: Costo Base → Margen → Subtotal → Estampilla Pro-Cultura (solo si es Capacitación) → **Total Final Ofertado**.
-   - Opcionalmente expandir "Personalizar valor ofertado" para sobreescribir el total sugerido manualmente (con botón "Sincronizar" para volver al valor calculado si se desea) — tampoco acepta negativos.
-   - Opcionalmente expandir "+ Agregar nota de alcance" para justificar el ajuste en texto libre.
-   - Cada cambio dispara `triggerSave` → `onUpdateCosting` → persiste inmediatamente (no hay botón de "guardar" separado dentro del módulo; existe un botón general "Guardar Cambios" en la cabecera del detalle como refuerzo).
-3. Paralelamente, en `ProposalDocumentsSection` (debajo del costeo), puede subir documentos internos de costeo (matrices Excel, contratos) y documentos de cara al cliente.
-4. Cuando el Valor Total Ofertado ya es mayor a $0, el trabajo del Líder termina ahí — **no hay ningún botón de "Entregar" para el Líder de Producto**, ni en el Kanban ni en el detalle. El envío final al cliente es una acción exclusiva del KAM (se encontró y corrigió un hueco donde el Líder también podía marcar "Entregada" directamente, saltándose al KAM). En el Kanban, la tarjeta en "En Costeo" muestra "Completar costeo" (enlace al detalle) mientras falta valor, y una etiqueta pasiva **"Listo para el KAM"** una vez está listo; en el detalle se ve como "Costeo listo — a la espera del KAM". Esa misma solicitud ya es visible en el dashboard del KAM como "Lista para Entregar" sin que el Líder tenga que hacer nada más.
+0. **Mientras la solicitud está en "Nueva" o "En Experto", la tarjeta de costeo no se muestra** — en su lugar hay un aviso "Costeo aún no disponible". Antes se mostraba editable en cualquier estado (se podía fijar un valor final desde "Nueva"), contradiciendo la regla ya validada de que el costeo se define todo de una vez, en su fase (`08`, pregunta 7).
+1. Cuando la propuesta está madura, el Líder de Producto avanza a `en-costeo` (botón "Pasar a Costeo", con el mismo diálogo de confirmación) — recién aquí aparece la tarjeta de costeo.
+2. En el detalle, el módulo `ProposalCostingModule` (columna principal, solo visible para este rol) permite:
+   - Ingresar el **Valor Final de la Propuesta** (COP) — el número que se le va a mostrar al cliente. Ya **no** se calcula a partir de un costo base + margen: el Líder lo digita directamente, porque el equipo ya trae este número calculado de un Excel externo y necesita que quede exacto (docs/04, `ProposalCosting`).
+   - Ajustar el **Margen de Contribución**, tanto en **porcentaje** (valor libre, se acepta coma decimal, p. ej. "38,30"; ya no hay botones de porcentajes predefinidos — confundían a la Líder en la UAT del 29/09) como en **pesos** (input manual) — ambos son informativos e independientes entre sí y del valor final; junto al campo en pesos se muestra una referencia calculada ("X% de $Y = $Z") solo para comparar, sin forzar que cuadren. Un texto bajo el campo aclara que el porcentaje se calcula sobre el **valor final ofrecido al cliente**, no sobre el costo.
+   - Ver, solo si el tipo es "Capacitación", una fila de referencia **"Estampilla Pro-Cultura (1.5%)"** — igual de informativa, nunca se suma ni se resta del valor final.
+   - Ver un indicador de solo lectura **"Asesor del Servicio"**, derivado de a quién se le asignó como docente/asesor en B.3 (planta o externo) — ya no es un switch editable aparte.
+   - Opcionalmente expandir "+ Agregar nota de alcance" para justificar el ajuste en texto libre (`negotiationNotes`, distinto del motivo de ajuste de una ronda — ver más abajo).
+   - Cada cambio se guarda solo, campo por campo — no hay ningún botón de "guardar" general. El botón "Guardar Cambios" que existía en la cabecera del detalle se quitó (`07`, gap #17): no cumplía ninguna función real y, con el costeo oculto antes de "En Costeo", podía escribirle a una solicitud "Nueva"/"En Experto" un costeo vacío en $0 donde antes no había ninguno.
+3. Paralelamente, en `ProposalDocumentsSection` (debajo del costeo), puede subir documentos internos de costeo (matrices Excel, contratos) y documentos de cara al cliente. En el **Repositorio Interno** se aceptan también libros de Excel con macros (`.xlsm`, pedido en la UAT por la Líder de Producto para su matriz de costeo); en **Propuesta Comercial** (de cara al cliente) siguen permitidos solo PDF y Word, y el backend rechaza `.xlsm` en esa categoría. Aún no hay análisis de malware (pendiente antes de producción).
+4. Cuando el valor final ya es mayor a $0, aparece un botón **"Enviar a KAM"** — al confirmarlo, la propuesta queda marcada como lista y **se abre una ronda en el Historial de Negociación** (ver abajo) con el valor, margen y alcance de ese momento. Recién ahí el KAM puede usar su "Enviar a cliente" (A.5) — antes de confirmar, aunque el valor ya esté puesto, el botón del KAM sigue deshabilitado. **No hay ningún botón de "Entregar" para el Líder de Producto**: el envío final al cliente sigue siendo exclusivo del KAM. En el Kanban, la tarjeta en "En Costeo" muestra "Completar costeo" mientras falta valor, "Completar envío" (enlace al detalle) mientras el valor existe pero no se ha confirmado, y la insignia **"Enviado al KAM"** (con "hace X tiempo") una vez confirmado.
+5. **Historial de Negociación** (sección nueva en el detalle, visible para Líder y KAM, solo si ya hay más de una ronda o una ronda cerrada): cada vez que el Líder confirma "Enviar a KAM" se abre o actualiza una ronda con el valor, margen, participantes/modalidad/horas/tipo/necesidad de ese momento. Si el cliente rechaza (A.7), esa ronda queda marcada como rechazada con su observación. **Desde la segunda ronda en adelante, el Líder debe escribir un motivo del ajuste obligatorio** antes de poder reenviar — el diálogo le muestra la observación del cliente de la ronda anterior como contexto.
+6. Si el rechazo del cliente requiere corregir algo de **"Información completa de la solicitud"** (ej. la descripción del alcance en `necesidad`, no solo el precio), el Líder de Producto ahora puede editar esa sección mientras la solicitud esté en "En Costeo" — ver B.7. Antes, una vez salía de "Nueva", nadie podía corregir esos campos.
 
-### B.5 — Reasignación (camino alterno, solo mientras "Nueva")
-Si una solicitud no corresponde a su especialidad/nodo (mal asignada por el KAM, sobrecarga, etc.), el Líder de Producto puede reasignarla — pero **solo mientras sigue en "Nueva"** (una vez alguien empezó a trabajarla, ya no se puede desde la interfaz):
-- Desde el Kanban (ícono de flechas en el pie de la tarjeta, solo visible en la columna "Nueva") o desde el detalle (link "Reasignar" junto a "Líder de Producto" en la tarjeta lateral).
-- Modal: selecciona nuevo Líder de Producto (la lista excluye al actual), el nodo se autosugiere según el nuevo líder, elige un motivo estructurado (dropdown con 5 opciones predefinidas + "Otro motivo"), y puede dejar una nota para el nuevo líder.
-- Al confirmar: `updateRequest` cambia `productLeader` y `node` — la solicitud desaparece de "Mis Solicitudes" del líder original y aparece en la del nuevo.
+### B.5 — Reasignación (camino alterno, en "Nueva" o "En Experto")
+Si una solicitud no corresponde a su especialidad/nodo (mal asignada por el KAM, sobrecarga, o el experto determina que el tema es de otro nodo), el Líder de Producto puede reasignarla mientras esté en **"Nueva" o "En proceso por experto"** (una vez llega a costeo, ya no se puede desde la interfaz):
+- Desde el Kanban (ícono de flechas en el pie de la tarjeta) o desde el detalle (link "Reasignar" junto a "Líder de Producto" en la tarjeta lateral).
+- Modal compartido (`ReassignLeaderDialog` + `useReassignRequest`, antes triplicado en 3 archivos distintos): selecciona nuevo Líder de Producto (la lista excluye al actual), el nodo se autosugiere según el nuevo líder, elige un motivo estructurado (dropdown con 5 opciones predefinidas + "Otro motivo"), y puede dejar una nota para el nuevo líder.
+- Al confirmar: `productLeader` y `node` cambian siempre. **Si la solicitud estaba en "En Experto", el estado vuelve a "Nueva"** (el nuevo líder reinicia el flujo) y se limpia el docente/asesor que tenía asignado (ya no aplicaría necesariamente bajo el nuevo nodo).
+
+  ⚠️ **Esta ampliación (permitir reasignar también desde "En Experto") es una decisión de Tomás, no una respuesta confirmada por Dianis** — en `08`, pregunta 6, ella no dio un caso concreto ("quizás todo puede pasar en la vida") y el prototipo se había dejado restringido solo a "Nueva". Se relajó igual porque apareció un caso de negocio concreto (el profesor determina que el tema no corresponde a su nodo) mientras se probaba el prototipo — **falta validar explícitamente con ella** que este es el comportamiento correcto.
 
 ### B.6 — Corregir "Especificaciones del Servicio"
-Si el KAM diligenció mal la dedicación, modalidad, participantes, tipo de servicio o fecha de entrega estimados, el Líder de Producto puede corregirlos directamente desde la tarjeta lateral "Especificaciones del Servicio" en el detalle (botón "Editar") — sobrescribe el valor sin dejar historial de "antes/después" (no se pidió esa trazabilidad).
+Si el KAM diligenció mal la dedicación, modalidad, participantes, tipo de servicio o fecha de entrega estimados, el Líder de Producto puede corregirlos directamente desde la tarjeta lateral "Especificaciones del Servicio" en el detalle (botón "Editar") — sobrescribe el valor sin dejar historial de "antes/después" independiente (si el cambio ocurre estando en "En Costeo" y luego se confirma "Enviar a KAM", sí queda congelado como parte de esa ronda del Historial de Negociación — ver B.4).
+
+### B.7 — Corregir "Información completa de la solicitud" tras un rechazo del cliente
+Antes, una vez la solicitud salía de "Nueva", **nadie** podía corregir estos campos (empresa, contacto, diagnóstico/`necesidad`, formación previa) — ni el KAM que los diligenció originalmente, ni el Líder. Esto era un problema real: si el cliente rechaza una propuesta por un tema de alcance (ej. "reducir de 5 plantas a 3"), la corrección vive en `necesidad`, no en el costeo.
+
+**Ahora el Líder de Producto también puede abrir "Editar información"** desde esta sección, pero solo cuando: la solicitud es suya, está en **"En Costeo"**, **y ya existe al menos una ronda "rechazada" en el Historial de Negociación** (es decir, el cliente ya devolvió esta propuesta al menos una vez). En el primer paso de costeo (antes de cualquier rechazo), sigue siendo de solo lectura para el Líder — la información sigue siendo del KAM mientras no haya un motivo concreto para tocarla. Es el mismo modal que ya usaba el KAM en "Nueva". Si corrige `necesidad` (o cualquier otro campo de esta sección) y luego confirma "Enviar a KAM" (B.4), ese valor corregido queda congelado en la ronda correspondiente del Historial de Negociación automáticamente, sin pasos adicionales.
+
+⚠️ Igual que B.5, **esto no viene de una pregunta respondida por Dianis** — surgió al analizar qué pasa cuando un rechazo del cliente no es solo de precio. Queda pendiente de validar con ella quién debería tener esta responsabilidad (¿Líder, KAM, o ambos?) — ver `08`, pregunta 16.
 
 ---
 
@@ -138,15 +165,13 @@ Envía ──────────────────────►  Ap
                                         │
                                         ▼
                                 Confirma avance a "En Costeo"
-                                Ingresa costo base + margen
-                                (+ estampilla automática si aplica)
-                                Ajusta valor ofertado si hay
-                                negociación comercial
+                                Digita el Valor Final de la
+                                Propuesta + margen (% y $)
+                                (+ referencia Pro-Cultura si aplica)
                                         │
                                         ▼
-                                Costeo > $0: tarjeta pasa a
-                                "Listo para el KAM" (el Líder
-                                ya no tiene más acciones) ──►  Ve banner "lista para entregar"
+                                Clic "Enviar a KAM" (abre ronda
+                                en el Historial de Negociación) ──►  Ve banner "lista para entregar"
                                                                         │
                                                                         ▼
                                                                 Abre detalle, revisa valor
@@ -155,7 +180,8 @@ Envía ──────────────────────►  Ap
                                                                         ▼
                                                                 Clic "Enviar a cliente"
                                                                 (única acción que marca
-                                                                "Entregada" en todo el sistema)
+                                                                "Entregada" en todo el sistema —
+                                                                deshabilitada hasta el paso anterior)
                                                                         │
                                                         ┌───────────────┴───────────────┐
                                                         ▼                                ▼
@@ -163,7 +189,8 @@ Envía ──────────────────────►  Ap
                                                                               "Devolver con observaciones"
                                                                                         │
                                                                                         ▼
-                                                                        Vuelve a "En Costeo" con la nota
-                                                                        visible para el Líder (reinicia
-                                                                        desde B.4)
+                                                                        Vuelve a "En Costeo", ronda queda
+                                                                        "rechazada" con la observación,
+                                                                        gate se resetea (reinicia desde B.4;
+                                                                        2da ronda en adelante exige motivo)
 ```

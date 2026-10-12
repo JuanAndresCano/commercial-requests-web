@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useMemo, useRef, type ReactNode } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -9,11 +9,7 @@ import {
   Clock,
   Layers,
   Calendar,
-  Save,
   Send,
-  Phone,
-  Mail,
-  User,
   Check,
   MessageSquare,
   ArrowLeftRight,
@@ -24,6 +20,7 @@ import {
   AlertCircle,
   Edit3,
   ClipboardList,
+  History,
 } from "@/components/icons";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -51,20 +48,77 @@ import {
   ProposalCosting,
   ProposalDocument,
   ExternalProfessorData,
-  calculateCosting,
-  PRODUCT_LEADERS,
-  NODES,
-  NODE_DEFAULT_LEADERS,
   REQUEST_TYPES,
   URGENCY_META,
   type RequestType,
   type Urgency,
+  type NegotiationRound,
 } from "@/lib/mock-data";
 import { useAuth } from "@/context/AuthContext";
 import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentModal";
+import { AdvisorContactDialog } from "@/components/costing/AdvisorContactDialog";
 import { ProposalCostingModule } from "@/components/costing/ProposalCostingModule";
 import { ProposalDocumentsSection } from "@/components/costing/ProposalDocumentsSection";
+import {
+  ReassignLeaderDialog,
+  REASSIGN_REASONS,
+  REASSIGN_REASON_TO_BACKEND,
+  type ReassignConfirmParams,
+} from "@/components/ReassignLeaderDialog";
+import { EditTeamDialog, type EditTeamParams } from "@/components/EditTeamDialog";
+import { TeamNodeEditor } from "@/components/TeamNodeEditor";
+import { CenterFields } from "@/components/CenterFields";
+import { StageTimeSection } from "@/components/StageTimeSection";
+import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
+import { getStageTimes } from "@/lib/stage-time";
+import {
+  openNegotiationRound,
+  closeRoundForClientDelivery,
+  rejectRoundWithObservations,
+  getRoundChanges,
+} from "@/lib/negotiation";
 import { toast } from "sonner";
+import { useRequestDetail } from "@/hooks/use-request-detail";
+import { useUpdateRequestInfo } from "@/hooks/use-update-request-info";
+import { useDeleteRequest } from "@/hooks/use-delete-request";
+import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
+import { useAssignProfessor } from "@/hooks/use-assign-professor";
+import { useUploadAttachment, useDeleteAttachment, useDownloadAttachment } from "@/hooks/use-attachments";
+import { CATEGORY_TO_BACKEND, buildLocalDocument, splitAttachments } from "@/lib/proposal-documents";
+import { useMarkReadyForKam } from "@/hooks/use-mark-ready-for-kam";
+import { useReassignProposal } from "@/hooks/use-reassign-proposal";
+import { useUpdateServiceSpecs } from "@/hooks/use-update-service-specs";
+import { useUpsertCosting } from "@/hooks/use-upsert-costing";
+import { useSetRequestNode } from "@/hooks/use-set-request-node";
+import { useSetRequestCenter } from "@/hooks/use-set-request-center";
+import { useNodes } from "@/hooks/use-nodes";
+import { useProductLeaders } from "@/hooks/use-product-leaders";
+import {
+  parseParticipantsRange,
+  requestTypeToBackend,
+  modalityToBackend,
+  mapProposalToRequestItem,
+} from "@/lib/proposal-adapter";
+import { cateringToPayload } from "@/lib/catering";
+import { canonicalNit, displayNit, parseNit } from "@/lib/nit";
+import { canEditProfessor } from "@/lib/professor-assignment";
+import { toProfessorInput } from "@/lib/professor-form";
+import { ApiError } from "@/lib/api/client";
+import type { UpdateProposalInfoPayload, CompanyType, SetCenterPayload } from "@/lib/api/requests";
+
+const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
+  Privada: "PRIVADA",
+  Pública: "PUBLICA",
+  Mixta: "MIXTA",
+  "Sin Ánimo de Lucro": "SIN_ANIMO_LUCRO",
+};
+
+const CANCEL_REASON_PRESETS = [
+  "Creada por error / prueba",
+  "Cliente desistió de la propuesta",
+  "Solicitud duplicada",
+  "Cambio en requerimientos del cliente",
+] as const;
 
 export default function RequestDetail() {
   const { id } = useParams();
@@ -81,30 +135,90 @@ export default function RequestDetail() {
     deleteRequest,
   } = useAuth();
 
+  const {
+    data: apiProposal,
+    isLoading: isLoadingProposal,
+    isError: isProposalError,
+    error: proposalError,
+  } = useRequestDetail(id);
+  const updateInfoMutation = useUpdateRequestInfo();
+  const deleteRequestMutation = useDeleteRequest();
+  const updateStatusMutation = useUpdateRequestStatus();
+  const { data: dbNodes } = useNodes();
+
   const role = user.role;
   const isKam = role === "kam";
   const isLeader = role === "lider-producto" || role === "lider-nodo";
 
-  const req: RequestItem = requests.find((r) => r.id === id) ?? requests[0];
+  // Cuando hay un id en la URL, esperamos la respuesta del backend antes de
+  // resolver la solicitud. Solo como respaldo (desarrollo sin backend) se
+  // acepta un item del contexto mock que coincida exactamente con el id.
+  // Si el backend devuelve 404 (solicitud cancelada, enlace viejo, etc.) se
+  // muestra un estado explícito de "no encontrada" — no un fallback silencioso
+  // que haría que cualquier acción (cancelar, editar) operara sobre el mock
+  // local sin tocar el backend.
+  const fallbackReq = requests.find((r) => r.id === id);
+  // The result is typed as `RequestItem | undefined` because useMemo can
+  // return undefined when neither the API response nor a matching mock is
+  // available yet. The two early returns in the render section (isLoadingProposal
+  // and !req) ensure that the rest of the hook body — and all of the JSX below
+  // them — can only ever run when req is a concrete RequestItem.
+  // We assert non-null here so that the 200+ downstream usages of `req`
+  // don't require optional-chaining rewrites. The runtime guarantee is
+  // enforced by the guards, not by this assertion.
+  const req = useMemo((): RequestItem => {
+    if (apiProposal) {
+      return mapProposalToRequestItem(apiProposal, isKam ? user.name : undefined);
+    }
+    // Solo usar el mock si todavía no llegó respuesta del backend (puede ser
+    // que el backend no esté levantado en dev y el item vive en el contexto).
+    if (!isLoadingProposal && !isProposalError && fallbackReq) {
+      return fallbackReq;
+    }
+    // This branch is only reachable while loading or on error; the early
+    // returns in the render will exit before this value is ever used.
+    return undefined as unknown as RequestItem;
+  }, [apiProposal, fallbackReq, isLoadingProposal, isProposalError, user.name]);
+
+  // Mutaciones reales (HU 4.1/4.3/4.4/4.5) — se llaman siempre (reglas de hooks), solo se
+  // usan cuando `apiProposal` existe (ver AGENTS.md: Boolean(apiProposal) decide el flujo
+  // real vs. mock); ver cada handler más abajo.
+  const uploadAttachmentReal = useUploadAttachment();
+  const deleteAttachmentReal = useDeleteAttachment();
+  const downloadAttachmentReal = useDownloadAttachment();
+  const assignProfessorReal = useAssignProfessor();
+  const markReadyForKamReal = useMarkReadyForKam();
+  const reassignProposalReal = useReassignProposal();
+  const updateSpecsReal = useUpdateServiceSpecs();
+  const upsertCostingReal = useUpsertCosting();
+  const setNodeReal = useSetRequestNode();
+  const setCenterReal = useSetRequestCenter();
+  const lastSentCosting = useRef<ProposalCosting | null>(null);
+  // The Product Leader directory feeds the Leader's reassignment and the KAM's team
+  // correction (GET /users allows PRODUCT_LEADER, ADMIN and KAM); never for a mock proposal.
+  const productLeadersQuery = useProductLeaders(Boolean(apiProposal) && (isLeader || isKam));
 
   // Se encontró que se podía marcar "Entregada" con costeo en $0 (nadie lo
   // había tocado, o se puso en $0 a propósito): ni "Marcar Entregada" ni
   // "Enviar a cliente" validaban que hubiera un valor real antes de cerrar
   // el ciclo comercial. Este es el único punto de verdad para esa regla.
-  const hasValidCosting = !!req.costing && req.costing.totalOfferedCop > 0;
+  const hasValidCosting = !!req?.costing && req.costing.totalOfferedCop > 0;
 
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnObservations, setReturnObservations] = useState("");
+  // Diálogo dedicado para "Enviar a KAM" (docs/03): a partir de la ronda 2
+  // exige una nota del motivo del ajuste, algo que el diálogo genérico
+  // CONFIRM_ACTION_META no puede expresar (no admite campos condicionales).
+  const [isSendToKamModalOpen, setIsSendToKamModalOpen] = useState(false);
+  const [sendToKamNote, setSendToKamNote] = useState("");
   const [showFullInfo, setShowFullInfo] = useState(false);
-  const [selectedNewLeader, setSelectedNewLeader] = useState("");
-  const [selectedNewNode, setSelectedNewNode] = useState("");
-  const [reassignReason, setReassignReason] = useState("Temática no afín / Corresponde a otro nodo");
-  const [reassignNotes, setReassignNotes] = useState("");
 
   // Edición de "Especificaciones del Servicio" por el Líder de Producto,
   // para corregir datos que el KAM haya diligenciado de forma incorrecta.
@@ -119,6 +233,7 @@ export default function RequestDetail() {
   });
 
   const handleStartEditSpecs = () => {
+    if (!req) return;
     setSpecsDraft({
       horas: req.horas ?? "",
       modalidad: req.modalidad ?? "",
@@ -130,7 +245,38 @@ export default function RequestDetail() {
     setIsEditingSpecs(true);
   };
 
+  // Estos campos quedan congelados en cada ronda del Historial de Negociación
+  // (docs/04) igual que el valor final y el margen — si ya se confirmó
+  // "Enviar a KAM" y el Líder corrige alguno después, el gate debe
+  // invalidarse igual que cuando se edita el precio, para que el KAM no
+  // entregue un alcance distinto al que el Líder confirmó por última vez.
+  const invalidateReadyForKamIfNeeded = (): Partial<RequestItem> =>
+    req.costing?.readyForKam ? { costing: { ...req.costing, readyForKam: false, costingSentAt: undefined } } : {};
+
   const handleSaveSpecs = () => {
+    if (!req) return;
+    if (apiProposal) {
+      const { min, max } = specsDraft.participantes ? parseParticipantsRange(specsDraft.participantes) : {};
+      const requestType = specsDraft.type ? requestTypeToBackend(specsDraft.type) : undefined;
+      updateSpecsReal.mutate(
+        {
+          id: req.id,
+          totalHours: specsDraft.horas ? Number(specsDraft.horas) : undefined,
+          programModality: specsDraft.modalidad ? modalityToBackend(specsDraft.modalidad) : undefined,
+          minParticipants: min,
+          maxParticipants: max,
+          requestType,
+          requestTypeOther: requestType === "OTHER" ? specsDraft.tipoOtro.trim() || undefined : undefined,
+          deadline: specsDraft.deadline || undefined,
+        },
+        {
+          onSuccess: () => toast.success("Especificaciones del servicio actualizadas"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudieron guardar los cambios"),
+        },
+      );
+      setIsEditingSpecs(false);
+      return;
+    }
     updateRequest(req.id, {
       horas: specsDraft.horas || undefined,
       modalidad: specsDraft.modalidad || undefined,
@@ -138,6 +284,7 @@ export default function RequestDetail() {
       type: (specsDraft.type || req.type) as RequestType,
       tipoOtro: specsDraft.type === "Otro" ? specsDraft.tipoOtro.trim() || undefined : undefined,
       deadline: specsDraft.deadline || undefined,
+      ...invalidateReadyForKamIfNeeded(),
     });
     setIsEditingSpecs(false);
     toast.success("Especificaciones del servicio actualizadas");
@@ -146,8 +293,26 @@ export default function RequestDetail() {
   // El KAM es dueño de la información de su solicitud (empresa, contacto,
   // diagnóstico, formación previa) y puede corregirla mientras nadie la haya
   // empezado a trabajar — Dianis confirmó esto en docs/08, preguntas 4 y 8.
-  const canEditFullInfo = isKam && req.kam === user.name && req.status === "nueva";
-  const fullInfoCompleteness = getFullInfoCompleteness(req);
+  // El Líder de Producto NO tiene acceso general a esta sección — sigue
+  // siendo del KAM, que fue quien la diligenció. La única excepción: si el
+  // cliente ya rechazó la propuesta una vez, el Líder puede corregir el
+  // alcance (sobre todo `necesidad`) mientras está re-costeando, porque ahí
+  // sí hay un motivo de negocio concreto para tocarlo (docs/08, pregunta 16
+  // — sin validar todavía con Dianis).
+  const wasRejectedByClient = (req?.negotiationRounds ?? []).some(
+    (r) => r.clientResponse === "rechazada" || (r.clientResponse as string) === "CHANGES_REQUESTED",
+  );
+  // UAT C-02: once the Líder assigns a professor the KAM can no longer add or
+  // edit information (the expert would be confused). The lock follows the
+  // assignment, not the status: a professor can already be assigned in "Nueva".
+  const canEditFullInfo =
+    (isKam && req?.kam === user.name && !req?.professor && req?.status === "nueva") ||
+    (role === "lider-producto" &&
+      req?.productLeader === user.name &&
+      req?.status === "en-costeo" &&
+      wasRejectedByClient);
+
+  const fullInfoCompleteness = getFullInfoCompleteness(req ?? ({} as RequestItem));
   const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
   const emptyFullInfoDraft = {
     title: "",
@@ -188,6 +353,7 @@ export default function RequestDetail() {
   const isFullInfoDirty = JSON.stringify(fullInfoDraft) !== JSON.stringify(fullInfoSnapshot);
 
   const handleStartEditFullInfo = () => {
+    if (!req) return;
     const initial: typeof emptyFullInfoDraft = {
       title: req.title,
       urgency: req.urgency,
@@ -240,6 +406,12 @@ export default function RequestDetail() {
   if (fullInfoDraft.contactCorreoAlternativo.trim() && !EMAIL_RE.test(fullInfoDraft.contactCorreoAlternativo.trim())) {
     fullInfoErrors.contactCorreoAlternativo = "Correo con formato inválido";
   }
+  // The NIT is only checked when it was changed, so a legacy value never blocks an unrelated edit.
+  const nitCheck = parseNit(fullInfoDraft.companyNit);
+  const nitChanged = canonicalNit(fullInfoDraft.companyNit) !== canonicalNit(req?.companyNit);
+  if (nitChanged && !nitCheck.ok) {
+    fullInfoErrors.companyNit = nitCheck.error;
+  }
   if (fullInfoDraft.companyTelefono.trim() && !PHONE_RE.test(fullInfoDraft.companyTelefono.trim())) {
     fullInfoErrors.companyTelefono = "Teléfono con formato inválido";
   }
@@ -254,7 +426,8 @@ export default function RequestDetail() {
   }
   const hasFullInfoErrors = Object.keys(fullInfoErrors).length > 0;
 
-  const handleSaveFullInfo = () => {
+  const handleSaveFullInfo = async () => {
+    if (!req) return;
     if (!fullInfoDraft.title.trim()) {
       toast.error("El título de la propuesta no puede quedar vacío");
       return;
@@ -263,11 +436,68 @@ export default function RequestDetail() {
       toast.error("Corrige los campos marcados antes de guardar");
       return;
     }
+
+    // An emptied field goes as null so the backend clears it (omitting it kept the old value).
+    const payload: UpdateProposalInfoPayload = {
+      programName: fullInfoDraft.title.trim(),
+      priority: fullInfoDraft.urgency === "alta" ? "ALTA" : fullInfoDraft.urgency === "baja" ? "BAJA" : "MEDIA",
+      companyNit: nitCheck.ok ? nitCheck.nit || null : fullInfoDraft.companyNit.trim() || null,
+      companyDescription: fullInfoDraft.companyDescripcion.trim() || null,
+      companyType: fullInfoDraft.companyTipo ? COMPANY_TYPE_MAP[fullInfoDraft.companyTipo] : undefined,
+      sector: fullInfoDraft.companyCiiuPrincipalDesc.trim() || null,
+      website: fullInfoDraft.companyWeb.trim() || null,
+      companyAddress: fullInfoDraft.companyDireccion.trim() || null,
+      companyPhone: fullInfoDraft.companyTelefono.trim() || null,
+      companyEmail: fullInfoDraft.companyCorreo.trim() || null,
+      ciiuCode: fullInfoDraft.companyCiiuPrincipal.trim() || null,
+      contactName: fullInfoDraft.applicant.trim() || null,
+      contactRole: fullInfoDraft.contactCargo.trim() || null,
+      contactArea: fullInfoDraft.contactArea.trim() || null,
+      contactPhone: fullInfoDraft.contactTelefono.trim() || null,
+      contactEmail: fullInfoDraft.contactCorreo.trim() || null,
+      contactSecondaryPhone: fullInfoDraft.contactTelefonoSecundario.trim() || null,
+      contactAlternativeEmail: fullInfoDraft.contactCorreoAlternativo.trim() || null,
+      needDescription: fullInfoDraft.necesidad.trim() || null,
+      competencies: fullInfoDraft.competencias.trim() || null,
+      successMetrics: fullInfoDraft.exito.trim() || null,
+      expectedResults: fullInfoDraft.resultados.trim() || null,
+      participantArea: fullInfoDraft.areaParticipantes.trim() || null,
+      ...cateringToPayload(fullInfoDraft.alimentacion),
+      hasPreviousTraining: fullInfoDraft.formacionPrevia === "Sí",
+      previousTraining: fullInfoDraft.formacionPrevia || undefined,
+      previousTrainingDescription: fullInfoDraft.descFormacion.trim() || null,
+      previousTrainingCompany: fullInfoDraft.empresaPrevia.trim() || null,
+      previousTrainingDate: fullInfoDraft.fechaPrevia || null,
+      observations: fullInfoDraft.observaciones.trim() || null,
+    };
+
+    if (apiProposal) {
+      try {
+        await updateInfoMutation.mutateAsync({
+          id: apiProposal.id,
+          data: payload,
+        });
+        toast.success("Información de la solicitud actualizada");
+        setIsEditingFullInfo(false);
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al actualizar la solicitud";
+        toast.error(errorMsg);
+        return;
+      }
+    }
+
     updateRequest(req.id, {
       ...fullInfoDraft,
       title: fullInfoDraft.title.trim(),
       formacionPrevia: fullInfoDraft.formacionPrevia || undefined,
       fullInfoUpdatedAt: new Date().toISOString(),
+      // Cuando lo edita el Líder (tras un rechazo, ver docs/03 B.7) puede
+      // afectar `necesidad`, que también queda congelada por ronda — mismo
+      // tratamiento que editar el precio. Para el KAM en "Nueva" esto nunca
+      // aplica (`req.costing` todavía no existe), así que no hace falta
+      // condicionar por rol aquí.
+      ...invalidateReadyForKamIfNeeded(),
     });
     setIsEditingFullInfo(false);
     toast.success("Información de la solicitud actualizada");
@@ -282,55 +512,231 @@ export default function RequestDetail() {
     setIsEditingFullInfo(false);
   };
 
-  const handleConfirmReassign = () => {
-    if (!selectedNewLeader) return;
+  const handleConfirmReassign = ({ newLeader, newNode, reason, notes }: ReassignConfirmParams) => {
+    if (!req) return;
+    if (apiProposal) {
+      const backendReason = REASSIGN_REASON_TO_BACKEND[reason as (typeof REASSIGN_REASONS)[number]] ?? "OTHER";
+      reassignProposalReal.mutate(
+        {
+          id: req.id,
+          newProductLeaderId: newLeader,
+          newNodeId: newNode || undefined,
+          reason: backendReason,
+          note: notes.trim() || undefined,
+        },
+        {
+          onSuccess: () => {
+            toast.success(`Solicitud ${req.code ?? req.id} reasignada exitosamente.`);
+            setIsReassignModalOpen(false);
+            // Tras reasignar, el visor deja de ser el Líder dueño de la solicitud —
+            // el refetch de este mismo detalle puede fallar por permisos (ya no es
+            // suyo) y dejar la UI mostrando al líder anterior indefinidamente. Salir
+            // al dashboard evita ese estado inconsistente sin depender de que el
+            // refetch tenga éxito.
+            navigate("/dashboard");
+          },
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo reasignar"),
+        },
+      );
+      return;
+    }
     updateRequest(req.id, {
-      productLeader: selectedNewLeader,
-      node: selectedNewNode || req.node,
+      productLeader: newLeader,
+      node: newNode || req.node,
     });
-    toast.success(`Solicitud ${req.id} reasignada a ${selectedNewLeader} exitosamente.`);
+    toast.success(`Solicitud ${req.code ?? req.id} reasignada a ${newLeader} exitosamente.`);
     setIsReassignModalOpen(false);
   };
 
-  // Borrador vacío solo para alimentar el formulario de costeo del Líder de
-  // Producto — nunca se muestra como si fuera un valor ya definido.
-  const currentCosting: ProposalCosting = req.costing ?? calculateCosting(req.type, 0, 30);
+  const leaderOptions = productLeadersQuery.data?.map((u) => ({
+    id: u.id,
+    label: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+  }));
+  const nodeOptions = dbNodes?.map((n) => ({ id: n.id, label: n.name }));
 
-  const clientKamDocs: ProposalDocument[] = req.clientKamDocuments ?? [];
-  const internalCostingDocs: ProposalDocument[] = req.internalCostingDocuments ?? [];
+  // Decisión del dueño (2026-10-07): el KAM corrige el nodo o el líder mientras la
+  // solicitud sigue "Entregada al líder" (nueva) y sin docente — la misma ventana en
+  // la que edita la información (C-02). Queda en el historial del equipo.
+  const canKamEditTeam = isKam && canEditFullInfo && Boolean(apiProposal);
 
-  const handleSaveAssignment = (
-    professorName: string,
-    type: "planta" | "externo",
-    externalData?: ExternalProfessorData,
-  ) => {
-    assignProfessorDetailed(req.id, professorName, type, externalData);
-    if (type === "externo") {
-      updateCosting(req.id, {
-        ...currentCosting,
-        requiresExternalAdvisor: true,
-        externalAdvisorDetails: externalData?.empresaConsultora
-          ? `${externalData.nombre} (${externalData.empresaConsultora})`
-          : externalData?.nombre,
-      });
+  const handleConfirmEditTeam = async ({ nodeId, productLeaderId }: EditTeamParams) => {
+    if (!apiProposal) return;
+    try {
+      await updateInfoMutation.mutateAsync({ id: apiProposal.id, data: { nodeId, productLeaderId } });
+      toast.success("Nodo y líder actualizados");
+      setIsEditTeamOpen(false);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar el nodo o el líder");
     }
   };
 
+  // C-06 / C-07 — el Líder dueño pone o quita el nodo y escribe el centro y el CENCO desde "Equipo
+  // Asignado" (el backend responde 403 a cualquier otro rol). Solo con solicitud real.
+  const canLeaderEditTeamData = role === "lider-producto" && Boolean(apiProposal);
+
+  const handleSaveNode = (patch: { nodeId: string | null }) => {
+    if (!apiProposal) return;
+    setNodeReal.mutate(
+      { id: apiProposal.id, ...patch },
+      {
+        onSuccess: () => toast.success(patch.nodeId ? "Nodo actualizado" : "Se quitó el nodo de la solicitud"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo actualizar el nodo"),
+      },
+    );
+  };
+
+  const handleSaveCenter = (patch: SetCenterPayload) => {
+    if (!apiProposal) return;
+    setCenterReal.mutate(
+      { id: apiProposal.id, ...patch },
+      {
+        onSuccess: () => toast.success("Centro y CENCO guardados"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar el centro"),
+      },
+    );
+  };
+
+  // HU 5.2 — con backend los documentos vienen de `apiProposal.attachments` (el backend ya
+  // filtró por rol: el KAM nunca recibe los internos); sin backend, del mock local.
+  const apiDocuments = apiProposal ? splitAttachments(apiProposal.attachments ?? []) : null;
+  const clientKamDocs: ProposalDocument[] = apiDocuments ? apiDocuments.clientKam : (req?.clientKamDocuments ?? []);
+  const internalCostingDocs: ProposalDocument[] = apiDocuments
+    ? apiDocuments.internalCosting
+    : (req?.internalCostingDocuments ?? []);
+
+  // Historial de negociación (docs/03/04): cada confirmación de "Enviar a
+  // KAM" abre una ronda nueva, sin excepción — aunque la anterior nunca haya
+  // llegado a entregarse al cliente. Antes se reutilizaba la ronda "pendiente
+  // sin entregar" para no dejar rondas huérfanas, pero probando en vivo
+  // (Tomás) quedó claro que el Líder espera ver un número de ronda por cada
+  // vez que confirma un envío, no solo por cada rechazo real del cliente —
+  // es la trazabilidad de cada intento, no solo de los que el cliente vio.
+  const negotiationRounds: NegotiationRound[] = req?.negotiationRounds ?? [];
+  const nextRoundNumber = negotiationRounds.length + 1;
+  const lastRejectedRound = [...negotiationRounds].reverse().find((round) => round.clientResponse === "rechazada");
+
+  // Resolves when the assignment is saved and rejects when it fails: the modal shows the error and
+  // stays open, so a failed save is never taken for a done one.
+  const handleSaveAssignment = async (
+    professorName: string,
+    type: "planta" | "externo",
+    externalData?: ExternalProfessorData,
+    professorId?: string,
+  ) => {
+    if (!req) return;
+    if (apiProposal) {
+      // A picked directory entry goes by id; typed data goes as `professor` and the backend creates or
+      // reuses it and assigns it in the same request. Either way the status does not change.
+      await assignProfessorReal.mutateAsync({
+        id: req.id,
+        target: professorId ? { professorId } : { professor: toProfessorInput(professorName, type, externalData) },
+      });
+      return;
+    }
+    // El indicador de "asesor externo" del costeo ya no es un campo propio:
+    // se deriva de `professorType`/`professor`/`externalProfessorData` (docs/04,
+    // gap #11), así que asignar el docente/asesor aquí ya deja todo consistente
+    // sin tocar `req.costing`.
+    assignProfessorDetailed(req.id, professorName, type, externalData);
+  };
+
+  // HU 5.1: the offered value, both contribution margins and the "Nota de alcance comercial"
+  // round-trip to the backend (Pro-Cultura stays a client-side reference). Each save creates a
+  // new economics row, so nothing is sent unless one of them actually changed. A margin the form
+  // holds empty is sent as null so it clears; 0 stays 0; an empty note is sent as null too.
+  // While a save is in flight `req.costing` is still the old row, so it is compared with what
+  // that save sent instead: the same values must not go out twice.
   const handleUpdateCosting = (newCosting: ProposalCosting) => {
+    if (!req) return;
+    if (apiProposal) {
+      const current = upsertCostingReal.isPending && lastSentCosting.current ? lastSentCosting.current : req.costing;
+      const negotiationNotes = newCosting.negotiationNotes?.trim() || null;
+      const unchanged =
+        newCosting.totalOfferedCop === current?.totalOfferedCop &&
+        newCosting.expectedMarginPercent === current?.expectedMarginPercent &&
+        newCosting.marginAmountCop === current?.marginAmountCop &&
+        negotiationNotes === (current?.negotiationNotes?.trim() || null);
+      if (unchanged) return;
+      lastSentCosting.current = newCosting;
+      upsertCostingReal.mutate(
+        {
+          id: apiProposal.id,
+          totalCost: newCosting.totalOfferedCop,
+          marginPercentage: newCosting.expectedMarginPercent ?? null,
+          marginAmount: newCosting.marginAmountCop ?? null,
+          negotiationNotes,
+        },
+        {
+          // The backend's 400 messages are English validator output: show one generic Spanish text.
+          onError: (err) =>
+            toast.error(
+              err instanceof ApiError && err.status === 400
+                ? "Revisa el valor y los márgenes: no pueden ser negativos y el % debe estar entre 0 y 100"
+                : err instanceof Error
+                  ? err.message
+                  : "No se pudo guardar el costeo",
+            ),
+        },
+      );
+      return;
+    }
     updateCosting(req.id, newCosting);
   };
 
-  const handleAddDocument = (doc: ProposalDocument) => {
-    addDocument(req.id, doc);
+  // HU 5.2 — un documento va al backend (almacenamiento privado) o al mock local, nunca a ambos.
+  const handleUploadDocument = (file: File, category: ProposalDocument["category"], tag?: string) => {
+    if (!req) return;
+    if (apiProposal) {
+      uploadAttachmentReal.mutate(
+        { proposalId: apiProposal.id, file, category: CATEGORY_TO_BACKEND[category], tag },
+        {
+          onSuccess: () => toast.success(`Archivo "${file.name}" cargado`),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo subir el archivo"),
+        },
+      );
+      return;
+    }
+    addDocument(req.id, buildLocalDocument(file, category, tag, user.name));
+    toast.success(`Archivo "${file.name}" cargado`);
   };
 
-  const handleRemoveDocument = (docId: string, category: "client_kam" | "internal_costing") => {
-    removeDocument(req.id, docId, category);
+  const handleRemoveDocument = (doc: ProposalDocument) => {
+    if (!req) return;
+    if (apiProposal) {
+      deleteAttachmentReal.mutate(
+        { proposalId: apiProposal.id, attachmentId: doc.id },
+        {
+          onSuccess: () => toast.info("Documento eliminado"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo eliminar el documento"),
+        },
+      );
+      return;
+    }
+    removeDocument(req.id, doc.id, doc.category);
+    toast.info("Documento eliminado");
   };
 
-  const handleSaveChanges = () => {
-    updateCosting(req.id, currentCosting);
-    toast.success("Cambios guardados correctamente");
+  // La URL de descarga es prefirmada y de corta vida: se pide justo al hacer clic (el
+  // backend valida rol y pertenencia) y se abre como descarga directa.
+  const handleDownloadDocument = (doc: ProposalDocument) => {
+    if (apiProposal) {
+      downloadAttachmentReal.mutate(
+        { proposalId: apiProposal.id, attachmentId: doc.id },
+        {
+          onSuccess: ({ url }) => {
+            const link = document.createElement("a");
+            link.href = url;
+            link.rel = "noopener";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          },
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo descargar el documento"),
+        },
+      );
+      return;
+    }
+    toast.success(`Descargando: ${doc.name}`);
   };
 
   // Avanzar de estado (y sobre todo "marcar entregada") es una acción con
@@ -340,18 +746,79 @@ export default function RequestDetail() {
   const [confirmingAction, setConfirmingAction] = useState<"experto" | "costeo" | "entregada" | null>(null);
 
   const handleMoveToExperto = () => {
+    if (!req) return;
+    if (apiProposal) {
+      updateStatusMutation.mutate(
+        { id: req.id, data: { status: "IN_PROGRESS" } },
+        {
+          onSuccess: () => toast.success("Propuesta pasada a: En proceso por experto"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar"),
+        },
+      );
+      setConfirmingAction(null);
+      return;
+    }
     updateStatus(req.id, "en-experto");
     toast.success("Propuesta pasada a: En proceso por experto");
     setConfirmingAction(null);
   };
 
+  // Used by "Guardar y avanzar a experto" in the assignment form: same transition as the header button, but it
+  // resolves or rejects so the form can report a failure. The confirmation lives in the form itself.
+  const handleAdvanceAfterAssign = async () => {
+    if (!req) return;
+    if (apiProposal) {
+      await updateStatusMutation.mutateAsync({ id: req.id, data: { status: "IN_PROGRESS" } });
+      return;
+    }
+    updateStatus(req.id, "en-experto");
+  };
+
   const handleMoveToCosteo = () => {
+    if (!req) return;
+    if (apiProposal) {
+      updateStatusMutation.mutate(
+        { id: req.id, data: { status: "IN_COSTING" } },
+        {
+          onSuccess: () => toast.success("Propuesta pasada a: En proceso de costeo"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo avanzar"),
+        },
+      );
+      setConfirmingAction(null);
+      return;
+    }
     updateStatus(req.id, "en-costeo");
     toast.success("Propuesta pasada a: En proceso de costeo");
     setConfirmingAction(null);
   };
 
-  const handleSendToClient = () => {
+  // Gate explícito del Líder de Producto antes de que el KAM pueda actuar
+  // (docs/04): marca el costeo como enviado al KAM. Se
+  // construye a partir del costeo ya persistido (`req.costing`) para no
+  // pisar ningún campo — solo se cambia `readyForKam`.
+  // Además (docs/04) abre una nueva ronda de negociación con un snapshot del
+  // valor final vigente — `leaderNote` es obligatoria desde la ronda 2 y se
+  // valida en la UI del diálogo dedicado antes de poder confirmar.
+  const handleMarkReadyForKam = (leaderNote?: string) => {
+    if (!req) return;
+    if (!req.costing) return;
+    if (apiProposal) {
+      markReadyForKamReal.mutate(
+        { id: req.id, leaderNote },
+        {
+          onSuccess: () => toast.success("Costeo enviado al KAM"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo enviar al KAM"),
+        },
+      );
+      return;
+    }
+    const { costing, negotiationRounds: updatedRounds } = openNegotiationRound(req, negotiationRounds, leaderNote);
+    updateRequest(req.id, { costing, negotiationRounds: updatedRounds });
+    toast.success("Costeo enviado al KAM");
+  };
+
+  const handleSendToClient = async () => {
+    if (!req) return;
     // Defensa adicional además del `disabled` del botón — por si el estado
     // cambia entre que se abre el diálogo de confirmación y se confirma.
     if (!hasValidCosting) {
@@ -359,28 +826,120 @@ export default function RequestDetail() {
       setConfirmingAction(null);
       return;
     }
+    if (!req.costing?.readyForKam) {
+      toast.error("El Líder de Producto aún no ha confirmado el envío del costeo");
+      setConfirmingAction(null);
+      return;
+    }
+
+    if (apiProposal) {
+      try {
+        await updateStatusMutation.mutateAsync({
+          id: apiProposal.id,
+          data: { status: "DELIVERED" },
+        });
+        toast.success("Propuesta enviada al cliente y marcada como Entregada");
+        setConfirmingAction(null);
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al enviar la propuesta al cliente";
+        toast.error(errorMsg);
+        setConfirmingAction(null);
+        return;
+      }
+    }
+
+    // Cierra el envío de la ronda vigente con la fecha de entrega efectiva
+    // al cliente (docs/04) — ver `closeRoundForClientDelivery` sobre por qué
+    // no basta filtrar solo por `clientResponse`.
+    const updatedRounds = closeRoundForClientDelivery(negotiationRounds);
     // Al reentregar (por ejemplo tras una devolución con observaciones) se
     // limpia la nota anterior — ya quedó resuelta en la nueva versión.
-    updateRequest(req.id, { status: "entregada", clientObservations: undefined });
+    updateRequest(req.id, {
+      status: "entregada",
+      clientObservations: undefined,
+      negotiationRounds: updatedRounds,
+    });
     toast.success("Propuesta enviada al cliente y marcada como Entregada");
     setConfirmingAction(null);
   };
 
   // El KAM puede cancelar su propia solicitud mientras nadie la haya
   // empezado a trabajar (docs/08, pregunta 14).
-  const handleCancelRequest = () => {
+  const handleCancelRequest = async () => {
+    const trimmedReason = cancelReason.trim();
+    if (!trimmedReason) {
+      toast.error("Por favor ingresa o selecciona un motivo de cancelación");
+      return;
+    }
+
+    if (apiProposal) {
+      try {
+        await deleteRequestMutation.mutateAsync({
+          id: apiProposal.id,
+          reason: trimmedReason,
+        });
+        toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
+        setIsCancelModalOpen(false);
+        setCancelReason("");
+        navigate("/dashboard");
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al cancelar la solicitud";
+        toast.error(errorMsg);
+        return;
+      }
+    }
     deleteRequest(req.id);
-    toast.success(`Solicitud ${req.id} cancelada`);
+    toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
     setIsCancelModalOpen(false);
+    setCancelReason("");
     navigate("/dashboard");
   };
 
   // Si el cliente pide ajustes tras la entrega, el KAM la devuelve a costeo
   // con una nota de observaciones para el Líder de Producto (docs/08, pregunta 13).
-  const handleReturnWithObservations = () => {
+  const handleReturnWithObservations = async () => {
+    if (!req) return;
+    const trimmedObservations = returnObservations.trim() || undefined;
+    if (!trimmedObservations) {
+      toast.error("Por favor ingresa las observaciones del cliente para devolver la propuesta");
+      return;
+    }
+
+    if (apiProposal) {
+      try {
+        await updateStatusMutation.mutateAsync({
+          id: apiProposal.id,
+          data: {
+            status: "IN_COSTING",
+            rejectionReason: trimmedObservations,
+          },
+        });
+        toast.success("Propuesta devuelta a costeo con las observaciones del cliente");
+        setIsReturnModalOpen(false);
+        setReturnObservations("");
+        return;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Error al devolver la propuesta a costeo";
+        toast.error(errorMsg);
+        return;
+      }
+    }
+
+    // Marca la ronda vigente como rechazada con la observación del cliente y
+    // resetea el gate del Líder (docs/04) — ver `rejectRoundWithObservations`
+    // sobre el bug que corrige ese reset.
+    const { negotiationRounds: updatedRounds, costing: updatedCosting } = rejectRoundWithObservations(
+      negotiationRounds,
+      req.costing,
+      trimmedObservations,
+    );
     updateRequest(req.id, {
       status: "en-costeo",
-      clientObservations: returnObservations.trim() || undefined,
+      clientObservations: trimmedObservations,
+      negotiationRounds: updatedRounds,
+      costing: updatedCosting,
     });
     toast.success("Propuesta devuelta a costeo con las observaciones del cliente");
     setIsReturnModalOpen(false);
@@ -414,6 +973,227 @@ export default function RequestDetail() {
     ? format(new Date(req.deadline), "d 'de' MMMM, yyyy", { locale: es })
     : "Sin fecha definida";
 
+  // Mientras el backend responde, mostramos un estado de carga explícito.
+  // Evita que la UI intente renderizar req (undefined) con accesos a .title,
+  // .costing, etc., lanzando un error o, peor aún, usando el primer item del
+  // array mock como fallback fantasma (bug F-2 de la auditoría).
+  if (isLoadingProposal) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground text-sm gap-2">
+          <span className="animate-spin rounded-full h-4 w-4 border-2 border-border border-t-primary" />
+          Cargando solicitud…
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Si el backend devuelve 404 y no hay ningún item mock con ese id (solicitud
+  // cancelada, enlace viejo, o timing de carga), mostramos un estado real de
+  // "no encontrada" en vez de un fallback silencioso que haría que cualquier
+  // acción (cancelar, editar) operara sobre el mock local sin tocar el backend.
+  if (!req) {
+    // `retry: false` en el hook: cualquier fallo llega aquí de inmediato. Solo
+    // un 404 real significa "no existe"; un fallo de red o un 5xx no dice nada
+    // sobre la solicitud, así que se muestra un mensaje de "reintentar".
+    const isNotFound = proposalError instanceof ApiError && proposalError.status === 404;
+    const showLoadFailure = isProposalError && !isNotFound;
+    return (
+      <AppShell>
+        <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <Link
+              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
+            </Link>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-10 text-center space-y-3 shadow-xs">
+            <p className="text-lg font-semibold text-foreground">
+              {showLoadFailure ? "No se pudo cargar la solicitud" : "Solicitud no encontrada"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {showLoadFailure
+                ? "Hubo un problema de conexión o del servidor. Intenta de nuevo en unos momentos."
+                : "Esta solicitud no existe, fue cancelada, o el enlace es incorrecto."}
+            </p>
+            <Link
+              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline mt-2"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Ir al tablero
+            </Link>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // C-22: the full request information always sits at the top of the main column, in every stage, so the
+  // product lead finds it in the same place (it was at the bottom and she could not find it).
+  const fullInfoSection = (
+    <div className="pt-1">
+      <h2 className="mb-2.5 px-0.5 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        Detalle completo de la solicitud
+      </h2>
+
+      <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 p-5",
+            showFullInfo && "border-b border-border dark:border-[#252838]",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setShowFullInfo((v) => !v)}
+            className="flex flex-1 min-w-0 items-center gap-3 text-left"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/70 dark:bg-secondary/20">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-foreground">Información completa de la solicitud</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                {fullInfoCompleteness.filled} de {fullInfoCompleteness.total} campos diligenciados
+                {req.fullInfoUpdatedAt &&
+                  ` · Editado ${formatDistanceToNow(new Date(req.fullInfoUpdatedAt), { addSuffix: true, locale: es })}`}
+              </p>
+            </div>
+          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {canEditFullInfo && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleStartEditFullInfo}
+                className="h-8 px-3 text-xs font-semibold border-[#5454e9]/30 text-[#5454e9] dark:text-[#865cf0] hover:bg-[#5454e9]/10"
+              >
+                <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                Editar información
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowFullInfo((v) => !v)}
+              aria-label={showFullInfo ? "Contraer sección" : "Expandir sección"}
+              className="rounded-lg p-2 text-muted-foreground hover:bg-secondary/70 dark:hover:bg-secondary/20 transition-colors"
+            >
+              <ChevronDown className={cn("h-4 w-4 transition-transform", showFullInfo && "rotate-180")} />
+            </button>
+          </div>
+        </div>
+
+        {!showFullInfo && (
+          <div
+            data-testid="full-info-summary"
+            className="space-y-1 border-t border-border dark:border-[#252838] px-5 py-3 text-xs"
+          >
+            <p className="text-muted-foreground">
+              <span className="font-semibold text-foreground">{req.company}</span>
+              {req.applicant ? ` · Contacto: ${req.applicant}` : ""}
+            </p>
+            {req.necesidad?.trim() && <p className="line-clamp-2 text-muted-foreground">{req.necesidad.trim()}</p>}
+            <button
+              type="button"
+              onClick={() => setShowFullInfo(true)}
+              className="font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+            >
+              Ver información completa
+            </button>
+          </div>
+        )}
+
+        {showFullInfo && (
+          <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
+            {/* Empresa */}
+            <InfoSection title="Empresa">
+              <InfoRow label="NIT" value={req.companyNit ? displayNit(req.companyNit) : req.companyNit} />
+              <InfoRow label="Dirección" value={req.companyDireccion} />
+              <InfoRow label="Teléfono" value={req.companyTelefono} />
+              <InfoRow label="Correo" value={req.companyCorreo} />
+              <InfoRow
+                label="CIIU principal"
+                value={
+                  req.companyCiiuPrincipal
+                    ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}`
+                    : undefined
+                }
+              />
+              <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
+              <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
+              <InfoRow label="Sitio web" value={req.companyWeb} />
+              <InfoRow label="Descripción" value={req.companyDescripcion} block />
+            </InfoSection>
+
+            {/* Contacto */}
+            <InfoSection title="Contacto del cliente">
+              <InfoRow label="Nombre" value={req.applicant} />
+              <InfoRow label="Cargo" value={req.contactCargo} />
+              <InfoRow label="Área o dependencia" value={req.contactArea} />
+              <InfoRow label="Teléfono" value={req.contactTelefono} />
+              <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
+              <InfoRow label="Correo" value={req.contactCorreo} />
+              <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
+
+              {req.additionalContacts && req.additionalContacts.length > 0 && (
+                <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Contactos adicionales
+                  </span>
+                  {req.additionalContacts.map((c) => (
+                    <div
+                      key={c.id}
+                      className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5"
+                    >
+                      <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
+                      {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
+                      {(c.telefono || c.correo) && (
+                        <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </InfoSection>
+
+            {/* Diagnóstico del requerimiento */}
+            <InfoSection title="Diagnóstico del requerimiento">
+              <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
+              <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
+              <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
+              <InfoRow label="Resultados esperados" value={req.resultados} block />
+              <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
+              <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
+            </InfoSection>
+
+            {/* Formación previa */}
+            <InfoSection title="Formación previa">
+              <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
+              {req.formacionPrevia === "Sí" && (
+                <>
+                  <InfoRow label="Descripción" value={req.descFormacion} block />
+                  <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
+                  <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
+                </>
+              )}
+            </InfoSection>
+
+            {/* Observaciones */}
+            <div className="lg:col-span-2">
+              <InfoSection title="Observaciones del KAM">
+                <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
+              </InfoSection>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <AppShell>
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -439,7 +1219,8 @@ export default function RequestDetail() {
 
               {/* Fila de metadatos inline sutiles: Empresa, Contacto, Código REQ y Badges discretos */}
               <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-muted-foreground">
-                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.id}</span>
+                <span className="font-mono font-bold text-[#5454e9] dark:text-[#865cf0]">#{req.code ?? req.id}</span>
+                <OfficialNumberBadge officialNumber={req.officialNumber} className="text-xs" />
 
                 <span className="text-border dark:text-[#252838]">·</span>
 
@@ -477,16 +1258,6 @@ export default function RequestDetail() {
             <div className="flex flex-wrap items-center gap-2.5 pt-1 lg:pt-0 shrink-0">
               {role === "lider-producto" ? (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSaveChanges}
-                    className="h-9 px-3 text-xs font-medium border-border hover:bg-secondary text-foreground"
-                  >
-                    <Save className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                    Guardar Cambios
-                  </Button>
-
                   {req.status === "nueva" && (
                     <Button
                       size="sm"
@@ -513,30 +1284,54 @@ export default function RequestDetail() {
 
                   {/* El Líder de Producto ya no puede marcar "Entregada" directamente:
                       esa es la acción del KAM (envía al cliente). El trabajo del Líder
-                      termina en dejar el costeo listo — eso ya deja la solicitud visible
-                      para el KAM como "Lista para Entregar" (docs/08, pregunta 13). */}
-                  {req.status === "en-costeo" && hasValidCosting && (
+                      termina en confirmar explícitamente que el costeo está listo para
+                      que el KAM pueda actuar (docs/03). */}
+                  {req.status === "en-costeo" && hasValidCosting && !req.costing?.readyForKam && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setSendToKamNote("");
+                        setIsSendToKamModalOpen(true);
+                      }}
+                      className="h-9 px-4 text-xs font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-xs"
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      Enviar a KAM
+                    </Button>
+                  )}
+
+                  {req.status === "en-costeo" && hasValidCosting && req.costing?.readyForKam && (
                     <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                      <Check className="h-3.5 w-3.5" /> Costeo listo — a la espera del KAM
+                      <Check className="h-3.5 w-3.5" />
+                      Enviado al KAM — a la espera de envío al cliente
+                      {req.costing.costingSentAt && (
+                        <span className="font-medium text-muted-foreground">
+                          (hace {formatDistanceToNow(new Date(req.costing.costingSentAt), { locale: es })})
+                        </span>
+                      )}
                     </div>
                   )}
 
+                  {/* Insignia sólida y propia — es el cierre del flujo, no un paso
+                      intermedio, así que no debe verse igual que "Enviado al KAM". */}
                   {req.status === "entregada" && (
-                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                      <Check className="h-3.5 w-3.5" /> Propuesta Entregada
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-[#4cb979] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm">
+                      <CheckCircle2 className="h-4 w-4" /> Propuesta Entregada
                     </div>
                   )}
                 </>
               ) : isKam && req.status === "en-costeo" ? (
                 <Button
                   size="sm"
-                  disabled={!hasValidCosting}
+                  disabled={!hasValidCosting || !req.costing?.readyForKam}
                   onClick={() => setConfirmingAction("entregada")}
                   className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
                   title={
-                    hasValidCosting
-                      ? undefined
-                      : "El Líder de Producto aún no ha definido un valor real para esta propuesta"
+                    !req.costing?.readyForKam
+                      ? "El Líder de Producto aún no ha confirmado el envío del costeo"
+                      : !hasValidCosting
+                        ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
+                        : undefined
                   }
                 >
                   <Send className="h-3.5 w-3.5 mr-1.5" />
@@ -557,7 +1352,9 @@ export default function RequestDetail() {
                     Devolver con observaciones
                   </Button>
                 </>
-              ) : isKam && req.status === "nueva" && req.kam === user.name ? (
+              ) : isKam && req.status === "nueva" && req.kam === user.name && !req.professor ? (
+                /* Decisión del dueño (2026-10-09): con docente asignado el KAM ya no
+                   puede cancelar (mismo bloqueo que editar, C-02). */
                 <Button
                   variant="outline"
                   size="sm"
@@ -580,6 +1377,34 @@ export default function RequestDetail() {
           {/* 🅰️ COLUMNA PRINCIPAL (Izquierda ~65% - Flujo de Trabajo) */}
           {/* ======================================================================= */}
           <div className="lg:col-span-8 space-y-6">
+            {/* Guía explícita del siguiente paso — antes el único indicio de que
+               hacía falta un docente era un tooltip sobre un botón deshabilitado
+               en la cabecera (invisible para alguien nuevo en la app, y que
+               obligaba a subir el scroll desde "Equipo Asignado"). El botón de
+               aquí abre el modal directo, sin necesidad de desplazarse. */}
+            {role === "lider-producto" && req.status === "nueva" && !req.professor && (
+              <div className="flex flex-col gap-3 rounded-xl border border-[#5454e9]/30 bg-[#5454e9]/10 dark:bg-[#5454e9]/15 p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3.5 sm:items-center">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5454e9] text-white">
+                    <UserCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-foreground">Siguiente paso: asigna un docente o asesor</p>
+                    <p className="text-xs text-muted-foreground">
+                      Necesitas asignar un docente de planta o un asesor externo antes de poder avanzar a "En Experto".
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => setIsAssignModalOpen(true)}
+                  className="shrink-0 self-start sm:self-auto bg-[#5454e9] hover:bg-[#4343d3] text-white"
+                >
+                  Asignar ahora
+                </Button>
+              </div>
+            )}
+
             {/* Observaciones del cliente tras una devolución — visibles para
                 ambos roles hasta que el Líder reentregue una versión corregida. */}
             {req.clientObservations && req.clientObservations.trim() && (
@@ -596,15 +1421,48 @@ export default function RequestDetail() {
               </div>
             )}
 
+            {fullInfoSection}
+
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
-              <ProposalCostingModule
-                request={req}
-                onUpdateCosting={handleUpdateCosting}
-                onOpenAdvisorModal={() => setIsAssignModalOpen(true)}
-              />
+              req.status === "en-costeo" || req.status === "entregada" ? (
+                <ProposalCostingModule request={req} onUpdateCosting={handleUpdateCosting} />
+              ) : (
+                /* Antes se mostraba editable en cualquier estado — se podía
+                   fijar un valor final desde "Nueva", antes de asignar
+                   siquiera un docente, contradiciendo la regla ya validada
+                   con Dianis (docs/08, pregunta 7: "todo se hace en el
+                   momento del costeo", sin valores parciales antes de esa
+                   fase). Se oculta por completo hasta llegar a "En Costeo". */
+                <div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 px-4 py-3">
+                  <Clock className="h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Costeo aún no disponible</p>
+                    <p className="text-xs text-slate-500 dark:text-muted-foreground">
+                      El módulo de costeo se habilita cuando la solicitud llegue a "En Costeo" — todavía hay trabajo
+                      previo por completar (asignar docente, avanzar a "En Experto").
+                    </p>
+                  </div>
+                </div>
+              )
+            ) : hasValidCosting && !req.costing?.readyForKam ? (
+              /* Costeo ya definido, pero el Líder todavía no confirmó el envío
+                 (docs/04, gate readyForKam) — antes esta situación caía en la
+                 misma vista de "Aprobado por Líder" de abajo, con badge verde
+                 y todo, aunque el botón "Enviar a cliente" seguía deshabilitado:
+                 una señal visual contradictoria para el KAM. */
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 dark:border-border bg-slate-50/60 dark:bg-secondary/10 p-8 text-center">
+                <Clock className="h-6 w-6 text-slate-400" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Costeo definido — pendiente de confirmación del Líder
+                </p>
+                <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
+                  El Líder de Producto ya calculó un valor, pero todavía no confirma el envío. En cuanto lo haga, verás
+                  aquí la propuesta oficial y podrás enviarla al cliente.
+                </p>
+              </div>
             ) : req.costing && req.costing.totalOfferedCop > 0 ? (
-              /* Vista comercial para KAM — solo cuando el Líder ya guardó un costeo real */
+              /* Vista comercial para KAM — solo cuando el Líder ya confirmó "Enviar a KAM" */
               <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-border">
                   <div>
@@ -673,8 +1531,8 @@ export default function RequestDetail() {
                 <Clock className="h-6 w-6 text-slate-400" />
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Costeo en proceso</p>
                 <p className="max-w-sm text-xs text-slate-500 dark:text-muted-foreground">
-                  El Líder de Producto todavía no ha estructurado el valor de esta propuesta. Aquí verás el valor
-                  oficial en cuanto quede definido.
+                  El Líder de Producto todavía no ha confirmado el valor de esta propuesta. Aquí verás el valor oficial
+                  en cuanto lo confirme.
                 </p>
               </div>
             )}
@@ -683,11 +1541,122 @@ export default function RequestDetail() {
             <ProposalDocumentsSection
               clientKamDocuments={clientKamDocs}
               internalCostingDocuments={internalCostingDocs}
-              onAddDocument={handleAddDocument}
+              onUploadFile={handleUploadDocument}
               onRemoveDocument={handleRemoveDocument}
+              onDownloadDocument={handleDownloadDocument}
+              isUploading={uploadAttachmentReal.isPending}
               userRole={role}
-              userName={user.name}
             />
+
+            {/* 3. HISTORIAL DE NEGOCIACIÓN (docs/03) — solo si ya hay más de un
+                envío al KAM; con una sola ronda en curso no hace falta mostrar
+                "historial". Visible para Líder y KAM. */}
+            {negotiationRounds.length > 0 && (
+              <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-6 shadow-xs space-y-4">
+                <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border dark:border-[#252838] pb-3">
+                  <History className="h-3.5 w-3.5" />
+                  Historial de Negociación
+                </h2>
+
+                <div className="space-y-3">
+                  {negotiationRounds.map((round, idx) => {
+                    const isPending =
+                      round.clientResponse === "pendiente" || (round.clientResponse as string) === "PENDING";
+                    const isRejected =
+                      round.clientResponse === "rechazada" || (round.clientResponse as string) === "CHANGES_REQUESTED";
+                    const isCurrentRound = isPending && idx === negotiationRounds.length - 1;
+                    const scopeDiffs = getRoundChanges(round, negotiationRounds[idx - 1]);
+                    return (
+                      <div
+                        key={round.id}
+                        className={cn(
+                          "rounded-lg border p-3.5 text-xs space-y-2",
+                          isCurrentRound
+                            ? "border-[#5454e9]/40 bg-[#5454e9]/5 dark:bg-[#5454e9]/10"
+                            : "border-border dark:border-[#252838] bg-secondary/20 dark:bg-secondary/10",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-foreground">Ronda {round.roundNumber}</span>
+                            <span className="font-mono font-semibold text-foreground">
+                              {formatCop(round.totalOfferedCop)}
+                            </span>
+                          </div>
+                          {isCurrentRound && (
+                            <span className="rounded-full bg-[#5454e9] px-2 py-0.5 text-[10px] font-bold text-white">
+                              Ronda vigente
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-muted-foreground">
+                          Enviada a KAM el {format(new Date(round.sentToKamAt), "d 'de' MMMM, yyyy", { locale: es })}
+                        </p>
+
+                        {round.sentToClientAt && (
+                          <p className="flex items-center gap-1.5 text-[#5454e9] dark:text-[#865cf0] font-medium">
+                            <Send className="h-3 w-3" />→ entregada al cliente el{" "}
+                            {format(new Date(round.sentToClientAt), "d 'de' MMMM, yyyy", { locale: es })}
+                          </p>
+                        )}
+
+                        {/* Ronda "pendiente" pero ya no es la vigente: el Líder
+                            la reemplazó con un envío más reciente antes de que
+                            el KAM alcanzara a entregarla — no quedó rechazada
+                            por el cliente, simplemente se abandonó. */}
+                        {isPending && !isCurrentRound && (
+                          <p className="text-muted-foreground italic">
+                            Reemplazada por una ronda posterior antes de llegar a entregarse al cliente.
+                          </p>
+                        )}
+
+                        {isRejected && (
+                          <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-2.5 space-y-1">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                              <RotateCcw className="h-3 w-3" /> Devuelta por el cliente
+                            </span>
+                            {round.clientObservation && (
+                              <p className="text-amber-700 dark:text-amber-400 leading-relaxed">
+                                Cliente: "{round.clientObservation}"
+                              </p>
+                            )}
+                            {round.clientRespondedAt && (
+                              <p className="text-[11px] text-amber-600/80 dark:text-amber-500/70">
+                                Devuelta el{" "}
+                                {format(new Date(round.clientRespondedAt), "d 'de' MMMM, yyyy", { locale: es })}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {round.leaderNote && (
+                          <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            <span className="font-semibold text-foreground">Ajuste del Líder: </span>"{round.leaderNote}
+                            "
+                          </p>
+                        )}
+
+                        {scopeDiffs.length > 0 && (
+                          <div className="rounded-lg border border-border dark:border-[#252838] bg-secondary/30 dark:bg-secondary/10 p-2.5 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Cambios frente a la ronda anterior
+                            </span>
+                            <ul className="space-y-0.5">
+                              {scopeDiffs.map((diff) => (
+                                <li key={diff} className="text-foreground leading-relaxed break-words">
+                                  {diff}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ======================================================================= */}
@@ -793,6 +1762,7 @@ export default function RequestDetail() {
                       <SelectContent>
                         <SelectItem value="Presencial en campus Icesi">Presencial en campus Icesi</SelectItem>
                         <SelectItem value="Presencial en sede cliente">Presencial en sede cliente</SelectItem>
+                        <SelectItem value="Presencial en otra sede">Presencial en otra sede</SelectItem>
                         <SelectItem value="Virtual sincrónica">Virtual sincrónica</SelectItem>
                         <SelectItem value="Híbrida">Híbrida</SelectItem>
                       </SelectContent>
@@ -898,29 +1868,49 @@ export default function RequestDetail() {
               </h3>
 
               <div className="space-y-3.5 text-xs">
-                {/* Nodo Temático */}
-                <div className="space-y-0.5">
-                  <span className="text-[11px] font-medium text-muted-foreground">Nodo Temático</span>
-                  <p className="font-semibold text-foreground leading-snug">{req.node}</p>
-                </div>
+                {/* Nodo Temático — opcional: sin nodo dice "Sin nodo"; el Líder dueño lo pone o lo quita */}
+                <TeamNodeEditor
+                  nodeName={req.node}
+                  nodeId={req.nodeId}
+                  nodeOptions={nodeOptions}
+                  editable={canLeaderEditTeamData}
+                  saving={setNodeReal.isPending}
+                  onSave={handleSaveNode}
+                  headerAction={
+                    canKamEditTeam ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditTeamOpen(true)}
+                        aria-label="Cambiar nodo temático"
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
+                      >
+                        Cambiar
+                      </button>
+                    ) : undefined
+                  }
+                />
 
                 {/* Líder de Producto */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Líder de Producto</span>
-                    {role === "lider-producto" && req.status === "nueva" && (
+                    {role === "lider-producto" && (req.status === "nueva" || req.status === "en-experto") && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedNewLeader("");
-                          setSelectedNewNode(req.node);
-                          setReassignReason("Temática no afín / Corresponde a otro nodo");
-                          setReassignNotes("");
-                          setIsReassignModalOpen(true);
-                        }}
+                        onClick={() => setIsReassignModalOpen(true)}
                         className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
                       >
                         <ArrowLeftRight className="h-3 w-3" /> Reasignar
+                      </button>
+                    )}
+                    {canKamEditTeam && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditTeamOpen(true)}
+                        aria-label="Cambiar líder de producto"
+                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
+                      >
+                        Cambiar
                       </button>
                     )}
                   </div>
@@ -930,25 +1920,67 @@ export default function RequestDetail() {
                   </div>
                 </div>
 
+                {/* Historial de cambios de nodo / líder (corrección del KAM o reasignación) */}
+                {req.teamHistory && req.teamHistory.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Historial de nodo y líder
+                    </span>
+                    <ul className="space-y-1">
+                      {[...req.teamHistory].reverse().map((entry) => (
+                        <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                          {entry.field === "nodo" ? "Nodo" : "Líder"}:{" "}
+                          {entry.previous && <span className="line-through">{entry.previous}</span>}
+                          {entry.previous && " → "}
+                          <span className="font-medium text-foreground">{entry.next}</span> · {entry.changedBy} ·{" "}
+                          {new Date(entry.changedAt).toLocaleDateString("es-CO", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                          {entry.reason && <> · Motivo: {entry.reason}</>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* KAM asignado */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <span className="text-[11px] font-medium text-muted-foreground">KAM Responsable</span>
                   <p className="font-semibold text-foreground">{req.kam}</p>
                 </div>
 
+                {/* Centro y CENCO (texto libre): el Líder dueño los escribe; el KAM los ve solo si tienen valor */}
+                <CenterFields
+                  center={req.center}
+                  costCenter={req.costCenter}
+                  editable={canLeaderEditTeamData}
+                  saving={setCenterReal.isPending}
+                  onSave={handleSaveCenter}
+                />
+
                 {/* Docente / Asesor asignado */}
                 <div className="space-y-1.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">Docente / Asesor</span>
-                    {role === "lider-producto" && (
-                      <button
-                        type="button"
-                        onClick={() => setIsAssignModalOpen(true)}
-                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
-                      >
-                        {req.professor ? "Cambiar" : "Asignar"}
-                      </button>
-                    )}
+                    {role === "lider-producto" &&
+                      (canEditProfessor(req.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsAssignModalOpen(true)}
+                          className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+                        >
+                          {req.professor ? "Cambiar" : "Asignar"}
+                        </button>
+                      ) : (
+                        <span
+                          className="text-[10px] text-muted-foreground italic"
+                          title='No editable: la solicitud ya pasó por "En proceso por experto"'
+                        >
+                          No editable
+                        </span>
+                      ))}
                   </div>
 
                   {req.professor ? (
@@ -967,182 +1999,75 @@ export default function RequestDetail() {
                           )}
                         </div>
 
-                        {/* Botón rápido de contacto para asesor externo */}
-                        {req.professorType === "externo" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsContactAdvisorModalOpen(true)}
-                            className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                            title="Ver datos de contacto del asesor externo"
-                          >
-                            Contacto
-                          </Button>
-                        )}
+                        {/* Botón rápido de contacto: el KAM ve los datos de contacto, nunca la identificación */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsContactAdvisorModalOpen(true)}
+                          className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                          title="Ver datos de contacto del docente o asesor"
+                        >
+                          Contacto
+                        </Button>
                       </div>
 
-                      {/* Subtítulo si tiene empresa */}
-                      {req.professorType === "externo" && req.externalProfessorData?.empresaConsultora && (
+                      {/* Subtítulo: empresa del asesor externo o facultad del docente de planta */}
+                      {(req.professorType === "externo"
+                        ? req.externalProfessorData?.empresaConsultora
+                        : req.externalProfessorData?.facultad) && (
                         <p className="text-[11px] text-muted-foreground">
-                          {req.externalProfessorData.empresaConsultora}
+                          {req.professorType === "externo"
+                            ? req.externalProfessorData?.empresaConsultora
+                            : req.externalProfessorData?.facultad}
                         </p>
                       )}
                     </div>
                   ) : (
                     <p className="text-xs italic text-muted-foreground">Sin docente o asesor asignado</p>
                   )}
+
+                  {/* Historial de cambios de asignación */}
+                  {req.professorHistory && req.professorHistory.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Historial de asignación
+                      </span>
+                      <ul className="space-y-1">
+                        {[...req.professorHistory].reverse().map((entry) => (
+                          <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                            {entry.previousProfessor ? (
+                              <>
+                                <span className="line-through">{entry.previousProfessor}</span> →{" "}
+                                <span className="font-medium text-foreground">{entry.newProfessor}</span>
+                              </>
+                            ) : (
+                              <>
+                                Asignado: <span className="font-medium text-foreground">{entry.newProfessor}</span>
+                              </>
+                            )}{" "}
+                            · {entry.changedBy} ·{" "}
+                            {new Date(entry.changedAt).toLocaleDateString("es-CO", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
+
+            {/* 3. TIEMPO POR ETAPA — días acumulados en cada etapa del rol */}
+            <StageTimeSection rows={getStageTimes(req, isKam ? "kam" : "leader")} />
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* INFORMACIÓN COMPLETA DE LA SOLICITUD (todo lo que diligenció el KAM) */}
-      {/* ========================================================================= */}
-      <div className="pt-1">
-        <h2 className="mb-2.5 px-0.5 font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Detalle completo de la solicitud
-        </h2>
-
-        <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-xs overflow-hidden">
-          <div
-            className={cn(
-              "flex items-center justify-between gap-3 p-5",
-              showFullInfo && "border-b border-border dark:border-[#252838]",
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => setShowFullInfo((v) => !v)}
-              className="flex flex-1 min-w-0 items-center gap-3 text-left"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/70 dark:bg-secondary/20">
-                <ClipboardList className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-foreground">Información completa de la solicitud</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                  {fullInfoCompleteness.filled} de {fullInfoCompleteness.total} campos diligenciados
-                  {req.fullInfoUpdatedAt &&
-                    ` · Editado ${formatDistanceToNow(new Date(req.fullInfoUpdatedAt), { addSuffix: true, locale: es })}`}
-                </p>
-              </div>
-            </button>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {canEditFullInfo && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleStartEditFullInfo}
-                  className="h-8 px-3 text-xs font-semibold border-[#5454e9]/30 text-[#5454e9] dark:text-[#865cf0] hover:bg-[#5454e9]/10"
-                >
-                  <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-                  Editar información
-                </Button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowFullInfo((v) => !v)}
-                aria-label={showFullInfo ? "Contraer sección" : "Expandir sección"}
-                className="rounded-lg p-2 text-muted-foreground hover:bg-secondary/70 dark:hover:bg-secondary/20 transition-colors"
-              >
-                <ChevronDown className={cn("h-4 w-4 transition-transform", showFullInfo && "rotate-180")} />
-              </button>
-            </div>
-          </div>
-
-          {showFullInfo && (
-            <div className="grid grid-cols-1 gap-5 border-t border-border dark:border-[#252838] p-5 lg:grid-cols-2">
-              {/* Empresa */}
-              <InfoSection title="Empresa">
-                <InfoRow label="NIT" value={req.companyNit} />
-                <InfoRow label="Dirección" value={req.companyDireccion} />
-                <InfoRow label="Teléfono" value={req.companyTelefono} />
-                <InfoRow label="Correo" value={req.companyCorreo} />
-                <InfoRow
-                  label="CIIU principal"
-                  value={
-                    req.companyCiiuPrincipal
-                      ? `${req.companyCiiuPrincipal}${req.companyCiiuPrincipalDesc ? ` — ${req.companyCiiuPrincipalDesc}` : ""}`
-                      : undefined
-                  }
-                />
-                <InfoRow label="CIIU secundarios" value={req.companyCiiusSecundarios?.join(", ")} />
-                <InfoRow label="Naturaleza jurídica" value={req.companyTipo} />
-                <InfoRow label="Sitio web" value={req.companyWeb} />
-                <InfoRow label="Descripción" value={req.companyDescripcion} block />
-              </InfoSection>
-
-              {/* Contacto */}
-              <InfoSection title="Contacto del cliente">
-                <InfoRow label="Nombre" value={req.applicant} />
-                <InfoRow label="Cargo" value={req.contactCargo} />
-                <InfoRow label="Área o dependencia" value={req.contactArea} />
-                <InfoRow label="Teléfono" value={req.contactTelefono} />
-                <InfoRow label="Teléfono secundario" value={req.contactTelefonoSecundario} />
-                <InfoRow label="Correo" value={req.contactCorreo} />
-                <InfoRow label="Correo alternativo" value={req.contactCorreoAlternativo} />
-
-                {req.additionalContacts && req.additionalContacts.length > 0 && (
-                  <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Contactos adicionales
-                    </span>
-                    {req.additionalContacts.map((c) => (
-                      <div
-                        key={c.id}
-                        className="rounded-lg bg-secondary/30 dark:bg-secondary/10 p-2.5 text-xs space-y-0.5"
-                      >
-                        <p className="font-semibold text-foreground">{c.nombre || "Sin nombre"}</p>
-                        {c.cargo && <p className="text-muted-foreground">{c.cargo}</p>}
-                        {(c.telefono || c.correo) && (
-                          <p className="text-muted-foreground">{[c.telefono, c.correo].filter(Boolean).join(" · ")}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </InfoSection>
-
-              {/* Diagnóstico del requerimiento */}
-              <InfoSection title="Diagnóstico del requerimiento">
-                <InfoRow label="Necesidad o problema a resolver" value={req.necesidad} block />
-                <InfoRow label="Competencias a fortalecer" value={req.competencias} block />
-                <InfoRow label="Cómo se medirá el éxito" value={req.exito} block />
-                <InfoRow label="Resultados esperados" value={req.resultados} block />
-                <InfoRow label="Perfil o área de los participantes" value={req.areaParticipantes} />
-                <InfoRow label="Servicio de alimentación y logística" value={req.alimentacion} block />
-              </InfoSection>
-
-              {/* Formación previa */}
-              <InfoSection title="Formación previa">
-                <InfoRow label="¿Han tenido formación previa con Icesi?" value={req.formacionPrevia} />
-                {req.formacionPrevia === "Sí" && (
-                  <>
-                    <InfoRow label="Descripción" value={req.descFormacion} block />
-                    <InfoRow label="Empresa que la dictó" value={req.empresaPrevia} />
-                    <InfoRow label="Fecha aproximada" value={req.fechaPrevia} />
-                  </>
-                )}
-              </InfoSection>
-
-              {/* Observaciones */}
-              <div className="lg:col-span-2">
-                <InfoSection title="Observaciones del KAM">
-                  <InfoRow label="" value={req.observaciones} block hideLabelWhenEmpty />
-                </InfoSection>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* MODAL: EDITAR INFORMACIÓN COMPLETA (KAM, solo mientras "Nueva") */}
+      {/* MODAL: EDITAR INFORMACIÓN COMPLETA (KAM, solo mientras "Nueva" y sin docente asignado) */}
       {/* ========================================================================= */}
       <Dialog open={isEditingFullInfo} onOpenChange={(open) => !open && handleCloseFullInfoModal()}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -1151,8 +2076,9 @@ export default function RequestDetail() {
               Editar información de la solicitud
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado
-              "Nueva".
+              {isKam
+                ? 'Corrige los datos que diligenciaste al crear la solicitud. Disponible solo mientras esté en estado "Nueva" y no tenga docente asignado.'
+                : "Corrige el alcance de la solicitud (por ejemplo la necesidad del cliente) — disponible porque el cliente ya devolvió esta propuesta pidiendo ajustes."}
             </DialogDescription>
           </DialogHeader>
 
@@ -1185,12 +2111,14 @@ export default function RequestDetail() {
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, title: v }))}
               />
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Urgencia</Label>
+                <Label htmlFor="general-urgencia-select" className="text-[11px] text-muted-foreground">
+                  Urgencia
+                </Label>
                 <Select
                   value={fullInfoDraft.urgency}
                   onValueChange={(v) => setFullInfoDraft((d) => ({ ...d, urgency: v as Urgency }))}
                 >
-                  <SelectTrigger className="h-8 text-xs">
+                  <SelectTrigger id="general-urgencia-select" className="h-8 text-xs">
                     <SelectValue placeholder="Seleccionar urgencia" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1209,6 +2137,7 @@ export default function RequestDetail() {
                 label="NIT"
                 value={fullInfoDraft.companyNit}
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyNit: v }))}
+                error={fullInfoErrors.companyNit}
               />
               <EditableField
                 label="Dirección"
@@ -1416,231 +2345,92 @@ export default function RequestDetail() {
         onClose={() => setIsAssignModalOpen(false)}
         request={req}
         onSaveAssignment={handleSaveAssignment}
+        onAdvanceToExpert={req.status === "nueva" ? handleAdvanceAfterAssign : undefined}
       />
 
       {/* ========================================================================= */}
-      {/* MODAL RÁPIDO DE CONTACTO: ASESOR EXTERNO */}
+      {/* MODAL RÁPIDO DE CONTACTO: DOCENTE / ASESOR */}
       {/* ========================================================================= */}
-      <Dialog open={isContactAdvisorModalOpen} onOpenChange={setIsContactAdvisorModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-xl border border-slate-200/80 p-6 shadow-lg dark:border-border dark:bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <User className="h-4 w-4 text-primary" />
-              Contacto del Asesor Externo
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              {isLeader
-                ? "Datos de contacto rápido para coordinación académica y administrativa."
-                : "Datos de contacto del asesor externo en modo solo lectura."}
-            </DialogDescription>
-          </DialogHeader>
+      <AdvisorContactDialog
+        open={isContactAdvisorModalOpen}
+        onOpenChange={setIsContactAdvisorModalOpen}
+        request={req}
+        isLeader={isLeader}
+        canChange={canEditProfessor(req.status)}
+        onChange={() => setIsAssignModalOpen(true)}
+      />
 
-          <div className="space-y-3 pt-2 text-xs">
-            <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3.5 space-y-2.5 dark:border-border dark:bg-secondary/20">
-              <div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                  Nombre Completo
-                </span>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {req.externalProfessorData?.nombre || req.professor}
-                </p>
-              </div>
-
-              {req.externalProfessorData?.empresaConsultora && (
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                    Empresa / Consultora
-                  </span>
-                  <p className="font-medium text-slate-800 dark:text-slate-200">
-                    {req.externalProfessorData.empresaConsultora}
-                  </p>
-                </div>
-              )}
-
-              {req.externalProfessorData?.correo && (
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Correo Electrónico
-                    </span>
-                    <a
-                      href={`mailto:${req.externalProfessorData.correo}`}
-                      className="text-primary hover:underline font-medium flex items-center gap-1.5"
-                    >
-                      <Mail className="h-3 w-3" />
-                      {req.externalProfessorData.correo}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {req.externalProfessorData?.telefono && (
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                      Teléfono de Contacto
-                    </span>
-                    <a
-                      href={`tel:${req.externalProfessorData.telefono}`}
-                      className="text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1.5 hover:text-primary"
-                    >
-                      <Phone className="h-3 w-3" />
-                      {req.externalProfessorData.telefono}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {req.externalProfessorData?.perfil && (
-                <div className="pt-1">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
-                    Perfil Profesional
-                  </span>
-                  <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
-                    {req.externalProfessorData.perfil}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              {isLeader && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs font-medium"
-                  onClick={() => {
-                    setIsContactAdvisorModalOpen(false);
-                    setIsAssignModalOpen(true);
-                  }}
-                >
-                  Editar datos
-                </Button>
-              )}
-              <Button size="sm" className="h-8 text-xs font-medium" onClick={() => setIsContactAdvisorModalOpen(false)}>
-                Cerrar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Modal: el KAM corrige nodo o líder (nueva y sin docente) */}
+      <EditTeamDialog
+        request={isEditTeamOpen ? req : null}
+        onOpenChange={setIsEditTeamOpen}
+        onConfirm={handleConfirmEditTeam}
+        nodeOptions={nodeOptions}
+        leaderOptions={leaderOptions}
+        saving={updateInfoMutation.isPending}
+      />
 
       {/* Modal Reasignar Líder de Producto */}
-      <Dialog open={isReassignModalOpen} onOpenChange={setIsReassignModalOpen}>
+      <ReassignLeaderDialog
+        request={isReassignModalOpen ? req : null}
+        onOpenChange={setIsReassignModalOpen}
+        onConfirm={handleConfirmReassign}
+        isConnected={Boolean(apiProposal)}
+        leaderOptions={apiProposal ? leaderOptions : undefined}
+        nodeOptions={apiProposal ? nodeOptions : undefined}
+      />
+
+      {/* Modal: Cancelar solicitud (KAM, solo mientras está "Nueva") */}
+      <Dialog
+        open={isCancelModalOpen}
+        onOpenChange={(open) => {
+          setIsCancelModalOpen(open);
+          if (!open) setCancelReason("");
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-foreground">{req.id}</span>
-              <span className="rounded bg-[#5454e9]/10 px-2 py-0.5 text-[10px] font-bold text-[#5454e9] dark:text-[#865cf0]">
-                {req.node}
-              </span>
-            </div>
-            <DialogTitle className="text-base font-bold text-foreground mt-1">Reasignar Líder de Producto</DialogTitle>
+            <DialogTitle className="text-base font-bold text-foreground">¿Cancelar esta solicitud?</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Transfiere la gestión técnica de esta propuesta a otro líder académico si no corresponde a tu área
-              temática o fue asignada por error.
+              Se cancelará la solicitud {req.code ?? req.id} ({req.company}). Por trazabilidad y control de gestión, es
+              obligatorio ingresar el motivo de cancelación.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2 text-xs">
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground shrink-0">Propuesta:</span>
-                <span className="font-semibold text-foreground text-right truncate">{req.title}</span>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-xs font-semibold text-foreground mb-1.5 block">
+                Selecciona un motivo común o escribe uno:
+              </Label>
+              <div className="flex flex-wrap gap-1.5 mb-2.5">
+                {CANCEL_REASON_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setCancelReason(preset)}
+                    className={`px-2.5 py-1 text-[11px] rounded-full font-medium transition-colors border ${
+                      cancelReason === preset
+                        ? "bg-[#5454e9] text-white border-[#5454e9]"
+                        : "bg-secondary/40 hover:bg-secondary border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Empresa:</span>
-                <span className="font-semibold text-foreground">{req.company}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Líder asignado actualmente:</span>
-                <span className="font-semibold text-[#e9683b]">{req.productLeader}</span>
-              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="detail-new-leader" className="text-xs font-semibold text-foreground">
-                Nuevo Líder de Producto destinatario *
+            <div>
+              <Label htmlFor="cancel-reason-input" className="text-xs font-semibold text-foreground mb-1 block">
+                Motivo de cancelación <span className="text-red-500">*</span>
               </Label>
-              <Select
-                value={selectedNewLeader}
-                onValueChange={(val) => {
-                  setSelectedNewLeader(val);
-                  const foundNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, leader]) => leader === val);
-                  if (foundNode) {
-                    setSelectedNewNode(foundNode[0]);
-                  }
-                }}
-              >
-                <SelectTrigger id="detail-new-leader" className="text-xs h-9">
-                  <SelectValue placeholder="Seleccionar nuevo líder de producto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRODUCT_LEADERS.map((leader) => {
-                    const isCurrent = leader === req.productLeader;
-                    const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, l]) => l === leader)?.[0];
-                    return (
-                      <SelectItem key={leader} value={leader} disabled={isCurrent}>
-                        {leader}{" "}
-                        {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="detail-reassign-node" className="text-xs font-semibold text-foreground">
-                Nodo Temático sugerido
-              </Label>
-              <Select value={selectedNewNode} onValueChange={setSelectedNewNode}>
-                <SelectTrigger id="detail-reassign-node" className="text-xs h-9">
-                  <SelectValue placeholder="Seleccionar nodo temático" />
-                </SelectTrigger>
-                <SelectContent>
-                  {NODES.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="detail-reassign-reason" className="text-xs font-semibold text-foreground">
-                Motivo de la reasignación
-              </Label>
-              <Select value={reassignReason} onValueChange={setReassignReason}>
-                <SelectTrigger id="detail-reassign-reason" className="text-xs h-9">
-                  <SelectValue placeholder="Seleccionar motivo..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Temática no afín / Corresponde a otro nodo">
-                    Temática no afín / Corresponde a otro nodo
-                  </SelectItem>
-                  <SelectItem value="Asignada por error por el KAM">Asignada por error por el KAM</SelectItem>
-                  <SelectItem value="Redistribución por sobrecarga operativa">
-                    Redistribución por sobrecarga operativa
-                  </SelectItem>
-                  <SelectItem value="Especialidad técnica específica">Especialidad técnica específica</SelectItem>
-                  <SelectItem value="Otro motivo">Otro motivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="detail-reassign-notes" className="text-xs font-semibold text-muted-foreground">
-                Nota o mensaje para el nuevo líder (opcional)
-              </Label>
-              <Textarea
-                id="detail-reassign-notes"
-                rows={2}
-                placeholder="Ej. Reasignado para ajuste pedagógico según línea de especialidad..."
-                value={reassignNotes}
-                onChange={(e) => setReassignNotes(e.target.value)}
-                className="text-xs resize-none"
+              <textarea
+                id="cancel-reason-input"
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Escribe la justificación o selecciona una de las opciones sugeridas..."
+                className="w-full text-xs rounded-lg border border-border dark:border-[#2b2d3d] bg-background dark:bg-[#151620] p-2.5 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-[#5454e9]"
               />
             </div>
           </div>
@@ -1650,39 +2440,10 @@ export default function RequestDetail() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setIsReassignModalOpen(false)}
-              className="text-xs"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={!selectedNewLeader || selectedNewLeader === req.productLeader}
-              onClick={handleConfirmReassign}
-              className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white"
-            >
-              Confirmar Reasignación
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal: Cancelar solicitud (KAM, solo mientras está "Nueva") */}
-      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-foreground">¿Cancelar esta solicitud?</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Se eliminará permanentemente la solicitud {req.id} ({req.company}). Esta acción no se puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsCancelModalOpen(false)}
+              onClick={() => {
+                setIsCancelModalOpen(false);
+                setCancelReason("");
+              }}
               className="text-xs"
             >
               Volver
@@ -1690,8 +2451,9 @@ export default function RequestDetail() {
             <Button
               type="button"
               size="sm"
+              disabled={!cancelReason.trim()}
               onClick={handleCancelRequest}
-              className="text-xs bg-red-600 hover:bg-red-700 text-white"
+              className="text-xs bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Sí, cancelar solicitud
             </Button>
@@ -1742,6 +2504,89 @@ export default function RequestDetail() {
               className="text-xs bg-[#5454e9] hover:bg-[#4343d3] text-white"
             >
               Devolver a costeo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal dedicado: Enviar a KAM (docs/03) — el diálogo genérico
+          CONFIRM_ACTION_META no admite un campo de texto condicional, así
+          que esta acción se sacó de ese patrón. Desde la ronda 2 exige una
+          nota del motivo del ajuste y muestra la observación del cliente de
+          la ronda anterior como contexto. */}
+      <Dialog
+        open={isSendToKamModalOpen}
+        onOpenChange={(open) => {
+          setIsSendToKamModalOpen(open);
+          if (!open) setSendToKamNote("");
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">
+              {nextRoundNumber === 1
+                ? "¿Enviar el costeo al KAM?"
+                : `¿Enviar el ajuste al KAM? (Ronda ${nextRoundNumber})`}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Confirma que el valor final de la propuesta ya está listo. El KAM podrá enviarla al cliente a partir de
+              este momento.
+            </DialogDescription>
+          </DialogHeader>
+
+          {nextRoundNumber > 1 && (
+            <div className="space-y-3 py-1">
+              {lastRejectedRound?.clientObservation && (
+                <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3 flex items-start gap-2.5">
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5 min-w-0">
+                    <p className="text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      El cliente devolvió la ronda {lastRejectedRound.roundNumber} con esta observación:
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed whitespace-pre-wrap">
+                      "{lastRejectedRound.clientObservation}"
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="send-to-kam-note" className="text-xs font-semibold text-foreground">
+                  ¿Qué ajustaste y por qué? *
+                </Label>
+                <Textarea
+                  id="send-to-kam-note"
+                  rows={3}
+                  placeholder="Ej: Reduje el alcance a 3 plantas y ajusté el valor según lo solicitado por el cliente..."
+                  value={sendToKamNote}
+                  onChange={(e) => setSendToKamNote(e.target.value)}
+                  className="text-xs resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSendToKamModalOpen(false)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={nextRoundNumber > 1 && !sendToKamNote.trim()}
+              onClick={() => {
+                handleMarkReadyForKam(nextRoundNumber > 1 ? sendToKamNote : undefined);
+                setIsSendToKamModalOpen(false);
+                setSendToKamNote("");
+              }}
+              className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white disabled:opacity-50"
+            >
+              Sí, enviar al KAM
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1836,6 +2681,10 @@ function getFullInfoCompleteness(req: RequestItem): { filled: number; total: num
   return { filled, total };
 }
 
+// Campos de alcance que cada ronda de negociación congela (docs/04) — si
+// alguno cambió respecto a la ronda anterior, el historial lo muestra como
+// parte del resumen de la ronda ("Participantes: 15-20 → 9-12"). La ronda 1
+// nunca tiene con qué compararse, así que no muestra diffs.
 function EditableField({
   label,
   value,
@@ -1849,11 +2698,17 @@ function EditableField({
   block?: boolean;
   error?: string;
 }) {
+  const fieldId = label ? "field-" + label.toLowerCase().replace(/[^a-z0-9]/g, "-") : undefined;
   return (
     <div className="space-y-1">
-      {label && <Label className="text-[11px] text-muted-foreground">{label}</Label>}
+      {label && (
+        <Label htmlFor={fieldId} className="text-[11px] text-muted-foreground">
+          {label}
+        </Label>
+      )}
       {block ? (
         <Textarea
+          id={fieldId}
           rows={2}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -1861,6 +2716,7 @@ function EditableField({
         />
       ) : (
         <Input
+          id={fieldId}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn("h-8 text-xs", error && "border-red-400 focus-visible:ring-red-400")}

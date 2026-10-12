@@ -1,5 +1,8 @@
 # Preguntas abiertas para validar con Líder de Producto
 
+> **Actualización 2026-10-09 (cierre del UAT).** Resuelto por el dueño del producto: el bloqueo de edición del KAM con docente asignado queda confirmado (pregunta 19) y el KAM **tampoco cancela** con docente asignado; el valor ofertado y la nota de alcance se muestran al KAM solo tras "Enviar a KAM"; al crear, líder obligatorio y nodo opcional.
+> **Siguen abiertas** (detalle en `PARIDAD-LOGICA-NEGOCIO.md` (repositorio del backend, `workspace/docs/`, tabla "Diferencias deliberadas")): si el rol ADMIN se mantiene en el modelo final; si se conserva el cálculo automático de 5 días hábiles de entrega; el catálogo de centros por nodo; si la mentoría sin certificado también es "CP"; qué significa la columna "Enviada al KAM" en el tablero del KAM; si el contador "Total" debe congelarse al entregar; la tarifa Pro-Cultura (C-12); y si los datos nuevos de una empresa que ya existe (mismo NIT) deben actualizarse.
+
 Este documento acumula preguntas de negocio/UX que van surgiendo mientras se
 construye el prototipo, y que **no puede responder el equipo de diseño/desarrollo
 por su cuenta** — necesitan una decisión de producto o de la Líder de Producto.
@@ -230,11 +233,18 @@ ocultar el botón.
 
 **Respuesta de la Líder:** "Quizás todo puede pasar en la vida" — no dio un
 caso concreto ni confirmó el límite explícitamente. No es un "sí" ni un "no"
-claro. **Decisión:** se mantiene la restricción actual (reasignar solo en
-"Nueva") porque no hay un caso de negocio específico que la contradiga — no
-relajar esta regla sin uno. Si en el uso real aparece una situación concreta
-(vacaciones, cambio de nodo con solicitud ya avanzada), retomar esta pregunta
-con ese caso puntual en mano.
+claro. **Decisión original:** se mantenía la restricción (reasignar solo en
+"Nueva") porque no había un caso de negocio específico que la contradijera.
+
+**Actualización (2026-09-20) — ⚠️ decisión sin validar con Dianis:** apareció
+un caso concreto mientras se probaba el prototipo: el experto/profesor asignado
+revisa la solicitud ya en "En Experto" y determina que el tema no corresponde
+a su nodo/especialidad. Se amplió la reasignación para permitirla también en
+ese estado (además de "Nueva"), reiniciando el estado a "Nueva" y limpiando el
+docente asignado al reasignar. **Esta ampliación fue una decisión de Tomás,
+no una respuesta confirmada por Dianis** — sigue pendiente validarla con ella
+explícitamente, con este caso concreto en mano (a diferencia de la pregunta
+original, que era abstracta).
 
 ---
 
@@ -332,6 +342,13 @@ entregada podemos cambiar muchas veces el precio de una propuesta." Confirma
 que es intencional — no se implementa ningún bloqueo. Si en el futuro se
 necesita saber qué se le cotizó exactamente al cliente en cada momento, habrá
 que agregar un historial de versiones del costeo — no es urgente hoy.
+
+**Actualización (2026-09-20):** ese historial ya se construyó — `RequestItem.negotiationRounds`
+(ver `04-modelo-de-datos-logico.md`) guarda cada valor ofertado, con quién y
+cuándo se envió, y la respuesta del cliente. No vino de una nueva pregunta a
+Dianis, surgió al analizar en vivo qué pasaba cuando el Líder ajustaba un
+precio ya rechazado — sigue sin bloquearse la edición, solo se dejó de perder
+el rastro de los cambios.
 
 ---
 
@@ -437,10 +454,15 @@ proceso de costeo" y la nota queda visible (para KAM y Líder) en un banner
 en el detalle hasta que se vuelva a marcar "Entregada" (momento en que se
 limpia). No se creó un estado "Rechazada" separado — se reutiliza el mismo
 pipeline lineal (`nueva` → `en-experto` → `en-costeo` → `entregada`), ahora
-con la posibilidad de retroceder de `entregada` a `en-costeo`. Si en la
-práctica esto pasa muy seguido o se necesita conservar historial de cuántas
-veces se devolvió una propuesta, valdría la pena revisar un modelo con
-versiones/historial más adelante.
+con la posibilidad de retroceder de `entregada` a `en-costeo`.
+
+**Actualización (2026-09-20):** el "historial de cuántas veces se devolvió"
+que esta respuesta dejaba como posible trabajo futuro ya se construyó —
+`negotiationRounds` (ver `04`) registra cada ronda con su valor, la
+observación del cliente si fue rechazada, y desde la segunda ronda exige que
+el Líder escriba el motivo del ajuste. Sigue sin existir un estado
+"Rechazada" separado en el pipeline principal (`status`); la información de
+rechazo vive en el historial de rondas, no en un nuevo valor de `status`.
 
 ---
 
@@ -500,6 +522,58 @@ con un nombre distinto (y entonces renombrarlo en código/docs) o si son dos
 roles distintos con funciones diferentes. No renombrar nada todavía sin esa
 aclaración — repreguntar explícitamente: "¿'Líder de Nodo' y 'Director de
 Nodo' son el mismo cargo?"
+
+---
+
+## 16. ¿Quién corrige el alcance de la solicitud cuando el cliente rechaza por un tema distinto al precio?
+
+**Estado:** 🔴 Abierta — implementado con una decisión provisional de Tomás, sin validar con Dianis
+
+**Contexto:** Cuando un cliente devuelve una propuesta pidiendo un ajuste de **alcance** (ej. "reducir de 5 plantas a 3"), la corrección real vive en campos de "Información completa de la solicitud" (`necesidad`, y potencialmente otros) — no solo en el precio. Hasta el 2026-09-20, **nadie podía editar esos campos** una vez la solicitud salía de "Nueva" (ni el KAM que los diligenció, ni el Líder de Producto).
+
+**Decisión provisional implementada:** se le dio acceso al **Líder de Producto** para editar "Información completa de la solicitud", pero solo cuando la solicitud (suya) esté en "En Costeo" **y ya haya sido rechazada al menos una vez por el cliente** — no desde el primer paso de costeo. Mismo modal que ya usaba el KAM en "Nueva". Se ajustó así (2026-09-20) tras revisar que la condición original (cualquier momento en "En Costeo") le daba acceso sin que hubiera un motivo de negocio — la información sigue siendo del KAM salvo que haya algo concreto que corregir.
+
+**Pregunta para la Líder de Producto:** ¿es el Líder de Producto quien debería corregir estos campos, o debería volver al KAM (que fue quien habló originalmente con el cliente y los diligenció)? ¿O ambos, según el campo?
+
+**Por qué importa:** define permisos de escritura por campo/rol/estado en el modelo real — la misma familia de decisión que ya se tomó en la pregunta 8, pero para el caso específico de una corrección post-rechazo, no de una corrección inicial.
+
+---
+
+## 17. Empresas duplicadas: si llega un NIT nuevo y ya existe una empresa histórica con el mismo nombre (sin NIT), ¿se fusionan?
+
+**Estado:** 🔴 Abierta — el código **no toma la decisión**; deja dos registros separados
+
+**Contexto:** El directorio de empresas del backend ahora identifica a cada empresa por NIT (único). Las empresas históricas (importadas antes de esta regla) no tienen NIT. Cuando el KAM crea una solicitud con un NIT que no existe todavía, pero ya hay una empresa histórica con el mismo nombre y sin NIT, hoy el sistema **crea una empresa nueva con ese NIT** y deja la histórica como registro aparte — es decir, ese caso genera un duplicado por nombre. Si el NIT ya existe, sí se reutiliza esa empresa. Si el KAM no escribe NIT, se mantiene la búsqueda anterior por nombre.
+
+**Pregunta para la Líder de Producto:** ¿se deben fusionar automáticamente (asignarle el NIT a la empresa histórica del mismo nombre), fusionar solo con confirmación del usuario, o dejarlas separadas hasta una depuración manual? ¿Qué pasa con nombres parecidos pero no idénticos ("Bancolombia" vs "Bancolombia S.A.")?
+
+**Por qué importa:** fusionar por nombre puede unir por error a dos empresas distintas con el mismo nombre (y mezclar su historial de propuestas); no fusionar deja duplicados. Tampoco resuelve los duplicados históricos que ya existen entre sí.
+
+---
+
+## 18. ¿El docente/asesor debe bloquearse tras "En proceso por experto", o solo auditarse el cambio?
+
+**Estado:** 🔴 Abierta — implementado con una decisión provisional de Tomás, sin validar con Dianis
+
+**Contexto:** Probando en vivo (2026-09-25) el flujo de "Devolver con observaciones" (pregunta 13: una propuesta `entregada` que el cliente devuelve vuelve a `en-costeo`), se encontró que el Líder de Producto podía cambiar el docente/asesor asignado **en cualquier estado de la solicitud**, sin dejar ningún registro — a diferencia del costeo, que abre una ronda de negociación por cada cambio (pregunta 13/B.4). Es decir: una propuesta ya devuelta al Líder para ajustar precio también permitía, sin que nadie se enterara, cambiar de quién iba a dictar el servicio.
+
+**Decisión provisional implementada:** el campo solo es editable mientras la solicitud está en **"Nueva" o "En Experto"** — una vez pasa a "En Costeo" o "Entregada" (incluyendo tras un "Devolver con observaciones", que regresa a "En Costeo", no a "En Experto") queda bloqueado. Todo cambio, en cualquier momento en que fue posible, queda en un historial visible (docente anterior, nuevo, quién y cuándo).
+
+**Pregunta para la Líder de Producto:** ¿el bloqueo total es correcto, o hay un caso real donde necesite cambiar el docente ya avanzado el proceso (ej. el docente asignado se enferma o queda indisponible)? Si existe ese caso, la alternativa sería permitir el cambio en cualquier estado pero exigiendo un motivo obligatorio (igual que el motivo de ajuste desde la 2ª ronda de negociación, pregunta 13), en vez de prohibirlo.
+
+**Por qué importa:** sin esta decisión, el modelo real no sabe si debe rechazar la petición de cambio en el backend (bloqueo duro) o solo aceptarla y registrarla (auditoría). Es la misma pregunta de fondo que la 6 y la 16: bloquear vs. permitir-con-motivo.
+
+---
+
+## 19. Con docente asignado, ¿cómo corrige el KAM un error en la información de la solicitud?
+
+**Estado:** 🔴 Abierta — acuerdo de la UAT del 2026-09-29 implementado con una respuesta provisional
+
+**Contexto:** En la UAT, la Líder de Producto y el KAM acordaron que, una vez la Líder asigna un docente, el KAM **no** puede agregar ni editar información de la propuesta (el experto se confunde si el contenido cambia). Como el docente ya se puede asignar en "Nueva", el bloqueo se aplica **al asignar**, no al cambiar de estado.
+
+**Decisión provisional implementada:** el botón "Editar información" del KAM desaparece cuando hay docente asignado (y el backend rechaza el cambio con 400). El Líder de Producto dueño y ADMIN conservan la edición, así que por ahora **el Líder corrige los errores del KAM**. "Cancelar solicitud" no se bloqueó en ese momento (la bitácora solo habla de agregar información); **desde el 2026-10-09 sí se bloquea con docente asignado**.
+
+**Preguntas:** ¿el Líder debería poder "liberar" la edición para el KAM, o el KAM le pide el cambio por otro canal? ¿El KAM debe seguir pudiendo cancelar con docente asignado? **(Resuelto el 2026-10-09: no puede.)** Efecto lateral a confirmar: en "En Costeo" siempre hay docente, así que el KAM tampoco edita tras un rechazo del cliente (pregunta 16 / B.7).
 
 ---
 
@@ -574,7 +648,7 @@ una pregunta abierta.)_
 - **El KAM puede editar la información de su propia solicitud** (empresa,
   contacto, diagnóstico, formación previa, observaciones) **mientras esté en
   "Nueva"** (preguntas 4 y 8).
-- **El KAM puede cancelar su propia solicitud mientras esté en "Nueva"**
+- **El KAM puede cancelar su propia solicitud mientras esté en "Nueva" y sin docente asignado (desde el 2026-10-09)**
   (pregunta 14).
 - **El KAM puede devolver una propuesta "Entregada" a costeo con
   observaciones del cliente** (pregunta 13).
@@ -585,12 +659,53 @@ una pregunta abierta.)_
   en la plataforma (pregunta 11); el Profesor no tendrá cuenta propia por
   ahora (pregunta 4).
 
+### Ronda del 2026-09-19/20 (cambios de negocio en costeo, gate a KAM y trazabilidad)
+
+_No vinieron de audios nuevos de Dianis para todo el paquete — los 2 originales
+(valor final manual + margen manual, y "dónde le doy clic para pasarla al
+KAM") sí son de ella; el resto se encontró/decidió mientras se probaba el
+prototipo en vivo, y queda marcado abajo qué sigue sin validar con ella._
+
+- **El campo de costeo captura el valor final directo, no una base + margen
+  calculado** — el equipo ya trae ese número de un Excel externo (audio de
+  Dianis). Margen % y margen $ pasan a ser manuales e independientes.
+- **Gate explícito del Líder antes de que el KAM pueda entregar** (audio de
+  Dianis: "no sé dónde darle clic para pasarla al KAM") — botón "Enviar a
+  KAM", con historial de negociación por ronda.
+- **Historial de negociación** (`negotiationRounds`): cada ronda registra
+  valor, margen, alcance, nota del Líder y respuesta del cliente — responde
+  lo que las preguntas 9 y 13 ya dejaban pendiente.
+- ⚠️ **Reasignación también desde "En Experto"** (pregunta 6, actualizada) —
+  sin validar con Dianis.
+- ⚠️ **Líder de Producto puede editar "Información completa de la solicitud"
+  en "En Costeo"** (pregunta 16, nueva) — sin validar con Dianis.
+- **"Requiere asesor externo" resuelto:** ya no es un switch independiente,
+  se deriva del docente/asesor realmente asignado (no requería pregunta a
+  Dianis — era una inconsistencia técnica, no una decisión de negocio).
+
 ## Pendientes para la próxima ronda con la Líder de Producto
 
 _(No fueron respondidas o quedaron con una respuesta ambigua/incompleta en la
-ronda del 2026-09-15 — repreguntar con ejemplos concretos, no descripciones
+ronda del 2026-09-15, o son decisiones nuevas tomadas sin ella (ver ronda
+2026-09-19/20 arriba) — repreguntar con ejemplos concretos, no descripciones
 abstractas.)_
 
+- **Pregunta 19 (nueva):** con docente asignado el KAM ya no edita; ¿cómo corrige
+  un error? Hoy lo corrige el Líder (ver pregunta 19 arriba).
+- **Pregunta 17 (nueva):** ¿una empresa histórica del mismo nombre y sin NIT
+  debe fusionarse con la que llega con NIT, o quedan separadas? Hoy quedan
+  separadas; el código no decide por nombre.
+- **Pregunta 18 (nueva):** ¿el docente/asesor debe bloquearse tras "En
+  proceso por experto", o solo auditarse el cambio? Hoy implementado
+  provisionalmente como bloqueo total + historial, sin confirmar con ella.
+- **Pregunta 16 (nueva):** ¿quién debe corregir el alcance de la solicitud
+  (`necesidad` y afines) cuando el cliente rechaza por un tema distinto al
+  precio — el Líder, el KAM, o ambos? Hoy implementado provisionalmente como
+  "el Líder, en En Costeo", sin confirmar con ella.
+- **Pregunta 6 (actualizada):** ¿reasignar desde "En Experto" (no solo
+  "Nueva") es correcto? Implementado con un caso concreto en mano esta vez
+  (el experto determina que el tema no corresponde a su nodo) — a diferencia
+  de la ronda anterior, que fue una pregunta abstracta sin caso.
 - **Pregunta 3 (detalle):** ¿la restricción de ocultar el desglose económico
   al KAM aplica también en "en costeo" sin valor aún definido? ¿La nota de
   alcance comercial (`negotiationNotes`) se mantiene visible para el KAM o

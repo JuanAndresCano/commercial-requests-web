@@ -1,5 +1,6 @@
-import { calculateCosting } from "./costing";
-export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada";
+import { calculateProCulturaReference, PRO_CULTURA_PERCENT } from "@/lib/currency";
+
+export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada" | "rechazada" | "cancelada";
 export type RequestType =
   "Capacitación" | "Consultoría" | "Mentoría" | "Investigación" | "Proyectos Especiales (Eventos)" | "Otro";
 export type Urgency = "alta" | "media" | "baja";
@@ -13,123 +14,40 @@ export const REQUEST_TYPES: RequestType[] = [
   "Otro",
 ];
 
-export interface CompanyRecord {
-  nit: string;
-  nombre: string;
-  direccion: string;
-  telefono: string;
-  correo: string;
-  ciiuPrincipal: string;
-  ciiuDescripcion?: string;
-  web?: string;
-  tipoEmpresa?: string;
-}
-
-export const MOCK_COMPANIES: CompanyRecord[] = [
-  {
-    nit: "890399001-5",
-    nombre: "Universidad Icesi",
-    direccion: "Calle 18 # 122-135, Pance, Cali",
-    telefono: "(602) 555 2334",
-    correo: "contacto@icesi.edu.co",
-    ciiuPrincipal: "8544",
-    ciiuDescripcion: "Educación de instituciones de educación superior",
-    web: "https://www.icesi.edu.co",
-    tipoEmpresa: "Privada",
-  },
-  {
-    nit: "890900608-9",
-    nombre: "Bancolombia S.A.",
-    direccion: "Carrera 48 # 26-85, Medellín",
-    telefono: "(604) 510 9000",
-    correo: "corporativo@bancolombia.com.co",
-    ciiuPrincipal: "6412",
-    ciiuDescripcion: "Bancos comerciales",
-    web: "https://www.bancolombia.com",
-    tipoEmpresa: "Privada",
-  },
-  {
-    nit: "890300279-4",
-    nombre: "Carvajal S.A.",
-    direccion: "Calle 29 Norte # 6A-40, Cali",
-    telefono: "(602) 667 5000",
-    correo: "servicioalcliente@carvajal.com",
-    ciiuPrincipal: "1811",
-    ciiuDescripcion: "Actividades de impresión",
-    web: "https://www.carvajal.com",
-    tipoEmpresa: "Privada",
-  },
-  {
-    nit: "890301884-5",
-    nombre: "Manuelita S.A.",
-    direccion: "Km 7 Vía Palmira - El Cerrito, Valle del Cauca",
-    telefono: "(602) 270 3000",
-    correo: "contacto@manuelita.com",
-    ciiuPrincipal: "1072",
-    ciiuDescripcion: "Elaboración de panela y azúcar",
-    web: "https://www.manuelita.com",
-    tipoEmpresa: "Privada",
-  },
-  {
-    nit: "860007738-9",
-    nombre: "Colombina S.A.",
-    direccion: "Carrera 1 # 24-56, La Paila, Zarzal",
-    telefono: "(602) 886 1900",
-    correo: "atencion@colombina.com",
-    ciiuPrincipal: "1082",
-    ciiuDescripcion: "Elaboración de cacao, chocolate y confitería",
-    web: "https://www.colombina.com",
-    tipoEmpresa: "Privada",
-  },
-  {
-    nit: "900123456-1",
-    nombre: "Tecnoquímicas S.A.",
-    direccion: "Calle 23 No. 7-39, Cali",
-    telefono: "(602) 882 1000",
-    correo: "contacto@tecnoquimicas.com",
-    ciiuPrincipal: "2100",
-    ciiuDescripcion: "Fabricación de productos farmacéuticos y sustancias químicas",
-    web: "https://www.tecnoquimicas.com",
-    tipoEmpresa: "Privada",
-  },
-  {
-    nit: "890901382-7",
-    nombre: "Grupo Nutresa S.A.",
-    direccion: "Calle 8 Sur # 52-01, Medellín",
-    telefono: "(604) 365 5600",
-    correo: "contacto@gruponutresa.com",
-    ciiuPrincipal: "1089",
-    ciiuDescripcion: "Elaboración de otros productos alimenticios",
-    web: "https://www.gruponutresa.com",
-    tipoEmpresa: "Privada",
-  },
-  {
-    nit: "890901672-1",
-    nombre: "Grupo Éxito S.A.",
-    direccion: "Carrera 48 # 32B Sur-139, Envigado",
-    telefono: "(604) 339 6565",
-    correo: "servicioalcliente@grupo-exito.com",
-    ciiuPrincipal: "4711",
-    ciiuDescripcion: "Comercio al por menor en establecimientos no especializados",
-    web: "https://www.grupoexito.com.co",
-    tipoEmpresa: "Privada",
-  },
-  {
-    nit: "890303893-6",
-    nombre: "Gases de Occidente S.A. E.S.P.",
-    direccion: "Avenida 2 Norte # 7N-55, Cali",
-    telefono: "(602) 418 7300",
-    correo: "contacto@gdo.com.co",
-    ciiuPrincipal: "3520",
-    ciiuDescripcion: "Distribución de combustibles gaseosos por tuberías",
-    web: "https://www.gdo.com.co",
-    tipoEmpresa: "Privada",
-  },
+export const NODES = [
+  "Biotecnología, Bioeconomía y Sostenibilidad",
+  "Inteligencia Artificial y Tecnologías Digitales",
+  "Innovación Educativa, Bienestar Social, Innovación Pública",
+  "Competitividad Organizacional, Economías Creativas",
+  "Salud Global, Calidad de Vida",
 ];
 
+export const PRODUCT_LEADERS = [
+  "Diana Carolina Romero Valencia",
+  "Juan Pablo Corrales Arenas",
+  "Claudia Maitee Bahamón Osorio",
+  "María Camila Restrepo",
+  "Sebastián Vélez",
+  "Laura Caicedo",
+];
+
+export const NODE_DEFAULT_LEADERS: Record<string, string> = {
+  "Biotecnología, Bioeconomía y Sostenibilidad": "Claudia Maitee Bahamón Osorio",
+  "Inteligencia Artificial y Tecnologías Digitales": "Juan Pablo Corrales Arenas",
+  "Innovación Educativa, Bienestar Social, Innovación Pública": "Diana Carolina Romero Valencia",
+  "Competitividad Organizacional, Economías Creativas": "María Camila Restrepo",
+  "Salud Global, Calidad de Vida": "Sebastián Vélez",
+};
+/**
+ * Data of the assigned professor/advisor, of either kind (the name is historical: it started for externals).
+ * `identificacion` is only known to the product leader; the KAM's payload never carries it.
+ */
 export interface ExternalProfessorData {
   nombre: string;
   identificacion?: string;
+  /** Faculty of a planta professor. */
+  facultad?: string;
+  /** Company or institution of an external advisor. */
   empresaConsultora?: string;
   correo?: string;
   telefono?: string;
@@ -145,6 +63,9 @@ export interface ProposalDocument {
   category: "client_kam" | "internal_costing";
   uploadedBy?: string;
   tag?: string;
+  // Only set for real (backend) documents; mock documents behave as downloadable/deletable.
+  downloadable?: boolean;
+  canDelete?: boolean;
 }
 
 export interface ClientContact {
@@ -157,19 +78,36 @@ export interface ClientContact {
 }
 
 export interface ProposalCosting {
-  requiresExternalAdvisor: boolean;
-  externalAdvisorDetails?: string;
-  baseCostCop: number;
-  expectedMarginPercent: number; // e.g. 30 (%)
+  // Margen de Contribución en pesos — input manual e independiente (docs/04,
+  // Requisito 1). Es informativo: no tiene que cuadrar matemáticamente con
+  // `expectedMarginPercent` ni con `totalOfferedCop`.
+  // undefined = sin margen registrado (el backend lo guarda como null); 0 es un valor real.
+  marginAmountCop?: number;
+  expectedMarginPercent?: number; // e.g. 30 (%) — manual, informativo
   proCulturaTaxPercent: number; // 1.5% if Capacitación, 0% otherwise
+  // Estampilla Pro-Cultura: fila de referencia calculada sobre el valor
+  // final ya digitado. Nunca se suma ni se resta de `totalOfferedCop` — el
+  // equipo ya la contempla en el Excel externo del que sale ese valor.
   proCulturaTaxAmount: number;
-  suggestedTotalCop: number;
-  totalOfferedCop: number; // Editable Valor Total Ofertado (COP)
+  // Valor Final de la Propuesta (COP) — único campo operativo real. Ya no se
+  // deriva de una base + margen: el Líder lo digita directamente.
+  totalOfferedCop: number;
   negotiationNotes?: string;
+  // Gate explícito del Líder de Producto (docs/04): mientras
+  // sea false, el KAM no puede enviar la propuesta al cliente aunque ya haya
+  // un valor ofertado > 0. Se invalida automáticamente (vuelve a false) si
+  // el Líder vuelve a editar el valor final o el margen tras haberlo marcado.
+  readyForKam: boolean;
+  // ISO timestamp de cuándo se marcó `readyForKam = true` por última vez —
+  // permite mostrar "esperando hace X días" y ordenar por antigüedad en el
+  // tablero del Líder. Se limpia junto con `readyForKam` si se invalida.
+  costingSentAt?: string;
 }
 
 export interface RequestItem {
   id: string;
+  /** Human-readable business code (e.g. "REQ-2026-0042"), distinct from `id` (UUID). */
+  code?: string;
   title: string;
   applicant: string;
   type: RequestType;
@@ -224,12 +162,26 @@ export interface RequestItem {
   observaciones?: string;
 
   company: string;
-  node: string;
+  /** Name of the node; `null` when the request has none (C-06: the node is optional). */
+  node: string | null;
+  /** Real id of the node (only when it comes from the API); `null` when the request has none. */
+  nodeId?: string | null;
+  /** Center the business goes through (free text), typed by the Product Leader (C-07). */
+  center?: string;
+  /** Cost center ("CENCO", free text) loaded for that center (C-07). */
+  costCenter?: string;
+  /** Official number ("CP 2026-0169"); the API only sends it once the request is delivered (C-13). */
+  officialNumber?: string;
+  /** Every change of status, oldest first (detail only); feeds "Tiempo por etapa". */
+  statusHistory?: StatusHistoryEntry[];
   productLeader: string;
   kam: string;
   professor?: string;
   professorType?: "planta" | "externo";
   externalProfessorData?: ExternalProfessorData;
+  professorHistory?: ProfessorAssignmentLogEntry[];
+  /** Cambios de nodo o de Líder de Producto, del más antiguo al más reciente. */
+  teamHistory?: TeamChangeEntry[];
   totalCostCop?: number;
   costing?: ProposalCosting;
   clientKamDocuments?: ProposalDocument[];
@@ -247,37 +199,117 @@ export interface RequestItem {
   // "lleva X días en esta fase" en el Kanban del Líder para detectar cuellos
   // de botella. Se actualiza automáticamente en AuthContext.updateRequest.
   statusUpdatedAt?: string;
+
+  // Historial de rondas de negociación comercial (docs/04): cada vez que el
+  // Líder envía un valor final al KAM se abre una ronda nueva. Vive en
+  // RequestItem (no en ProposalCosting) porque sobrevive a los sucesivos
+  // sobrescritos de `costing` — es el registro de lo que pasó, no el estado
+  // actual del costeo.
+  negotiationRounds?: NegotiationRound[];
 }
 
-export const NODES = [
-  "Biotecnología, Bioeconomía y Sostenibilidad",
-  "Inteligencia Artificial y Tecnologías Digitales",
-  "Innovación Educativa, Bienestar Social, Innovación Pública",
-  "Competitividad Organizacional, Economías Creativas",
-  "Salud Global, Calidad de Vida",
-];
+export interface StatusHistoryEntry {
+  status: RequestStatus;
+  changedAt: string;
+}
 
-export const KAMS = ["Andrea Martínez", "Carlos Riveros", "Diana Salcedo", "Felipe Ortiz"];
-export const PRODUCT_LEADERS = [
-  "Diana Carolina Romero Valencia",
-  "Juan Pablo Corrales Arenas",
-  "Claudia Maitee Bahamón Osorio",
-  "María Camila Restrepo",
-  "Sebastián Vélez",
-  "Laura Caicedo",
-];
-export const PROFESSORS = ["Dr. Ricardo Mejía", "Dra. Paula Henao", "Dr. Andrés Lozano"];
+export interface TeamChangeEntry {
+  id: string;
+  field: "nodo" | "lider";
+  previous?: string;
+  next: string;
+  changedBy: string;
+  changedAt: string;
+  /** Motivo de la reasignación del Líder; vacío cuando el KAM corrigió el dato. */
+  reason?: string;
+}
 
-export const NODE_DEFAULT_LEADERS: Record<string, string> = {
-  "Biotecnología, Bioeconomía y Sostenibilidad": "Claudia Maitee Bahamón Osorio",
-  "Inteligencia Artificial y Tecnologías Digitales": "Juan Pablo Corrales Arenas",
-  "Innovación Educativa, Bienestar Social, Innovación Pública": "Diana Carolina Romero Valencia",
-  "Competitividad Organizacional, Economías Creativas": "María Camila Restrepo",
-  "Salud Global, Calidad de Vida": "Sebastián Vélez",
-};
+export interface ProfessorAssignmentLogEntry {
+  id: string; // `${requestId}-doc${n}`
+  previousProfessor?: string;
+  previousProfessorType?: "planta" | "externo";
+  newProfessor: string;
+  newProfessorType: "planta" | "externo";
+  changedBy: string;
+  changedAt: string;
+  statusAtChange: RequestStatus;
+}
 
-export { calculateCosting };
+// No existe "aceptada" explícita: el sistema no tiene hoy un evento real de
+// "el cliente aceptó" — solo "fue entregada" (vigente mientras nadie la
+// devuelva). Inventar un estado "aceptada" sería fabricar un dato que nadie
+// confirma.
+export type ClientResponse = "pendiente" | "rechazada" | "PENDING" | "CHANGES_REQUESTED";
 
+export interface NegotiationRound {
+  id: string; // `${requestId}-r${roundNumber}`
+  roundNumber: number; // 1, 2, 3...
+  totalOfferedCop: number; // snapshot del valor final en esta ronda
+  marginAmountCop: number;
+  expectedMarginPercent: number;
+  leaderNote?: string; // obligatoria desde la ronda 2
+  sentToKamAt: string; // ISO — cuando el Líder confirmó "Enviar a KAM"
+  sentToClientAt?: string; // ISO — cuando el KAM efectivamente la entregó
+  clientResponse: ClientResponse;
+  clientObservation?: string; // solo si clientResponse === "rechazada"
+  clientRespondedAt?: string; // ISO — cuando el KAM registró la devolución
+  // Snapshot de alcance vigente al momento del envío (docs/04) — además del
+  // precio, cada ronda congela estos campos tal como estaban en `req` (no en
+  // `req.costing`) cuando el Líder confirmó "Enviar a KAM". Permite mostrar
+  // qué cambió de alcance entre rondas, no solo el valor ofertado.
+  participantes?: string;
+  modalidad?: string;
+  horas?: string;
+  type?: RequestType;
+  necesidad?: string;
+  // Además de los 5 del prototipo, todo lo que el Líder puede ajustar entre
+  // rondas (decisión del dueño, 2026-10-07), para listar cada cambio.
+  deadline?: string; // ISO
+  competencias?: string;
+  exito?: string;
+  resultados?: string;
+  areaParticipantes?: string;
+  alimentacion?: string;
+  formacionPrevia?: string;
+  /** false cuando la ronda no congeló el alcance (datos antiguos): solo se compara el precio. */
+  hasScopeSnapshot?: boolean;
+}
+
+/**
+ * Arma un `ProposalCosting` a partir del valor final de la propuesta
+ * (docs/04). Ya no hay cálculo hacia adelante desde una base:
+ * `totalOfferedCop` es el valor que el Líder digita directamente, y
+ * `marginAmountCop` es un input manual independiente (informativo). La
+ * estampilla Pro-Cultura es solo una referencia calculada sobre el valor
+ * final — nunca se suma ni se resta de él.
+ */
+export function calculateCosting(
+  type: RequestType,
+  totalOfferedCop: number,
+  expectedMarginPercent: number,
+  marginAmountCop: number = 0,
+  negotiationNotes?: string,
+  readyForKam: boolean = false,
+): ProposalCosting {
+  const proCultura = calculateProCulturaReference(totalOfferedCop, type);
+  const proCulturaTaxPercent = proCultura.applies ? PRO_CULTURA_PERCENT : 0;
+  const proCulturaTaxAmount = proCultura.amount;
+
+  return {
+    marginAmountCop,
+    expectedMarginPercent,
+    proCulturaTaxPercent,
+    proCulturaTaxAmount,
+    totalOfferedCop,
+    negotiationNotes,
+    readyForKam,
+  };
+}
+
+/**
+ * @deprecated Legacy mock dataset. Persona 2 (KAM) now consumes real proposals from
+ * the backend API (`useRequests` / `requestsApi`). Kept for compatibility with Persona 3 and 4.
+ */
 export const MOCK_REQUESTS: RequestItem[] = [
   {
     id: "REQ-2026-0142",
@@ -506,11 +538,9 @@ export const MOCK_REQUESTS: RequestItem[] = [
     totalCostCop: 24_000_000,
     costing: calculateCosting(
       "Capacitación",
-      18_500_000,
-      30,
       24_000_000,
-      false,
-      undefined,
+      30,
+      5_550_000,
       "Acuerdo de descuento del 1.3% por volumen de horas con SURA",
     ),
     horas: "32",
@@ -637,7 +667,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 12_500_000,
-    costing: calculateCosting("Consultoría", 9_500_000, 31.5, 12_500_000, false),
+    costing: calculateCosting("Consultoría", 12_500_000, 31.5, 2_992_500, undefined, true),
     horas: "60",
     modalidad: "Presencial en sede cliente",
     participantes: "1 - 5",
@@ -702,11 +732,11 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 34_500_000,
-    costing: calculateCosting("Capacitación", 26_000_000, 30, 34_500_000, false),
+    costing: calculateCosting("Capacitación", 34_500_000, 30, 7_800_000, undefined, true),
     horas: "48",
     modalidad: "Presencial en sede cliente",
     participantes: "20 - 25",
-    companyNit: "890303893-6",
+    companyNit: "890303893-0",
     companyDireccion: "Avenida 2 Norte # 7N-55, Cali",
     companyTelefono: "(602) 418 7300",
     companyCorreo: "contacto@gdo.com.co",
@@ -772,23 +802,41 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Ing. Carlos Eduardo Valencia",
     professorType: "externo",
     totalCostCop: 42_000_000,
-    costing: calculateCosting(
-      "Consultoría",
-      31_000_000,
-      35,
-      42_000_000,
-      true,
-      "Experto externo en analítica de redes de gas",
-    ),
+    costing: calculateCosting("Consultoría", 42_000_000, 35, 10_850_000),
     // Ejemplo de propuesta "devuelta con observaciones" (docs/08, pregunta 13):
     // el cliente ya la había recibido y pidió un ajuste de alcance — el KAM la
     // regresó a "en-costeo" y esta nota queda visible hasta que se reentregue.
     clientObservations:
       "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
+    // Backfill (docs/04): esta solicitud ya traía `clientObservations` con un
+    // rechazo completo del cliente antes de que existiera `negotiationRounds`
+    // (docs/04) — sin esta ronda 1, su historial de negociación saldría
+    // vacío pese a que la narrativa ya cuenta un rechazo.
+    negotiationRounds: [
+      {
+        id: "REQ-2026-0135-r1",
+        roundNumber: 1,
+        totalOfferedCop: 42_000_000,
+        marginAmountCop: 10_850_000,
+        expectedMarginPercent: 35,
+        participantes: "6 - 10",
+        modalidad: "Híbrida",
+        horas: "100",
+        type: "Consultoría",
+        necesidad:
+          "Optimizar la distribución de gas natural en la red secundaria para reducir pérdidas técnicas y mejorar tiempos de respuesta ante fallas.",
+        sentToKamAt: "2026-09-10T09:00:00.000Z",
+        sentToClientAt: "2026-09-12T14:00:00.000Z",
+        clientResponse: "rechazada",
+        clientObservation:
+          "El cliente pidió reducir el alcance de 5 plantas a 3 (Cali, Yumbo y Palmira) y ajustar el valor de la propuesta en consecuencia. Favor reenviar cotización corregida esta semana.",
+        clientRespondedAt: "2026-09-15T08:00:00.000Z",
+      },
+    ],
     horas: "100",
     modalidad: "Híbrida",
     participantes: "6 - 10",
-    companyNit: "890303893-6",
+    companyNit: "890303893-0",
     companyDireccion: "Avenida 2 Norte # 7N-55, Cali",
     companyTelefono: "(602) 418 7300",
     companyCorreo: "contacto@gdo.com.co",
@@ -839,7 +887,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     horas: "20",
     modalidad: "Presencial en sede cliente",
     participantes: "11 - 15",
-    companyNit: "890303893-6",
+    companyNit: "890303893-0",
     companyDireccion: "Avenida 2 Norte # 7N-55, Cali",
     companyTelefono: "(602) 418 7300",
     companyCorreo: "contacto@gdo.com.co",
@@ -1240,7 +1288,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Juan Carlos González",
     professorType: "planta",
     totalCostCop: 15_600_000,
-    costing: calculateCosting("Capacitación", 12_000_000, 30, 15_600_000, false),
+    costing: calculateCosting("Capacitación", 15_600_000, 30, 3_600_000),
     horas: "36",
     modalidad: "Presencial en sede cliente",
     participantes: "15 - 20",
@@ -1280,7 +1328,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 10_800_000,
-    costing: calculateCosting("Proyectos Especiales (Eventos)", 8_000_000, 28, 10_800_000, false),
+    costing: calculateCosting("Proyectos Especiales (Eventos)", 10_800_000, 28, 2_240_000),
     // Segundo ejemplo de propuesta "devuelta con observaciones" — para
     // probar el banner en más de una tarjeta a la vez.
     clientObservations:
@@ -1332,14 +1380,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Transformación Digital y Arquitectura Cloud",
     },
     totalCostCop: 33_750_000,
-    costing: calculateCosting(
-      "Consultoría",
-      25_000_000,
-      35,
-      33_750_000,
-      true,
-      "Ing. Carlos Eduardo Valencia (Valencia & Partners) — trazabilidad IoT en cadena de frío",
-    ),
+    costing: calculateCosting("Consultoría", 33_750_000, 35, 8_750_000),
     horas: "70",
     modalidad: "Híbrida",
     participantes: "6 - 10",
@@ -1384,7 +1425,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dr. Ricardo Mejía",
     professorType: "planta",
     totalCostCop: 19_500_000,
-    costing: calculateCosting("Capacitación", 15_000_000, 30, 19_500_000, false),
+    costing: calculateCosting("Capacitación", 19_500_000, 30, 4_500_000, undefined, true),
     horas: "28",
     modalidad: "Presencial en sede cliente",
     participantes: "11 - 15",
@@ -1427,7 +1468,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
     professor: "Dra. Paula Henao",
     professorType: "planta",
     totalCostCop: 8_900_000,
-    costing: calculateCosting("Mentoría", 6_800_000, 27, 8_900_000, false),
+    costing: calculateCosting("Mentoría", 8_900_000, 27, 1_836_000, undefined, true),
     horas: "18",
     modalidad: "Virtual sincrónica",
     participantes: "1 - 5",
@@ -1475,14 +1516,7 @@ export const MOCK_REQUESTS: RequestItem[] = [
       perfil: "Consultor Senior en Estrategia Comercial y Pricing",
     },
     totalCostCop: 27_200_000,
-    costing: calculateCosting(
-      "Consultoría",
-      20_000_000,
-      34,
-      27_200_000,
-      true,
-      "Ing. Carlos Eduardo Valencia (Valencia & Partners) — estrategia de precios",
-    ),
+    costing: calculateCosting("Consultoría", 27_200_000, 34, 6_800_000, undefined, true),
     horas: "55",
     modalidad: "Híbrida",
     participantes: "1 - 5",
@@ -1539,6 +1573,22 @@ export const STATUS_META: Record<
     headerBg: "bg-[#4cb979]/10",
     borderTone: "border-t-[#4cb979]",
   },
+  // Sin tablero propio todavía (HU 3.x, Persona 2) — placeholder mínimo para que
+  // RequestStatus (ampliado por #7) siga siendo exhaustivo en este lookup.
+  rechazada: {
+    label: "Rechazada",
+    tone: "bg-destructive/15 text-destructive border-destructive/30",
+    dot: "bg-destructive",
+    headerBg: "bg-destructive/10",
+    borderTone: "border-t-destructive",
+  },
+  cancelada: {
+    label: "Cancelada",
+    tone: "bg-muted text-muted-foreground border-border",
+    dot: "bg-muted-foreground",
+    headerBg: "bg-muted",
+    borderTone: "border-t-muted-foreground",
+  },
 };
 
 export const URGENCY_META: Record<Urgency, { label: string; tone: string }> = {
@@ -1546,6 +1596,18 @@ export const URGENCY_META: Record<Urgency, { label: string; tone: string }> = {
   media: { label: "Media", tone: "text-[#757a07] dark:text-[#e4eb60] bg-[#e4eb60]/25 border-[#e4eb60]/40" },
   baja: { label: "Baja", tone: "text-muted-foreground bg-muted border-border" },
 };
+
+// Fuente única de verdad para "¿de quién es el turno dentro de En Costeo?".
+// `status === "en-costeo"` no alcanza: desde que el Líder de Producto debe
+// confirmar explícitamente el envío (docs/04), una solicitud
+// puede estar en esa etapa sin que el KAM tenga nada que hacer todavía.
+// Cualquier tablero que muestre "lista para el KAM" / "lista para entregar"
+// debe pasar por aquí en vez de repetir la condición — así no se repite el
+// olvido que causó que el tablero del KAM mostrara "Lista para Entregar"
+// sobre solicitudes que el Líder ni siquiera había confirmado.
+export function isReadyForKamHandoff(req: Pick<RequestItem, "status" | "costing">): boolean {
+  return req.status === "en-costeo" && !!req.costing?.readyForKam;
+}
 
 export function formatCop(amount: number) {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(
@@ -1560,23 +1622,4 @@ export function formatCompactCop(amount: number): string {
     return `$ ${formatted}M COP`;
   }
   return formatCop(amount);
-}
-
-export function getRelativeTime(id: string): string {
-  switch (id) {
-    case "REQ-2026-0142":
-      return "Hace 2 horas";
-    case "REQ-2026-0143":
-      return "Hace 4 horas";
-    case "REQ-2026-0144":
-      return "Ayer";
-    case "REQ-2026-0138":
-      return "Hace 2 días";
-    case "REQ-2026-0131":
-      return "Hace 4 días";
-    case "REQ-2026-0120":
-      return "12 mar 2026";
-    default:
-      return "Reciente";
-  }
 }

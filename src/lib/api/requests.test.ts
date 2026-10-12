@@ -1,0 +1,220 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "./client";
+import { requestsApi } from "./requests";
+
+const fetchMock = vi.fn();
+
+function respond(status: number, body: unknown) {
+  fetchMock.mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: "status",
+    json: () => Promise.resolve(body),
+  });
+}
+
+describe("requestsApi", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches dashboard metrics", async () => {
+    respond(200, { total: 10, nuevas: 2, listas: 1, entregadas: 3 });
+    const metrics = await requestsApi.getDashboardMetrics();
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\/dashboard\/metrics$/);
+    expect(metrics.total).toBe(10);
+  });
+
+  it("lists requests with query params", async () => {
+    respond(200, []);
+    await requestsApi.list({
+      q: "bancolombia",
+      status: "nueva",
+      urgency: "urgente",
+      type: "CAPACITACION",
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("q=bancolombia");
+    expect(String(url)).not.toContain("role=");
+    expect(String(url)).toContain("status=nueva");
+    expect(String(url)).toContain("urgency=urgente");
+    expect(String(url)).toContain("type=CAPACITACION");
+    expect(init).toMatchObject({ method: "GET", credentials: "include" });
+  });
+
+  it("never sends a role: the backend takes it from the session token", async () => {
+    respond(200, []);
+    await requestsApi.list({ status: "nueva" });
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\?status=nueva$/);
+  });
+
+  it("gets proposal by ID", async () => {
+    respond(200, { id: "req-123", title: "Test" });
+    const proposal = await requestsApi.getById("req-123");
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\/req-123$/);
+    expect(proposal.id).toBe("req-123");
+  });
+
+  it("creates a proposal", async () => {
+    respond(201, { id: "req-new", title: "New Proposal" });
+    const payload = {
+      companyName: "Acme",
+      productLeaderId: "leader-1",
+      programName: "Training",
+    };
+    const created = await requestsApi.create(payload);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/proposals$/);
+    expect(init).toMatchObject({
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    expect(created.id).toBe("req-new");
+  });
+
+  it("advances a status with an optional rejectionReason", async () => {
+    respond(200, {});
+    await requestsApi.updateStatus("p1", { status: "IN_COSTING" });
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: "PATCH",
+      body: JSON.stringify({ status: "IN_COSTING" }),
+    });
+
+    await requestsApi.updateStatus("p1", { status: "IN_COSTING", rejectionReason: "Client wants a smaller scope" });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: "PATCH",
+      body: JSON.stringify({ status: "IN_COSTING", rejectionReason: "Client wants a smaller scope" }),
+    });
+  });
+
+  it("updates proposal info via PATCH /requests/:id/info", async () => {
+    respond(200, { id: "req-1", title: "Updated Title" });
+    const payload = { programName: "Updated Title", priority: "ALTA" as const };
+    const updated = await requestsApi.updateInfo("req-1", payload);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/req-1\/info$/);
+    expect(init).toMatchObject({
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    expect(updated.title).toBe("Updated Title");
+  });
+
+  it("deletes/cancels proposal via DELETE /requests/:id with reason", async () => {
+    respond(200, { success: true, id: "req-1", message: "Cancelled" });
+    const result = await requestsApi.delete("req-1", { reason: "Cliente desistió de la propuesta" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/req-1$/);
+    expect(init).toMatchObject({
+      method: "DELETE",
+      body: JSON.stringify({ reason: "Cliente desistió de la propuesta" }),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("assigns a directory professor with a PATCH to /professor", async () => {
+    respond(200, {});
+    await requestsApi.assignProfessor("p1", { professorId: "prof-1" });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/professor$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ professorId: "prof-1" }) });
+  });
+
+  it("assigns a typed professor in the same PATCH, without a professorId", async () => {
+    respond(200, {});
+    const professor = { fullName: "Luis Mora", type: "EXTERNAL" as const, company: "Mora SAS", email: "luis@mora.co" };
+    await requestsApi.assignProfessor("p1", { professor });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/professor$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ professor }) });
+  });
+
+  it("reassigns with a PATCH to /reassign", async () => {
+    respond(200, {});
+    await requestsApi.reassign("p1", {
+      newProductLeaderId: "ldp-2",
+      newNodeId: "node-2",
+      reason: "WORKLOAD_REDISTRIBUTION",
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/reassign$/);
+    expect(init).toMatchObject({ method: "PATCH" });
+  });
+
+  it("sends the total and both margins to PUT /requests/:id/costing", async () => {
+    respond(200, {});
+    await requestsApi.upsertCosting("p1", { totalCost: 30000000, marginPercentage: 30, marginAmount: 9000000 });
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/requests\/p1\/costing$/);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: "PUT",
+      body: JSON.stringify({ totalCost: 30000000, marginPercentage: 30, marginAmount: 9000000 }),
+    });
+  });
+
+  it("sends an empty margin as null (clears it) and a zero margin as 0 (stores it)", async () => {
+    respond(200, {});
+    await requestsApi.upsertCosting("p1", { totalCost: 1000, marginPercentage: null, marginAmount: 0 });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({ totalCost: 1000, marginPercentage: null, marginAmount: 0 });
+    expect(body.marginPercentage).toBeNull();
+    expect(body.marginAmount).toBe(0);
+  });
+
+  it("omits a margin left undefined so the backend keeps the previous value", async () => {
+    respond(200, {});
+    await requestsApi.upsertCosting("p1", { totalCost: 1000 });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({ totalCost: 1000 });
+    expect("marginPercentage" in body).toBe(false);
+    expect("marginAmount" in body).toBe(false);
+  });
+
+  it("sets the node with PATCH /requests/:id/node", async () => {
+    respond(200, { id: "p1", nodeId: "n-1", node: { id: "n-1", name: "Nodo" } });
+    await requestsApi.setNode("p1", { nodeId: "n-1" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/node$/);
+    expect(init).toMatchObject({ method: "PATCH", body: JSON.stringify({ nodeId: "n-1" }) });
+  });
+
+  it("removes the node by sending an explicit null", async () => {
+    respond(200, { id: "p1", nodeId: null, node: null });
+    await requestsApi.setNode("p1", { nodeId: null });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ nodeId: null });
+  });
+
+  it("saves the center and the cost center with PATCH /requests/:id/center", async () => {
+    respond(200, { id: "p1" });
+    await requestsApi.setCenter("p1", { center: "Eduteka", costCenter: "CC-1234" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/requests\/p1\/center$/);
+    expect(init).toMatchObject({ method: "PATCH" });
+    expect(JSON.parse(init.body as string)).toEqual({ center: "Eduteka", costCenter: "CC-1234" });
+  });
+
+  it("clears a center field with null and leaves an omitted one out of the body", async () => {
+    respond(200, { id: "p1" });
+    await requestsApi.setCenter("p1", { center: null });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({ center: null });
+    expect("costCenter" in body).toBe(false);
+  });
+
+  it("surfaces errors as ApiError instances", async () => {
+    respond(403, { message: "Forbidden access" });
+    await expect(requestsApi.getById("req-unauthorized")).rejects.toBeInstanceOf(ApiError);
+  });
+});

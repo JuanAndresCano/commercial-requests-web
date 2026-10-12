@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight,
   Clock,
+  CheckCircle2,
   UserCheck,
   Sparkles,
   ArrowLeftRight,
@@ -21,16 +22,17 @@ import { StatusBadge, UrgencyBadge } from "@/components/StatusBadge";
 import { RoleBadge } from "@/components/RoleBadge";
 import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
+import { BoardMotion } from "@/components/kanban/BoardMotion";
+import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
+import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { usePersistentState } from "@/hooks/use-persistent-state";
-import {
-  PRODUCT_LEADERS,
-  NODES,
-  NODE_DEFAULT_LEADERS,
-  formatCop,
-  formatCompactCop,
-  type RequestItem,
-  type RequestStatus,
-} from "@/lib/mock-data";
+import { useReassignProposal } from "@/hooks/use-reassign-proposal";
+import { useNodes } from "@/hooks/use-nodes";
+import { useProductLeaders } from "@/hooks/use-product-leaders";
+import { formatCop, formatCompactCop, type RequestItem, type RequestStatus } from "@/lib/mock-data";
+import { LEADER_BOARD_STAGES, countByStage, groupByStage, leaderStageOf, type BoardStage } from "@/lib/board-stages";
+import { getLeaderStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
+import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
 import {
   Dialog,
   DialogContent,
@@ -39,9 +41,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import {
+  ReassignLeaderDialog,
+  REASSIGN_REASONS,
+  REASSIGN_REASON_TO_BACKEND,
+  type ReassignConfirmParams,
+} from "@/components/ReassignLeaderDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns";
@@ -51,7 +56,7 @@ interface ProductLeaderDashboardProps {
   requests: RequestItem[];
   user: { name: string; email: string; roleLabel: string };
   updateRequest: (id: string, patch: Partial<RequestItem>) => void;
-  updateStatus: (id: string, status: RequestStatus) => void;
+  updateStatus: (id: string, status: RequestStatus, onSuccess?: () => void) => void;
 }
 
 // Fecha límite en la tarjeta del Kanban: además de la fecha, el color avisa
@@ -73,40 +78,22 @@ function getDeadlineDisplay(
   return { text: `Vence: ${formatted}`, className: "text-muted-foreground" };
 }
 
-const KANBAN_STAGES: {
-  id: RequestStatus;
-  title: string;
-  description: string;
-}[] = [
-  {
-    id: "nueva",
-    title: "Nueva",
-    description: "Pendientes por revisar alcance y asignar docente de planta o externo",
-  },
-  {
-    id: "en-experto",
-    title: "En proceso por experto",
-    description: "Docente formulando temática, cronograma y propuesta técnica",
-  },
-  {
-    id: "en-costeo",
-    title: "En proceso de costeo",
-    description: "Simulación financiera, tarifas y cálculo de margen antes de entrega",
-  },
-  {
-    id: "entregada",
-    title: "Entregada",
-    description: "Propuestas culminadas y entregadas a la empresa o KAM comercial",
-  },
-];
-
-export function ProductLeaderDashboard({ requests, user, updateRequest, updateStatus }: ProductLeaderDashboardProps) {
+// `updateRequest` stays in the public prop type (Dashboard.tsx still needs to pass
+// something matching it) but this component no longer calls it — reassignment now
+// always goes through the real backend (useReassignProposal), since every proposal
+// here comes from commercial-requests-backend.
+export function ProductLeaderDashboard({
+  requests,
+  user,
+  updateRequest: _updateRequest,
+  updateStatus,
+}: ProductLeaderDashboardProps) {
   // Filter states
   // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
   // el Líder de Producto al volver del detalle de una propuesta — antes se
   // reiniciaba porque el dashboard se desmonta y remonta en cada navegación.
   const [searchQuery, setSearchQuery] = usePersistentState("icesi_lp_dashboard_search_v1", "");
-  const [activeStageFilter, setActiveStageFilter] = usePersistentState<RequestStatus | "todas">(
+  const [activeStageFilter, setActiveStageFilter] = usePersistentState<BoardStage | "todas">(
     "icesi_lp_dashboard_filter_v1",
     "todas",
   );
@@ -114,17 +101,22 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
     "icesi_lp_dashboard_sin_docente_v1",
     false,
   );
+  // Muestra solo las de la etapa derivada "Enviada al KAM": las que el Líder ya
+  // confirmó y solo esperan a que el KAM las envíe al cliente (ordenadas por
+  // las que más llevan esperando). Sigue sirviendo con todas las fases a la
+  // vista para aislar esa etapa sin salir de la vista general.
+  const [onlyWaitingForKam, setOnlyWaitingForKam] = usePersistentState("icesi_lp_dashboard_esperando_kam_v1", false);
   const [viewMode, setViewMode] = usePersistentState<"kanban" | "tabla">("icesi_lp_dashboard_view_v1", "kanban");
 
   // En Kanban, las columnas ya son el filtro — la tarjeta KPI en esa vista no
   // oculta nada, sino que "aísla" esa columna a pantalla completa para revisar
   // más tarjetas cómodamente sin salir del Kanban.
-  const [isolatedStage, setIsolatedStage] = usePersistentState<RequestStatus | null>(
+  const [isolatedStage, setIsolatedStage] = usePersistentState<BoardStage | null>(
     "icesi_lp_dashboard_isolated_v1",
     null,
   );
 
-  const handleStageKpiClick = (stage: RequestStatus) => {
+  const handleStageKpiClick = (stage: BoardStage) => {
     if (viewMode === "tabla") {
       setActiveStageFilter((prev) => (prev === stage ? "todas" : stage));
     } else {
@@ -132,33 +124,42 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
     }
   };
 
-  // Reassignment Modal State
+  // Reassignment Modal State — every proposal here comes from the real backend (this
+  // dashboard is only reachable already connected, see Dashboard.tsx), so unlike
+  // RequestDetail.tsx there is no mock fallback to branch on.
   const [reassigningRequest, setReassigningRequest] = useState<RequestItem | null>(null);
-  const [selectedNewLeader, setSelectedNewLeader] = useState<string>("");
-  const [selectedNewNode, setSelectedNewNode] = useState<string>("");
-  const [reassignReason, setReassignReason] = useState<string>("Temática no afín / Corresponde a otro nodo");
-  const [reassignNotes, setReassignNotes] = useState<string>("");
+  const reassignProposalReal = useReassignProposal();
+  const nodesQuery = useNodes();
+  const productLeadersQuery = useProductLeaders();
+  const leaderOptions = productLeadersQuery.data?.map((u) => ({
+    id: u.id,
+    label: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+  }));
+  const nodeOptions = nodesQuery.data?.map((n) => ({ id: n.id, label: n.name }));
 
   const handleOpenReassign = (r: RequestItem) => {
     setReassigningRequest(r);
-    setSelectedNewLeader("");
-    setSelectedNewNode(r.node);
-    setReassignReason("Temática no afín / Corresponde a otro nodo");
-    setReassignNotes("");
   };
 
-  const handleConfirmReassign = () => {
-    if (!reassigningRequest || !selectedNewLeader) return;
-    const targetLeader = selectedNewLeader;
-    const targetNode = selectedNewNode || reassigningRequest.node;
-
-    updateRequest(reassigningRequest.id, {
-      productLeader: targetLeader,
-      node: targetNode,
-    });
-
-    toast.success(`Solicitud ${reassigningRequest.id} transferida a ${targetLeader}.`);
-    setReassigningRequest(null);
+  const handleConfirmReassign = ({ newLeader, newNode, reason, notes }: ReassignConfirmParams) => {
+    if (!reassigningRequest) return;
+    const backendReason = REASSIGN_REASON_TO_BACKEND[reason as (typeof REASSIGN_REASONS)[number]] ?? "OTHER";
+    reassignProposalReal.mutate(
+      {
+        id: reassigningRequest.id,
+        newProductLeaderId: newLeader,
+        newNodeId: newNode,
+        reason: backendReason,
+        note: notes.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Solicitud ${reassigningRequest.code ?? reassigningRequest.id} transferida exitosamente.`);
+          setReassigningRequest(null);
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo reasignar"),
+      },
+    );
   };
 
   // Avanzar de etapa es irreversible desde la UI (no hay botón para "devolver"
@@ -192,17 +193,26 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
   const handleConfirmAdvance = () => {
     if (!confirmingAdvance) return;
     const meta = ADVANCE_META[confirmingAdvance.from];
-    updateStatus(confirmingAdvance.reqId, meta.nextStatus);
-    toast.success(meta.successMsg);
+    // El toast de éxito se dispara solo si el backend confirma — updateStatus (Dashboard.tsx)
+    // llama este callback desde el onSuccess de la mutación real, no antes.
+    updateStatus(confirmingAdvance.reqId, meta.nextStatus, () => toast.success(meta.successMsg));
     setConfirmingAdvance(null);
   };
 
   // El Líder de Producto solo trabaja sus propias solicitudes — sin toggle a "Todas".
-  const activeDataset = requests.filter((r) => r.productLeader === user.name);
+  // `requests` ya viene escopeado por el backend (useProductLeaderQueue → role:
+  // PRODUCT_LEADER); filtrar aquí también por nombre era redundante y frágil, porque
+  // `productLeader` es opcional en el mapper (payload liviano) y cae en "—" si falta,
+  // lo que descartaría en silencio propuestas legítimas del propio Líder.
+  const activeDataset = requests;
 
-  const countNuevas = activeDataset.filter((r) => r.status === "nueva").length;
-  const countEnExperto = activeDataset.filter((r) => r.status === "en-experto").length;
-  const countEnCosteo = activeDataset.filter((r) => r.status === "en-costeo").length;
+  // Etapa percibida por el Líder (ver leaderStageOf): "En costeo" y "Enviada al KAM" son
+  // columnas distintas, y cada contador coincide con su columna del Kanban.
+  const stageCounts = countByStage(activeDataset, leaderStageOf);
+  const countNuevas = stageCounts.nueva;
+  const countEnExperto = stageCounts["en-experto"];
+  const countEnCosteo = stageCounts["en-costeo"];
+  const countEnviadasKam = stageCounts["enviada-kam"];
   const entregadasList = activeDataset.filter((r) => r.status === "entregada");
   const countEntregadas = entregadasList.length;
   const entregadasValue = entregadasList.reduce(
@@ -211,6 +221,27 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
   );
 
   const sinDocenteCount = activeDataset.filter((r) => !r.professor && r.status !== "entregada").length;
+  const waitingForKamCount = countEnviadasKam;
+
+  // Cada filtro solo tiene sentido operativo en la(s) etapa(s) donde puede
+  // haber algo que mostrar: "Sin docente" solo antes/durante la asignación
+  // (en "en-experto" en adelante ya es obligatorio, ver docs/07 gap #3), y
+  // "Esperando al KAM" solo existe en la etapa "Enviada al KAM". Fuera de ahí el
+  // botón quedaba visible con un contador que no correspondía a lo que se
+  // veía en pantalla — se oculta en vez de mostrar un filtro que no aplica.
+  const missingProfessorRelevant =
+    viewMode === "tabla"
+      ? activeStageFilter === "todas" || activeStageFilter === "nueva"
+      : isolatedStage === null || isolatedStage === "nueva";
+  const waitingForKamRelevant =
+    viewMode === "tabla"
+      ? activeStageFilter === "todas" || activeStageFilter === "enviada-kam"
+      : isolatedStage === null || isolatedStage === "enviada-kam";
+
+  // Con el filtro "Esperando al KAM" activo, las que más tiempo llevan
+  // esperando son las que más urge revisar — se muestran primero.
+  const byCostingSentAtAsc = (a: RequestItem, b: RequestItem) =>
+    new Date(a.costing?.costingSentAt ?? 0).getTime() - new Date(b.costing?.costingSentAt ?? 0).getTime();
 
   // Métricas agregadas (no son una etapa del pipeline) — mismo cálculo que ya
   // usa el KAM, para que ambos tableros hablen del pipeline en los mismos términos.
@@ -221,13 +252,15 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
 
   // Vista Tabla: el estado sí oculta filas — ahí aporta valor real (reduce una lista larga).
   const filteredRequests = useMemo(() => {
-    return activeDataset.filter((r) => {
-      if (activeStageFilter !== "todas" && r.status !== activeStageFilter) return false;
-      if (onlyMissingProfessor && (r.professor || r.status === "entregada")) return false;
+    const result = activeDataset.filter((r) => {
+      if (activeStageFilter !== "todas" && leaderStageOf(r) !== activeStageFilter) return false;
+      if (onlyMissingProfessor && missingProfessorRelevant && (r.professor || r.status === "entregada")) return false;
+      if (onlyWaitingForKam && waitingForKamRelevant && leaderStageOf(r) !== "enviada-kam") return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
           r.id.toLowerCase().includes(q) ||
+          (r.code ? r.code.toLowerCase().includes(q) : false) ||
           r.company.toLowerCase().includes(q) ||
           r.title.toLowerCase().includes(q) ||
           r.type.toLowerCase().includes(q) ||
@@ -237,19 +270,30 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
       }
       return true;
     });
-  }, [activeDataset, activeStageFilter, onlyMissingProfessor, searchQuery]);
+    return onlyWaitingForKam && waitingForKamRelevant ? result.sort(byCostingSentAtAsc) : result;
+  }, [
+    activeDataset,
+    activeStageFilter,
+    onlyMissingProfessor,
+    missingProfessorRelevant,
+    onlyWaitingForKam,
+    waitingForKamRelevant,
+    searchQuery,
+  ]);
 
   // Vista Kanban: la columna ya ES el estado, así que el filtro de estado no debe vaciar el
   // contenido (no aporta nada nuevo) — solo aplican los filtros que sí cruzan información
   // que el tablero no muestra por sí solo (buscador, "sin docente"). El estado activo solo
   // se usa para el "spotlight" (resaltar + hacer scroll a la columna), no para ocultar nada.
   const kanbanRequests = useMemo(() => {
-    return activeDataset.filter((r) => {
-      if (onlyMissingProfessor && (r.professor || r.status === "entregada")) return false;
+    const result = activeDataset.filter((r) => {
+      if (onlyMissingProfessor && missingProfessorRelevant && (r.professor || r.status === "entregada")) return false;
+      if (onlyWaitingForKam && waitingForKamRelevant && leaderStageOf(r) !== "enviada-kam") return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
           r.id.toLowerCase().includes(q) ||
+          (r.code ? r.code.toLowerCase().includes(q) : false) ||
           r.company.toLowerCase().includes(q) ||
           r.title.toLowerCase().includes(q) ||
           r.type.toLowerCase().includes(q) ||
@@ -259,23 +303,18 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
       }
       return true;
     });
-  }, [activeDataset, onlyMissingProfessor, searchQuery]);
+    return onlyWaitingForKam && waitingForKamRelevant ? result.sort(byCostingSentAtAsc) : result;
+  }, [
+    activeDataset,
+    onlyMissingProfessor,
+    missingProfessorRelevant,
+    onlyWaitingForKam,
+    waitingForKamRelevant,
+    searchQuery,
+  ]);
 
   // Group by status for the single unified Kanban
-  const groupedRequests = useMemo(() => {
-    const grouped: Record<RequestStatus, RequestItem[]> = {
-      nueva: [],
-      "en-experto": [],
-      "en-costeo": [],
-      entregada: [],
-    };
-    kanbanRequests.forEach((req) => {
-      if (grouped[req.status]) {
-        grouped[req.status].push(req);
-      }
-    });
-    return grouped;
-  }, [kanbanRequests]);
+  const groupedRequests = useMemo(() => groupByStage(kanbanRequests, leaderStageOf), [kanbanRequests]);
 
   const firstName = user.name ? user.name.split(" ")[0] : "";
 
@@ -289,6 +328,7 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
               Hola, {firstName}
             </h1>
             <RoleBadge label="Líder de Producto" />
+            <RealtimeIndicator />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Gestión directa de tus solicitudes: asignación de docentes, avance técnico y costeo en un único lugar.
@@ -328,7 +368,10 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
       {/* Dato agregado secundario — mismo formato que ya usa el KAM. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-0.5 text-xs text-muted-foreground">
         <span>
-          <strong className="font-bold text-foreground">{totalCount}</strong> solicitudes en total
+          <strong className="font-bold text-foreground">
+            <AnimatedNumber value={totalCount} />
+          </strong>{" "}
+          solicitudes en total
         </span>
         <span className="text-border dark:text-[#252838]">·</span>
         <span>
@@ -337,7 +380,7 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
       </div>
 
       {/* 2. Interactive Stages / KPIs Bar with Official Icesi Colors */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StageKpiCard
           stage="nueva"
           label="1. Nuevas"
@@ -366,10 +409,19 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
           onClick={() => handleStageKpiClick("en-costeo")}
         />
         <StageKpiCard
+          stage="enviada-kam"
+          label="4. Enviadas al KAM"
+          count={countEnviadasKam}
+          hint="Esperando que el KAM las entregue"
+          activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
+          active={viewMode === "tabla" ? activeStageFilter === "enviada-kam" : isolatedStage === "enviada-kam"}
+          onClick={() => handleStageKpiClick("enviada-kam")}
+        />
+        <StageKpiCard
           stage="entregada"
-          label="4. Entregadas"
+          label="5. Entregadas"
           count={countEntregadas}
-          hint="Sin propuestas entregadas aún"
+          hint="Sin propuestas entregadas al cliente aún"
           secondaryLine={
             <span className="font-semibold text-[#4cb979]">
               {formatCompactCop(entregadasValue)} en valor real aprobado
@@ -393,20 +445,38 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setOnlyMissingProfessor((prev) => !prev)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors",
-              onlyMissingProfessor
-                ? "border-[#e9683b] bg-[#e9683b] text-white"
-                : "border-border bg-secondary/50 text-foreground hover:bg-secondary",
-            )}
-            title="Mostrar solo solicitudes sin docente asignado"
-          >
-            <UserCheck className="h-3.5 w-3.5" />
-            Sin docente ({sinDocenteCount})
-          </button>
+          {missingProfessorRelevant && (
+            <button
+              type="button"
+              onClick={() => setOnlyMissingProfessor((prev) => !prev)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors",
+                onlyMissingProfessor
+                  ? "border-[#e9683b] bg-[#e9683b] text-white"
+                  : "border-border bg-secondary/50 text-foreground hover:bg-secondary",
+              )}
+              title="Mostrar solo solicitudes sin docente asignado"
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              Sin docente ({sinDocenteCount})
+            </button>
+          )}
+          {waitingForKamRelevant && (
+            <button
+              type="button"
+              onClick={() => setOnlyWaitingForKam((prev) => !prev)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors",
+                onlyWaitingForKam
+                  ? "border-[#5454e9] bg-[#5454e9] text-white"
+                  : "border-border bg-secondary/50 text-foreground hover:bg-secondary",
+              )}
+              title="Mostrar solo solicitudes en Costeo ya enviadas al KAM, esperando que él las entregue"
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Esperando al KAM ({waitingForKamCount})
+            </button>
+          )}
           {viewMode === "tabla" && activeStageFilter !== "todas" && (
             <button
               type="button"
@@ -422,7 +492,7 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
               onClick={() => setIsolatedStage(null)}
               className="rounded-lg border border-border bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary cursor-pointer"
             >
-              Ver las 4 fases
+              Ver las {LEADER_BOARD_STAGES.length} fases
             </button>
           )}
           <span className="text-xs text-muted-foreground">
@@ -467,20 +537,25 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
           {kanbanRequests.length === 0 && activeDataset.length > 0 && (
             <div className="rounded-xl border border-dashed border-border bg-secondary/20 p-6 text-center text-sm">
               <p className="font-medium text-foreground">
-                {onlyMissingProfessor
+                {onlyMissingProfessor && missingProfessorRelevant
                   ? "Ninguna de tus solicitudes activas está sin docente en este momento."
-                  : "No se encontraron solicitudes con esta búsqueda."}
+                  : onlyWaitingForKam && waitingForKamRelevant
+                    ? "Ninguna de tus solicitudes está enviada al KAM esperando que la entregue."
+                    : "No se encontraron solicitudes con esta búsqueda."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {onlyMissingProfessor
+                {onlyMissingProfessor && missingProfessorRelevant
                   ? 'El filtro "Sin docente" excluye además las que ya están Entregadas.'
-                  : "Intenta con otro término de búsqueda."}
+                  : onlyWaitingForKam && waitingForKamRelevant
+                    ? 'El filtro "Esperando al KAM" solo muestra las solicitudes que ya confirmaste y enviaste al KAM.'
+                    : "Intenta con otro término de búsqueda."}
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   setOnlyMissingProfessor(false);
+                  setOnlyWaitingForKam(false);
                   setSearchQuery("");
                 }}
                 className="mt-3 text-xs"
@@ -489,200 +564,258 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
               </Button>
             </div>
           )}
-          <div className={cn("grid gap-4 items-start", isolatedStage ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-4")}>
-            {(isolatedStage ? KANBAN_STAGES.filter((s) => s.id === isolatedStage) : KANBAN_STAGES).map((stage) => {
-              const stageItems = groupedRequests[stage.id];
+          <BoardMotion
+            layoutKey={[isolatedStage ?? "", searchQuery, onlyMissingProfessor, onlyWaitingForKam].join("|")}
+          >
+            <div
+              className={cn(
+                "grid gap-4 items-start",
+                isolatedStage ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-5",
+              )}
+            >
+              {(isolatedStage ? LEADER_BOARD_STAGES.filter((s) => s.id === isolatedStage) : LEADER_BOARD_STAGES).map(
+                (stage) => {
+                  const stageItems = groupedRequests[stage.id];
 
-              return (
-                <KanbanColumn
-                  key={stage.id}
-                  stage={stage.id}
-                  title={stage.title}
-                  description={stage.description}
-                  items={stageItems}
-                  getKey={(req) => req.id}
-                  isolated={!!isolatedStage}
-                  onExitIsolation={() => setIsolatedStage(null)}
-                  renderItem={(req) => {
-                    const hasRealCosting = req.costing && req.costing.totalOfferedCop > 0;
-                    const deadlineInfo = getDeadlineDisplay(req.deadline, req.status);
-                    const stageAge = formatDistanceToNow(new Date(req.statusUpdatedAt ?? req.createdAt), {
-                      addSuffix: true,
-                      locale: es,
-                    });
+                  return (
+                    <KanbanColumn
+                      key={stage.id}
+                      stage={stage.id}
+                      title={stage.title}
+                      description={stage.description}
+                      items={stageItems}
+                      getKey={(req) => req.id}
+                      isolated={!!isolatedStage}
+                      onExitIsolation={() => setIsolatedStage(null)}
+                      onHeaderClick={() => handleStageKpiClick(stage.id)}
+                      stageCount={LEADER_BOARD_STAGES.length}
+                      renderItem={(req) => {
+                        const hasRealCosting = req.costing && req.costing.totalOfferedCop > 0;
+                        const deadlineInfo = getDeadlineDisplay(req.deadline, req.status);
+                        const stageAgeLabel = getLeaderStageAgeLabel(req, stage.id);
+                        const totalAgeLabel = getTotalAgeLabel(req);
 
-                    return (
-                      <div className="group relative rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
-                        {/* Alerta prioritaria: el cliente pidió ajustes — es la señal
+                        return (
+                          <div className="group relative flex h-full flex-col rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#161824] shadow-2xs hover:shadow-md transition-all hover:border-[#5454e9]/40 overflow-hidden">
+                            {/* Alerta prioritaria: el cliente pidió ajustes — es la señal
                       más urgente que puede tener una tarjeta, va antes que
-                      cualquier otra cosa (docs/08, pregunta 13). */}
-                        {req.clientObservations && (
-                          <div className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300/60 dark:border-amber-900/50 px-3 py-1.5">
-                            <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-                            <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                              Cliente pidió ajustes
-                            </span>
-                          </div>
-                        )}
+                      cualquier otra cosa (docs/08, pregunta 13). Se renderiza
+                      siempre (invisible si no aplica) para reservar el mismo
+                      espacio en todas las tarjetas de la columna — así una
+                      tarjeta sin el aviso no se ve más "baja"/distinta que
+                      una con él (mismo criterio que RequestCard.tsx). */}
+                            <div
+                              className={cn(
+                                "flex items-center gap-1.5 border-b px-3 py-1.5",
+                                req.clientObservations
+                                  ? "bg-amber-100 dark:bg-amber-950/40 border-amber-300/60 dark:border-amber-900/50"
+                                  : "invisible border-transparent",
+                              )}
+                            >
+                              <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                              <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                                Cliente pidió ajustes
+                              </span>
+                            </div>
 
-                        {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
-                        <Link to={`/solicitudes/${req.id}`} className="block p-3.5">
-                          {/* Top: ID, Company & Urgency */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono text-[11px] font-bold text-foreground">{req.id}</span>
-                                <span className="text-muted-foreground/60 text-[10px]">•</span>
-                                <span className="text-[11px] font-medium text-foreground truncate max-w-[120px]">
-                                  {req.company}
-                                </span>
+                            {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
+                            <Link to={`/solicitudes/${req.id}`} className="block flex-1 p-3.5">
+                              {/* Top: ID, Company & Urgency */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <OfficialNumberBadge officialNumber={req.officialNumber} className="mb-1" />
+                                  <span className="text-[11px] font-medium text-foreground truncate block max-w-full">
+                                    {req.company}
+                                  </span>
+                                  <p className="mt-1 font-sans font-bold text-xs leading-snug text-foreground group-hover:text-[#5454e9] transition-colors line-clamp-2">
+                                    {req.title}
+                                  </p>
+                                </div>
+                                <UrgencyBadge urgency={req.urgency} />
                               </div>
-                              <p className="mt-1 font-sans font-bold text-xs leading-snug text-foreground group-hover:text-[#5454e9] transition-colors line-clamp-2">
-                                {req.title}
-                              </p>
-                            </div>
-                            <UrgencyBadge urgency={req.urgency} />
-                          </div>
 
-                          {/* Middle: Type + Valor cotizado (si ya hay costeo real) */}
-                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                            <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                              {req.type}
-                            </span>
-                            {hasRealCosting && (
-                              <span className="font-mono text-[11px] font-bold text-[#4cb979]">
-                                {formatCop(req.costing!.totalOfferedCop)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Docente / Profesor status */}
-                          <div className="mt-2.5 border-t border-border dark:border-[#222434] pt-2 flex items-center justify-between text-[11px]">
-                            <span className="text-muted-foreground font-medium">Docente:</span>
-                            {req.professor ? (
-                              <span className="font-semibold text-foreground truncate max-w-[130px]">
-                                {req.professor}
-                              </span>
-                            ) : (
-                              <span className="rounded bg-[#e9683b]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#e9683b]">
-                                Sin docente
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Antigüedad en la fase actual — ayuda a detectar cuellos de botella */}
-                          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                            <Clock className="h-3 w-3 shrink-0" />
-                            <span>En esta fase {stageAge}</span>
-                          </div>
-                        </Link>
-
-                        {/* Footer: Date & Direct Actions — fuera del área de navegación */}
-                        <div className="px-3.5 pb-3.5">
-                          <div className="mt-3 pt-2 border-t border-border dark:border-[#222434] flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground min-w-0">
-                              <span className="flex items-center gap-1 shrink-0">
-                                <Calendar className="h-3 w-3 shrink-0" />
-                                {format(new Date(req.createdAt), "d MMM", { locale: es })}
-                              </span>
-                              {deadlineInfo && (
-                                <span className={cn("truncate", deadlineInfo.className)}>{deadlineInfo.text}</span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              {/* Reasignar solo mientras nadie ha empezado a trabajar la solicitud */}
-                              {req.status === "nueva" && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenReassign(req)}
-                                  className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                                  title="Reasignar a otro líder de producto"
-                                >
-                                  <ArrowLeftRight className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-
-                              {/* Status Advancement Button — requiere docente asignado y confirmación */}
-                              {stage.id === "nueva" && (
-                                <Button
-                                  size="sm"
-                                  disabled={!req.professor}
-                                  onClick={() =>
-                                    setConfirmingAdvance({
-                                      reqId: req.id,
-                                      company: req.company,
-                                      title: req.title,
-                                      from: "nueva",
-                                    })
-                                  }
-                                  className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title={req.professor ? "Avanzar a En Experto" : "Asigna un docente antes de avanzar"}
-                                >
-                                  Pasar a Experto
-                                  <ChevronRight className="h-3 w-3 ml-0.5" />
-                                </Button>
-                              )}
-
-                              {stage.id === "en-experto" && (
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    setConfirmingAdvance({
-                                      reqId: req.id,
-                                      company: req.company,
-                                      title: req.title,
-                                      from: "en-experto",
-                                    })
-                                  }
-                                  className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
-                                  title="Avanzar a En Costeo"
-                                >
-                                  Pasar a Costeo
-                                  <ChevronRight className="h-3 w-3 ml-0.5" />
-                                </Button>
-                              )}
-
-                              {/* "Entregar" (enviar al cliente) es una acción exclusiva del KAM,
-                            no del Líder de Producto — el trabajo del Líder termina en dejar
-                            el costeo listo (docs/08, pregunta 13). Por eso aquí solo se
-                            invita a completar el costeo, o se confirma que ya quedó listo. */}
-                              {stage.id === "en-costeo" && !hasRealCosting && (
-                                <Button
-                                  asChild
-                                  size="sm"
-                                  className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
-                                >
-                                  <Link to={`/solicitudes/${req.id}`} title="Completar el costeo de esta propuesta">
-                                    Completar costeo
-                                    <ArrowRight className="h-3 w-3 ml-0.5" />
-                                  </Link>
-                                </Button>
-                              )}
-                              {stage.id === "en-costeo" && hasRealCosting && (
-                                <span className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]">
-                                  <Check className="h-3 w-3" /> Listo para el KAM
+                              {/* Middle: Type + Valor cotizado (si ya hay costeo real) */}
+                              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                  {req.type}
                                 </span>
-                              )}
+                                {hasRealCosting && (
+                                  <span className="font-mono text-[11px] font-bold text-[#4cb979]">
+                                    {formatCop(req.costing!.totalOfferedCop)}
+                                  </span>
+                                )}
+                              </div>
 
-                              {/* Llegar a "Entregada" solo ocurre cuando el KAM la envía al
+                              {/* Docente / Profesor status */}
+                              <div className="mt-2.5 border-t border-border dark:border-[#222434] pt-2 flex items-center justify-between text-[11px]">
+                                <span className="text-muted-foreground font-medium">Docente:</span>
+                                {req.professor ? (
+                                  <span className="font-semibold text-foreground truncate max-w-[130px]">
+                                    {req.professor}
+                                  </span>
+                                ) : (
+                                  <span className="rounded bg-[#e9683b]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#e9683b]">
+                                    Sin docente
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Antigüedad en la etapa actual y total desde la creación — ayuda a detectar cuellos
+                                de botella (mismo texto que ve el KAM) */}
+                              {stageAgeLabel && (
+                                <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  <Clock className="h-3 w-3 shrink-0" />
+                                  <span>{stageAgeLabel}</span>
+                                </div>
+                              )}
+                              {totalAgeLabel && (
+                                <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  <Clock className="h-3 w-3 shrink-0" />
+                                  <span>{totalAgeLabel}</span>
+                                </div>
+                              )}
+                            </Link>
+
+                            {/* Footer: Date & Direct Actions — fuera del área de navegación */}
+                            <div className="px-3.5 pb-3.5">
+                              <div className="mt-3 pt-2 border-t border-border dark:border-[#222434] flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground min-w-0">
+                                  <span className="flex items-center gap-1 shrink-0">
+                                    <Calendar className="h-3 w-3 shrink-0" />
+                                    {format(new Date(req.createdAt), "d MMM", { locale: es })}
+                                  </span>
+                                  {deadlineInfo && (
+                                    <span className={cn("truncate", deadlineInfo.className)}>{deadlineInfo.text}</span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  {/* Reasignar mientras la solicitud sigue en las etapas tempranas
+                            (aún no entra a costeo): "Nueva" o "En Experto" (docs/03). */}
+                                  {(req.status === "nueva" || req.status === "en-experto") && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenReassign(req)}
+                                      className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                                      title="Reasignar a otro líder de producto"
+                                    >
+                                      <ArrowLeftRight className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+
+                                  {/* Status Advancement Button — requiere docente asignado y confirmación */}
+                                  {stage.id === "nueva" && (
+                                    <Button
+                                      size="sm"
+                                      disabled={!req.professor}
+                                      onClick={() =>
+                                        setConfirmingAdvance({
+                                          reqId: req.id,
+                                          company: req.company,
+                                          title: req.title,
+                                          from: "nueva",
+                                        })
+                                      }
+                                      className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+                                      title={
+                                        req.professor ? "Avanzar a En Experto" : "Asigna un docente antes de avanzar"
+                                      }
+                                    >
+                                      Pasar a Experto
+                                      <ChevronRight className="h-3 w-3 ml-0.5" />
+                                    </Button>
+                                  )}
+
+                                  {stage.id === "en-experto" && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() =>
+                                        setConfirmingAdvance({
+                                          reqId: req.id,
+                                          company: req.company,
+                                          title: req.title,
+                                          from: "en-experto",
+                                        })
+                                      }
+                                      className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
+                                      title="Avanzar a En Costeo"
+                                    >
+                                      Pasar a Costeo
+                                      <ChevronRight className="h-3 w-3 ml-0.5" />
+                                    </Button>
+                                  )}
+
+                                  {/* "Entregar" (enviar al cliente) es una acción exclusiva del KAM,
+                            no del Líder de Producto — el trabajo del Líder termina en
+                            confirmar explícitamente que el costeo está listo para el KAM
+                            (docs/03). La confirmación en sí (con diálogo) vive
+                            en el detalle de la solicitud — aquí solo se dirige hacia allá. */}
+                                  {stage.id === "en-costeo" && !hasRealCosting && (
+                                    <Button
+                                      asChild
+                                      size="sm"
+                                      className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
+                                    >
+                                      <Link to={`/solicitudes/${req.id}`} title="Completar el costeo de esta propuesta">
+                                        Completar costeo
+                                        <ArrowRight className="h-3 w-3 ml-0.5" />
+                                      </Link>
+                                    </Button>
+                                  )}
+                                  {stage.id === "en-costeo" && hasRealCosting && (
+                                    <Button
+                                      asChild
+                                      size="sm"
+                                      className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
+                                    >
+                                      <Link
+                                        to={`/solicitudes/${req.id}`}
+                                        title="Ir al detalle para confirmar el envío al KAM"
+                                      >
+                                        Completar envío
+                                        <ArrowRight className="h-3 w-3 ml-0.5" />
+                                      </Link>
+                                    </Button>
+                                  )}
+                                  {stage.id === "enviada-kam" && (
+                                    <span
+                                      className="inline-flex flex-col items-start gap-0 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]"
+                                      title="Ya confirmaste el costeo; ahora depende del KAM enviarlo al cliente"
+                                    >
+                                      <span className="inline-flex items-center gap-1">
+                                        <Check className="h-3 w-3" /> Enviado al KAM
+                                      </span>
+                                      {req.costing?.costingSentAt && (
+                                        <span className="pl-4 font-medium text-muted-foreground normal-case">
+                                          hace{" "}
+                                          {formatDistanceToNow(new Date(req.costing.costingSentAt), { locale: es })}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+
+                                  {/* Llegar a "Entregada" solo ocurre cuando el KAM la envía al
                             cliente (acción exclusiva suya, ver comentario arriba) — así
-                            que toda tarjeta en esta columna ya cerró ese paso. */}
-                              {stage.id === "entregada" && (
-                                <span className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold text-[#4cb979]">
-                                  <Check className="h-3 w-3" /> Enviado al cliente
-                                </span>
-                              )}
+                            que toda tarjeta en esta columna ya cerró ese paso. Insignia
+                            propia (sólida, no el mismo tono suave de "Enviado al KAM")
+                            porque es el cierre del flujo, no un paso intermedio. */}
+                                  {stage.id === "entregada" && (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#4cb979] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                                      <CheckCircle2 className="h-3.5 w-3.5" /> Enviado al cliente
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    );
-                  }}
-                />
-              );
-            })}
-          </div>
+                        );
+                      }}
+                    />
+                  );
+                },
+              )}
+            </div>
+          </BoardMotion>
         </>
       )}
 
@@ -706,12 +839,13 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       <p>No se encontraron solicitudes con estos filtros.</p>
-                      {(onlyMissingProfessor || searchQuery || activeStageFilter !== "todas") && (
+                      {(onlyMissingProfessor || onlyWaitingForKam || searchQuery || activeStageFilter !== "todas") && (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
                             setOnlyMissingProfessor(false);
+                            setOnlyWaitingForKam(false);
                             setSearchQuery("");
                             setActiveStageFilter("todas");
                           }}
@@ -725,11 +859,14 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
                 ) : (
                   filteredRequests.map((r) => {
                     const hasRealCosting = r.costing && r.costing.totalOfferedCop > 0;
+                    const stageAgeLabel = getLeaderStageAgeLabel(r, leaderStageOf(r));
+                    const totalAgeLabel = getTotalAgeLabel(r);
                     return (
                       <tr key={r.id} className="transition-colors hover:bg-secondary/30 dark:hover:bg-[#1a1c2a]">
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs font-semibold text-foreground">{r.id}</span>
+                            <span className="font-mono text-xs font-semibold text-foreground">{r.code ?? r.id}</span>
+                            <OfficialNumberBadge officialNumber={r.officialNumber} />
                             <span className="text-muted-foreground/60 text-xs">·</span>
                             <span className="text-xs text-muted-foreground">
                               {format(new Date(r.createdAt), "d MMM", { locale: es })}
@@ -778,7 +915,19 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
                           )}
                         </td>
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          <StatusBadge status={r.status} />
+                          <StatusBadge status={leaderStageOf(r)} />
+                          {stageAgeLabel && (
+                            <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <Clock className="h-3 w-3 shrink-0" />
+                              {stageAgeLabel}
+                            </p>
+                          )}
+                          {totalAgeLabel && (
+                            <p className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <Clock className="h-3 w-3 shrink-0" />
+                              {totalAgeLabel}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
                           <Link
@@ -800,153 +949,16 @@ export function ProductLeaderDashboard({ requests, user, updateRequest, updateSt
       )}
 
       {/* 5. Modal de Reasignación de Líder de Producto */}
-      <Dialog
-        open={!!reassigningRequest}
+      <ReassignLeaderDialog
+        request={reassigningRequest}
         onOpenChange={(open) => {
           if (!open) setReassigningRequest(null);
         }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-foreground">{reassigningRequest?.id}</span>
-              <span className="rounded bg-[#5454e9]/10 px-2 py-0.5 text-[10px] font-bold text-[#5454e9]">
-                {reassigningRequest?.node}
-              </span>
-            </div>
-            <DialogTitle className="text-base font-bold text-foreground mt-1">Reasignar Líder de Producto</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Transfiere esta solicitud comercial a otro líder si no corresponde a tu área temática.
-            </DialogDescription>
-          </DialogHeader>
-
-          {reassigningRequest && (
-            <div className="space-y-4 py-2 text-xs">
-              <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground shrink-0">Propuesta:</span>
-                  <span className="font-semibold text-foreground text-right truncate">{reassigningRequest.title}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Empresa:</span>
-                  <span className="font-semibold text-foreground">{reassigningRequest.company}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Líder actual:</span>
-                  <span className="font-semibold text-[#e9683b]">{reassigningRequest.productLeader}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="modal-new-leader" className="text-xs font-semibold text-foreground">
-                  Nuevo Líder de Producto destinatario *
-                </Label>
-                <Select
-                  value={selectedNewLeader}
-                  onValueChange={(val) => {
-                    setSelectedNewLeader(val);
-                    const foundNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, leader]) => leader === val);
-                    if (foundNode) {
-                      setSelectedNewNode(foundNode[0]);
-                    }
-                  }}
-                >
-                  <SelectTrigger id="modal-new-leader" className="text-xs h-9">
-                    <SelectValue placeholder="Seleccionar nuevo líder de producto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRODUCT_LEADERS.map((leader) => {
-                      const isCurrent = leader === reassigningRequest.productLeader;
-                      const leaderNode = Object.entries(NODE_DEFAULT_LEADERS).find(([_, l]) => l === leader)?.[0];
-                      return (
-                        <SelectItem key={leader} value={leader} disabled={isCurrent}>
-                          {leader}{" "}
-                          {isCurrent ? "(Líder actual)" : leaderNode ? `· Nodo: ${leaderNode.split(",")[0]}` : ""}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="modal-new-node" className="text-xs font-semibold text-foreground">
-                  Nodo Temático
-                </Label>
-                <Select value={selectedNewNode} onValueChange={setSelectedNewNode}>
-                  <SelectTrigger id="modal-new-node" className="text-xs h-9">
-                    <SelectValue placeholder="Seleccionar nodo temático" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {NODES.map((n) => (
-                      <SelectItem key={n} value={n}>
-                        {n}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="modal-reassign-reason" className="text-xs font-semibold text-foreground">
-                  Motivo de la reasignación
-                </Label>
-                <Select value={reassignReason} onValueChange={setReassignReason}>
-                  <SelectTrigger id="modal-reassign-reason" className="text-xs h-9">
-                    <SelectValue placeholder="Seleccionar motivo..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Temática no afín / Corresponde a otro nodo">
-                      Temática no afín / Corresponde a otro nodo
-                    </SelectItem>
-                    <SelectItem value="Asignada por error por el KAM">Asignada por error por el KAM</SelectItem>
-                    <SelectItem value="Redistribución por sobrecarga operativa">
-                      Redistribución por sobrecarga operativa
-                    </SelectItem>
-                    <SelectItem value="Especialidad técnica específica">Especialidad técnica específica</SelectItem>
-                    <SelectItem value="Otro motivo">Otro motivo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="modal-reassign-notes" className="text-xs font-semibold text-muted-foreground">
-                  Nota o mensaje para el nuevo líder (opcional)
-                </Label>
-                <Textarea
-                  id="modal-reassign-notes"
-                  rows={2}
-                  placeholder="Ej. Esta solicitud corresponde al área de Inteligencia Artificial..."
-                  value={reassignNotes}
-                  onChange={(e) => setReassignNotes(e.target.value)}
-                  className="text-xs resize-none"
-                />
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setReassigningRequest(null)}
-              className="text-xs"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={!selectedNewLeader || selectedNewLeader === reassigningRequest?.productLeader}
-              onClick={handleConfirmReassign}
-              className="text-xs bg-[#5454e9] hover:bg-[#4343d0] text-white"
-            >
-              Confirmar Reasignación
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onConfirm={handleConfirmReassign}
+        isConnected
+        leaderOptions={leaderOptions}
+        nodeOptions={nodeOptions}
+      />
 
       {/* 6. Confirmación antes de avanzar de etapa desde el tablero — con los
           datos concretos de la solicitud, no un texto genérico, para que un

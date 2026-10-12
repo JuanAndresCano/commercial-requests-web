@@ -1,0 +1,6 @@
+{
+  "name": "Solicitudes Comerciales · Universidad Icesi",
+  "description": "Plataforma para gestión de solicitudes comerciales de capacitación, consultoría y mentoría — Universidad Icesi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

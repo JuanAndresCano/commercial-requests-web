@@ -1,4 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { authApi, type SessionUser } from "@/lib/api/auth";
+import { setUnauthorizedHandler } from "@/lib/api/client";
+import { isSessionActive, mapBackendRoles, msUntilExpiry } from "@/lib/session";
+import { useSessionSync } from "@/hooks/use-session-sync";
+import type { SessionConflictReason } from "@/lib/session-sync";
 import {
   MOCK_REQUESTS,
   RequestItem,
@@ -7,8 +12,11 @@ import {
   ProposalDocument,
   ExternalProfessorData,
 } from "@/lib/mock-data";
+import { assignProfessorWithHistory } from "@/lib/professor-assignment";
+import { resetDashboardUiState } from "@/lib/dashboard-ui-state";
+import { useTheme } from "@/context/ThemeContext";
 
-export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor";
+export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor" | "administrador";
 
 export interface User {
   role: UserRole;
@@ -18,47 +26,44 @@ export interface User {
   node?: string;
 }
 
-export const ROLE_CONFIGS: Record<
-  UserRole,
-  { label: string; defaultName: string; defaultEmail: string; node?: string }
-> = {
-  kam: {
-    label: "KAM",
-    defaultName: "Andrea Martínez",
-    defaultEmail: "andrea.martinez@icesi.edu.co",
-  },
+export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = {
+  kam: { label: "KAM" },
   "lider-producto": {
     label: "Líder de Producto",
-    defaultName: "Juan Pablo Corrales Arenas",
-    defaultEmail: "juanpablo.corrales@icesi.edu.co",
     node: "Inteligencia Artificial y Tecnologías Digitales",
   },
   "lider-nodo": {
     label: "Líder de Nodo",
-    defaultName: "Carlos Riveros",
-    defaultEmail: "carlos.riveros@icesi.edu.co",
     node: "Competitividad Organizacional, Economías Creativas",
   },
-  profesor: {
-    label: "Profesor",
-    defaultName: "Dr. Ricardo Mejía",
-    defaultEmail: "ricardo.mejia@icesi.edu.co",
-  },
+  profesor: { label: "Profesor" },
+  administrador: { label: "Administrador" },
 };
 
-const STORAGE_KEY_USER = "icesi_auth_user_v3";
+// Legacy key of the mock login; the session now lives in an httpOnly cookie.
+const LEGACY_STORAGE_KEY_USER = "icesi_auth_user_v3";
 const STORAGE_KEY_REQUESTS = "icesi_requests_data_v3";
+
+export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
+// Placeholder while nobody is signed in. Routes are guarded by RequireAuth, so
+// no page renders with it; it only keeps `user` non-nullable for consumers.
+const ANONYMOUS_USER: User = { role: "kam", roleLabel: "", name: "", email: "" };
 
 interface AuthContextType {
   user: User;
-  login: (role: UserRole, customName?: string, customEmail?: string) => void;
-  switchRole: (role: UserRole) => void;
+  status: AuthStatus;
+  /** Signs in against the backend; rejects with ApiError (401 = bad credentials). */
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /**
+   * Another tab of this browser signed in as someone else (or signed out), so the
+   * session cookie no longer belongs to the user this tab shows. Reload to continue.
+   */
+  sessionConflict: SessionConflictReason | null;
   requests: RequestItem[];
-  addRequest: (item: Omit<RequestItem, "id" | "createdAt">) => RequestItem;
   updateRequest: (id: string, updates: Partial<RequestItem>) => void;
   deleteRequest: (id: string) => void;
-  assignProfessor: (id: string, professorName: string) => void;
   assignProfessorDetailed: (
     id: string,
     professorName: string,
@@ -69,30 +74,97 @@ interface AuthContextType {
   addDocument: (id: string, doc: ProposalDocument) => void;
   removeDocument: (id: string, docId: string, category: "client_kam" | "internal_costing") => void;
   updateStatus: (id: string, status: RequestStatus) => void;
-  resetData: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_USER);
-      if (stored) {
-        return JSON.parse(stored);
+  const [user, setUser] = useState<User>(ANONYMOUS_USER);
+  const [status, setStatus] = useState<AuthStatus>("loading");
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const { conflict: sessionConflict, announce } = useSessionSync(userId);
+
+  const { setTheme } = useTheme();
+
+  // Every session starts like the first visit: light theme and clean boards.
+  const resetUiForNewSession = useCallback(() => {
+    resetDashboardUiState();
+    setTheme("light");
+  }, [setTheme]);
+
+  const clearSession = useCallback(() => {
+    setUser(ANONYMOUS_USER);
+    setUserId(null);
+    setExpiresAt(null);
+    setStatus("unauthenticated");
+    resetUiForNewSession();
+  }, [resetUiForNewSession]);
+
+  // Returns false (and leaves the user signed out) when the session is expired
+  // or the account has no role the UI knows about.
+  const applySession = useCallback(
+    (session: SessionUser): boolean => {
+      const roles = mapBackendRoles(session.roles);
+      if (roles.length === 0 || !isSessionActive(session.expiresAt)) {
+        clearSession();
+        return false;
       }
-    } catch {
-      // Fallback
-    }
-    const defaultCfg = ROLE_CONFIGS["kam"];
-    return {
-      role: "kam",
-      roleLabel: defaultCfg.label,
-      name: defaultCfg.defaultName,
-      email: defaultCfg.defaultEmail,
-      node: defaultCfg.node,
+      // An account has exactly one role. More than one means badly migrated data:
+      // say so loudly instead of silently picking one (the first is used so the
+      // user is not locked out, and the menu never mixes modules of several roles).
+      if (roles.length > 1) {
+        console.warn(
+          `[auth] Session for user ${session.id} arrived with ${roles.length} roles; expected exactly one. ` +
+            `Received: ${session.roles.join(", ")}. Using "${roles[0]}".`,
+        );
+      }
+      const cfg = ROLE_CONFIGS[roles[0]];
+      const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
+      setUser({
+        role: roles[0],
+        roleLabel: cfg.label,
+        name: fullName || session.email,
+        email: session.email,
+        node: cfg.node,
+      });
+      setUserId(session.id);
+      setExpiresAt(session.expiresAt);
+      setStatus("authenticated");
+      return true;
+    },
+    [clearSession],
+  );
+
+  // Restore the session from the cookie on load; never trust local state.
+  useEffect(() => {
+    localStorage.removeItem(LEGACY_STORAGE_KEY_USER);
+    let cancelled = false;
+    authApi
+      .getMe()
+      .then((session) => {
+        if (!cancelled) applySession(session);
+      })
+      .catch(() => {
+        if (!cancelled) clearSession();
+      });
+    return () => {
+      cancelled = true;
     };
-  });
+  }, [applySession, clearSession]);
+
+  // Any 401 on an authenticated request (revoked or expired session) signs out.
+  useEffect(() => {
+    setUnauthorizedHandler(clearSession);
+    return () => setUnauthorizedHandler(null);
+  }, [clearSession]);
+
+  // Sign out the moment the token expires, even if the tab stays idle.
+  useEffect(() => {
+    if (expiresAt === null) return;
+    const timer = window.setTimeout(clearSession, msUntilExpiry(expiresAt));
+    return () => window.clearTimeout(timer);
+  }, [expiresAt, clearSession]);
 
   const [requests, setRequests] = useState<RequestItem[]>(() => {
     try {
@@ -132,67 +204,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-    } catch {
-      // Ignore storage errors
-    }
-  }, [user]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(requests));
     } catch {
       // Ignore storage errors
     }
   }, [requests]);
 
-  const login = (role: UserRole, customName?: string, customEmail?: string) => {
-    const config = ROLE_CONFIGS[role] ?? ROLE_CONFIGS["kam"];
-    const newUser: User = {
-      role,
-      roleLabel: config.label,
-      name: customName || config.defaultName,
-      email: customEmail || config.defaultEmail,
-      node: config.node,
-    };
-    setUser(newUser);
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUser));
-  };
-
-  const switchRole = (role: UserRole) => {
-    login(role);
+  const login = async (email: string, password: string) => {
+    await authApi.login(email, password);
+    resetUiForNewSession();
+    const session = await authApi.getMe();
+    if (!applySession(session)) {
+      throw new Error("La cuenta no tiene un rol habilitado en esta plataforma.");
+    }
+    announce({ type: "login", userId: session.id });
   };
 
   const logout = () => {
-    localStorage.removeItem(STORAGE_KEY_USER);
-    const defaultCfg = ROLE_CONFIGS["kam"];
-    setUser({
-      role: "kam",
-      roleLabel: defaultCfg.label,
-      name: defaultCfg.defaultName,
-      email: defaultCfg.defaultEmail,
-    });
-  };
-
-  const addRequest = (item: Omit<RequestItem, "id" | "createdAt">): RequestItem => {
-    const newId = `REQ-2026-${String(requests.length + 145).padStart(4, "0")}`;
-    const newReq: RequestItem = {
-      ...item,
-      id: newId,
-      createdAt: new Date().toISOString().split("T")[0],
-      // Arranca el reloj de "tiempo en esta fase" desde el instante en que
-      // se crea (siempre en "nueva").
-      statusUpdatedAt: new Date().toISOString(),
-      // El costeo es responsabilidad exclusiva del Líder de Producto — una
-      // solicitud recién creada por el KAM nunca debe llegar con un precio
-      // ya calculado. Se queda sin definir hasta que el Líder lo guarde.
-      costing: item.costing,
-      clientKamDocuments: item.clientKamDocuments ?? [],
-      internalCostingDocuments: item.internalCostingDocuments ?? [],
-      totalCostCop: item.totalCostCop,
-    };
-    setRequests((prev) => [newReq, ...prev]);
-    return newReq;
+    // Clear local state first; the request still carries the cookie and bumps
+    // tokenVersion server-side so the token cannot be replayed.
+    clearSession();
+    announce({ type: "logout" });
+    void authApi.logout().catch(() => undefined);
   };
 
   const updateRequest = (id: string, updates: Partial<RequestItem>) => {
@@ -219,21 +252,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRequests((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const assignProfessor = (id: string, professorName: string) => {
-    updateRequest(id, { professor: professorName, professorType: "planta" });
-  };
-
   const assignProfessorDetailed = (
     id: string,
     professorName: string,
     type: "planta" | "externo",
     externalData?: ExternalProfessorData,
   ) => {
-    updateRequest(id, {
-      professor: professorName,
-      professorType: type,
-      externalProfessorData: externalData,
-    });
+    const current = requests.find((r) => r.id === id);
+    if (!current) return;
+    updateRequest(id, assignProfessorWithHistory(current, professorName, type, externalData, user.name));
   };
 
   const updateCosting = (id: string, costing: ProposalCosting) => {
@@ -285,38 +312,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateRequest(id, { status });
   };
 
-  const resetData = () => {
-    setRequests(MOCK_REQUESTS);
-    localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(MOCK_REQUESTS));
-
-    // También limpia los filtros/vistas persistidas de los tableros
-    // (usePersistentState) — si no, un filtro que quedó activo (ej. "Sin
-    // docente") sigue ocultando todo después del reset, sin ninguna pista de
-    // por qué, aunque los datos ya se hayan restablecido correctamente.
-    const uiStatePrefixes = ["icesi_kam_dashboard_", "icesi_lp_dashboard_"];
-    Object.keys(localStorage)
-      .filter((key) => uiStatePrefixes.some((prefix) => key.startsWith(prefix)))
-      .forEach((key) => localStorage.removeItem(key));
-  };
-
   return (
     <AuthContext.Provider
       value={{
         user,
+        status,
         login,
-        switchRole,
         logout,
+        sessionConflict,
         requests,
-        addRequest,
         updateRequest,
         deleteRequest,
-        assignProfessor,
         assignProfessorDetailed,
         updateCosting,
         addDocument,
         removeDocument,
         updateStatus,
-        resetData,
       }}
     >
       {children}

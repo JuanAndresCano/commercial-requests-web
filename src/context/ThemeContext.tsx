@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 type Theme = "dark" | "light";
 
@@ -10,21 +10,30 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const THEME_KEY = "icesi_theme_mode";
+/** Key of the old remembered theme; it is no longer read so the app always opens in light mode. */
+const LEGACY_THEME_KEY = "icesi_theme_mode";
 
+export const DEFAULT_THEME: Theme = "light";
+
+/** Institutional default theme is light mode. */
+export function systemTheme(): Theme {
+  return "light";
+}
+
+/**
+ * The app always opens in light mode. Dark mode can be toggled, but only lasts
+ * until the page reloads or the session changes (see AuthContext).
+ */
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setThemeState] = useState<Theme>(() => {
+  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
+
+  useEffect(() => {
     try {
-      const stored = localStorage.getItem(THEME_KEY);
-      if (stored === "light" || stored === "dark") {
-        return stored;
-      }
-      // Default to dark mode
-      return "dark";
+      localStorage.removeItem(LEGACY_THEME_KEY);
     } catch {
-      return "dark";
+      // ignore
     }
-  });
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -35,20 +44,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.classList.remove("dark");
       root.classList.add("light");
     }
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch {
-      // ignore
-    }
   }, [theme]);
 
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
-  };
+  }, []);
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
-  };
+  }, []);
 
   return <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>{children}</ThemeContext.Provider>;
 };
