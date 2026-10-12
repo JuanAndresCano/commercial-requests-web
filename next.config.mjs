@@ -3,6 +3,9 @@ const nextConfig = {
   // The container runs a Node server (see Dockerfile); Traefik still routes /api to the backend.
   output: "standalone",
   poweredByHeader: false,
+  // The Vite entry point (main.tsx) never used StrictMode; the App Router turns it on by default, which in
+  // `next dev` would run every effect twice (EventSource, requests). Production is not affected either way.
+  reactStrictMode: false,
   // `next dev` appends a block of "agent rules" to AGENTS.md on every start; the repo's AGENTS.md is hand-written.
   agentRules: false,
   async headers() {
