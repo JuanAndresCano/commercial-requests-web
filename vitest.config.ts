@@ -30,8 +30,6 @@ export default defineConfig({
         "src/**/*.{test,spec}.{ts,tsx}",
         "src/test/**",
         "src/components/ui/**", // generated shadcn primitives
-        "src/main.tsx",
-        "src/vite-env.d.ts",
       ],
       // Business logic must be covered. Ratchet: every sprint, add the modules
       // that gain tests here and never lower an existing number.
