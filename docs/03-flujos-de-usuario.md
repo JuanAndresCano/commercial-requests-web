@@ -9,18 +9,20 @@
 > - **Tableros en vivo:** se refrescan solos con eventos del servidor (con respaldo por sondeo) y muestran "Lleva N días en esta etapa" y "Total N días".
 > - Detalle de cada decisión y su motivo: `PARIDAD-LOGICA-NEGOCIO.md` (repositorio del backend, `workspace/docs/`, tabla "Diferencias deliberadas").
 
-Este documento describe, pantalla por pantalla, los dos recorridos prioritarios: **crear y hacer seguimiento a una solicitud (KAM)** y **triage + costeo de una solicitud (Líder de Producto)**. Las rutas están definidas en `src/App.tsx`.
+Este documento describe, pantalla por pantalla, los dos recorridos prioritarios: **crear y hacer seguimiento a una solicitud (KAM)** y **triage + costeo de una solicitud (Líder de Producto)**. Las rutas son archivos bajo `src/app/` (Next.js App Router); en el prototipo estaban definidas en `src/App.tsx` con react-router-dom.
 
 ## Mapa de rutas
 
-| Ruta | Pantalla | Archivo |
-|---|---|---|
-| `/` | Landing pública | `src/pages/Index.tsx` |
-| `/login` | Selección de rol + login simulado | `src/pages/Login.tsx` |
-| `/dashboard` | Dashboard (bifurca por rol) | `src/pages/Dashboard.tsx` |
-| `/solicitudes` | Tablero de solicitudes (Kanban o lista) | `src/pages/RequestsBoard.tsx` |
-| `/solicitudes/nueva` | Wizard de creación (5 pasos) | `src/pages/NewRequest.tsx` |
-| `/solicitudes/:id` | Detalle de solicitud (bifurca por rol) | `src/pages/RequestDetail.tsx` |
+| Ruta | Pantalla | Vista | Archivo de ruta (`src/app/`) |
+|---|---|---|---|
+| `/` | Landing pública | `src/views/Index.tsx` | `page.tsx` |
+| `/login` | Selección de rol + login simulado | `src/views/Login.tsx` | `login/page.tsx` |
+| `/dashboard` | Dashboard (bifurca por rol) | `src/views/Dashboard.tsx` | `(private)/dashboard/page.tsx` |
+| `/solicitudes` | Tablero de solicitudes (Kanban o lista) — **ruta del prototipo, no existe en la app actual** | `src/views/RequestsBoard.tsx` (no existe) | — (cae en `not-found.tsx`) |
+| `/solicitudes/nueva` | Wizard de creación (5 pasos) | `src/views/NewRequest.tsx` | `(private)/solicitudes/nueva/page.tsx` |
+| `/solicitudes/:id` | Detalle de solicitud (bifurca por rol) | `src/views/RequestDetail.tsx` | `(private)/solicitudes/[id]/page.tsx` |
+
+Desde la migración a Next: las rutas privadas viven en el grupo `(private)`, cuyo `layout.tsx` aplica la guarda de sesión (`RequireAuth`, redirige a `/login`); cada `page.tsx` carga su vista con `dynamic(..., { ssr: false })`; las URL desconocidas muestran `src/app/not-found.tsx` (la pantalla `NotFound` de siempre, ahora con HTTP 404).
 
 ⚠️ La ruta `/solicitudes/:id/resumen` (vista "Resumen") **ya no existe** — se eliminó por completo (`RequestSummary.tsx` fue borrado) porque todo su contenido era fijo/de ejemplo, sin leer la solicitud real. Quedan exactamente 2 pantallas por solicitud: el tablero y el detalle.
 
