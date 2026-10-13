@@ -5,7 +5,6 @@ import {
   Clock,
   CheckCircle2,
   UserCheck,
-  Sparkles,
   ArrowLeftRight,
   Building2,
   Search,
@@ -24,7 +23,6 @@ import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { BoardMotion } from "@/components/kanban/BoardMotion";
 import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
-import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useReassignProposal } from "@/hooks/use-reassign-proposal";
 import { useNodes } from "@/hooks/use-nodes";
@@ -328,7 +326,6 @@ export function ProductLeaderDashboard({
               Hola, {firstName}
             </h1>
             <RoleBadge label="Líder de Producto" />
-            <RealtimeIndicator />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Gestión directa de tus solicitudes: asignación de docentes, avance técnico y costeo en un único lugar.
@@ -341,9 +338,6 @@ export function ProductLeaderDashboard({
       {countNuevas > 0 && (
         <div className="flex flex-col gap-3 rounded-xl border border-[#5454e9]/30 bg-[#5454e9]/10 dark:bg-[#5454e9]/15 p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3.5 sm:items-center">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5454e9] text-white">
-              <Sparkles className="h-5 w-5" />
-            </div>
             <div>
               <p className="text-sm font-bold text-foreground">
                 ¡Tienes {countNuevas}{" "}
