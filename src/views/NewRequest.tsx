@@ -21,7 +21,6 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
-  Sparkles,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
@@ -564,9 +563,6 @@ export default function NewRequest() {
         {restoredDraftInfo && (
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/10 p-4 text-xs">
             <div className="flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-white">
-                <Sparkles className="h-4 w-4" />
-              </div>
               <div>
                 <p className="font-bold text-foreground text-sm">Solicitud en curso detectada</p>
                 <p className="text-muted-foreground mt-0.5">

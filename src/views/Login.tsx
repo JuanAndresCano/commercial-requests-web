@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useRouter } from "@/lib/app-router";
-import { ArrowLeft, Eye, EyeOff, ShieldCheck, Sparkles } from "@/components/icons";
+import { ArrowLeft, Eye, EyeOff, ShieldCheck } from "@/components/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,8 +76,7 @@ export default function Login() {
         <div className="relative z-10 my-auto hidden lg:block max-w-md">
           <div className="rounded-2xl border border-white/20 bg-black/40 backdrop-blur-md p-6 text-white shadow-2xl">
             <div className="flex items-center gap-2 text-[#e4eb60] text-xs font-bold uppercase tracking-wider mb-2">
-              <Sparkles className="h-4 w-4" />
-              <span>Campus Cali · Excelencia Icesi</span>
+              <span>De la necesidad del cliente a la propuesta</span>
             </div>
             <h2 className="text-2xl font-bold font-sans leading-tight">
               Transformando conocimiento en soluciones empresariales
