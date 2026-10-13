@@ -14,7 +14,6 @@ import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { BoardMotion } from "@/components/kanban/BoardMotion";
 import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
-import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useRequests } from "@/hooks/use-requests";
 import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
@@ -221,7 +220,6 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               Hola, {firstName}
             </h1>
             <RoleBadge label="KAM Icesi" />
-            <RealtimeIndicator />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Panel de seguimiento, prospección y gestión de propuestas corporativas
