@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useRouter } from "@/lib/app-router";
 import { ArrowLeft, Eye, EyeOff, ShieldCheck, Sparkles } from "@/components/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
+  const router = useRouter();
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,7 +23,7 @@ export default function Login() {
     setSubmitting(true);
     try {
       await login(email.trim(), password);
-      navigate("/dashboard");
+      router.push("/dashboard");
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         toast.error("Correo o contraseña incorrectos.", {
@@ -63,7 +63,7 @@ export default function Login() {
 
         {/* Top Left: Universidad Icesi Logo in pure white */}
         <div className="relative z-10">
-          <Link to="/" className="inline-flex items-center gap-3">
+          <Link href="/" className="inline-flex items-center gap-3">
             <IcesiLogo variant="horizontal" colorScheme="white" size="md" />
           </Link>
           <div className="mt-2 flex items-center gap-2 text-xs text-white/80 font-medium">
@@ -106,7 +106,7 @@ export default function Login() {
         {/* Top bar with Login title & Guía link + Dark/Light Mode switch */}
         <div className="flex items-center justify-between pb-6 border-b border-border dark:border-[#252838]">
           <Link
-            to="/"
+            href="/"
             className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />

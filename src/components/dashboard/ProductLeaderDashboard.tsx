@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/app-router";
 import {
   ArrowRight,
   Clock,
@@ -619,7 +619,7 @@ export function ProductLeaderDashboard({
                             </div>
 
                             {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
-                            <Link to={`/solicitudes/${req.id}`} className="block flex-1 p-3.5">
+                            <Link href={`/solicitudes/${req.id}`} className="block flex-1 p-3.5">
                               {/* Top: ID, Company & Urgency */}
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
@@ -756,7 +756,10 @@ export function ProductLeaderDashboard({
                                       size="sm"
                                       className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
                                     >
-                                      <Link to={`/solicitudes/${req.id}`} title="Completar el costeo de esta propuesta">
+                                      <Link
+                                        href={`/solicitudes/${req.id}`}
+                                        title="Completar el costeo de esta propuesta"
+                                      >
                                         Completar costeo
                                         <ArrowRight className="h-3 w-3 ml-0.5" />
                                       </Link>
@@ -769,7 +772,7 @@ export function ProductLeaderDashboard({
                                       className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
                                     >
                                       <Link
-                                        to={`/solicitudes/${req.id}`}
+                                        href={`/solicitudes/${req.id}`}
                                         title="Ir al detalle para confirmar el envío al KAM"
                                       >
                                         Completar envío
@@ -876,7 +879,7 @@ export function ProductLeaderDashboard({
                         <td className="px-4 py-3.5 align-middle">
                           <div className="flex flex-col gap-1 max-w-[320px]">
                             <Link
-                              to={`/solicitudes/${r.id}`}
+                              href={`/solicitudes/${r.id}`}
                               className="font-semibold text-sm text-foreground hover:text-[#5454e9] transition-colors leading-snug line-clamp-2"
                               title={r.title}
                             >
@@ -931,7 +934,7 @@ export function ProductLeaderDashboard({
                         </td>
                         <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
                           <Link
-                            to={`/solicitudes/${r.id}`}
+                            href={`/solicitudes/${r.id}`}
                             className="inline-flex items-center text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
                           >
                             <span>Ver detalle</span>

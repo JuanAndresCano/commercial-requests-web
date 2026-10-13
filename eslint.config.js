@@ -84,7 +84,7 @@ export default tseslint.config(
     files: [
       "src/hooks/use-persistent-state.ts",
       "src/context/ThemeContext.tsx",
-      "src/pages/NewRequest.tsx",
+      "src/views/NewRequest.tsx",
       "src/context/AuthContext.tsx",
     ],
     rules: { "no-restricted-globals": ["error", { name: "fetch", message: "Use the API client in src/lib/api." }] },

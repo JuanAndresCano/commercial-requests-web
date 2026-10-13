@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useRouter } from "@/lib/app-router";
 import { Menu } from "@/components/icons";
 import { useAuth } from "@/context/AuthContext";
 import { SidebarContent } from "@/components/SidebarContent";
@@ -11,7 +11,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -19,7 +19,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const handleLogout = () => {
     logout();
-    navigate("/");
+    router.push("/");
   };
 
   return (
@@ -65,7 +65,7 @@ export function AppShell({ children }: AppShellProps) {
                   <Menu className="h-5 w-5" />
                 </button>
 
-                <Link to="/dashboard" className="flex items-center gap-3 group">
+                <Link href="/dashboard" className="flex items-center gap-3 group">
                   <IcesiLogo variant="horizontal" size="sm" withDescriptor={true} />
                   <div className="hidden sm:flex flex-col border-l border-border pl-3">
                     <span className="text-xs font-extrabold uppercase tracking-wider text-primary dark:text-icesi-purple">

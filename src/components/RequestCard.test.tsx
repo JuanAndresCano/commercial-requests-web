@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { describe, expect, it } from "vitest";
 import { RequestCard } from "./RequestCard";
 import type { RequestItem } from "@/lib/mock-data";
@@ -22,7 +22,7 @@ const baseRequest: RequestItem = {
 };
 
 function renderCard(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+  return render(<TestRouter>{ui}</TestRouter>);
 }
 
 describe("RequestCard stage age", () => {
