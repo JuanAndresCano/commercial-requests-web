@@ -6,14 +6,18 @@ Mapa completo ruta → propósito → roles → archivos, para ubicar rápido d�
 
 ```
 src/
-├── App.tsx                    # Definición de rutas (react-router-dom)
+├── app/                       # Next.js App Router (desde la migración a Next; antes App.tsx + react-router-dom):
+│   │                          #   layout.tsx = <head> (antes index.html), providers.tsx = providers cliente,
+│   │                          #   page.tsx, login/, (private)/{dashboard,solicitudes/nueva,solicitudes/[id]}/ = una ruta por archivo,
+│   │                          #   (private)/layout.tsx = guard de sesión (RequireAuth), not-found.tsx = 404
 ├── context/
 │   ├── AuthContext.tsx        # Sesión simulada + CRUD de solicitudes (localStorage)
 │   └── ThemeContext.tsx       # Tema claro/oscuro
 ├── lib/
 │   ├── mock-data.ts           # Todo el "modelo de datos" + datos semilla + cálculos
+│   ├── app-router/            # Fachada de navegación (Link, useRouter, usePathname, useSearchParams, useParams) sobre next/link y next/navigation
 │   └── utils.ts                # helper cn() (clsx + tailwind-merge)
-├── pages/                     # Una carpeta por ruta (ver tabla abajo)
+├── views/                     # Una vista por ruta (antes src/pages; las páginas de src/app las cargan con dynamic ssr:false; ver tabla abajo)
 ├── hooks/
 │   ├── use-persistent-state.ts # useState que persiste en localStorage (filtros/vista de los dashboards)
 │   └── use-reassign-request.ts # Regla de negocio de reasignación (compartida, ver `07` gap #9)
@@ -48,13 +52,15 @@ src/
 
 | Ruta | Archivo | Propósito | Roles que la ven distinto |
 |---|---|---|---|
-| `/` | `pages/Index.tsx` | Landing pública (no autenticada) | Todos |
-| `/login` | `pages/Login.tsx` | Selección de rol + formulario de acceso simulado | Todos |
-| `/dashboard` | `pages/Dashboard.tsx` | Bifurca: renderiza `KamCommandCenter` o `ProductLeaderDashboard` según rol; para `lider-nodo`/`profesor` cae en una rama genérica **rota** (ver `07-gaps-conocidos-y-deuda-tecnica.md`) | KAM / Líder de Producto tienen componente dedicado |
-| `/solicitudes` | `pages/RequestsBoard.tsx` | Tablero general: vista Kanban o Lista, con filtros de texto/estado/urgencia/tipo + "scope" (Todas / Asignadas a mi rol / Sin profesor) | Mismo componente para todos los roles, pero en la navegación (`AppShell`) solo **Líder de Nodo** ("Solicitudes de nodo") y **Profesor** ("Mis propuestas") tienen un ítem de menú que apunta aquí — KAM y Líder de Producto usan su propio dashboard (`/dashboard`) como pantalla principal de solicitudes y solo llegan a esta ruta si la visitan directamente. El filtro por defecto sigue cambiando según el rol (Líder de Producto arranca en "mine") por si acaso. |
-| `/solicitudes/nueva` | `pages/NewRequest.tsx` | Wizard de 5 pasos para registrar una solicitud | Pensado para KAM, pero accesible a cualquier rol |
-| `/solicitudes/:id` | `pages/RequestDetail.tsx` | Detalle completo — bifurca fuertemente entre `role === "lider-producto"` (módulo de costeo editable + acciones de avance) y KAM (vista de costeo solo-lectura + botón "Enviar a cliente") | KAM vs. Líder de Producto — la diferencia más importante de todo el sistema |
-| `*` | `pages/NotFound.tsx` | 404 | — |
+| `/` | `views/Index.tsx` | Landing pública (no autenticada) | Todos |
+| `/login` | `views/Login.tsx` | Selección de rol + formulario de acceso simulado | Todos |
+| `/dashboard` | `views/Dashboard.tsx` | Bifurca: renderiza `KamCommandCenter` o `ProductLeaderDashboard` según rol; para `lider-nodo`/`profesor` cae en una rama genérica **rota** (ver `07-gaps-conocidos-y-deuda-tecnica.md`) | KAM / Líder de Producto tienen componente dedicado |
+| `/solicitudes` | `views/RequestsBoard.tsx` (**no existe en la app actual**: ruta y archivo del prototipo; hoy esa URL muestra la pantalla 404) | Tablero general: vista Kanban o Lista, con filtros de texto/estado/urgencia/tipo + "scope" (Todas / Asignadas a mi rol / Sin profesor) | Mismo componente para todos los roles, pero en la navegación (`AppShell`) solo **Líder de Nodo** ("Solicitudes de nodo") y **Profesor** ("Mis propuestas") tienen un ítem de menú que apunta aquí — KAM y Líder de Producto usan su propio dashboard (`/dashboard`) como pantalla principal de solicitudes y solo llegan a esta ruta si la visitan directamente. El filtro por defecto sigue cambiando según el rol (Líder de Producto arranca en "mine") por si acaso. |
+| `/solicitudes/nueva` | `views/NewRequest.tsx` | Wizard de 5 pasos para registrar una solicitud | Pensado para KAM, pero accesible a cualquier rol |
+| `/solicitudes/:id` | `views/RequestDetail.tsx` | Detalle completo — bifurca fuertemente entre `role === "lider-producto"` (módulo de costeo editable + acciones de avance) y KAM (vista de costeo solo-lectura + botón "Enviar a cliente") | KAM vs. Líder de Producto — la diferencia más importante de todo el sistema |
+| `*` | `views/NotFound.tsx` (la carga `src/app/not-found.tsx`) | 404 | — |
+
+Archivos de ruta bajo `src/app/` (Next): `/` → `page.tsx`, `/login` → `login/page.tsx`, `/dashboard` → `(private)/dashboard/page.tsx`, `/solicitudes/nueva` → `(private)/solicitudes/nueva/page.tsx`, `/solicitudes/:id` → `(private)/solicitudes/[id]/page.tsx`.
 
 ⚠️ La ruta `/solicitudes/:id/resumen` (`RequestSummary.tsx`) **ya no existe** — se eliminó porque todo su contenido era fijo/de ejemplo. Si algún documento viejo la menciona, está desactualizado.
 
@@ -74,7 +80,7 @@ src/
 
 ### Compartidos entre ambos
 - `AppShell.tsx` — layout raíz. Contiene: rail lateral fijo (ícono app, avatar+dropdown de usuario/cambio de rol/**restablecer datos de ejemplo**, navegación por ítems dinámicos según rol, toggle de tema, logout), con **animación de expansión al pasar el cursor** (ancho angosto de solo íconos que se ensancha revelando las etiquetas de texto — inspirado en el portal de estudiantes de Icesi), topbar (logo, dropdown de rol, toggle de tema), franja de marca secundaria, `<main>`, footer institucional. Ya **no** tiene ningún widget flotante.
-- `RequestCard.tsx` — tarjeta usada en `RequestsBoard.tsx` y en el Kanban de `KamCommandCenter` (vista Kanban/Lista genérica, distinta de las tarjetas del Kanban propio de `ProductLeaderDashboard`, que están en línea dentro del propio archivo por tener botones de acción específicos).
+- `RequestCard.tsx` — tarjeta usada en `RequestsBoard.tsx` (del prototipo, ya no existe) y en el Kanban de `KamCommandCenter` (vista Kanban/Lista genérica, distinta de las tarjetas del Kanban propio de `ProductLeaderDashboard`, que están en línea dentro del propio archivo por tener botones de acción específicos).
 - `KanbanColumn.tsx` / `StageKpiCard.tsx` — genéricos, parametrizados por `RequestStatus` vía `STAGE_THEME` (`kanban-theme.ts`). `KanbanColumn` soporta un modo `isolated` (una sola columna a ancho completo, tarjetas en cuadrícula de hasta 3 por fila) usado cuando el usuario "aísla" una fase desde una tarjeta KPI en vista Kanban.
 - `StatusBadge.tsx` — exporta `StatusBadge` (por `RequestStatus`) y `UrgencyBadge` (por `Urgency`).
 - `ProposalDocumentsSection.tsx` — usado en el detalle para ambos roles (con matices de permisos vía prop `userRole`).
