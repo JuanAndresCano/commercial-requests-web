@@ -373,4 +373,114 @@ describe("Company360View Component", () => {
 
     expect(refetchDetailsMock).toHaveBeenCalled();
   });
+
+  it("handles company with empty proposals and missing metadata gracefully without crashing (edge case)", () => {
+    const emptyCompany360: Company360Response = {
+      company: {
+        id: "comp-empty",
+        name: "Empresa Sin Datos S.A.S.",
+        nit: "900000000-0",
+        sector: null,
+        ciiuCode: null,
+        type: null,
+        description: null,
+        website: null,
+        address: null,
+        phone: null,
+        email: null,
+        contacts: [],
+      },
+      metrics: {
+        totalProposals: 0,
+        deliveredCount: 0,
+        pipelineCount: 0,
+        deliveredTotalCop: 0,
+        pipelineTotalCop: 0,
+        totalPortfolioCop: 0,
+        totalHours: 0,
+        impactedParticipants: 0,
+        activeNodesCount: 0,
+        firstEngagementDate: null,
+        lastEngagementDate: null,
+        impact: {
+          totalHours: 0,
+          totalParticipants: 0,
+          successMetrics: [],
+          expectedResults: [],
+          competencies: [],
+        },
+      },
+      timeline: [],
+      impact: {
+        totalHours: 0,
+        totalParticipants: 0,
+        successMetrics: [],
+        expectedResults: [],
+        competencies: [],
+      },
+      nodeBreakdown: [],
+    };
+
+    vi.spyOn(companyHooks, "useAdminCompanies").mockReturnValue({
+      data: [
+        {
+          id: "comp-empty",
+          name: "Empresa Sin Datos S.A.S.",
+          nit: "900000000-0",
+          totalProposals: 0,
+          deliveredCount: 0,
+          deliveredTotalCop: 0,
+          pipelineTotalCop: 0,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof companyHooks.useAdminCompanies>);
+
+    vi.spyOn(companyHooks, "useAdminCompany360").mockReturnValue({
+      data: emptyCompany360,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof companyHooks.useAdminCompany360>);
+
+    renderComponent("comp-empty");
+
+    expect(screen.getByRole("heading", { level: 3, name: "Empresa Sin Datos S.A.S." })).toBeInTheDocument();
+    expect(screen.getByText("Sin contactos adicionales vinculados a la cuenta.")).toBeInTheDocument();
+    expect(screen.getByText("No hay iniciativas registradas para esta empresa.")).toBeInTheDocument();
+    expect(screen.getByText("No se han registrado métricas cuantitativas adicionales aún.")).toBeInTheDocument();
+    expect(screen.getByText("No hay resultados cualitativos adicionales documentados.")).toBeInTheDocument();
+    expect(screen.getByText("No se han registrado etiquetas de competencias para esta cuenta.")).toBeInTheDocument();
+    expect(screen.getByText("Sin vinculación a nodos académicos aún.")).toBeInTheDocument();
+  });
+
+  it("allows switching selected company via dropdown", () => {
+    const hookSpy = vi.spyOn(companyHooks, "useAdminCompany360").mockReturnValue({
+      data: mockCompany360,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof companyHooks.useAdminCompany360>);
+
+    vi.spyOn(companyHooks, "useAdminCompanies").mockReturnValue({
+      data: mockCompanies,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof companyHooks.useAdminCompanies>);
+
+    renderComponent("comp-1");
+
+    expect(hookSpy).toHaveBeenCalledWith("comp-1");
+
+    // Click select mock container to trigger change to comp-2
+    const selectTrigger = screen.getByTestId("mock-select");
+    fireEvent.click(selectTrigger);
+
+    expect(hookSpy).toHaveBeenCalledWith("comp-2");
+  });
 });

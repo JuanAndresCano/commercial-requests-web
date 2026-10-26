@@ -316,4 +316,18 @@ describe("AdminDashboard Component", () => {
     expect(screen.getByText("Embudo de Conversión Comercial")).toBeInTheDocument();
     expect(screen.queryByTestId("mock-company-360-view")).not.toBeInTheDocument();
   });
+
+  it("renders Company 360 view directly when URL query has tab=empresas", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent(["/dashboard?tab=empresas"]);
+
+    expect(screen.getByTestId("mock-company-360-view")).toBeInTheDocument();
+    expect(screen.queryByText("Embudo de Conversión Comercial")).not.toBeInTheDocument();
+  });
 });
