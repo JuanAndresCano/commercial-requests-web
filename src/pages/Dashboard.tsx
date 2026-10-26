@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import { KamCommandCenter } from "@/components/dashboard/KamCommandCenter";
 import { ProductLeaderDashboard } from "@/components/dashboard/ProductLeaderDashboard";
+import { AdminDashboard } from "@/components/dashboard/AdminDashboard";
 import { useRequests } from "@/hooks/use-requests";
 import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
@@ -45,6 +46,14 @@ export default function Dashboard() {
     return (
       <AppShell>
         <ProductLeaderDashboardConnected user={user} updateRequest={updateRequest} />
+      </AppShell>
+    );
+  }
+
+  if (user.role === "administrador") {
+    return (
+      <AppShell>
+        <AdminDashboard user={user} />
       </AppShell>
     );
   }

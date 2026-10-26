@@ -158,3 +158,4 @@ export const UserCheck = makeIcon("person_check");
 export const UserPlus = makeIcon("person_add");
 export const Users = makeIcon("group");
 export const X = makeIcon("close");
+export const Zap = makeIcon("bolt");

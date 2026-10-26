@@ -294,6 +294,59 @@ export interface ProposalStatusChange {
   changedAt: string;
 }
 
+export interface AdminDashboardTimeframe {
+  selectedYear: number;
+  selectedQuarter: number | null;
+  availableYears: number[];
+  startDate: string;
+  endDate: string;
+}
+
+export interface AdminMacroKpis {
+  deliveredTotalCop: number;
+  pipelineTotalCop: number;
+  deliveredCount: number;
+  pipelineCount: number;
+  totalProposals: number;
+  winRatePercentage: number;
+  averageCycleDays: number;
+}
+
+export interface FunnelStage {
+  stage: string;
+  label: string;
+  count: number;
+  totalCop: number;
+  percentage: number;
+}
+
+export interface KamRankingEntry {
+  kamId: string;
+  name: string;
+  email: string;
+  totalProposals: number;
+  deliveredCount: number;
+  deliveredTotalCop: number;
+  pipelineCount: number;
+  pipelineTotalCop: number;
+}
+
+export interface NodeDistributionEntry {
+  nodeId: string;
+  name: string;
+  totalProposals: number;
+  deliveredTotalCop: number;
+  pipelineTotalCop: number;
+}
+
+export interface AdminDashboardData {
+  timeframe: AdminDashboardTimeframe;
+  macroKpis: AdminMacroKpis;
+  conversionFunnel: FunnelStage[];
+  kamRanking: KamRankingEntry[];
+  nodeDistribution: NodeDistributionEntry[];
+}
+
 export interface ProposalDashboardMetrics {
   total: number;
   nuevas: number;
@@ -468,6 +521,15 @@ export interface ReassignProposalPayload {
 export const requestsApi = {
   /** Retrieves aggregated KPI metrics for the authenticated user based on role */
   getDashboardMetrics: () => apiRequest<ProposalDashboardMetrics>("/requests/dashboard/metrics"),
+
+  /** Retrieves executive dashboard analytics for administrators */
+  getAdminDashboard: (params?: { year?: number; quarter?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.year) search.set("year", String(params.year));
+    if (params?.quarter) search.set("quarter", String(params.quarter));
+    const qs = search.toString();
+    return apiRequest<AdminDashboardData>(`/requests/dashboard/admin${qs ? `?${qs}` : ""}`);
+  },
 
   /** Retrieves filtered list of proposals */
   list: (params: RequestsQueryParams = {}) => {
