@@ -345,7 +345,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           hint="Cerradas con el cliente"
           secondaryLine={
             entregadasValue > 0 ? (
-              <span className="font-semibold text-foreground">{formatCompactCop(entregadasValue)} en juego</span>
+              <span className="font-semibold text-foreground">{formatCompactCop(entregadasValue)} total entregado</span>
             ) : undefined
           }
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}

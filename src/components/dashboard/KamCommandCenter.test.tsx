@@ -141,7 +141,7 @@ describe("KamCommandCenter (HU 3.1)", () => {
     // "Lista para Entregar" has 15M from REQ-2026-0002
     expect(screen.getByText("$ 15M COP por entregar")).toBeInTheDocument();
     // "Entregada" has 10M from REQ-2026-0004
-    expect(screen.getByText("$ 10M COP en juego")).toBeInTheDocument();
+    expect(screen.getByText("$ 10M COP total entregado")).toBeInTheDocument();
   });
 
   it('labels the "nueva" stage as "Entregada al líder" for the KAM, in the card and in the table row', () => {
