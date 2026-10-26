@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import {
   Building2,
   Calendar,
-  Check,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -12,8 +11,6 @@ import {
   Network,
   Phone,
   RefreshCw,
-  Sparkles,
-  TrendingUp,
   User,
   Users,
   Zap,
@@ -190,8 +187,6 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
 
   const hoursTotal = metrics?.totalHours ?? impact?.totalHours ?? 0;
   const participantsTotal = metrics?.impactedParticipants ?? impact?.totalParticipants ?? 0;
-  const successMetrics = impact?.successMetrics ?? [];
-  const expectedResults = impact?.expectedResults ?? [];
   const competencies = impact?.competencies ?? [];
 
   return (
@@ -572,67 +567,9 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: IMPACTO, LOGROS Y PENETRACIÓN (5 COLS) */}
+        {/* COLUMNA DERECHA: COMPETENCIAS Y PENETRACIÓN POR NODO (5 COLS) */}
         <div className="space-y-6 lg:col-span-5">
-          {/* Card A: Logros y Métricas de Éxito */}
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3">
-            <div className="flex items-center gap-2 border-b border-border pb-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div>
-                <h4 className="font-display text-sm font-bold text-foreground">Logros y Métricas de Éxito</h4>
-                <p className="text-[11px] text-muted-foreground">
-                  Indicadores tangibles generados en las intervenciones
-                </p>
-              </div>
-            </div>
-
-            {successMetrics.length === 0 ? (
-              <p className="py-2 text-xs text-muted-foreground italic">
-                No se han registrado métricas cuantitativas adicionales aún.
-              </p>
-            ) : (
-              <ul className="space-y-2.5 pt-1">
-                {successMetrics.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 text-xs text-foreground">
-                    <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
-                    <span className="leading-relaxed">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Card B: Resultados Esperados */}
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3">
-            <div className="flex items-center gap-2 border-b border-border pb-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                <TrendingUp className="h-4 w-4" />
-              </div>
-              <div>
-                <h4 className="font-display text-sm font-bold text-foreground">Resultados Esperados</h4>
-                <p className="text-[11px] text-muted-foreground">Transformaciones de negocio acordadas</p>
-              </div>
-            </div>
-
-            {expectedResults.length === 0 ? (
-              <p className="py-2 text-xs text-muted-foreground italic">
-                No hay resultados cualitativos adicionales documentados.
-              </p>
-            ) : (
-              <ul className="space-y-2.5 pt-1">
-                {expectedResults.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 text-xs text-foreground">
-                    <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0 mt-1.5" />
-                    <span className="leading-relaxed">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Card C: Habilidades y Competencias Instaladas */}
+          {/* Card: Habilidades y Competencias Instaladas */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3">
             <div className="flex items-center gap-2 border-b border-border pb-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">

@@ -329,14 +329,7 @@ describe("Company360View Component", () => {
     expect(screen.getByText("En costeo")).toBeInTheDocument();
     expect(screen.getByText("$ 60.000.000")).toBeInTheDocument();
 
-    // 5. Impact & Achievements Wall
-    expect(screen.getByText("Logros y Métricas de Éxito")).toBeInTheDocument();
-    expect(screen.getByText("Reducción del 25% en tiempos de respuesta de servicio al cliente")).toBeInTheDocument();
-    expect(screen.getByText("Certificación internacional de 45 líderes en agilidad")).toBeInTheDocument();
-
-    expect(screen.getByText("Resultados Esperados")).toBeInTheDocument();
-    expect(screen.getByText("Adopción de nuevas metodologías de innovación abierta")).toBeInTheDocument();
-
+    // 5. Competencies and Academic Nodes
     expect(screen.getByText("Habilidades y Competencias Instaladas")).toBeInTheDocument();
     expect(screen.getByText("Liderazgo Adaptativo")).toBeInTheDocument();
     expect(screen.getByText("Metodologías Ágiles")).toBeInTheDocument();
@@ -451,8 +444,6 @@ describe("Company360View Component", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Empresa Sin Datos S.A.S." })).toBeInTheDocument();
     expect(screen.getByText("Sin contactos adicionales vinculados a la cuenta.")).toBeInTheDocument();
     expect(screen.getByText("No hay iniciativas registradas para esta empresa.")).toBeInTheDocument();
-    expect(screen.getByText("No se han registrado métricas cuantitativas adicionales aún.")).toBeInTheDocument();
-    expect(screen.getByText("No hay resultados cualitativos adicionales documentados.")).toBeInTheDocument();
     expect(screen.getByText("No se han registrado etiquetas de competencias para esta cuenta.")).toBeInTheDocument();
     expect(screen.getByText("Sin vinculación a nodos académicos aún.")).toBeInTheDocument();
   });
