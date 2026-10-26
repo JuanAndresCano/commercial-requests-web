@@ -6,6 +6,7 @@ import {
   Clock,
   ExternalLink,
   GraduationCap,
+  Layers,
   Mail,
   MapPin,
   Network,
@@ -13,7 +14,6 @@ import {
   RefreshCw,
   User,
   Users,
-  Zap,
   Briefcase,
   AlertCircle,
 } from "@/components/icons";
@@ -187,7 +187,57 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
 
   const hoursTotal = metrics?.totalHours ?? impact?.totalHours ?? 0;
   const participantsTotal = metrics?.impactedParticipants ?? impact?.totalParticipants ?? 0;
-  const competencies = impact?.competencies ?? [];
+
+  // 1. Desglose analítico por línea de servicio
+  const serviceTypeMap = new Map<string, { count: number; totalCop: number }>();
+  for (const ev of timeline) {
+    const rawType = ev.serviceType || ev.programType || "Consultoría Especializada";
+    const val = ev.grossValue ?? ev.estimatedValueCop ?? 0;
+    const curr = serviceTypeMap.get(rawType) ?? { count: 0, totalCop: 0 };
+    curr.count += 1;
+    curr.totalCop += val;
+    serviceTypeMap.set(rawType, curr);
+  }
+
+  const serviceBreakdown = Array.from(serviceTypeMap.entries())
+    .map(([name, data]) => ({
+      name,
+      count: data.count,
+      totalCop: data.totalCop,
+      percentage: metrics.totalProposals > 0 ? Math.round((data.count / metrics.totalProposals) * 100) : 0,
+    }))
+    .sort((a, b) => b.totalCop - a.totalCop);
+
+  // 2. Salud comercial y gestión de la cuenta
+  const averageTicket =
+    metrics.deliveredCount > 0
+      ? Math.round(metrics.deliveredTotalCop / metrics.deliveredCount)
+      : metrics.totalProposals > 0
+        ? Math.round((metrics.deliveredTotalCop + metrics.pipelineTotalCop) / metrics.totalProposals)
+        : 0;
+
+  // KAMs involucrados
+  const kamMap = new Map<string, number>();
+  for (const ev of timeline) {
+    const kam = ev.kamName || (typeof ev.kam === "object" ? ev.kam?.name : null) || "Sin asignar";
+    kamMap.set(kam, (kamMap.get(kam) ?? 0) + 1);
+  }
+  const kamsList = Array.from(kamMap.entries()).sort((a, b) => b[1] - a[1]);
+
+  // Formateo de fechas de vinculación
+  const formatEngagement = (dateStr: string | null | undefined) => {
+    if (!dateStr) return null;
+    try {
+      return new Date(dateStr).toLocaleDateString("es-CO", {
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return null;
+    }
+  };
+  const firstEngagementFormatted = formatEngagement(metrics.firstEngagementDate);
+  const lastEngagementFormatted = formatEngagement(metrics.lastEngagementDate);
 
   return (
     <div className="space-y-6" data-testid="company-360-view">
@@ -567,38 +617,105 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: COMPETENCIAS Y PENETRACIÓN POR NODO (5 COLS) */}
+        {/* COLUMNA DERECHA: MIX DE SERVICIOS, GESTIÓN Y PENETRACIÓN POR NODO (5 COLS) */}
         <div className="space-y-6 lg:col-span-5">
-          {/* Card: Habilidades y Competencias Instaladas */}
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3">
+          {/* Card: Mix de Portafolio por Servicio */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-4">
             <div className="flex items-center gap-2 border-b border-border pb-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                <Zap className="h-4 w-4" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                <Layers className="h-4 w-4" />
               </div>
               <div>
-                <h4 className="font-display text-sm font-bold text-foreground">
-                  Habilidades y Competencias Instaladas
-                </h4>
-                <p className="text-[11px] text-muted-foreground">Capacidades desarrolladas en la organización</p>
+                <h4 className="font-display text-sm font-bold text-foreground">Mix de Portafolio por Servicio</h4>
+                <p className="text-[11px] text-muted-foreground">
+                  Distribución del volumen e inversión por línea contratada
+                </p>
               </div>
             </div>
 
-            {competencies.length === 0 ? (
-              <p className="py-2 text-xs text-muted-foreground italic">
-                No se han registrado etiquetas de competencias para esta cuenta.
-              </p>
+            {serviceBreakdown.length === 0 ? (
+              <p className="py-2 text-xs text-muted-foreground italic">Sin líneas de servicio registradas aún.</p>
             ) : (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {competencies.map((comp, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
-                  >
-                    {comp}
-                  </span>
+              <div className="space-y-3.5">
+                {serviceBreakdown.map((item) => (
+                  <div key={item.name} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-foreground line-clamp-1 pr-2">{item.name}</span>
+                      <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground">
+                        {item.count} {item.count === 1 ? "propuesta" : "propuestas"} ({item.percentage}%)
+                      </span>
+                    </div>
+
+                    {/* Barra de Progreso */}
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-sky-600 dark:bg-sky-500 transition-all duration-300"
+                        style={{ width: `${item.percentage}%` }}
+                      />
+                    </div>
+
+                    <div className="flex justify-end text-[11px] text-muted-foreground">
+                      <span className="font-semibold text-foreground">{formatCop(item.totalCop)}</span>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Card: Salud y Gestión de la Cuenta */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 border-b border-border pb-3">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <Briefcase className="h-4 w-4" />
+              </div>
+              <div>
+                <h4 className="font-display text-sm font-bold text-foreground">Salud y Gestión de la Cuenta</h4>
+                <p className="text-[11px] text-muted-foreground">Indicadores de relación comercial y ticket medio</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-1">
+                <span className="text-[11px] font-medium text-muted-foreground block">Ticket promedio</span>
+                <span className="font-mono text-sm font-bold text-foreground block">
+                  {averageTicket > 0 ? formatCop(averageTicket) : "N/D"}
+                </span>
+                <span className="text-[10px] text-muted-foreground block">
+                  {metrics.deliveredCount > 0 ? "en propuestas entregadas" : "en portafolio activo"}
+                </span>
+              </div>
+
+              <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-1">
+                <span className="text-[11px] font-medium text-muted-foreground block">Vigencia comercial</span>
+                <span className="text-xs font-bold text-foreground block">
+                  {firstEngagementFormatted && lastEngagementFormatted
+                    ? `${firstEngagementFormatted} – ${lastEngagementFormatted}`
+                    : firstEngagementFormatted || "Sin registro"}
+                </span>
+                <span className="text-[10px] text-muted-foreground block">Primer y último contacto</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-medium text-muted-foreground block">Gestores comerciales (KAM)</span>
+              {kamsList.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">Sin gestores comerciales vinculados aún.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {kamsList.map(([kam, count]) => (
+                    <span
+                      key={kam}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground shadow-2xs"
+                    >
+                      <User className="h-3 w-3 text-muted-foreground" />
+                      <span>{kam}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground font-bold">({count})</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Card D: Penetración por Nodo Académico */}

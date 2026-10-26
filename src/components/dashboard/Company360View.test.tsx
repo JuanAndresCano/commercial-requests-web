@@ -318,8 +318,8 @@ describe("Company360View Component", () => {
     expect(screen.getByText("PROP-2026-001")).toBeInTheDocument();
     expect(screen.getByText("Programa de Liderazgo Transformacional y Transformación Cultural")).toBeInTheDocument();
     expect(screen.getByText("Entregada / Cerrada")).toBeInTheDocument();
-    expect(screen.getByText("$ 85.000.000")).toBeInTheDocument();
-    expect(screen.getByText("Carlos Mendoza")).toBeInTheDocument();
+    expect(screen.getAllByText("$ 85.000.000").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Carlos Mendoza").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Claudia Maitee Bahamón")).toBeInTheDocument();
     expect(screen.getByText("Dr. Roberto Casas")).toBeInTheDocument();
 
@@ -327,14 +327,17 @@ describe("Company360View Component", () => {
     expect(screen.getByText("PROP-2026-045")).toBeInTheDocument();
     expect(screen.getByText("Consultoría de Arquitectura Cloud Nativa y Ciberseguridad")).toBeInTheDocument();
     expect(screen.getByText("En costeo")).toBeInTheDocument();
-    expect(screen.getByText("$ 60.000.000")).toBeInTheDocument();
+    expect(screen.getAllByText("$ 60.000.000").length).toBeGreaterThanOrEqual(1);
 
-    // 5. Competencies and Academic Nodes
-    expect(screen.getByText("Habilidades y Competencias Instaladas")).toBeInTheDocument();
-    expect(screen.getByText("Liderazgo Adaptativo")).toBeInTheDocument();
-    expect(screen.getByText("Metodologías Ágiles")).toBeInTheDocument();
-    expect(screen.getByText("Analítica de Datos")).toBeInTheDocument();
-    expect(screen.getByText("Transformación Digital")).toBeInTheDocument();
+    // 5. Portfolio Service Mix and Account Health
+    expect(screen.getByText("Mix de Portafolio por Servicio")).toBeInTheDocument();
+    expect(screen.getAllByText("Capacitación").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Consultoría").length).toBeGreaterThanOrEqual(1);
+
+    expect(screen.getByText("Salud y Gestión de la Cuenta")).toBeInTheDocument();
+    expect(screen.getByText("Ticket promedio")).toBeInTheDocument();
+    expect(screen.getByText("Vigencia comercial")).toBeInTheDocument();
+    expect(screen.getByText("Gestores comerciales (KAM)")).toBeInTheDocument();
 
     // 6. Node Penetration Breakdown
     expect(screen.getByText("Penetración por Nodo Académico")).toBeInTheDocument();
@@ -444,7 +447,8 @@ describe("Company360View Component", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Empresa Sin Datos S.A.S." })).toBeInTheDocument();
     expect(screen.getByText("Sin contactos adicionales vinculados a la cuenta.")).toBeInTheDocument();
     expect(screen.getByText("No hay iniciativas registradas para esta empresa.")).toBeInTheDocument();
-    expect(screen.getByText("No se han registrado etiquetas de competencias para esta cuenta.")).toBeInTheDocument();
+    expect(screen.getByText("Sin líneas de servicio registradas aún.")).toBeInTheDocument();
+    expect(screen.getByText("Sin gestores comerciales vinculados aún.")).toBeInTheDocument();
     expect(screen.getByText("Sin vinculación a nodos académicos aún.")).toBeInTheDocument();
   });
 
