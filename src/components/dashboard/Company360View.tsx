@@ -176,8 +176,23 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
     );
   }
 
-  const { company, metrics, timeline, nodeBreakdown } = company360;
-  const contacts = company.contacts && Array.isArray(company.contacts) ? company.contacts : [];
+  const { company, metrics, timeline = [], nodeBreakdown = [] } = company360;
+  const contacts = company?.contacts && Array.isArray(company.contacts) ? company.contacts : [];
+
+  const impact = company360.impact ||
+    metrics?.impact || {
+      totalHours: metrics?.totalHours ?? 0,
+      totalParticipants: metrics?.impactedParticipants ?? 0,
+      successMetrics: [],
+      expectedResults: [],
+      competencies: [],
+    };
+
+  const hoursTotal = metrics?.totalHours ?? impact?.totalHours ?? 0;
+  const participantsTotal = metrics?.impactedParticipants ?? impact?.totalParticipants ?? 0;
+  const successMetrics = impact?.successMetrics ?? [];
+  const expectedResults = impact?.expectedResults ?? [];
+  const competencies = impact?.competencies ?? [];
 
   return (
     <div className="space-y-6" data-testid="company-360-view">
@@ -388,7 +403,7 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
           </div>
           <div className="mt-3">
             <div className="font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-              {metrics.impact.totalHours.toLocaleString("es-CO")}{" "}
+              {hoursTotal.toLocaleString("es-CO")}{" "}
               <span className="text-base font-medium text-muted-foreground">hrs</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Formación y asesoría estratégica</p>
@@ -405,7 +420,7 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
           </div>
           <div className="mt-3">
             <div className="font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-              {metrics.impact.totalParticipants.toLocaleString("es-CO")}
+              {participantsTotal.toLocaleString("es-CO")}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Colaboradores y líderes beneficiados</p>
           </div>
@@ -440,19 +455,30 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
 
                 <div className="space-y-6">
                   {timeline.map((event) => {
-                    const stage = STAGE_CONFIG[event.status] || {
-                      label: event.status,
+                    const stageKey = event.statusCode || event.status || "NEW";
+                    const stage = STAGE_CONFIG[stageKey] || {
+                      label: event.statusLabel || stageKey,
                       bg: "bg-muted",
                       text: "text-muted-foreground",
                       border: "border-border",
                       dot: "bg-muted-foreground",
                     };
 
-                    const formattedDate = new Date(event.createdAt).toLocaleDateString("es-CO", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    });
+                    const eventDate = event.date || event.createdAt;
+                    const formattedDate = eventDate
+                      ? new Date(eventDate).toLocaleDateString("es-CO", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "";
+
+                    const quarterLabel = typeof event.quarter === "number" ? `Q${event.quarter}` : event.quarter || "";
+                    const valueCop = event.grossValue ?? event.estimatedValueCop ?? 0;
+                    const serviceType = event.serviceType || event.programType || "Consultoría";
+                    const kam = event.kamName || (typeof event.kam === "object" ? event.kam?.name : event.kam);
+                    const leader = event.leaderName || event.academicLeaderName;
+                    const docente = event.professorName || event.assignedDocenteName;
 
                     return (
                       <div key={event.proposalId} className="relative flex items-start gap-4">
@@ -472,7 +498,8 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
                             <div className="flex items-center gap-2">
                               <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-2 py-0.5 text-[11px] font-bold text-foreground">
                                 <Calendar className="h-3 w-3 text-muted-foreground" />
-                                {event.quarter} {event.year} • {formattedDate}
+                                {quarterLabel ? `${quarterLabel} ` : ""}
+                                {event.year} • {formattedDate}
                               </span>
                               <span className="font-mono text-xs font-bold text-icesi-blue">{event.code}</span>
                             </div>
@@ -494,9 +521,9 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
 
                           {/* Valor Económico y Tipo de Servicio */}
                           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-                            <div className="font-bold text-foreground">{formatCop(event.estimatedValueCop)}</div>
+                            <div className="font-bold text-foreground">{formatCop(valueCop)}</div>
                             <span className="text-muted-foreground">•</span>
-                            <span className="font-medium text-muted-foreground">{event.serviceType}</span>
+                            <span className="font-medium text-muted-foreground">{serviceType}</span>
                             {event.nodeName && (
                               <>
                                 <span className="text-muted-foreground">•</span>
@@ -510,27 +537,27 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
 
                           {/* Chips de Equipo Involucrado */}
                           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2 text-[11px]">
-                            {event.kam && (
+                            {kam && (
                               <div className="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-muted-foreground">
                                 <User className="h-3 w-3 text-muted-foreground" />
                                 <span>
-                                  KAM: <strong className="text-foreground">{event.kam.name}</strong>
+                                  KAM: <strong className="text-foreground">{kam}</strong>
                                 </span>
                               </div>
                             )}
-                            {event.academicLeaderName && (
+                            {leader && (
                               <div className="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-muted-foreground">
                                 <GraduationCap className="h-3 w-3 text-muted-foreground" />
                                 <span>
-                                  Líder: <strong className="text-foreground">{event.academicLeaderName}</strong>
+                                  Líder: <strong className="text-foreground">{leader}</strong>
                                 </span>
                               </div>
                             )}
-                            {event.assignedDocenteName && (
+                            {docente && (
                               <div className="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-muted-foreground">
                                 <Briefcase className="h-3 w-3 text-muted-foreground" />
                                 <span>
-                                  Docente: <strong className="text-foreground">{event.assignedDocenteName}</strong>
+                                  Docente: <strong className="text-foreground">{docente}</strong>
                                 </span>
                               </div>
                             )}
@@ -561,13 +588,13 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
               </div>
             </div>
 
-            {metrics.impact.successMetrics.length === 0 ? (
+            {successMetrics.length === 0 ? (
               <p className="py-2 text-xs text-muted-foreground italic">
                 No se han registrado métricas cuantitativas adicionales aún.
               </p>
             ) : (
               <ul className="space-y-2.5 pt-1">
-                {metrics.impact.successMetrics.map((item, idx) => (
+                {successMetrics.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2.5 text-xs text-foreground">
                     <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
                     <span className="leading-relaxed">{item}</span>
@@ -589,13 +616,13 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
               </div>
             </div>
 
-            {metrics.impact.expectedResults.length === 0 ? (
+            {expectedResults.length === 0 ? (
               <p className="py-2 text-xs text-muted-foreground italic">
                 No hay resultados cualitativos adicionales documentados.
               </p>
             ) : (
               <ul className="space-y-2.5 pt-1">
-                {metrics.impact.expectedResults.map((item, idx) => (
+                {expectedResults.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2.5 text-xs text-foreground">
                     <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0 mt-1.5" />
                     <span className="leading-relaxed">{item}</span>
@@ -619,13 +646,13 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
               </div>
             </div>
 
-            {metrics.impact.competencies.length === 0 ? (
+            {competencies.length === 0 ? (
               <p className="py-2 text-xs text-muted-foreground italic">
                 No se han registrado etiquetas de competencias para esta cuenta.
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {metrics.impact.competencies.map((comp, idx) => (
+                {competencies.map((comp, idx) => (
                   <span
                     key={idx}
                     className="inline-flex items-center rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
@@ -658,6 +685,8 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
                 {nodeBreakdown.map((item) => {
                   const percentage =
                     metrics.totalProposals > 0 ? Math.round((item.proposalsCount / metrics.totalProposals) * 100) : 0;
+                  const totalValue = item.totalValueCop ?? (item.deliveredCop ?? 0) + (item.pipelineCop ?? 0);
+                  const deliveredCount = item.deliveredCount ?? (item.deliveredCop > 0 ? 1 : 0);
 
                   return (
                     <div key={item.nodeId} className="space-y-1.5">
@@ -678,9 +707,9 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
 
                       <div className="flex justify-between text-[11px] text-muted-foreground">
                         <span>
-                          {item.deliveredCount} {item.deliveredCount === 1 ? "entregada" : "entregadas"}
+                          {deliveredCount} {deliveredCount === 1 ? "entregada" : "entregadas"}
                         </span>
-                        <span className="font-semibold text-foreground">{formatCop(item.totalValueCop)}</span>
+                        <span className="font-semibold text-foreground">{formatCop(totalValue)}</span>
                       </div>
                     </div>
                   );

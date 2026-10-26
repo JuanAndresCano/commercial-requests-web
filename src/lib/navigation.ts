@@ -1,4 +1,4 @@
-import { Home, FileText, PlusCircle, Network, GraduationCap } from "@/components/icons";
+import { Home, FileText, PlusCircle, Network, GraduationCap, LayoutGrid, Building2 } from "@/components/icons";
 import type { UserRole } from "@/context/AuthContext";
 
 export interface NavItem {
@@ -26,7 +26,10 @@ export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { to: "/dashboard", label: "Solicitudes", icon: FileText },
     { to: "/solicitudes/nueva", label: "Nueva solicitud", icon: PlusCircle },
   ],
-  administrador: [{ to: "/dashboard", label: "Inicio", icon: Home }],
+  administrador: [
+    { to: "/dashboard", label: "Resumen Ejecutivo", icon: LayoutGrid },
+    { to: "/dashboard?tab=empresas", label: "Impacto por Empresa", icon: Building2 },
+  ],
 };
 
 export function getNavItems(role: UserRole): NavItem[] {
@@ -38,7 +41,10 @@ export function isNavItemActive(itemTo: string, pathname: string, search: string
   const [itemPath, itemQuery] = itemTo.split("?");
 
   if (itemQuery) return pathname === itemPath && search.includes(itemQuery);
-  if (itemTo === "/dashboard") return pathname === "/dashboard" || pathname === "/";
+  if (itemTo === "/dashboard") {
+    if (search.includes("tab=empresas")) return false;
+    return pathname === "/dashboard" || pathname === "/";
+  }
   if (itemTo === "/solicitudes/nueva") return pathname === "/solicitudes/nueva";
   if (itemTo === "/solicitudes") {
     if (pathname === "/solicitudes/nueva") return false;

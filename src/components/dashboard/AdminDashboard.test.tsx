@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AdminDashboard } from "./AdminDashboard";
 import * as adminHook from "@/hooks/use-admin-dashboard";
@@ -134,20 +135,22 @@ const mockAdminData: AdminDashboardData = {
   ],
 };
 
-function renderComponent() {
+function renderComponent(initialEntries?: string[]) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <AdminDashboard
-        user={{
-          name: "Lina Ayala",
-          email: "admin@icesi.edu.co",
-          roleLabel: "Administrador",
-        }}
-      />
-    </QueryClientProvider>,
+    <MemoryRouter initialEntries={initialEntries ?? ["/dashboard"]}>
+      <QueryClientProvider client={queryClient}>
+        <AdminDashboard
+          user={{
+            name: "Lina Ayala",
+            email: "admin@icesi.edu.co",
+            roleLabel: "Administrador",
+          }}
+        />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 

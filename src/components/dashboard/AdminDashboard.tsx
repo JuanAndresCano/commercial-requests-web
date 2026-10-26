@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Calendar, Users, Layers, AlertCircle, RefreshCw, Building2, LayoutGrid } from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RoleBadge } from "@/components/RoleBadge";
@@ -58,10 +59,30 @@ const STAGE_COLORS: Record<string, { bg: string; fill: string; text: string; bor
 };
 
 export function AdminDashboard({ user }: AdminDashboardProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get("tab") === "empresas" ? "empresas" : "resumen";
+  const [activeTab, setActiveTabState] = useState<"resumen" | "empresas">(currentTab);
+
+  useEffect(() => {
+    setActiveTabState(currentTab);
+  }, [currentTab]);
+
+  const handleTabChange = (tab: "resumen" | "empresas") => {
+    setActiveTabState(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tab === "resumen") {
+        next.delete("tab");
+      } else {
+        next.set("tab", tab);
+      }
+      return next;
+    });
+  };
+
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedQuarter, setSelectedQuarter] = useState<number | undefined>(undefined);
-  const [activeTab, setActiveTab] = useState<"resumen" | "empresas">("resumen");
 
   const { data, isLoading, isFetching, isError, refetch } = useAdminDashboard({
     year: selectedYear,
@@ -134,7 +155,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
         <div className="flex items-center rounded-xl border border-border bg-muted/40 p-1 shadow-xs shrink-0">
           <button
             type="button"
-            onClick={() => setActiveTab("resumen")}
+            onClick={() => handleTabChange("resumen")}
             className={cn(
               "flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer",
               activeTab === "resumen"
@@ -147,7 +168,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("empresas")}
+            onClick={() => handleTabChange("empresas")}
             className={cn(
               "flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer",
               activeTab === "empresas"

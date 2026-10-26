@@ -86,6 +86,11 @@ const mockCompany360: Company360Response = {
     deliveredTotalCop: 320000000,
     pipelineTotalCop: 140000000,
     totalPortfolioCop: 460000000,
+    totalHours: 360,
+    impactedParticipants: 420,
+    activeNodesCount: 2,
+    firstEngagementDate: "2026-02-15T10:00:00.000Z",
+    lastEngagementDate: "2026-04-10T14:30:00.000Z",
     impact: {
       totalHours: 360,
       totalParticipants: 420,
@@ -99,6 +104,19 @@ const mockCompany360: Company360Response = {
       ],
       competencies: ["Liderazgo Adaptativo", "Metodologías Ágiles", "Analítica de Datos", "Transformación Digital"],
     },
+  },
+  impact: {
+    totalHours: 360,
+    totalParticipants: 420,
+    successMetrics: [
+      "Reducción del 25% en tiempos de respuesta de servicio al cliente",
+      "Certificación internacional de 45 líderes en agilidad",
+    ],
+    expectedResults: [
+      "Adopción de nuevas metodologías de innovación abierta",
+      "Escalamiento de modelos analíticos en toma de decisiones",
+    ],
+    competencies: ["Liderazgo Adaptativo", "Metodologías Ágiles", "Analítica de Datos", "Transformación Digital"],
   },
   timeline: [
     {
