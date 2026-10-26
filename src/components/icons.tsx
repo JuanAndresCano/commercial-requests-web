@@ -81,6 +81,7 @@ function makeIcon(glyph: string, fill = true) {
 }
 
 export const AlertCircle = makeIcon("error");
+export const AlertTriangle = makeIcon("warning");
 export const ArrowLeft = makeIcon("arrow_back");
 export const ArrowLeftRight = makeIcon("swap_horiz");
 export const ArrowRight = makeIcon("arrow_forward");
@@ -140,6 +141,7 @@ export const PlusCircle = makeIcon("add_circle");
 export const Printer = makeIcon("print");
 export const Rocket = makeIcon("rocket_launch");
 export const RotateCcw = makeIcon("restart_alt");
+export const RefreshCw = makeIcon("refresh");
 export const Save = makeIcon("save");
 export const Search = makeIcon("search");
 export const Send = makeIcon("send");

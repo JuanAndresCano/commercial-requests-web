@@ -112,6 +112,19 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   const listasParaEntregarCount = stageCounts["en-costeo"];
   const entregadasCount = stageCounts.entregada;
 
+  // Valor financiero acumulado de propuestas entregadas (en juego) y listas para entregar
+  const entregadasList = activeDataset.filter((r) => r.status === "entregada");
+  const entregadasValue = entregadasList.reduce(
+    (sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0),
+    0,
+  );
+
+  const listasParaEntregarList = activeDataset.filter((r) => kamStageOf(r) === "en-costeo");
+  const listasParaEntregarValue = listasParaEntregarList.reduce(
+    (sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0),
+    0,
+  );
+
   // Métricas agregadas (no son una etapa del pipeline) — se muestran como
   // dato secundario, no como tarjeta-filtro principal.
   const totalCount = apiMetrics?.total ?? activeDataset.length;
@@ -314,6 +327,13 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           label={KAM_STAGE_LABELS["en-costeo"]}
           count={listasParaEntregarCount}
           hint="Costeo listo para enviar al cliente"
+          secondaryLine={
+            listasParaEntregarValue > 0 ? (
+              <span className="font-semibold text-foreground">
+                {formatCompactCop(listasParaEntregarValue)} por entregar
+              </span>
+            ) : undefined
+          }
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
           active={viewMode === "tabla" ? activeFilter === "en-costeo" : isolatedStage === "en-costeo"}
           onClick={() => handleCardClick("en-costeo")}
@@ -323,6 +343,11 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           label={KAM_STAGE_LABELS.entregada}
           count={entregadasCount}
           hint="Cerradas con el cliente"
+          secondaryLine={
+            entregadasValue > 0 ? (
+              <span className="font-semibold text-foreground">{formatCompactCop(entregadasValue)} en juego</span>
+            ) : undefined
+          }
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
           active={viewMode === "tabla" ? activeFilter === "entregada" : isolatedStage === "entregada"}
           onClick={() => handleCardClick("entregada")}

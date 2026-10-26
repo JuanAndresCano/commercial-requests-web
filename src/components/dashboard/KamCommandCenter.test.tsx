@@ -111,6 +111,39 @@ describe("KamCommandCenter (HU 3.1)", () => {
     expect(screen.getByRole("button", { name: /^Entregada(?! al líder)/i })).toBeInTheDocument();
   });
 
+  it("shows the monetary amount on 'Lista para Entregar' and 'Entregada' cards", () => {
+    const requestsWithMoney: RequestItem[] = [
+      ...mockRequests,
+      {
+        id: "REQ-2026-0004",
+        title: "Propuesta Entregada",
+        company: "Bancolombia",
+        applicant: "Diana",
+        type: "Capacitación",
+        createdAt: new Date().toISOString(),
+        status: "entregada",
+        urgency: "alta",
+        productLeader: "Carlos Gómez",
+        kam: "Andrea Martínez",
+        node: "IA",
+        costing: {
+          readyForKam: true,
+          totalOfferedCop: 10000000,
+          expectedMarginPercent: 30,
+          marginAmountCop: 3000000,
+          proCulturaTaxPercent: 1.5,
+          proCulturaTaxAmount: 150000,
+        },
+      },
+    ];
+
+    renderWithClient(<KamCommandCenter requests={requestsWithMoney} userName="Andrea Martínez" />);
+    // "Lista para Entregar" has 15M from REQ-2026-0002
+    expect(screen.getByText("$ 15M COP por entregar")).toBeInTheDocument();
+    // "Entregada" has 10M from REQ-2026-0004
+    expect(screen.getByText("$ 10M COP en juego")).toBeInTheDocument();
+  });
+
   it('labels the "nueva" stage as "Entregada al líder" for the KAM, in the card and in the table row', () => {
     renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
     const row = screen.getByText("Propuesta Capacitación 1").closest("tr") as HTMLElement;
