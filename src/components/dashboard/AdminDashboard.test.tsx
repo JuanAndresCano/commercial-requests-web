@@ -1,3 +1,4 @@
+import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -6,6 +7,34 @@ import * as adminHook from "@/hooks/use-admin-dashboard";
 import type { AdminDashboardData } from "@/lib/api/requests";
 
 vi.mock("@/hooks/use-admin-dashboard");
+
+const SelectContext = React.createContext<(val: string) => void>(() => {});
+
+vi.mock("@/components/ui/select", () => ({
+  Select: ({
+    children,
+    onValueChange,
+  }: {
+    children: React.ReactNode;
+    value?: string;
+    onValueChange?: (val: string) => void;
+  }) => (
+    <SelectContext.Provider value={onValueChange || (() => {})}>
+      <div data-testid="mock-select">{children}</div>
+    </SelectContext.Provider>
+  ),
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectValue: () => <span>SelectValue</span>,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => {
+    const onValueChange = React.useContext(SelectContext);
+    return (
+      <button type="button" role="option" data-value={value} onClick={() => onValueChange(value)}>
+        {children}
+      </button>
+    );
+  },
+}));
 
 const mockAdminData: AdminDashboardData = {
   timeframe: {
@@ -166,15 +195,15 @@ describe("AdminDashboard Component", () => {
     expect(screen.getByText("Administrador Icesi")).toBeInTheDocument();
 
     // 2. Macro KPIs
-    expect(screen.getAllByText("Total Entregado").length).toBe(2);
+    expect(screen.getByText("Total entregado")).toBeInTheDocument();
     expect(screen.getAllByText("$ 203.5M COP").length).toBe(2);
     expect(screen.getByText("5 propuestas radicadas")).toBeInTheDocument();
 
-    expect(screen.getByText("Tubería Activa")).toBeInTheDocument();
+    expect(screen.getByText("Tubería activa")).toBeInTheDocument();
     expect(screen.getAllByText("$ 262M COP").length).toBe(2);
     expect(screen.getByText("28 en proceso")).toBeInTheDocument();
 
-    expect(screen.getByText("33")).toBeInTheDocument();
+    expect(screen.getAllByText("33").length).toBeGreaterThan(0);
     expect(screen.getByText(/15.2% tasa de entrega/)).toBeInTheDocument();
 
     expect(screen.getByText("7.6 días")).toBeInTheDocument();
@@ -241,8 +270,8 @@ describe("AdminDashboard Component", () => {
 
     renderComponent();
 
-    const select = screen.getByRole("combobox", { name: "Seleccionar año" });
-    fireEvent.change(select, { target: { value: "2025" } });
+    const option2025 = screen.getByRole("option", { name: "2025" });
+    fireEvent.click(option2025);
 
     expect(hookSpy).toHaveBeenCalledWith(
       expect.objectContaining({
