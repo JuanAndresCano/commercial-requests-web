@@ -10,6 +10,10 @@ vi.mock("@/hooks/use-admin-dashboard");
 
 const SelectContext = React.createContext<(val: string) => void>(() => {});
 
+vi.mock("./Company360View", () => ({
+  Company360View: () => <div data-testid="mock-company-360-view">Mocked Company 360 View</div>,
+}));
+
 vi.mock("@/components/ui/select", () => ({
   Select: ({
     children,
@@ -278,5 +282,35 @@ describe("AdminDashboard Component", () => {
         year: 2025,
       }),
     );
+  });
+
+  it("switches smoothly between 'Resumen Ejecutivo' and 'Impacto por Empresa' tabs", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    // Initially in Resumen Ejecutivo
+    expect(screen.getByText("Embudo de Conversión Comercial")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-company-360-view")).not.toBeInTheDocument();
+
+    // Click "Impacto por Empresa"
+    const companyTabBtn = screen.getByRole("button", { name: /Impacto por Empresa/i });
+    fireEvent.click(companyTabBtn);
+
+    // Now Company 360 view is active
+    expect(screen.getByTestId("mock-company-360-view")).toBeInTheDocument();
+    expect(screen.queryByText("Embudo de Conversión Comercial")).not.toBeInTheDocument();
+
+    // Switch back to "Resumen Ejecutivo"
+    const resumenTabBtn = screen.getByRole("button", { name: /Resumen Ejecutivo/i });
+    fireEvent.click(resumenTabBtn);
+
+    expect(screen.getByText("Embudo de Conversión Comercial")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-company-360-view")).not.toBeInTheDocument();
   });
 });

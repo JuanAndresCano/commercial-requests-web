@@ -347,6 +347,91 @@ export interface AdminDashboardData {
   nodeDistribution: NodeDistributionEntry[];
 }
 
+export interface CompanyListItem {
+  id: string;
+  name: string;
+  nit: string | null;
+  sector: string | null;
+  type: string | null;
+  totalProposals: number;
+  deliveredCount: number;
+  deliveredTotalCop: number;
+  pipelineTotalCop: number;
+}
+
+export interface CompanyTimelineEvent {
+  proposalId: string;
+  code: string;
+  title: string;
+  date: string;
+  year: number;
+  quarter: number;
+  statusCode: string;
+  statusLabel: string;
+  grossValue: number;
+  nodeName: string;
+  kamName: string;
+  leaderName: string;
+  professorName: string | null;
+  programType: string | null;
+  modality: string | null;
+  totalHours: number;
+  participants: number;
+}
+
+export interface Company360Impact {
+  successMetrics: string[];
+  expectedResults: string[];
+  competencies: string[];
+}
+
+export interface CompanyNodeBreakdown {
+  nodeId: string;
+  nodeName: string;
+  proposalsCount: number;
+  deliveredCop: number;
+  pipelineCop: number;
+}
+
+export interface Company360Response {
+  company: {
+    id: string;
+    name: string;
+    nit: string | null;
+    sector: string | null;
+    ciiuCode: string | null;
+    type: string | null;
+    description: string | null;
+    website: string | null;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    contacts: Array<{
+      id: string;
+      name: string | null;
+      role: string | null;
+      areaDependency: string | null;
+      email: string | null;
+      phone: string | null;
+    }>;
+  };
+  metrics: {
+    totalProposals: number;
+    deliveredCount: number;
+    pipelineCount: number;
+    deliveredTotalCop: number;
+    pipelineTotalCop: number;
+    totalHours: number;
+    impactedParticipants: number;
+    activeNodesCount: number;
+    firstEngagementDate: string | null;
+    lastEngagementDate: string | null;
+  };
+  timeline: CompanyTimelineEvent[];
+  impact: Company360Impact;
+  nodeBreakdown: CompanyNodeBreakdown[];
+}
+
 export interface ProposalDashboardMetrics {
   total: number;
   nuevas: number;
@@ -521,6 +606,13 @@ export interface ReassignProposalPayload {
 export const requestsApi = {
   /** Retrieves aggregated KPI metrics for the authenticated user based on role */
   getDashboardMetrics: () => apiRequest<ProposalDashboardMetrics>("/requests/dashboard/metrics"),
+
+  /** Retrieves summary of all companies for executive admin review */
+  getAdminCompanies: () => apiRequest<CompanyListItem[]>("/requests/dashboard/admin/companies"),
+
+  /** Retrieves full 360-degree account intelligence, timeline and impact for a company */
+  getAdminCompany360: (companyId: string) =>
+    apiRequest<Company360Response>(`/requests/dashboard/admin/company/${companyId}`),
 
   /** Retrieves executive dashboard analytics for administrators */
   getAdminDashboard: (params?: { year?: number; quarter?: number }) => {
