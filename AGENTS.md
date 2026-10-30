@@ -19,16 +19,28 @@ client of `commercial-requests-backend` (NestJS).
 
 ## Architecture decisions and project knowledge
 
-Cross-repo decisions (why the backend was kept, why this client evolves from the
-prototype instead of Next.js) and the project audit live in the backend knowledge
+Cross-repo decisions (why the backend was kept, why this client moved from the
+Vite prototype to Next.js as an SPA shell) and the project audit live in the backend knowledge
 base: `../commercial-requests-backend/wiki/` — start at `wiki/index.md`, decisions
 in `wiki/decisiones/`. Clone both repositories side by side to read it. When asked
 "why" about the architecture, answer from those pages; don't guess.
 
 ## Stack
 
-React 18 · TypeScript (strict) · Vite · React Router · Tailwind · shadcn/ui ·
-TanStack Query · Vitest + Testing Library. **This is not Next.js.**
+React 19 · TypeScript (strict) · Next.js 16 (App Router) · Tailwind · shadcn/ui ·
+TanStack Query · Vitest + Testing Library.
+
+Next.js is used as an **SPA shell**: every route is a file under `src/app`, but its view
+(`src/views`) is loaded with `dynamic(..., { ssr: false })` and the providers are client-only,
+so nothing renders on the server and there are no Server Components with data. The web runs
+as a Node `standalone` server (port 80 in the container) behind the reverse proxy, which routes
+`/api` to the backend on the same host. Decision record: ADR-0006 in
+`../commercial-requests-backend/wiki/decisiones/` (it supersedes ADR-0002 on the framework).
+
+- Screens never import `next/*` directly: use `@/lib/app-router` (`Link`, `useRouter`,
+  `usePathname`, `useSearchParams`, `useParams`). In tests, wrap with `TestRouter` from
+  `src/test/router.tsx`; `next/navigation` and `next/link` are mocked in `src/test/setup.ts`.
+- The browser-visible API base URL is `NEXT_PUBLIC_API_URL` (inlined at build time).
 
 ## Commands
 

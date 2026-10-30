@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/app-router";
 import { Calendar, User, ArrowUpRight, AlertCircle, ArrowRight, Clock } from "@/components/icons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -32,7 +32,7 @@ export function RequestCard({ req, cta, stage }: RequestCardProps) {
 
   return (
     <Link
-      to={`/solicitudes/${req.id}`}
+      href={`/solicitudes/${req.id}`}
       className="group flex h-full flex-col rounded-lg border border-border dark:border-[#252838] bg-card dark:bg-[#141622] shadow-2xs transition-all hover:border-[#5454e9]/40 hover:shadow-md dark:hover:bg-[#171926] overflow-hidden"
     >
       {/* El cliente pidió ajustes — el KAM habla directo con el cliente, así

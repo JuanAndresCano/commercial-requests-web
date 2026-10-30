@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useRouter } from "@/lib/app-router";
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,7 +21,6 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
-  Sparkles,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
@@ -131,7 +130,7 @@ const LEADER_REQUIRED_MESSAGE = "Selecciona el Líder de Producto que atenderá 
 const DRAFT_STORAGE_KEY = "icesi_kam_new_request_draft_v1";
 
 export default function NewRequest() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { user } = useAuth();
   const createProposal = useCreateProposal();
   const { data: dbNodes } = useNodes();
@@ -523,7 +522,9 @@ export default function NewRequest() {
     return (
       <SuccessScreen
         kind={submitted}
-        onClose={() => navigate(user.role === "kam" || user.role === "lider-producto" ? "/dashboard" : "/solicitudes")}
+        onClose={() =>
+          router.push(user.role === "kam" || user.role === "lider-producto" ? "/dashboard" : "/solicitudes")
+        }
       />
     );
 
@@ -534,7 +535,7 @@ export default function NewRequest() {
         <div className="h-1 w-full bg-linear-to-r from-[#5454e9] via-[#865cf0] to-[#e4eb60]" />
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
           <Link
-            to="/dashboard"
+            href="/dashboard"
             className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -549,7 +550,7 @@ export default function NewRequest() {
             </span>
           </div>
           <Link
-            to="/dashboard"
+            href="/dashboard"
             className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary dark:hover:bg-[#1a1c28]"
           >
             <X className="h-4 w-4" />
@@ -562,9 +563,6 @@ export default function NewRequest() {
         {restoredDraftInfo && (
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/10 p-4 text-xs">
             <div className="flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-white">
-                <Sparkles className="h-4 w-4" />
-              </div>
               <div>
                 <p className="font-bold text-foreground text-sm">Solicitud en curso detectada</p>
                 <p className="text-muted-foreground mt-0.5">
@@ -2169,7 +2167,7 @@ function SuccessScreen({ kind, onClose }: { kind: "draft" | "sent"; onClose: () 
 
           <div className="mt-8 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
             <Button variant="outline" asChild>
-              <Link to="/dashboard">Ir al tablero principal</Link>
+              <Link href="/dashboard">Ir al tablero principal</Link>
             </Button>
             <Button onClick={onClose}>Ver lista de solicitudes</Button>
           </div>

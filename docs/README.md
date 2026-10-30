@@ -20,7 +20,7 @@
 
 ## ⚠️ Qué es (y qué NO es) esta documentación
 
-Lo que sigue documenta **el prototipo de UX/UI** tal como se validó (React + TypeScript + Vite + Tailwind + shadcn/ui, con datos simulados y persistencia en `localStorage`) — es la referencia de **reglas de negocio y experiencia validadas**, no un esquema del backend final.
+Lo que sigue documenta **el prototipo de UX/UI** tal como se validó (React + TypeScript + Vite + Tailwind + shadcn/ui, con datos simulados y persistencia en `localStorage`; el prototipo era Vite, **hoy el cliente es Next.js 16 (App Router) usado como cascarón SPA**, ver ADR-0006 del backend; los nombres de archivo de estos documentos ya apuntan a `src/views` y `src/app`, pero las pantallas y reglas descritas son las del prototipo validado) — es la referencia de **reglas de negocio y experiencia validadas**, no un esquema del backend final.
 
 **El backend real** (modelo de datos definitivo, autenticación institucional, API) vive en `commercial-requests-backend` (NestJS) — ver `AGENTS.md` para el enlace y las decisiones de arquitectura cruzadas entre los dos repos. Esta documentación no define esa arquitectura final — documenta la lógica de negocio y la experiencia tal como existen hoy en el prototipo, para que quien construya el backend real entienda:
 

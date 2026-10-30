@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ProductLeaderDashboard } from "./ProductLeaderDashboard";
@@ -43,14 +43,14 @@ function renderDashboard() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <TestRouter>
         <ProductLeaderDashboard
           requests={dataset}
           user={{ name: "Carlos Gómez", email: "c@icesi.edu.co", roleLabel: "Líder de Producto" }}
           updateRequest={vi.fn()}
           updateStatus={vi.fn()}
         />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
 }
@@ -138,14 +138,14 @@ describe("ProductLeaderDashboard time counters and official number (C-13)", () =
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <TestRouter>
           <ProductLeaderDashboard
             requests={timed}
             user={{ name: "Carlos Gómez", email: "c@icesi.edu.co", roleLabel: "Líder de Producto" }}
             updateRequest={vi.fn()}
             updateStatus={vi.fn()}
           />
-        </MemoryRouter>
+        </TestRouter>
       </QueryClientProvider>,
     );
   };

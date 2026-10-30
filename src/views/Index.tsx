@@ -1,11 +1,11 @@
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Sparkles } from "@/components/icons";
+import { Link, useRouter } from "@/lib/app-router";
+import { ArrowRight } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Index = () => {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col antialiased transition-colors">
@@ -24,7 +24,7 @@ const Index = () => {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle variant="pill" />
-            <Link to="/login" className="text-xs font-bold text-[#5454e9] dark:text-[#865cf0] hover:underline">
+            <Link href="/login" className="text-xs font-bold text-[#5454e9] dark:text-[#865cf0] hover:underline">
               Iniciar Sesión
             </Link>
           </div>
@@ -36,8 +36,8 @@ const Index = () => {
         {/* Hero Section */}
         <div className="relative overflow-hidden rounded-2xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-8 sm:p-10 shadow-sm">
           <div className="relative z-10 max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#5454e9]/30 bg-[#5454e9]/10 px-3 py-1 text-xs font-semibold text-[#5454e9] dark:text-[#865cf0] mb-4">
-              <Sparkles className="h-3.5 w-3.5" />
+            <div className="mb-5 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+              <span aria-hidden="true" className="h-px w-10 bg-primary/60" />
               <span>Universidad Icesi · Extensión y Consultoría</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground font-sans leading-tight">
@@ -50,7 +50,7 @@ const Index = () => {
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Button
-                onClick={() => navigate("/login")}
+                onClick={() => router.push("/login")}
                 className="bg-[#5454e9] hover:bg-[#4343d3] text-white text-xs font-bold px-5 h-10 shadow-sm"
               >
                 Iniciar sesión
