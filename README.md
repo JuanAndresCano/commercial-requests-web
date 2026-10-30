@@ -24,7 +24,7 @@ npm run dev            # http://localhost:3000
 
 ## Stack
 
-React 18 · TypeScript (strict) · Vite · React Router · Tailwind CSS · shadcn/ui ·
+React 19 · TypeScript (strict) · Next.js 16 (App Router, SPA shell) · Tailwind CSS · shadcn/ui ·
 TanStack Query · Vitest.
 
 ## Documentation

@@ -31,3 +31,7 @@ dist-ssr
 
 # Test output
 coverage
+
+# Next.js build output and generated types
+.next
+next-env.d.ts

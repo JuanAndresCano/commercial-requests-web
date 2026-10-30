@@ -145,7 +145,6 @@ export const Search = makeIcon("search");
 export const Send = makeIcon("send");
 export const ShieldCheck = makeIcon("verified_user");
 export const SlidersHorizontal = makeIcon("tune");
-export const Sparkles = makeIcon("auto_awesome");
 export const Sun = makeIcon("light_mode");
 export const Tag = makeIcon("sell");
 export const Trash2 = makeIcon("delete");
