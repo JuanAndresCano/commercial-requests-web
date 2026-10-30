@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RequestDetail from "./RequestDetail";
@@ -101,11 +101,7 @@ function renderPage() {
   return render(
     <ThemeProvider>
       <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/solicitudes/REQ-2026-0002"]}>
-          <Routes>
-            <Route path="/solicitudes/:id" element={<RequestDetail />} />
-          </Routes>
-        </MemoryRouter>
+        <TestRouter route="/solicitudes/REQ-2026-0002" routes={{ "/solicitudes/:id": <RequestDetail /> }} />
       </QueryClientProvider>
     </ThemeProvider>,
   );

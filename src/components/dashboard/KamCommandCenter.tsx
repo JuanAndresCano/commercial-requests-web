@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/app-router";
 import { Plus, Rocket, Search, ArrowRight, X, Building2, LayoutGrid, List, Clock } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,7 +233,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
             asChild
             className="h-10 rounded-lg bg-icesi-blue px-4 font-bold text-white shadow-sm hover:bg-icesi-blue/90 transition-all"
           >
-            <Link to="/solicitudes/nueva" className="inline-flex items-center gap-2">
+            <Link href="/solicitudes/nueva" className="inline-flex items-center gap-2">
               <Plus className="h-4 w-4 stroke-[2.5]" />
               <span>Nueva Solicitud</span>
             </Link>
@@ -485,7 +485,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                                   size="sm"
                                   className="text-xs bg-icesi-blue hover:bg-icesi-blue/90 text-white"
                                 >
-                                  <Link to="/solicitudes/nueva">Crear mi primera solicitud</Link>
+                                  <Link href="/solicitudes/nueva">Crear mi primera solicitud</Link>
                                 </Button>
                               </div>
                             </>
@@ -545,7 +545,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                           <td className="px-4 py-3.5 align-middle">
                             <div className="flex flex-col gap-1 max-w-[320px]">
                               <Link
-                                to={`/solicitudes/${r.id}`}
+                                href={`/solicitudes/${r.id}`}
                                 className="font-semibold text-sm text-foreground hover:text-icesi-blue dark:hover:text-icesi-purple transition-colors leading-snug line-clamp-2"
                                 title={r.title}
                               >
@@ -642,14 +642,14 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                                 size="sm"
                                 className="h-8 rounded-full bg-icesi-blue hover:bg-icesi-blue/90 px-3.5 text-xs font-bold text-white shadow-xs transition-colors"
                               >
-                                <Link to={`/solicitudes/${r.id}`}>
+                                <Link href={`/solicitudes/${r.id}`}>
                                   <span>Ver propuesta</span>
                                   <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                                 </Link>
                               </Button>
                             ) : (
                               <Link
-                                to={`/solicitudes/${r.id}`}
+                                href={`/solicitudes/${r.id}`}
                                 className="inline-flex items-center text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
                               >
                                 <span>Ver detalle</span>
@@ -686,7 +686,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                       </p>
                       <div className="mt-3 flex items-center justify-center gap-2">
                         <Button asChild size="sm" className="text-xs bg-icesi-blue hover:bg-icesi-blue/90 text-white">
-                          <Link to="/solicitudes/nueva">Crear mi primera solicitud</Link>
+                          <Link href="/solicitudes/nueva">Crear mi primera solicitud</Link>
                         </Button>
                       </div>
                     </>

@@ -1,11 +1,11 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useRouter } from "@/lib/app-router";
 import { ArrowRight, Sparkles } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Index = () => {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col antialiased transition-colors">
@@ -24,7 +24,7 @@ const Index = () => {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle variant="pill" />
-            <Link to="/login" className="text-xs font-bold text-[#5454e9] dark:text-[#865cf0] hover:underline">
+            <Link href="/login" className="text-xs font-bold text-[#5454e9] dark:text-[#865cf0] hover:underline">
               Iniciar Sesión
             </Link>
           </div>
@@ -50,7 +50,7 @@ const Index = () => {
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Button
-                onClick={() => navigate("/login")}
+                onClick={() => router.push("/login")}
                 className="bg-[#5454e9] hover:bg-[#4343d3] text-white text-xs font-bold px-5 h-10 shadow-sm"
               >
                 Iniciar sesión

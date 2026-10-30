@@ -25,6 +25,15 @@ base: `../commercial-requests-backend/wiki/` — start at `wiki/index.md`, decis
 in `wiki/decisiones/`. Clone both repositories side by side to read it. When asked
 "why" about the architecture, answer from those pages; don't guess.
 
+## Migration in progress (Vite → Next.js)
+
+This client is being migrated, in small steps and with **no visible change**, from
+Vite + React Router to Next.js 16 (App Router, used as an SPA shell) and React 19
+(branches `chore/next-prep` and `feat/next-migration`). Decision record: ADR-0006 in
+`../commercial-requests-backend/wiki/decisiones/` (it supersedes ADR-0002 on the
+framework). Until the migration lands, the "Stack" section below describes the
+current state; it is rewritten in the last step.
+
 ## Stack
 
 React 18 · TypeScript (strict) · Vite · React Router · Tailwind · shadcn/ui ·
