@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useRouter, useSearchParams } from "@/lib/app-router";
 import { Calendar, Users, Layers, AlertCircle, RefreshCw, Building2, LayoutGrid } from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RoleBadge } from "@/components/RoleBadge";
@@ -59,7 +59,8 @@ const STAGE_COLORS: Record<string, { bg: string; fill: string; text: string; bor
 };
 
 export function AdminDashboard({ user }: AdminDashboardProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const currentTab = searchParams.get("tab") === "empresas" ? "empresas" : "resumen";
   const [activeTab, setActiveTabState] = useState<"resumen" | "empresas">(currentTab);
 
@@ -69,15 +70,14 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
 
   const handleTabChange = (tab: "resumen" | "empresas") => {
     setActiveTabState(tab);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (tab === "resumen") {
-        next.delete("tab");
-      } else {
-        next.set("tab", tab);
-      }
-      return next;
-    });
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === "resumen") {
+      params.delete("tab");
+    } else {
+      params.set("tab", tab);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/dashboard?${qs}` : "/dashboard");
   };
 
   const currentYear = new Date().getFullYear();

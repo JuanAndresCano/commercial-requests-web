@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AdminDashboard } from "./AdminDashboard";
 import * as adminHook from "@/hooks/use-admin-dashboard";
@@ -135,12 +135,13 @@ const mockAdminData: AdminDashboardData = {
   ],
 };
 
-function renderComponent(initialEntries?: string[]) {
+function renderComponent(initialEntries?: string[] | string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const route = typeof initialEntries === "string" ? initialEntries : (initialEntries?.[0] ?? "/dashboard");
   return render(
-    <MemoryRouter initialEntries={initialEntries ?? ["/dashboard"]}>
+    <TestRouter route={route}>
       <QueryClientProvider client={queryClient}>
         <AdminDashboard
           user={{
@@ -150,7 +151,7 @@ function renderComponent(initialEntries?: string[]) {
           }}
         />
       </QueryClientProvider>
-    </MemoryRouter>,
+    </TestRouter>,
   );
 }
 

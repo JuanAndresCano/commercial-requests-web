@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Dashboard from "./Dashboard";
 import * as authContext from "@/context/AuthContext";
@@ -28,9 +28,9 @@ describe("Dashboard Page Role Routing", () => {
     });
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <TestRouter route="/dashboard">
           <Dashboard />
-        </MemoryRouter>
+        </TestRouter>
       </QueryClientProvider>,
     );
   };
