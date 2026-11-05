@@ -352,7 +352,7 @@ export interface CompanyListItem {
   name: string;
   nit: string | null;
   sector: string | null;
-  type: string | null;
+  type?: string | null;
   totalProposals: number;
   deliveredCount: number;
   deliveredTotalCop: number;
@@ -363,23 +363,33 @@ export interface CompanyTimelineEvent {
   proposalId: string;
   code: string;
   title: string;
-  date: string;
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
   year: number;
-  quarter: number;
-  statusCode: string;
-  statusLabel: string;
-  grossValue: number;
+  quarter: number | string;
+  statusCode?: string;
+  status?: string;
+  statusLabel?: string;
+  grossValue?: number;
+  estimatedValueCop?: number;
   nodeName: string;
-  kamName: string;
-  leaderName: string;
-  professorName: string | null;
-  programType: string | null;
-  modality: string | null;
-  totalHours: number;
-  participants: number;
+  kamName?: string;
+  kam?: { id: string; name: string; email?: string };
+  leaderName?: string;
+  academicLeaderName?: string;
+  professorName?: string | null;
+  assignedDocenteName?: string | null;
+  programType?: string | null;
+  serviceType?: string;
+  modality?: string | null;
+  totalHours?: number;
+  participants?: number;
 }
 
 export interface Company360Impact {
+  totalHours?: number;
+  totalParticipants?: number;
   successMetrics: string[];
   expectedResults: string[];
   competencies: string[];
@@ -389,8 +399,10 @@ export interface CompanyNodeBreakdown {
   nodeId: string;
   nodeName: string;
   proposalsCount: number;
-  deliveredCop: number;
-  pipelineCop: number;
+  deliveredCount?: number;
+  deliveredCop?: number;
+  pipelineCop?: number;
+  totalValueCop?: number;
 }
 
 export interface Company360Response {
@@ -407,10 +419,10 @@ export interface Company360Response {
     phone: string | null;
     email: string | null;
     contacts: Array<{
-      id: string;
+      id?: string;
       name: string | null;
       role: string | null;
-      areaDependency: string | null;
+      areaDependency?: string | null;
       email: string | null;
       phone: string | null;
     }>;
@@ -421,11 +433,13 @@ export interface Company360Response {
     pipelineCount: number;
     deliveredTotalCop: number;
     pipelineTotalCop: number;
+    totalPortfolioCop?: number;
     totalHours: number;
     impactedParticipants: number;
     activeNodesCount: number;
     firstEngagementDate: string | null;
     lastEngagementDate: string | null;
+    impact?: Company360Impact;
   };
   timeline: CompanyTimelineEvent[];
   impact: Company360Impact;

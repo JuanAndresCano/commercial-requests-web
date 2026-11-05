@@ -740,7 +740,7 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
                   const percentage =
                     metrics.totalProposals > 0 ? Math.round((item.proposalsCount / metrics.totalProposals) * 100) : 0;
                   const totalValue = item.totalValueCop ?? (item.deliveredCop ?? 0) + (item.pipelineCop ?? 0);
-                  const deliveredCount = item.deliveredCount ?? (item.deliveredCop > 0 ? 1 : 0);
+                  const deliveredCount = item.deliveredCount ?? ((item.deliveredCop ?? 0) > 0 ? 1 : 0);
 
                   return (
                     <div key={item.nodeId} className="space-y-1.5">
