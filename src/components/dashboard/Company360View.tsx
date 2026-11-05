@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "@/lib/app-router";
 import {
   Building2,
   Calendar,
@@ -546,7 +547,14 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
                                 {quarterLabel ? `${quarterLabel} ` : ""}
                                 {event.year} • {formattedDate}
                               </span>
-                              <span className="font-mono text-xs font-bold text-icesi-blue">{event.code}</span>
+                              <Link
+                                href={`/solicitudes/${event.proposalId}`}
+                                className="font-mono text-xs font-bold text-icesi-blue hover:underline hover:text-icesi-blue/80 inline-flex items-center gap-1 transition-colors"
+                                title={`Ver detalle de la solicitud ${event.code}`}
+                              >
+                                <span>{event.code}</span>
+                                <ExternalLink className="h-3 w-3 opacity-70" />
+                              </Link>
                             </div>
 
                             <span

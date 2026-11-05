@@ -1003,7 +1003,9 @@ export default function RequestDetail() {
         <div className="space-y-6 max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <Link
-              href={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              href={
+                role === "kam" || role === "lider-producto" || role === "administrador" ? "/dashboard" : "/dashboard"
+              }
               className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
@@ -1019,7 +1021,9 @@ export default function RequestDetail() {
                 : "Esta solicitud no existe, fue cancelada, o el enlace es incorrecto."}
             </p>
             <Link
-              href={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              href={
+                role === "kam" || role === "lider-producto" || role === "administrador" ? "/dashboard" : "/dashboard"
+              }
               className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline mt-2"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Ir al tablero
@@ -1202,7 +1206,7 @@ export default function RequestDetail() {
         {/* ========================================================================= */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <Link
-            href={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+            href={role === "kam" || role === "lider-producto" || role === "administrador" ? "/dashboard" : "/dashboard"}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
