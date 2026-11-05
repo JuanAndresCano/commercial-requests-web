@@ -50,7 +50,7 @@ Es el dueño comercial de la relación con el cliente corporativo. Su "resultado
 
 ### Su pantalla principal: `KamCommandCenter`
 
-Archivo: `src/components/dashboard/KamCommandCenter.tsx`, montado desde `src/pages/Dashboard.tsx` cuando `role === "kam"`. Todo su estado de UI (filtro, búsqueda, vista, columna aislada) se persiste en `localStorage` vía el hook `usePersistentState` — sobrevive a navegar al detalle y volver.
+Archivo: `src/components/dashboard/KamCommandCenter.tsx`, montado desde `src/views/Dashboard.tsx` cuando `role === "kam"`. Todo su estado de UI (filtro, búsqueda, vista, columna aislada) se persiste en `localStorage` vía el hook `usePersistentState` — sobrevive a navegar al detalle y volver.
 
 Estructura (de arriba hacia abajo):
 1. **Saludo personalizado** ("Hola, Andrea" + `RoleBadge` "KAM Icesi") + botón prominente "Nueva Solicitud".
@@ -65,7 +65,7 @@ Estructura (de arriba hacia abajo):
 
 ### Su journey de creación de solicitud
 
-Ver detalle completo en `03-flujos-de-usuario.md`. Resumen: wizard de 5 pasos (`src/pages/NewRequest.tsx`) — Empresa → Contacto → Requerimiento → Formación previa → Observaciones y Documentos. **6 campos son obligatorios para enviar** (no solo 2 — esto estaba desactualizado): razón social de la empresa y su naturaleza jurídica (paso 1), título de la propuesta y tipo de requerimiento — con su descripción libre si el tipo es "Otro" (paso 3), y si ha habido formación previa y el nivel de urgencia (paso 4). Todo lo demás es opcional, con autoguardado en `localStorage` y recuperación de borrador. *Actualización 2026-10-09:* el **líder de producto es obligatorio** y lo elige el KAM; el **nodo temático es opcional** y nunca se rellena solo (ya no se sugiere el líder a partir del nodo).
+Ver detalle completo en `03-flujos-de-usuario.md`. Resumen: wizard de 5 pasos (`src/views/NewRequest.tsx`) — Empresa → Contacto → Requerimiento → Formación previa → Observaciones y Documentos. **6 campos son obligatorios para enviar** (no solo 2 — esto estaba desactualizado): razón social de la empresa y su naturaleza jurídica (paso 1), título de la propuesta y tipo de requerimiento — con su descripción libre si el tipo es "Otro" (paso 3), y si ha habido formación previa y el nivel de urgencia (paso 4). Todo lo demás es opcional, con autoguardado en `localStorage` y recuperación de borrador. *Actualización 2026-10-09:* el **líder de producto es obligatorio** y lo elige el KAM; el **nodo temático es opcional** y nunca se rellena solo (ya no se sugiere el líder a partir del nodo).
 
 ---
 
@@ -104,7 +104,7 @@ Se auditó cada transición de estado buscando huecos donde un clic accidental (
 
 ### Su pantalla principal: `ProductLeaderDashboard`
 
-Archivo: `src/components/dashboard/ProductLeaderDashboard.tsx`, montado desde `src/pages/Dashboard.tsx` cuando `role === "lider-producto"`. Igual que en `KamCommandCenter`, todo su estado de UI se persiste en `localStorage`.
+Archivo: `src/components/dashboard/ProductLeaderDashboard.tsx`, montado desde `src/views/Dashboard.tsx` cuando `role === "lider-producto"`. Igual que en `KamCommandCenter`, todo su estado de UI se persiste en `localStorage`.
 
 Estructura:
 1. **Header** con saludo personalizado ("Hola, Juan Pablo" + `RoleBadge`).
@@ -134,7 +134,7 @@ Ver detalle completo en `03-flujos-de-usuario.md`. Resumen: desde el Kanban o de
 
 **`role: "lider-nodo"`** · Nombre por defecto: Carlos Riveros · Nodo asociado: Competitividad Organizacional, Economías Creativas
 
-Rol de supervisión/coordinación a nivel de nodo académico. En el prototipo actual **no tiene un dashboard propio dedicado** (cae en la rama genérica de `src/pages/Dashboard.tsx`, la cual además tiene un bug que la rompe — ver `07-gaps-conocidos-y-deuda-tecnica.md`). Su navegación (`AppShell`) solo ofrece "Inicio" y "Solicitudes de nodo". No es foco de este esfuerzo de UX, pero cualquier cambio en la lógica de reasignación (que involucra nodos) debería considerar que este rol existe conceptualmente.
+Rol de supervisión/coordinación a nivel de nodo académico. En el prototipo actual **no tiene un dashboard propio dedicado** (cae en la rama genérica de `src/views/Dashboard.tsx`, la cual además tiene un bug que la rompe — ver `07-gaps-conocidos-y-deuda-tecnica.md`). Su navegación (`AppShell`) solo ofrece "Inicio" y "Solicitudes de nodo". No es foco de este esfuerzo de UX, pero cualquier cambio en la lógica de reasignación (que involucra nodos) debería considerar que este rol existe conceptualmente.
 
 **Respuesta parcial de la Líder de Producto (`08`, pregunta 15):** el rol sí existe en la operación real y supervisa las propuestas que están bajo su nodo — pero ella se refirió a él como **"Director de Nodo"**, no "Líder de Nodo". Falta confirmar si es el mismo rol con otro nombre más correcto, o si son dos roles distintos — no cambiar el nombre en el código todavía sin esa confirmación (ver pregunta 15 actualizada en `08`).
 

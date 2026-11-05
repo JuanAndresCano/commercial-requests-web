@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, usePathname, useSearchParams } from "@/lib/app-router";
 import { LogOut } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -36,7 +36,9 @@ const LABEL_WIDTH = {
 
 /** Nav links, user menu and controls of the side menu; the links come from the session role. */
 export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarContentProps) {
-  const { pathname, search } = useLocation();
+  const pathname = usePathname();
+  const query = useSearchParams().toString();
+  const search = query ? `?${query}` : "";
   const { user } = useAuth();
   const navItems = getNavItems(user.role);
 
@@ -61,7 +63,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
     <div className="flex h-full w-full flex-col justify-between overflow-hidden py-4 text-white select-none">
       <div className="flex w-full flex-col gap-4 px-2">
         <Link
-          to="/dashboard"
+          href="/dashboard"
           onClick={onNavigate}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform hover:scale-105"
           title="Universidad Icesi - Solicitudes Comerciales"
@@ -115,7 +117,7 @@ export function SidebarContent({ expanded, onLogout, onNavigate }: SidebarConten
             return (
               <Link
                 key={item.to}
-                to={item.to}
+                href={item.to}
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
                 className={cn(

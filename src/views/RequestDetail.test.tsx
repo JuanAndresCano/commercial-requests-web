@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RequestDetail from "./RequestDetail";
@@ -279,12 +279,10 @@ function renderPage(requestId = "REQ-2026-0001") {
   return render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/solicitudes/${requestId}`]}>
-          <Routes>
-            <Route path="/solicitudes/:id" element={<RequestDetail />} />
-            <Route path="/dashboard" element={<div>Tablero Dashboard</div>} />
-          </Routes>
-        </MemoryRouter>
+        <TestRouter
+          route={`/solicitudes/${requestId}`}
+          routes={{ "/solicitudes/:id": <RequestDetail />, "/dashboard": <div>Tablero Dashboard</div> }}
+        />
       </QueryClientProvider>
     </ThemeProvider>,
   );

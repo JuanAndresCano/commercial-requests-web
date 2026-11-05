@@ -8,3 +8,7 @@ docs
 
 # Generated shadcn/ui primitives: kept exactly as generated.
 src/components/ui
+
+# Next.js build output and generated types
+.next
+next-env.d.ts

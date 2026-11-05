@@ -11,3 +11,5 @@ docs
 *.log
 Dockerfile
 .dockerignore
+.next
+next-env.d.ts

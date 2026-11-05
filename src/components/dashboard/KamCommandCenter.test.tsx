@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { beforeEach, describe, expect, it } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KamCommandCenter } from "./KamCommandCenter";
@@ -66,7 +66,7 @@ function renderWithClient(ui: React.ReactElement) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>{ui}</MemoryRouter>
+      <TestRouter>{ui}</TestRouter>
     </QueryClientProvider>,
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, type ReactNode } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useRouter } from "@/lib/app-router";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -122,7 +122,7 @@ const CANCEL_REASON_PRESETS = [
 
 export default function RequestDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
+  const router = useRouter();
   const {
     requests,
     user,
@@ -533,7 +533,7 @@ export default function RequestDetail() {
             // suyo) y dejar la UI mostrando al líder anterior indefinidamente. Salir
             // al dashboard evita ese estado inconsistente sin depender de que el
             // refetch tenga éxito.
-            navigate("/dashboard");
+            router.push("/dashboard");
           },
           onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo reasignar"),
         },
@@ -882,7 +882,7 @@ export default function RequestDetail() {
         toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
         setIsCancelModalOpen(false);
         setCancelReason("");
-        navigate("/dashboard");
+        router.push("/dashboard");
         return;
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "Error al cancelar la solicitud";
@@ -894,7 +894,7 @@ export default function RequestDetail() {
     toast.success(`Solicitud ${req.code ?? req.id} cancelada`);
     setIsCancelModalOpen(false);
     setCancelReason("");
-    navigate("/dashboard");
+    router.push("/dashboard");
   };
 
   // Si el cliente pide ajustes tras la entrega, el KAM la devuelve a costeo
@@ -1003,7 +1003,7 @@ export default function RequestDetail() {
         <div className="space-y-6 max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <Link
-              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              href={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes
@@ -1019,7 +1019,7 @@ export default function RequestDetail() {
                 : "Esta solicitud no existe, fue cancelada, o el enlace es incorrecto."}
             </p>
             <Link
-              to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+              href={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline mt-2"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Ir al tablero
@@ -1202,7 +1202,7 @@ export default function RequestDetail() {
         {/* ========================================================================= */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <Link
-            to={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
+            href={role === "kam" || role === "lider-producto" ? "/dashboard" : "/solicitudes"}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Volver a solicitudes

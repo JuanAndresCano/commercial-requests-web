@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { TestRouter } from "@/test/router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ROLE_CONFIGS, type UserRole } from "@/context/AuthContext";
@@ -26,11 +26,11 @@ function renderShell(role: UserRole = "kam") {
   auth.current = { ...auth.current, role, roleLabel: ROLE_CONFIGS[role].label };
   return render(
     <ThemeProvider>
-      <MemoryRouter initialEntries={["/dashboard"]}>
+      <TestRouter route="/dashboard">
         <AppShell>
           <p>contenido</p>
         </AppShell>
-      </MemoryRouter>
+      </TestRouter>
     </ThemeProvider>,
   );
 }

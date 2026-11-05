@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/app-router";
 import {
   ArrowRight,
   Clock,
   CheckCircle2,
   UserCheck,
-  Sparkles,
   ArrowLeftRight,
   Building2,
   Search,
@@ -24,7 +23,6 @@ import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { BoardMotion } from "@/components/kanban/BoardMotion";
 import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
-import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useReassignProposal } from "@/hooks/use-reassign-proposal";
 import { useNodes } from "@/hooks/use-nodes";
@@ -328,7 +326,6 @@ export function ProductLeaderDashboard({
               Hola, {firstName}
             </h1>
             <RoleBadge label="Líder de Producto" />
-            <RealtimeIndicator />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Gestión directa de tus solicitudes: asignación de docentes, avance técnico y costeo en un único lugar.
@@ -341,9 +338,6 @@ export function ProductLeaderDashboard({
       {countNuevas > 0 && (
         <div className="flex flex-col gap-3 rounded-xl border border-[#5454e9]/30 bg-[#5454e9]/10 dark:bg-[#5454e9]/15 p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3.5 sm:items-center">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5454e9] text-white">
-              <Sparkles className="h-5 w-5" />
-            </div>
             <div>
               <p className="text-sm font-bold text-foreground">
                 ¡Tienes {countNuevas}{" "}
@@ -619,7 +613,7 @@ export function ProductLeaderDashboard({
                             </div>
 
                             {/* Área informativa: toda la tarjeta (menos los botones de acción) lleva al detalle */}
-                            <Link to={`/solicitudes/${req.id}`} className="block flex-1 p-3.5">
+                            <Link href={`/solicitudes/${req.id}`} className="block flex-1 p-3.5">
                               {/* Top: ID, Company & Urgency */}
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
@@ -756,7 +750,10 @@ export function ProductLeaderDashboard({
                                       size="sm"
                                       className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
                                     >
-                                      <Link to={`/solicitudes/${req.id}`} title="Completar el costeo de esta propuesta">
+                                      <Link
+                                        href={`/solicitudes/${req.id}`}
+                                        title="Completar el costeo de esta propuesta"
+                                      >
                                         Completar costeo
                                         <ArrowRight className="h-3 w-3 ml-0.5" />
                                       </Link>
@@ -769,7 +766,7 @@ export function ProductLeaderDashboard({
                                       className="h-7 px-2 text-[10px] font-bold bg-icesi-blue hover:bg-[#4343d0] text-white shadow-2xs"
                                     >
                                       <Link
-                                        to={`/solicitudes/${req.id}`}
+                                        href={`/solicitudes/${req.id}`}
                                         title="Ir al detalle para confirmar el envío al KAM"
                                       >
                                         Completar envío
@@ -876,7 +873,7 @@ export function ProductLeaderDashboard({
                         <td className="px-4 py-3.5 align-middle">
                           <div className="flex flex-col gap-1 max-w-[320px]">
                             <Link
-                              to={`/solicitudes/${r.id}`}
+                              href={`/solicitudes/${r.id}`}
                               className="font-semibold text-sm text-foreground hover:text-[#5454e9] transition-colors leading-snug line-clamp-2"
                               title={r.title}
                             >
@@ -931,7 +928,7 @@ export function ProductLeaderDashboard({
                         </td>
                         <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
                           <Link
-                            to={`/solicitudes/${r.id}`}
+                            href={`/solicitudes/${r.id}`}
                             className="inline-flex items-center text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
                           >
                             <span>Ver detalle</span>

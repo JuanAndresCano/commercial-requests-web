@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RequestFormData } from "@/pages/NewRequest";
+import type { RequestFormData } from "@/views/NewRequest";
 import { buildCreateProposalPayload } from "./create-proposal-payload";
 
 const EMPTY: RequestFormData = {

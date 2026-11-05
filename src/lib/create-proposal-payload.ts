@@ -7,7 +7,7 @@ import type {
   RequestType as ApiRequestType,
 } from "@/lib/api/requests";
 import type { ClientContact } from "@/lib/mock-data";
-import type { RequestFormData } from "@/pages/NewRequest";
+import type { RequestFormData } from "@/views/NewRequest";
 import { cateringToPayload } from "@/lib/catering";
 import { parseNit } from "@/lib/nit";
 
