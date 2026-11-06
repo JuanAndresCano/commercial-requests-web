@@ -5,6 +5,7 @@ export interface LoginResponse {
   accessToken: string;
   /** Token expiry, epoch milliseconds (the JWT `exp`). */
   expiresAt: number;
+  isPendingRole?: boolean;
 }
 
 export interface SessionUser {
@@ -14,16 +15,25 @@ export interface SessionUser {
   lastName: string | null;
   /** Backend role codes, e.g. KAM, PRODUCT_LEADER. */
   roles: string[];
+  isPendingRole?: boolean;
   expiresAt: number;
 }
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    apiRequest<LoginResponse>("/auth/login", {
+  devLogin: (email: string) =>
+    apiRequest<LoginResponse>("/auth/dev-login", {
       method: "POST",
-      body: { email, password },
+      body: { email },
       skipUnauthorizedHandler: true,
     }),
+  assignInitialRole: (roleCode: string) =>
+    apiRequest<{ success: boolean; role: string; accessToken: string; expiresAt: number }>(
+      "/auth/assign-initial-role",
+      {
+        method: "POST",
+        body: { roleCode },
+      },
+    ),
   /** Fails with 401 when there is no valid session cookie. */
   getMe: () => apiRequest<SessionUser>("/auth/me"),
   logout: () => apiRequest<void>("/auth/logout", { method: "POST" }),

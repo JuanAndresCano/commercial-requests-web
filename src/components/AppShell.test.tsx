@@ -50,7 +50,6 @@ describe("AppShell role-based menu", () => {
   it.each<[UserRole, string[]]>([
     ["kam", ["Solicitudes", "Nueva solicitud"]],
     ["lider-producto", ["Solicitudes"]],
-    ["lider-nodo", ["Inicio", "Solicitudes de nodo"]],
     ["administrador", ["Resumen Ejecutivo", "Impacto por Empresa"]],
   ])("shows only the modules of %s", (role, labels) => {
     renderShell(role);
@@ -118,16 +117,15 @@ describe("AppShell mobile drawer", () => {
   beforeEach(() => window.localStorage.clear());
 
   it("opens a drawer with the same links as the desktop menu", () => {
-    renderShell("lider-nodo");
+    renderShell("kam");
     fireEvent.click(screen.getByRole("button", { name: "Menú de navegación" }));
 
     const drawer = screen.getByRole("dialog");
     const drawerLinks = within(drawer)
       .getAllByRole("link")
       .map((a) => a.getAttribute("aria-label"));
-    expect(drawerLinks).toContain("Inicio");
-    expect(drawerLinks).toContain("Solicitudes de nodo");
-    expect(drawerLinks).not.toContain("Nueva solicitud");
+    expect(drawerLinks).toContain("Solicitudes");
+    expect(drawerLinks).toContain("Nueva solicitud");
   });
 
   it("closes the drawer after following a link", () => {

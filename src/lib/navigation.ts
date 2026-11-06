@@ -1,4 +1,4 @@
-import { Home, FileText, PlusCircle, Network, GraduationCap, LayoutGrid, Building2 } from "@/components/icons";
+import { FileText, PlusCircle, LayoutGrid, Building2, type Home } from "@/components/icons";
 import type { UserRole } from "@/context/AuthContext";
 
 export interface NavItem {
@@ -14,14 +14,6 @@ export interface NavItem {
 export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
   // Single unified board (4 states + quick "Sin docente" filter).
   "lider-producto": [{ to: "/dashboard", label: "Solicitudes", icon: FileText }],
-  "lider-nodo": [
-    { to: "/dashboard", label: "Inicio", icon: Home },
-    { to: "/solicitudes", label: "Solicitudes de nodo", icon: Network },
-  ],
-  profesor: [
-    { to: "/dashboard", label: "Inicio", icon: Home },
-    { to: "/solicitudes", label: "Mis propuestas", icon: GraduationCap },
-  ],
   kam: [
     { to: "/dashboard", label: "Solicitudes", icon: FileText },
     { to: "/solicitudes/nueva", label: "Nueva solicitud", icon: PlusCircle },
@@ -33,7 +25,7 @@ export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
 };
 
 export function getNavItems(role: UserRole): NavItem[] {
-  return NAV_ITEMS[role];
+  return NAV_ITEMS[role] ?? [];
 }
 
 /** Whether a nav link is the current location (handles query strings and nested routes). */

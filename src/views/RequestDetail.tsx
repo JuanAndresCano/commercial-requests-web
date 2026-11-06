@@ -148,7 +148,7 @@ export default function RequestDetail() {
 
   const role = user.role;
   const isKam = role === "kam";
-  const isLeader = role === "lider-producto" || role === "lider-nodo";
+  const isLeader = role === "lider-producto";
 
   // Cuando hay un id en la URL, esperamos la respuesta del backend antes de
   // resolver la solicitud. Solo como respaldo (desarrollo sin backend) se

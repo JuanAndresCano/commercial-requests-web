@@ -16,7 +16,7 @@ import { assignProfessorWithHistory } from "@/lib/professor-assignment";
 import { resetDashboardUiState } from "@/lib/dashboard-ui-state";
 import { useTheme } from "@/context/ThemeContext";
 
-export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor" | "administrador";
+export type UserRole = "kam" | "lider-producto" | "administrador";
 
 export interface User {
   role: UserRole;
@@ -32,11 +32,6 @@ export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = 
     label: "Líder de Producto",
     node: "Inteligencia Artificial y Tecnologías Digitales",
   },
-  "lider-nodo": {
-    label: "Líder de Nodo",
-    node: "Competitividad Organizacional, Economías Creativas",
-  },
-  profesor: { label: "Profesor" },
   administrador: { label: "Administrador" },
 };
 
@@ -44,7 +39,7 @@ export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = 
 const LEGACY_STORAGE_KEY_USER = "icesi_auth_user_v3";
 const STORAGE_KEY_REQUESTS = "icesi_requests_data_v3";
 
-export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "pending-role";
 
 // Placeholder while nobody is signed in. Routes are guarded by RequireAuth, so
 // no page renders with it; it only keeps `user` non-nullable for consumers.
@@ -53,8 +48,9 @@ const ANONYMOUS_USER: User = { role: "kam", roleLabel: "", name: "", email: "" }
 interface AuthContextType {
   user: User;
   status: AuthStatus;
-  /** Signs in against the backend; rejects with ApiError (401 = bad credentials). */
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password?: string) => Promise<void>;
+  devLogin: (email: string) => Promise<void>;
+  assignInitialRole: (roleCode: string) => Promise<void>;
   logout: () => void;
   /**
    * Another tab of this browser signed in as someone else (or signed out), so the
@@ -105,14 +101,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // or the account has no role the UI knows about.
   const applySession = useCallback(
     (session: SessionUser): boolean => {
-      const roles = mapBackendRoles(session.roles);
-      if (roles.length === 0 || !isSessionActive(session.expiresAt)) {
+      if (!isSessionActive(session.expiresAt)) {
         clearSession();
         return false;
       }
-      // An account has exactly one role. More than one means badly migrated data:
-      // say so loudly instead of silently picking one (the first is used so the
-      // user is not locked out, and the menu never mixes modules of several roles).
+      const roles = mapBackendRoles(session.roles);
+      if (session.isPendingRole || roles.length === 0) {
+        const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
+        setUser({
+          role: "kam",
+          roleLabel: "Pendiente de Selección",
+          name: fullName || session.email,
+          email: session.email,
+        });
+        setUserId(session.id);
+        setExpiresAt(session.expiresAt);
+        setStatus("pending-role");
+        return true;
+      }
       if (roles.length > 1) {
         console.warn(
           `[auth] Session for user ${session.id} arrived with ${roles.length} roles; expected exactly one. ` +
@@ -210,15 +216,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [requests]);
 
-  const login = async (email: string, password: string) => {
-    await authApi.login(email, password);
-    resetUiForNewSession();
-    const session = await authApi.getMe();
-    if (!applySession(session)) {
-      throw new Error("La cuenta no tiene un rol habilitado en esta plataforma.");
-    }
-    announce({ type: "login", userId: session.id });
-  };
+  const devLogin = useCallback(
+    async (email: string) => {
+      resetUiForNewSession();
+      await authApi.devLogin(email);
+      const session = await authApi.getMe();
+      if (!applySession(session)) {
+        throw new Error("No se pudo iniciar sesión con la cuenta seleccionada.");
+      }
+      announce({ type: "login", userId: session.id });
+    },
+    [applySession, announce, resetUiForNewSession],
+  );
+
+  const assignInitialRole = useCallback(
+    async (roleCode: string) => {
+      await authApi.assignInitialRole(roleCode);
+      resetUiForNewSession();
+      const session = await authApi.getMe();
+      if (!applySession(session)) {
+        throw new Error("Error al aplicar el rol institucional.");
+      }
+      announce({ type: "login", userId: session.id });
+    },
+    [applySession, announce, resetUiForNewSession],
+  );
+
+  const login = useCallback(
+    async (email: string, _password?: string) => {
+      await devLogin(email);
+    },
+    [devLogin],
+  );
 
   const logout = () => {
     // Clear local state first; the request still carries the cookie and bumps
@@ -318,6 +347,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         status,
         login,
+        devLogin,
+        assignInitialRole,
         logout,
         sessionConflict,
         requests,

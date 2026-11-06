@@ -10,10 +10,6 @@ describe("getNavItems", () => {
     expect(getNavItems("lider-producto").map((i) => i.to)).toEqual(["/dashboard"]);
   });
 
-  it("gives the node leader home and node requests", () => {
-    expect(getNavItems("lider-nodo").map((i) => i.label)).toEqual(["Inicio", "Solicitudes de nodo"]);
-  });
-
   it("gives the administrator executive summary and company 360 links", () => {
     expect(getNavItems("administrador").map((i) => i.label)).toEqual(["Resumen Ejecutivo", "Impacto por Empresa"]);
     expect(getNavItems("administrador").map((i) => i.to)).toEqual(["/dashboard", "/dashboard?tab=empresas"]);

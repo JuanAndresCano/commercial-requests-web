@@ -86,6 +86,7 @@ export const ArrowLeft = makeIcon("arrow_back");
 export const ArrowLeftRight = makeIcon("swap_horiz");
 export const ArrowRight = makeIcon("arrow_forward");
 export const ArrowUpRight = makeIcon("north_east");
+export const Award = makeIcon("workspace_premium");
 export const Bell = makeIcon("notifications");
 export const Briefcase = makeIcon("work");
 export const Building = makeIcon("domain");

@@ -1,67 +1,114 @@
-import { useState } from "react";
-import { Link, useRouter } from "@/lib/app-router";
-import { ArrowLeft, Eye, EyeOff, ShieldCheck } from "@/components/icons";
+import { useState, useEffect } from "react";
+import { Link, useRouter, useSearchParams } from "@/lib/app-router";
+import { ArrowLeft } from "@/components/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
-import { ApiError } from "@/lib/api/client";
+import { API_URL, ApiError } from "@/lib/api/client";
 import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-export default function Login() {
-  const [showPwd, setShowPwd] = useState(false);
-  const [password, setPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const router = useRouter();
-  const { login } = useAuth();
+function MicrosoftLogo({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+    </svg>
+  );
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
+const DEV_ACCOUNTS = [
+  { role: "KAM", name: "Diana Martínez", email: "diana.martinez@icesi.edu.co" },
+  { role: "Líder de Producto (LDP)", name: "Laura Díaz", email: "ldp@icesi.edu.co" },
+  { role: "Administrador", name: "Administrador", email: "admin@icesi.edu.co" },
+];
+
+export default function Login() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { devLogin, status } = useAuth();
+
+  const [devEmail, setDevEmail] = useState("");
+  const [devSubmitting, setDevSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Read potential OAuth error returned from backend redirect query params
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam) {
+      const decoded = decodeURIComponent(errorParam);
+      if (decoded.includes("domain") || decoded.includes("@icesi.edu.co") || decoded === "domain_not_allowed") {
+        setErrorMessage(
+          "Solo se permite el ingreso con cuentas institucionales autorizadas (@icesi.edu.co o @u.icesi.edu.co).",
+        );
+      } else if (decoded === "invalid_state") {
+        setErrorMessage("La sesión de autenticación caducó o no es válida. Por favor intenta de nuevo.");
+      } else if (
+        decoded === "sso_cancelled" ||
+        decoded.toLowerCase().includes("access_denied") ||
+        decoded.toLowerCase().includes("cancel")
+      ) {
+        setErrorMessage("El inicio de sesión institucional fue cancelado por el usuario.");
+      } else if (decoded === "missing_code") {
+        setErrorMessage("No se recibió el código de autorización desde Microsoft. Por favor intenta de nuevo.");
+      } else {
+        setErrorMessage(decoded);
+      }
+    }
+  }, [searchParams]);
+
+  // If already authenticated, redirect
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/dashboard");
+    } else if (status === "pending-role") {
+      router.replace("/onboarding/select-role");
+    }
+  }, [status, router]);
+
+  const handleMicrosoftLogin = () => {
+    window.location.href = `${API_URL}/auth/microsoft`;
+  };
+
+  const handleDevLogin = async (emailToUse: string) => {
+    setDevSubmitting(true);
     try {
-      await login(email.trim(), password);
-      router.push("/dashboard");
+      await devLogin(emailToUse.trim());
+      // Navigation is handled reactively by status effect
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        toast.error("Correo o contraseña incorrectos.", {
-          description: "Verifica tus credenciales o contacta a TI si crees que esto es un error.",
-        });
-      } else if (error instanceof ApiError && error.status === 429) {
-        toast.error("Demasiados intentos fallidos.", {
-          description: "Por seguridad, espera unos minutos antes de intentar de nuevo.",
-        });
-      } else if (error instanceof ApiError) {
-        toast.error("No pudimos iniciar tu sesión.", { description: "Intenta de nuevo en unos minutos." });
+        toast.error("Usuario de prueba no encontrado en la base de datos.");
       } else {
-        toast.error("No pudimos iniciar tu sesión.", {
+        toast.error("Error al iniciar sesión en modo desarrollo.", {
           description: error instanceof Error ? error.message : "Error inesperado.",
         });
       }
     } finally {
-      setSubmitting(false);
+      setDevSubmitting(false);
     }
   };
+
+  const isDevelopment = process.env.NODE_ENV !== "production";
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-background text-foreground transition-colors">
       {/* Left Column: Authentic Universidad Icesi Campus */}
       <div className="relative w-full lg:w-1/2 min-h-[380px] lg:min-h-screen bg-slate-900 flex flex-col justify-between p-6 sm:p-10 overflow-hidden select-none">
-        {/* Real photographic campus background representation */}
         <div
           className="absolute inset-0 bg-cover bg-center transition-all duration-700"
           style={{
             backgroundImage: `url('https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1800&q=80')`,
           }}
         >
-          {/* Deep gradient overlay to ensure contrast and rich colors */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/60" />
           <div className="absolute inset-0 bg-[#5454e9]/25 mix-blend-multiply" />
         </div>
 
-        {/* Top Left: Universidad Icesi Logo in pure white */}
+        {/* Top Left: Universidad Icesi Logo */}
         <div className="relative z-10">
           <Link href="/" className="inline-flex items-center gap-3">
             <IcesiLogo variant="horizontal" colorScheme="white" size="md" />
@@ -72,7 +119,7 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Center Graphic: Clock Tower reference card */}
+        {/* Center Graphic */}
         <div className="relative z-10 my-auto hidden lg:block max-w-md">
           <div className="rounded-2xl border border-white/20 bg-black/40 backdrop-blur-md p-6 text-white shadow-2xl">
             <div className="flex items-center gap-2 text-[#e4eb60] text-xs font-bold uppercase tracking-wider mb-2">
@@ -89,13 +136,11 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Bottom Left: Official Tagline Blocks (Exactly matching Screenshot 1!) */}
+        {/* Bottom Left: Official Tagline Blocks */}
         <div className="relative z-10 flex flex-col items-start gap-0 mt-6 lg:mt-0">
-          {/* Blue Block: "Llega más lejos" in Azul Icesi #5454e9 */}
           <div className="bg-[#5454e9] text-white px-6 py-3 font-bold text-xl sm:text-2xl tracking-tight shadow-md">
             Llega más lejos
           </div>
-          {/* Black Block: "icesi.edu.co" */}
           <div className="bg-black text-white px-6 py-2 font-bold text-lg tracking-wide">icesi.edu.co</div>
         </div>
       </div>
@@ -124,7 +169,6 @@ export default function Login() {
                 icesi.edu.co
               </a>
             </div>
-            {/* Dark mode / Light mode toggle */}
             <ThemeToggle variant="pill" />
           </div>
         </div>
@@ -132,83 +176,100 @@ export default function Login() {
         {/* Center Card: "Inicia sesión" */}
         <div className="my-auto max-w-md w-full mx-auto py-8">
           <div className="mb-6">
-            <h2 className="text-3xl font-extrabold tracking-tight text-foreground font-sans">Inicia sesión</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Ingresa con tus credenciales institucionales de la Universidad Icesi. Tu rol se asigna automáticamente
-              según tu cuenta.
+            <h2 className="text-3xl font-extrabold tracking-tight text-foreground font-sans">Acceso Institucional</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Ingresa de forma segura con tu cuenta de Microsoft Entra ID de la Universidad Icesi.
             </p>
           </div>
 
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="usuario" className="block text-xs font-semibold text-foreground mb-1.5">
-                Usuario / Correo institucional
-              </Label>
-              <Input
-                id="usuario"
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="correo@icesi.edu.co"
-                required
-                className="h-11 rounded-lg border-border dark:border-[#2b2d3d] bg-secondary/30 dark:bg-[#151620] text-sm focus-visible:ring-[#5454e9]"
-              />
+          {/* Error Banner if SSO returned an issue */}
+          {errorMessage && (
+            <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+              <p className="font-semibold mb-0.5">No fue posible completar el acceso</p>
+              <p>{errorMessage}</p>
             </div>
+          )}
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <Label htmlFor="contrasena" className="text-xs font-semibold text-foreground">
-                  Contraseña
-                </Label>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
-                >
-                  ¿Olvidaste tu contraseña?
-                </button>
-              </div>
-              <div className="relative">
-                <Input
-                  id="contrasena"
-                  type={showPwd ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  className="h-11 pr-10 rounded-lg border-border dark:border-[#2b2d3d] bg-secondary/30 dark:bg-[#151620] text-sm focus-visible:ring-[#5454e9]"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd(!showPwd)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
-                  aria-label={showPwd ? "Ocultar contraseña" : "Ver contraseña"}
-                >
-                  {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Iniciar sesión Button in official Azul Icesi #5454e9 */}
+          {/* Primary Institutional SSO Button */}
+          <div className="space-y-4">
             <Button
-              type="submit"
-              disabled={submitting}
-              className="w-full h-11 text-sm font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white rounded-lg shadow-md transition-all active:scale-[0.99] mt-2"
+              type="button"
+              onClick={handleMicrosoftLogin}
+              className="w-full h-12 text-sm font-semibold bg-white dark:bg-[#1a1c26] text-slate-800 dark:text-white border border-slate-300 dark:border-[#2f3245] hover:bg-slate-50 dark:hover:bg-[#222533] shadow-sm flex items-center justify-center gap-3 transition-all active:scale-[0.99]"
             >
-              {submitting ? "Ingresando…" : "Iniciar sesión"}
+              <MicrosoftLogo className="h-5 w-5 shrink-0" />
+              <span>Iniciar sesión con cuenta Icesi</span>
             </Button>
-          </form>
-
-          {/* Institutional note */}
-          <div className="mt-6 rounded-lg border border-border dark:border-[#252838] bg-secondary/20 dark:bg-[#141520] p-3 text-xs text-muted-foreground flex items-center gap-2.5">
-            <ShieldCheck className="h-4 w-4 text-[#4cb979] shrink-0" />
-            <span>Acceso seguro con autenticación institucional y Directorio Activo Icesi.</span>
+            <p className="text-[11px] text-center text-muted-foreground">
+              Habilitado para colaboradores con cuentas @icesi.edu.co y @u.icesi.edu.co
+            </p>
           </div>
+
+          {/* Developer Quick-Login Impersonator (Visible in local development) */}
+          {isDevelopment && (
+            <div className="mt-8 pt-6 border-t border-dashed border-border dark:border-[#252838]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  ⚡ Modo Desarrollo (Dev Switcher)
+                </span>
+                <span className="text-[10px] text-muted-foreground font-mono">NODE_ENV={process.env.NODE_ENV}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Simula una sesión de prueba con cualquier rol del seed sin requerir login en Microsoft:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                {DEV_ACCOUNTS.map((acc) => (
+                  <button
+                    key={acc.email}
+                    type="button"
+                    disabled={devSubmitting}
+                    onClick={() => handleDevLogin(acc.email)}
+                    className="p-2 text-left rounded-lg border border-border hover:border-primary/50 bg-secondary/40 hover:bg-secondary/70 transition-colors text-xs"
+                  >
+                    <div className="font-semibold text-foreground truncate">{acc.name}</div>
+                    <div className="text-[11px] text-muted-foreground">{acc.role}</div>
+                  </button>
+                ))}
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (devEmail) handleDevLogin(devEmail);
+                }}
+                className="flex gap-2"
+              >
+                <div className="flex-1">
+                  <Label htmlFor="dev-email-input" className="sr-only">
+                    Correo dev
+                  </Label>
+                  <Input
+                    id="dev-email-input"
+                    type="email"
+                    placeholder="otro.correo@icesi.edu.co"
+                    value={devEmail}
+                    onChange={(e) => setDevEmail(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  disabled={devSubmitting || !devEmail}
+                  className="h-9 text-xs"
+                >
+                  Entrar
+                </Button>
+              </form>
+            </div>
+          )}
         </div>
 
-        {/* Footer info (matches Screenshot 1) */}
+        {/* Footer info */}
         <div className="pt-6 border-t border-border dark:border-[#252838] text-center text-[11px] text-muted-foreground leading-relaxed">
-          <p>Universidad Icesi, Calle 18 No. 122–135 | Cali-Colombia | Teléfono: (602) 555 2334 | Fax: 555 1441</p>
+          <p>Universidad Icesi, Calle 18 No. 122–135 | Cali-Colombia | Teléfono: (602) 555 2334</p>
           <p className="mt-0.5">
             Copyright © {new Date().getFullYear()}{" "}
             <a
