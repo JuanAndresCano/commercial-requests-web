@@ -148,6 +148,7 @@ export default function Login() {
               <Input
                 id="usuario"
                 type="text"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="correo@icesi.edu.co"
@@ -172,6 +173,7 @@ export default function Login() {
                 <Input
                   id="contrasena"
                   type={showPwd ? "text" : "password"}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
