@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, type ReactNode } from "react";
 import { Link, useParams, useRouter } from "@/lib/app-router";
+import { hasPendingAdjustment } from "@/lib/adjustments";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -69,6 +70,18 @@ import { EditTeamDialog, type EditTeamParams } from "@/components/EditTeamDialog
 import { TeamNodeEditor } from "@/components/TeamNodeEditor";
 import { CenterFields } from "@/components/CenterFields";
 import { StageTimeSection } from "@/components/StageTimeSection";
+import { CustomerInfoEditor } from "@/components/CustomerInfoEditor";
+import { CommercialStatusPanel } from "@/components/CommercialStatusPanel";
+import { CommercialStatusChip } from "@/components/CommercialStatusChip";
+import { parseCiiu } from "@/lib/ciiu";
+import {
+  CONTACTABILITY_ERROR,
+  customerContactErrors,
+  customerContactServerMessage,
+  hasValidContactChannel,
+  pendingValue,
+  phoneError,
+} from "@/lib/customer-contact";
 import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
 import { getStageTimes } from "@/lib/stage-time";
 import {
@@ -105,6 +118,9 @@ import { canEditProfessor } from "@/lib/professor-assignment";
 import { toProfessorInput } from "@/lib/professor-form";
 import { ApiError } from "@/lib/api/client";
 import type { UpdateProposalInfoPayload, CompanyType, SetCenterPayload } from "@/lib/api/requests";
+
+const MISSING_CUSTOMER_CHANNEL_REASON =
+  "Completa al menos un teléfono o correo válido en Empresa y contacto antes de enviar.";
 
 const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
   Privada: "PRIVADA",
@@ -217,6 +233,8 @@ export default function RequestDetail() {
   // exige una nota del motivo del ajuste, algo que el diálogo genérico
   // CONFIRM_ACTION_META no puede expresar (no admite campos condicionales).
   const [isSendToKamModalOpen, setIsSendToKamModalOpen] = useState(false);
+  // Hora del último guardado de costeo confirmado por el servidor (para mostrarla al Líder).
+  const [costingSavedAt, setCostingSavedAt] = useState<string | null>(null);
   const [sendToKamNote, setSendToKamNote] = useState("");
   const [showFullInfo, setShowFullInfo] = useState(false);
 
@@ -312,8 +330,43 @@ export default function RequestDetail() {
       req?.status === "en-costeo" &&
       wasRejectedByClient);
 
+  // Customer data has its own edit window; this does not unlock the technical or financial form.
+  const canEditCustomer = Boolean(
+    isKam &&
+    apiProposal?.creator?.email === user.email &&
+    ["NEW", "IN_PROGRESS", "IN_COSTING"].includes(apiProposal?.workflow?.currentStatus?.code ?? ""),
+  );
+  const hasValidCustomerContact = apiProposal
+    ? Object.keys(
+        customerContactErrors({
+          companyPhone: apiProposal.company.phone,
+          companyEmail: apiProposal.company.email,
+          contactPhone: apiProposal.contact?.phone,
+          contactEmail: apiProposal.contact?.email,
+          contactSecondaryPhone: apiProposal.contact?.secondaryPhone,
+          contactAlternativeEmail: apiProposal.contact?.alternativeEmail,
+        }),
+      ).length === 0
+    : true;
+
+  const customerChannelLabel =
+    [apiProposal?.contact?.email, apiProposal?.contact?.phone, apiProposal?.company?.email, apiProposal?.company?.phone]
+      .map((value) => pendingValue(value))
+      .find(Boolean) ?? "Sin canal registrado";
+
+  // Por qué el KAM todavía no puede enviar al cliente. Se muestra como texto visible
+  // (no solo como tooltip) para que también lo vea quien usa teclado o pantalla táctil.
+  const sendToClientBlockReason = !hasValidCustomerContact
+    ? MISSING_CUSTOMER_CHANNEL_REASON
+    : !req?.costing?.readyForKam
+      ? "El Líder de Producto aún no ha confirmado el envío del costeo"
+      : !hasValidCosting
+        ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
+        : undefined;
+
   const fullInfoCompleteness = getFullInfoCompleteness(req ?? ({} as RequestItem));
   const [isEditingFullInfo, setIsEditingFullInfo] = useState(false);
+  const [isDiscardChangesOpen, setIsDiscardChangesOpen] = useState(false);
   const emptyFullInfoDraft = {
     title: "",
     urgency: "media" as Urgency,
@@ -351,6 +404,11 @@ export default function RequestDetail() {
   // de retroalimentación).
   const [fullInfoSnapshot, setFullInfoSnapshot] = useState(emptyFullInfoDraft);
   const isFullInfoDirty = JSON.stringify(fullInfoDraft) !== JSON.stringify(fullInfoSnapshot);
+  // Contact/phone 400 the server may still return after the client checks; shown in Spanish inside the modal
+  // until the user changes something (it is tied to the draft that was rejected).
+  const [rejectedContact, setRejectedContact] = useState<{ message: string; draft: string } | null>(null);
+  const fullInfoServerError =
+    rejectedContact && rejectedContact.draft === JSON.stringify(fullInfoDraft) ? rejectedContact.message : null;
 
   const handleStartEditFullInfo = () => {
     if (!req) return;
@@ -387,6 +445,7 @@ export default function RequestDetail() {
     };
     setFullInfoDraft(initial);
     setFullInfoSnapshot(initial);
+    setRejectedContact(null);
     setShowFullInfo(true);
     setIsEditingFullInfo(true);
   };
@@ -395,7 +454,6 @@ export default function RequestDetail() {
   // así que solo se marcan como error si traen algo y ese algo no cumple el
   // formato mínimo esperado.
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const PHONE_RE = /^[0-9+()\-\s]{7,}$/;
   const fullInfoErrors: Partial<Record<keyof typeof fullInfoDraft, string>> = {};
   if (fullInfoDraft.companyCorreo.trim() && !EMAIL_RE.test(fullInfoDraft.companyCorreo.trim())) {
     fullInfoErrors.companyCorreo = "Correo con formato inválido";
@@ -412,19 +470,43 @@ export default function RequestDetail() {
   if (nitChanged && !nitCheck.ok) {
     fullInfoErrors.companyNit = nitCheck.error;
   }
-  if (fullInfoDraft.companyTelefono.trim() && !PHONE_RE.test(fullInfoDraft.companyTelefono.trim())) {
-    fullInfoErrors.companyTelefono = "Teléfono con formato inválido";
-  }
-  if (fullInfoDraft.contactTelefono.trim() && !PHONE_RE.test(fullInfoDraft.contactTelefono.trim())) {
-    fullInfoErrors.contactTelefono = "Teléfono con formato inválido";
-  }
-  if (
-    fullInfoDraft.contactTelefonoSecundario.trim() &&
-    !PHONE_RE.test(fullInfoDraft.contactTelefonoSecundario.trim())
-  ) {
-    fullInfoErrors.contactTelefonoSecundario = "Teléfono con formato inválido";
-  }
-  const hasFullInfoErrors = Object.keys(fullInfoErrors).length > 0;
+  // Same phone rule as the wizard and the backend (7 to 15 digits, "+" only at the start), shown on the field.
+  const companyPhoneError = phoneError(fullInfoDraft.companyTelefono);
+  if (companyPhoneError) fullInfoErrors.companyTelefono = companyPhoneError;
+  const contactPhoneError = phoneError(fullInfoDraft.contactTelefono);
+  if (contactPhoneError) fullInfoErrors.contactTelefono = contactPhoneError;
+  const secondaryPhoneError = phoneError(fullInfoDraft.contactTelefonoSecundario);
+  if (secondaryPhoneError) fullInfoErrors.contactTelefonoSecundario = secondaryPhoneError;
+  // The principal CIIU is always checked here: this modal sends every field, so an invalid one saved earlier
+  // stays flagged on its field until it is corrected.
+  const ciiuCheck = parseCiiu(fullInfoDraft.companyCiiuPrincipal);
+  if (!ciiuCheck.ok) fullInfoErrors.companyCiiuPrincipal = ciiuCheck.error;
+  // Minimum channel: a valid phone or e-mail in company or contact. It blocks only when this edit removes the last
+  // valid channel the request had when the modal opened; an inherited request with none can still save other fields.
+  const channelsOf = (draft: typeof fullInfoDraft) => ({
+    companyPhone: draft.companyTelefono,
+    companyEmail: draft.companyCorreo,
+    contactPhone: draft.contactTelefono,
+    contactEmail: draft.contactCorreo,
+  });
+  const removesLastChannel =
+    hasValidContactChannel(channelsOf(fullInfoSnapshot)) && !hasValidContactChannel(channelsOf(fullInfoDraft));
+  const channelMessage = removesLastChannel ? CONTACTABILITY_ERROR : null;
+  const formContactError = channelMessage ?? fullInfoServerError;
+  const hasFullInfoErrors = Object.keys(fullInfoErrors).length > 0 || removesLastChannel;
+  // Tabs that hold a field with an error, so it is visible even when the user is looking at another tab.
+  const COMPANY_TAB_FIELDS = ["companyNit", "companyTelefono", "companyCorreo", "companyCiiuPrincipal"] as const;
+  const CONTACT_TAB_FIELDS = [
+    "contactTelefono",
+    "contactTelefonoSecundario",
+    "contactCorreo",
+    "contactCorreoAlternativo",
+  ] as const;
+  const invalidTabs = {
+    empresa: removesLastChannel || COMPANY_TAB_FIELDS.some((field) => fullInfoErrors[field]),
+    contacto: removesLastChannel || CONTACT_TAB_FIELDS.some((field) => fullInfoErrors[field]),
+  };
+  const channelFieldInvalid = removesLastChannel;
 
   const handleSaveFullInfo = async () => {
     if (!req) return;
@@ -433,9 +515,10 @@ export default function RequestDetail() {
       return;
     }
     if (hasFullInfoErrors) {
-      toast.error("Corrige los campos marcados antes de guardar");
+      toast.error(channelMessage ?? "Corrige los campos marcados antes de guardar");
       return;
     }
+    setRejectedContact(null);
 
     // An emptied field goes as null so the backend clears it (omitting it kept the old value).
     const payload: UpdateProposalInfoPayload = {
@@ -447,15 +530,15 @@ export default function RequestDetail() {
       sector: fullInfoDraft.companyCiiuPrincipalDesc.trim() || null,
       website: fullInfoDraft.companyWeb.trim() || null,
       companyAddress: fullInfoDraft.companyDireccion.trim() || null,
-      companyPhone: fullInfoDraft.companyTelefono.trim() || null,
+      companyPhone: pendingValue(fullInfoDraft.companyTelefono) ?? null,
       companyEmail: fullInfoDraft.companyCorreo.trim() || null,
-      ciiuCode: fullInfoDraft.companyCiiuPrincipal.trim() || null,
+      ciiuCode: ciiuCheck.ok ? ciiuCheck.code || null : null,
       contactName: fullInfoDraft.applicant.trim() || null,
       contactRole: fullInfoDraft.contactCargo.trim() || null,
       contactArea: fullInfoDraft.contactArea.trim() || null,
-      contactPhone: fullInfoDraft.contactTelefono.trim() || null,
+      contactPhone: pendingValue(fullInfoDraft.contactTelefono) ?? null,
       contactEmail: fullInfoDraft.contactCorreo.trim() || null,
-      contactSecondaryPhone: fullInfoDraft.contactTelefonoSecundario.trim() || null,
+      contactSecondaryPhone: pendingValue(fullInfoDraft.contactTelefonoSecundario) ?? null,
       contactAlternativeEmail: fullInfoDraft.contactCorreoAlternativo.trim() || null,
       needDescription: fullInfoDraft.necesidad.trim() || null,
       competencies: fullInfoDraft.competencias.trim() || null,
@@ -481,8 +564,10 @@ export default function RequestDetail() {
         setIsEditingFullInfo(false);
         return;
       } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : "Error al actualizar la solicitud";
-        toast.error(errorMsg);
+        // A contact/phone 400 goes to the user in Spanish, inside the modal; other errors keep their message.
+        const contactMessage = customerContactServerMessage(err);
+        if (contactMessage) setRejectedContact({ message: contactMessage, draft: JSON.stringify(fullInfoDraft) });
+        toast.error(contactMessage ?? (err instanceof Error ? err.message : "Error al actualizar la solicitud"));
         return;
       }
     }
@@ -506,9 +591,15 @@ export default function RequestDetail() {
   // Si hay cambios sin guardar, confirma antes de cerrar el modal (clic
   // afuera, Esc, o botón Cancelar) para no perderlos por accidente.
   const handleCloseFullInfoModal = () => {
-    if (isFullInfoDirty && !window.confirm("Tienes cambios sin guardar en esta solicitud. ¿Descartarlos?")) {
+    if (isFullInfoDirty) {
+      setIsDiscardChangesOpen(true);
       return;
     }
+    setIsEditingFullInfo(false);
+  };
+
+  const handleDiscardFullInfoChanges = () => {
+    setIsDiscardChangesOpen(false);
     setIsEditingFullInfo(false);
   };
 
@@ -557,6 +648,10 @@ export default function RequestDetail() {
   // Decisión del dueño (2026-10-07): el KAM corrige el nodo o el líder mientras la
   // solicitud sigue "Entregada al líder" (nueva) y sin docente — la misma ventana en
   // la que edita la información (C-02). Queda en el historial del equipo.
+  // Commercial follow-up: only on delivered proposals; only the owner KAM edits, others read it (Leader included).
+  const isDelivered = apiProposal?.workflow?.currentStatus?.code === "DELIVERED";
+  const canEditCommercialStatus = isKam && isDelivered && apiProposal?.creator?.email === user.email;
+  const showCommercialChip = isDelivered && (canEditCommercialStatus || Boolean(apiProposal?.commercialStatus));
   const canKamEditTeam = isKam && canEditFullInfo && Boolean(apiProposal);
 
   const handleConfirmEditTeam = async ({ nodeId, productLeaderId }: EditTeamParams) => {
@@ -667,6 +762,7 @@ export default function RequestDetail() {
           negotiationNotes,
         },
         {
+          onSuccess: () => setCostingSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
           // The backend's 400 messages are English validator output: show one generic Spanish text.
           onError: (err) =>
             toast.error(
@@ -838,7 +934,7 @@ export default function RequestDetail() {
           id: apiProposal.id,
           data: { status: "DELIVERED" },
         });
-        toast.success("Propuesta enviada al cliente y marcada como Entregada");
+        toast.success("Propuesta presentada al cliente");
         setConfirmingAction(null);
         return;
       } catch (err: unknown) {
@@ -860,7 +956,7 @@ export default function RequestDetail() {
       clientObservations: undefined,
       negotiationRounds: updatedRounds,
     });
-    toast.success("Propuesta enviada al cliente y marcada como Entregada");
+    toast.success("Propuesta presentada al cliente");
     setConfirmingAction(null);
   };
 
@@ -961,10 +1057,10 @@ export default function RequestDetail() {
       onConfirm: handleMoveToCosteo,
     },
     entregada: {
-      title: "¿Marcar como Entregada?",
+      title: "¿Confirmar presentación de propuesta?",
       description:
-        "Confirma que la propuesta ya fue remitida al cliente con el costeo definido. Esta acción cierra el flujo de la solicitud.",
-      confirmLabel: "Sí, marcar entregada",
+        "Confirma que la propuesta fue remitida al cliente. Queda Entregada y podrá volver a Sustentación y ajustes si el cliente solicita cambios.",
+      confirmLabel: "Sí, confirmar presentación",
       onConfirm: handleSendToClient,
     },
   } as const;
@@ -980,7 +1076,10 @@ export default function RequestDetail() {
   if (isLoadingProposal) {
     return (
       <AppShell>
-        <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground text-sm gap-2">
+        <div
+          role="status"
+          className="flex items-center justify-center min-h-[40vh] text-muted-foreground text-sm gap-2"
+        >
           <span className="animate-spin rounded-full h-4 w-4 border-2 border-border border-t-primary" />
           Cargando solicitud…
         </div>
@@ -1087,6 +1186,13 @@ export default function RequestDetail() {
           </div>
         </div>
 
+        {/* One edit entry at a time: while the full editor is open it already covers company and contact. */}
+        {canEditCustomer && !canEditFullInfo && apiProposal && (
+          <div className="border-t border-border px-5 py-3">
+            <CustomerInfoEditor key={apiProposal.id} proposal={apiProposal} />
+          </div>
+        )}
+
         {!showFullInfo && (
           <div
             data-testid="full-info-summary"
@@ -1141,7 +1247,7 @@ export default function RequestDetail() {
 
               {req.additionalContacts && req.additionalContacts.length > 0 && (
                 <div className="pt-2 mt-2 border-t border-border dark:border-[#252838] space-y-2.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Contactos adicionales
                   </span>
                   {req.additionalContacts.map((c) => (
@@ -1237,7 +1343,20 @@ export default function RequestDetail() {
 
                 <span className="text-border dark:text-[#252838]">·</span>
 
-                <StatusBadge status={req.status} />
+                <StatusBadge status={req.status} pendingAdjustment={hasPendingAdjustment(req)} />
+
+                {showCommercialChip && apiProposal && (
+                  <>
+                    <span aria-hidden="true" className="text-muted-foreground">
+                      →
+                    </span>
+                    <CommercialStatusChip
+                      proposalId={apiProposal.id}
+                      status={apiProposal.commercialStatus}
+                      canEdit={canEditCommercialStatus}
+                    />
+                  </>
+                )}
 
                 <Badge
                   variant="outline"
@@ -1316,31 +1435,37 @@ export default function RequestDetail() {
                       intermedio, así que no debe verse igual que "Enviado al KAM". */}
                   {req.status === "entregada" && (
                     <div className="inline-flex items-center gap-1.5 rounded-full bg-[#4cb979] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm">
-                      <CheckCircle2 className="h-4 w-4" /> Propuesta Entregada
+                      <CheckCircle2 className="h-4 w-4" /> Entregada
                     </div>
                   )}
                 </>
               ) : isKam && req.status === "en-costeo" ? (
-                <Button
-                  size="sm"
-                  disabled={!hasValidCosting || !req.costing?.readyForKam}
-                  onClick={() => setConfirmingAction("entregada")}
-                  className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                  title={
-                    !req.costing?.readyForKam
-                      ? "El Líder de Producto aún no ha confirmado el envío del costeo"
-                      : !hasValidCosting
-                        ? "El Líder de Producto aún no ha definido un valor real para esta propuesta"
-                        : undefined
-                  }
-                >
-                  <Send className="h-3.5 w-3.5 mr-1.5" />
-                  Enviar a cliente
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    disabled={!hasValidCosting || !req.costing?.readyForKam || !hasValidCustomerContact}
+                    onClick={() => setConfirmingAction("entregada")}
+                    className="h-9 px-4 text-xs font-bold bg-[#5454e9] hover:bg-[#4343d3] text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={sendToClientBlockReason}
+                    aria-describedby={sendToClientBlockReason ? "send-to-client-reason" : undefined}
+                  >
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                    Enviar a cliente
+                  </Button>
+                  {sendToClientBlockReason && (
+                    <p
+                      id="send-to-client-reason"
+                      role="status"
+                      className="basis-full text-xs text-amber-700 dark:text-amber-300 lg:text-right"
+                    >
+                      {sendToClientBlockReason}
+                    </p>
+                  )}
+                </>
               ) : isKam && req.status === "entregada" ? (
                 <>
                   <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#4cb979]/30 bg-[#4cb979]/10 px-3 py-1.5 text-xs font-bold text-[#4cb979]">
-                    <Check className="h-3.5 w-3.5" /> Propuesta Entregada
+                    <Check className="h-3.5 w-3.5" /> Entregada
                   </div>
                   <Button
                     variant="outline"
@@ -1407,18 +1532,24 @@ export default function RequestDetail() {
 
             {/* Observaciones del cliente tras una devolución — visibles para
                 ambos roles hasta que el Líder reentregue una versión corregida. */}
-            {req.clientObservations && req.clientObservations.trim() && (
+            {hasPendingAdjustment(req) && (
               <div className="rounded-xl border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-4 flex items-start gap-3">
                 <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div className="space-y-0.5 min-w-0">
                   <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
-                    El cliente pidió ajustes — propuesta devuelta a costeo
+                    Sustentación y ajustes — el cliente solicitó cambios
                   </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed whitespace-pre-wrap">
-                    {req.clientObservations}
-                  </p>
+                  {req.clientObservations?.trim() && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed whitespace-pre-wrap">
+                      {req.clientObservations}
+                    </p>
+                  )}
                 </div>
               </div>
+            )}
+
+            {apiProposal && (
+              <CommercialStatusPanel key={apiProposal.id} proposal={apiProposal} role={role} userEmail={user.email} />
             )}
 
             {fullInfoSection}
@@ -1426,7 +1557,12 @@ export default function RequestDetail() {
             {/* 1. SECCIÓN COSTEO FINANCIERO */}
             {role === "lider-producto" ? (
               req.status === "en-costeo" || req.status === "entregada" ? (
-                <ProposalCostingModule request={req} onUpdateCosting={handleUpdateCosting} />
+                <ProposalCostingModule
+                  request={req}
+                  onUpdateCosting={handleUpdateCosting}
+                  savedAt={costingSavedAt}
+                  isSaving={upsertCostingReal.isPending}
+                />
               ) : (
                 /* Antes se mostraba editable en cualquier estado — se podía
                    fijar un valor final desde "Nueva", antes de asignar
@@ -1488,7 +1624,7 @@ export default function RequestDetail() {
                     </p>
                     <span className="text-xs font-medium text-slate-400">COP</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-400 mt-0.5">
                     Monto total autorizado para la presentación y cotización oficial al cliente.
                   </p>
                 </div>
@@ -1500,7 +1636,7 @@ export default function RequestDetail() {
                 {req.type === "Capacitación" && (
                   <div className="grid grid-cols-1 gap-2.5 pt-1 text-xs sm:max-w-[220px]">
                     <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 dark:border-border dark:bg-secondary/20">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">
+                      <span className="text-xs font-medium uppercase tracking-wider text-slate-400 block">
                         Estampilla Pro-Cultura ({req.costing.proCulturaTaxPercent}%)
                       </span>
                       <span className="font-mono font-semibold text-amber-700 dark:text-amber-300">
@@ -1578,14 +1714,14 @@ export default function RequestDetail() {
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-foreground">Ronda {round.roundNumber}</span>
+                            <span className="font-bold text-foreground">Sustentación y ajuste {round.roundNumber}</span>
                             <span className="font-mono font-semibold text-foreground">
                               {formatCop(round.totalOfferedCop)}
                             </span>
                           </div>
                           {isCurrentRound && (
                             <span className="rounded-full bg-[#5454e9] px-2 py-0.5 text-[10px] font-bold text-white">
-                              Ronda vigente
+                              Sustentación y ajuste vigente
                             </span>
                           )}
                         </div>
@@ -1596,7 +1732,7 @@ export default function RequestDetail() {
 
                         {round.sentToClientAt && (
                           <p className="flex items-center gap-1.5 text-[#5454e9] dark:text-[#865cf0] font-medium">
-                            <Send className="h-3 w-3" />→ entregada al cliente el{" "}
+                            <Send className="h-3 w-3" />→ presentada al cliente el{" "}
                             {format(new Date(round.sentToClientAt), "d 'de' MMMM, yyyy", { locale: es })}
                           </p>
                         )}
@@ -1607,7 +1743,7 @@ export default function RequestDetail() {
                             por el cliente, simplemente se abandonó. */}
                         {isPending && !isCurrentRound && (
                           <p className="text-muted-foreground italic">
-                            Reemplazada por una ronda posterior antes de llegar a entregarse al cliente.
+                            Reemplazada por un ajuste posterior antes de llegar a entregarse al cliente.
                           </p>
                         )}
 
@@ -1622,7 +1758,7 @@ export default function RequestDetail() {
                               </p>
                             )}
                             {round.clientRespondedAt && (
-                              <p className="text-[11px] text-amber-600/80 dark:text-amber-500/70">
+                              <p className="text-xs text-amber-600/80 dark:text-amber-500/70">
                                 Devuelta el{" "}
                                 {format(new Date(round.clientRespondedAt), "d 'de' MMMM, yyyy", { locale: es })}
                               </p>
@@ -1639,8 +1775,8 @@ export default function RequestDetail() {
 
                         {scopeDiffs.length > 0 && (
                           <div className="rounded-lg border border-border dark:border-[#252838] bg-secondary/30 dark:bg-secondary/10 p-2.5 space-y-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                              Cambios frente a la ronda anterior
+                            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                              Cambios frente al ajuste anterior
                             </span>
                             <ul className="space-y-0.5">
                               {scopeDiffs.map((diff) => (
@@ -1673,7 +1809,7 @@ export default function RequestDetail() {
                   <button
                     type="button"
                     onClick={handleStartEditSpecs}
-                    className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+                    className="text-xs font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
                   >
                     Editar
                   </button>
@@ -1736,7 +1872,7 @@ export default function RequestDetail() {
               ) : (
                 <div className="space-y-3 text-xs mt-2">
                   <div className="space-y-1">
-                    <Label htmlFor="specs-horas" className="text-[11px] text-muted-foreground">
+                    <Label htmlFor="specs-horas" className="text-xs text-muted-foreground">
                       Dedicación estimada (horas)
                     </Label>
                     <Input
@@ -1749,7 +1885,7 @@ export default function RequestDetail() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="specs-modalidad" className="text-[11px] text-muted-foreground">
+                    <Label htmlFor="specs-modalidad" className="text-xs text-muted-foreground">
                       Modalidad
                     </Label>
                     <Select
@@ -1770,7 +1906,7 @@ export default function RequestDetail() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="specs-participantes" className="text-[11px] text-muted-foreground">
+                    <Label htmlFor="specs-participantes" className="text-xs text-muted-foreground">
                       Participantes
                     </Label>
                     <Select
@@ -1792,7 +1928,7 @@ export default function RequestDetail() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="specs-tipo" className="text-[11px] text-muted-foreground">
+                    <Label htmlFor="specs-tipo" className="text-xs text-muted-foreground">
                       Tipo de servicio
                     </Label>
                     <Select
@@ -1814,7 +1950,7 @@ export default function RequestDetail() {
 
                   {specsDraft.type === "Otro" && (
                     <div className="space-y-1">
-                      <Label htmlFor="specs-tipo-otro" className="text-[11px] text-muted-foreground">
+                      <Label htmlFor="specs-tipo-otro" className="text-xs text-muted-foreground">
                         Especifica el tipo
                       </Label>
                       <Input
@@ -1828,7 +1964,7 @@ export default function RequestDetail() {
                   )}
 
                   <div className="space-y-1">
-                    <Label htmlFor="specs-deadline" className="text-[11px] text-muted-foreground">
+                    <Label htmlFor="specs-deadline" className="text-xs text-muted-foreground">
                       Entrega esperada
                     </Label>
                     <Input
@@ -1882,7 +2018,7 @@ export default function RequestDetail() {
                         type="button"
                         onClick={() => setIsEditTeamOpen(true)}
                         aria-label="Cambiar nodo temático"
-                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
+                        className="text-xs font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
                       >
                         Cambiar
                       </button>
@@ -1893,12 +2029,12 @@ export default function RequestDetail() {
                 {/* Líder de Producto */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-muted-foreground">Líder de Producto</span>
+                    <span className="text-xs font-medium text-muted-foreground">Líder de Producto</span>
                     {role === "lider-producto" && (req.status === "nueva" || req.status === "en-experto") && (
                       <button
                         type="button"
                         onClick={() => setIsReassignModalOpen(true)}
-                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
+                        className="text-xs font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline flex items-center gap-1 cursor-pointer"
                       >
                         <ArrowLeftRight className="h-3 w-3" /> Reasignar
                       </button>
@@ -1908,7 +2044,7 @@ export default function RequestDetail() {
                         type="button"
                         onClick={() => setIsEditTeamOpen(true)}
                         aria-label="Cambiar líder de producto"
-                        className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
+                        className="text-xs font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline cursor-pointer"
                       >
                         Cambiar
                       </button>
@@ -1916,19 +2052,19 @@ export default function RequestDetail() {
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-foreground">{req.productLeader}</p>
-                    {req.productLeader === user.name && <span className="text-[10px] text-muted-foreground">(Tú)</span>}
+                    {req.productLeader === user.name && <span className="text-xs text-muted-foreground">(Tú)</span>}
                   </div>
                 </div>
 
                 {/* Historial de cambios de nodo / líder (corrección del KAM o reasignación) */}
                 {req.teamHistory && req.teamHistory.length > 0 && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                       Historial de nodo y líder
                     </span>
                     <ul className="space-y-1">
                       {[...req.teamHistory].reverse().map((entry) => (
-                        <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                        <li key={entry.id} className="text-xs text-muted-foreground leading-snug">
                           {entry.field === "nodo" ? "Nodo" : "Líder"}:{" "}
                           {entry.previous && <span className="line-through">{entry.previous}</span>}
                           {entry.previous && " → "}
@@ -1947,7 +2083,7 @@ export default function RequestDetail() {
 
                 {/* KAM asignado */}
                 <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
-                  <span className="text-[11px] font-medium text-muted-foreground">KAM Responsable</span>
+                  <span className="text-xs font-medium text-muted-foreground">KAM Responsable</span>
                   <p className="font-semibold text-foreground">{req.kam}</p>
                 </div>
 
@@ -1963,19 +2099,19 @@ export default function RequestDetail() {
                 {/* Docente / Asesor asignado */}
                 <div className="space-y-1.5 pt-2 border-t border-border dark:border-[#252838]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-muted-foreground">Docente / Asesor</span>
+                    <span className="text-xs font-medium text-muted-foreground">Docente / Asesor</span>
                     {role === "lider-producto" &&
                       (canEditProfessor(req.status) ? (
                         <button
                           type="button"
                           onClick={() => setIsAssignModalOpen(true)}
-                          className="text-[11px] font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
+                          className="text-xs font-semibold text-[#5454e9] dark:text-[#865cf0] hover:underline"
                         >
                           {req.professor ? "Cambiar" : "Asignar"}
                         </button>
                       ) : (
                         <span
-                          className="text-[10px] text-muted-foreground italic"
+                          className="text-xs text-muted-foreground italic"
                           title='No editable: la solicitud ya pasó por "En proceso por experto"'
                         >
                           No editable
@@ -2004,7 +2140,7 @@ export default function RequestDetail() {
                           variant="ghost"
                           size="sm"
                           onClick={() => setIsContactAdvisorModalOpen(true)}
-                          className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
                           title="Ver datos de contacto del docente o asesor"
                         >
                           Contacto
@@ -2015,7 +2151,7 @@ export default function RequestDetail() {
                       {(req.professorType === "externo"
                         ? req.externalProfessorData?.empresaConsultora
                         : req.externalProfessorData?.facultad) && (
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {req.professorType === "externo"
                             ? req.externalProfessorData?.empresaConsultora
                             : req.externalProfessorData?.facultad}
@@ -2029,12 +2165,12 @@ export default function RequestDetail() {
                   {/* Historial de cambios de asignación */}
                   {req.professorHistory && req.professorHistory.length > 0 && (
                     <div className="space-y-1 pt-1">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                         Historial de asignación
                       </span>
                       <ul className="space-y-1">
                         {[...req.professorHistory].reverse().map((entry) => (
-                          <li key={entry.id} className="text-[10px] text-muted-foreground leading-snug">
+                          <li key={entry.id} className="text-xs text-muted-foreground leading-snug">
                             {entry.previousProfessor ? (
                               <>
                                 <span className="line-through">{entry.previousProfessor}</span> →{" "}
@@ -2082,24 +2218,49 @@ export default function RequestDetail() {
             </DialogDescription>
           </DialogHeader>
 
+          {formContactError && (
+            <div className="space-y-0.5">
+              <p role="alert" className="text-xs font-semibold text-red-500">
+                {formContactError}
+              </p>
+              {removesLastChannel && (
+                <p className="text-xs text-muted-foreground">
+                  Revisa los teléfonos y correos de las pestañas Empresa y Contacto.
+                </p>
+              )}
+            </div>
+          )}
+
           <Tabs defaultValue="general" className="mt-2">
             <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto">
-              <TabsTrigger value="general" className="text-[11px] py-1.5">
+              <TabsTrigger value="general" className="text-xs py-1.5">
                 General
               </TabsTrigger>
-              <TabsTrigger value="empresa" className="text-[11px] py-1.5">
+              <TabsTrigger
+                value="empresa"
+                className="text-xs py-1.5"
+                data-invalid={invalidTabs.empresa ? "true" : undefined}
+                title={invalidTabs.empresa ? "Esta pestaña tiene datos por corregir" : undefined}
+              >
                 Empresa
+                {invalidTabs.empresa && <TabErrorMarker />}
               </TabsTrigger>
-              <TabsTrigger value="contacto" className="text-[11px] py-1.5">
+              <TabsTrigger
+                value="contacto"
+                className="text-xs py-1.5"
+                data-invalid={invalidTabs.contacto ? "true" : undefined}
+                title={invalidTabs.contacto ? "Esta pestaña tiene datos por corregir" : undefined}
+              >
                 Contacto
+                {invalidTabs.contacto && <TabErrorMarker />}
               </TabsTrigger>
-              <TabsTrigger value="diagnostico" className="text-[11px] py-1.5">
+              <TabsTrigger value="diagnostico" className="text-xs py-1.5">
                 Diagnóstico
               </TabsTrigger>
-              <TabsTrigger value="formacion" className="text-[11px] py-1.5">
+              <TabsTrigger value="formacion" className="text-xs py-1.5">
                 Formación
               </TabsTrigger>
-              <TabsTrigger value="observaciones" className="text-[11px] py-1.5">
+              <TabsTrigger value="observaciones" className="text-xs py-1.5">
                 Otros
               </TabsTrigger>
             </TabsList>
@@ -2111,7 +2272,7 @@ export default function RequestDetail() {
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, title: v }))}
               />
               <div className="space-y-1">
-                <Label htmlFor="general-urgencia-select" className="text-[11px] text-muted-foreground">
+                <Label htmlFor="general-urgencia-select" className="text-xs text-muted-foreground">
                   Urgencia
                 </Label>
                 <Select
@@ -2149,17 +2310,20 @@ export default function RequestDetail() {
                 value={fullInfoDraft.companyTelefono}
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyTelefono: v }))}
                 error={fullInfoErrors.companyTelefono}
+                invalid={channelFieldInvalid}
               />
               <EditableField
                 label="Correo"
                 value={fullInfoDraft.companyCorreo}
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCorreo: v }))}
                 error={fullInfoErrors.companyCorreo}
+                invalid={channelFieldInvalid}
               />
               <EditableField
                 label="CIIU principal"
                 value={fullInfoDraft.companyCiiuPrincipal}
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, companyCiiuPrincipal: v }))}
+                error={fullInfoErrors.companyCiiuPrincipal}
               />
               <EditableField
                 label="Descripción CIIU"
@@ -2205,6 +2369,7 @@ export default function RequestDetail() {
                 value={fullInfoDraft.contactTelefono}
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactTelefono: v }))}
                 error={fullInfoErrors.contactTelefono}
+                invalid={channelFieldInvalid}
               />
               <EditableField
                 label="Teléfono secundario"
@@ -2217,6 +2382,7 @@ export default function RequestDetail() {
                 value={fullInfoDraft.contactCorreo}
                 onChange={(v) => setFullInfoDraft((d) => ({ ...d, contactCorreo: v }))}
                 error={fullInfoErrors.contactCorreo}
+                invalid={channelFieldInvalid}
               />
               <EditableField
                 label="Correo alternativo"
@@ -2225,7 +2391,7 @@ export default function RequestDetail() {
                 error={fullInfoErrors.contactCorreoAlternativo}
               />
               {req.additionalContacts && req.additionalContacts.length > 0 && (
-                <p className="text-[11px] italic text-muted-foreground pt-1">
+                <p className="text-xs italic text-muted-foreground pt-1">
                   Los contactos adicionales no son editables aquí todavía — vuelve al wizard si necesitas corregirlos.
                 </p>
               )}
@@ -2271,7 +2437,7 @@ export default function RequestDetail() {
 
             <TabsContent value="formacion" className="space-y-2.5 pt-4">
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">¿Han tenido formación previa con Icesi?</Label>
+                <Label className="text-xs text-muted-foreground">¿Han tenido formación previa con Icesi?</Label>
                 <Select
                   value={fullInfoDraft.formacionPrevia || undefined}
                   onValueChange={(v) =>
@@ -2408,7 +2574,7 @@ export default function RequestDetail() {
                     key={preset}
                     type="button"
                     onClick={() => setCancelReason(preset)}
-                    className={`px-2.5 py-1 text-[11px] rounded-full font-medium transition-colors border ${
+                    className={`px-2.5 py-1 text-xs rounded-full font-medium transition-colors border ${
                       cancelReason === preset
                         ? "bg-[#5454e9] text-white border-[#5454e9]"
                         : "bg-secondary/40 hover:bg-secondary border-border text-muted-foreground hover:text-foreground"
@@ -2526,7 +2692,7 @@ export default function RequestDetail() {
             <DialogTitle className="text-base font-bold text-foreground">
               {nextRoundNumber === 1
                 ? "¿Enviar el costeo al KAM?"
-                : `¿Enviar el ajuste al KAM? (Ronda ${nextRoundNumber})`}
+                : `¿Enviar el ajuste al KAM? (Sustentación y ajuste ${nextRoundNumber})`}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Confirma que el valor final de la propuesta ya está listo. El KAM podrá enviarla al cliente a partir de
@@ -2540,8 +2706,8 @@ export default function RequestDetail() {
                 <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3 flex items-start gap-2.5">
                   <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <div className="space-y-0.5 min-w-0">
-                    <p className="text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                      El cliente devolvió la ronda {lastRejectedRound.roundNumber} con esta observación:
+                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
+                      El cliente devolvió la sustentación y ajuste {lastRejectedRound.roundNumber} con esta observación:
                     </p>
                     <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed whitespace-pre-wrap">
                       "{lastRejectedRound.clientObservation}"
@@ -2592,6 +2758,26 @@ export default function RequestDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Descartar cambios sin guardar de "Información completa" */}
+      <Dialog open={isDiscardChangesOpen} onOpenChange={setIsDiscardChangesOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">¿Descartar los cambios?</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Tienes cambios sin guardar en esta solicitud. Si sales ahora, se perderán.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsDiscardChangesOpen(false)}>
+              Seguir editando
+            </Button>
+            <Button type="button" variant="destructive" size="sm" onClick={handleDiscardFullInfoChanges}>
+              Descartar cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Confirmación de avance de estado — evita que un clic accidental
           (o varios seguidos) cambie el estado o mande la propuesta al cliente. */}
       <Dialog open={!!confirmingAction} onOpenChange={(open) => !open && setConfirmingAction(null)}>
@@ -2606,6 +2792,33 @@ export default function RequestDetail() {
                   {CONFIRM_ACTION_META[confirmingAction].description}
                 </DialogDescription>
               </DialogHeader>
+              {confirmingAction === "entregada" && (
+                <dl
+                  aria-label="Resumen de lo que se remite al cliente"
+                  className="space-y-1.5 rounded-md border border-border bg-secondary/30 p-3 text-xs"
+                >
+                  <div>
+                    <dt className="text-muted-foreground">Empresa:</dt>
+                    <dd className="font-semibold text-foreground">{req.company}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Propuesta:</dt>
+                    <dd className="font-medium text-foreground">{req.title}</dd>
+                  </div>
+                  {req.costing && req.costing.totalOfferedCop > 0 && (
+                    <div>
+                      <dt className="text-muted-foreground">Valor ofrecido:</dt>
+                      <dd className="font-mono font-semibold text-foreground">
+                        {formatCop(req.costing.totalOfferedCop)}
+                      </dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-muted-foreground">Canal de contacto:</dt>
+                    <dd className="font-medium text-foreground">{customerChannelLabel}</dd>
+                  </div>
+                </dl>
+              )}
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   type="button"
@@ -2685,24 +2898,33 @@ function getFullInfoCompleteness(req: RequestItem): { filled: number; total: num
 // alguno cambió respecto a la ronda anterior, el historial lo muestra como
 // parte del resumen de la ronda ("Participantes: 15-20 → 9-12"). La ronda 1
 // nunca tiene con qué compararse, así que no muestra diffs.
+/** Visual marker for a tab that holds a field with an error (the accessible name of the tab stays unchanged). */
+function TabErrorMarker() {
+  return <span aria-hidden="true" className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500" />;
+}
+
 function EditableField({
   label,
   value,
   onChange,
   block = false,
   error,
+  invalid = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   block?: boolean;
   error?: string;
+  /** Marks the field as wrong without its own text (the message is shown once, elsewhere in the form). */
+  invalid?: boolean;
 }) {
+  const flagged = Boolean(error) || invalid;
   const fieldId = label ? "field-" + label.toLowerCase().replace(/[^a-z0-9]/g, "-") : undefined;
   return (
     <div className="space-y-1">
       {label && (
-        <Label htmlFor={fieldId} className="text-[11px] text-muted-foreground">
+        <Label htmlFor={fieldId} className="text-xs text-muted-foreground">
           {label}
         </Label>
       )}
@@ -2712,17 +2934,19 @@ function EditableField({
           rows={2}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={cn("text-xs resize-none", error && "border-red-400 focus-visible:ring-red-400")}
+          aria-invalid={flagged || undefined}
+          className={cn("text-xs resize-none", flagged && "border-red-400 focus-visible:ring-red-400")}
         />
       ) : (
         <Input
           id={fieldId}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={cn("h-8 text-xs", error && "border-red-400 focus-visible:ring-red-400")}
+          aria-invalid={flagged || undefined}
+          className={cn("h-8 text-xs", flagged && "border-red-400 focus-visible:ring-red-400")}
         />
       )}
-      {error && <p className="text-[11px] text-red-500">{error}</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   );
 }
@@ -2730,7 +2954,7 @@ function EditableField({
 function InfoSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-lg border border-border dark:border-[#252838] p-4 space-y-2.5">
-      <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{title}</h4>
+      <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{title}</h4>
       <div className="space-y-2 text-xs">{children}</div>
     </div>
   );

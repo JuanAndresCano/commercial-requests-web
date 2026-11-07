@@ -17,10 +17,30 @@ import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useRequests } from "@/hooks/use-requests";
 import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
+import { formatCopTotal } from "@/lib/cop-total";
 import { formatRelativeTime, mapProposalToRequestItem } from "@/lib/proposal-adapter";
 import { fuzzyMatch } from "@/lib/fuzzy";
 import { getStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
 import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
+import { CommercialStatusChip } from "@/components/CommercialStatusChip";
+import { ResentAdjustmentBadge } from "@/components/ResentAdjustmentBadge";
+import { AdjustmentFilterSelect, PendingAdjustmentsCounter } from "@/components/dashboard/AdjustmentFilterControls";
+import {
+  countPendingAdjustments,
+  hasPendingAdjustment,
+  isAdjustmentFilter,
+  matchesAdjustmentFilter,
+  type AdjustmentFilter,
+} from "@/lib/adjustments";
+import {
+  COMMERCIAL_STATUS_LABELS,
+  COMMERCIAL_STATUS_NONE_THEME,
+  COMMERCIAL_STATUS_THEME,
+  isCommercialStatus,
+  matchesCommercialStatus,
+  sumDeliveredValues,
+  type CommercialStatusFilter,
+} from "@/lib/commercial-status";
 import {
   EMPTY_KAM_BOARD_FILTERS,
   deriveKamBoardFilterOptions,
@@ -51,7 +71,12 @@ type FilterType = RequestStatus | "all";
 
 export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
   const { data: apiProposals, isLoading, isError, refetch } = useRequests();
-  const { data: apiMetrics } = useDashboardMetrics();
+  const {
+    data: apiMetrics,
+    isPending: metricsPending,
+    isError: metricsError,
+    refetch: refetchMetrics,
+  } = useDashboardMetrics();
 
   // Persistido para que el tablero (búsqueda, filtro y vista) siga como lo dejó
   // el KAM al volver del detalle de una propuesta — antes se reiniciaba porque
@@ -59,7 +84,20 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   // arranca limpio y en Kanban (resetDashboardUiState en AuthContext).
   const [activeFilter, setActiveFilter] = usePersistentState<FilterType>("icesi_kam_dashboard_filter_v1", "all");
   const [searchQuery, setSearchQuery] = usePersistentState("icesi_kam_dashboard_search_v1", "");
+  const [storedCommercialFilter, setCommercialFilter] = usePersistentState<CommercialStatusFilter>(
+    "icesi_kam_dashboard_commercial_filter_v1",
+    "",
+  );
+  const [storedAdjustmentFilter, setAdjustmentFilter] = usePersistentState<AdjustmentFilter>(
+    "icesi_kam_dashboard_adjustment_filter_v1",
+    "",
+  );
   const [viewMode, setViewMode] = usePersistentState<"tabla" | "kanban">("icesi_kam_dashboard_view_v1", "kanban");
+
+  const adjustmentFilter: AdjustmentFilter = isAdjustmentFilter(storedAdjustmentFilter) ? storedAdjustmentFilter : "";
+
+  const commercialFilter: CommercialStatusFilter =
+    storedCommercialFilter === "none" || isCommercialStatus(storedCommercialFilter) ? storedCommercialFilter : "";
 
   const firstName = userName ? userName.split(" ")[0] : "Andrea";
 
@@ -74,6 +112,8 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   }, [apiProposals, requests, userName]);
 
   const myRequests = activeDataset;
+  // The API only returns the KAM's own proposals; local fallback data is read-only (no PATCH to write to).
+  const canEditCommercialStatus = Boolean(apiProposals);
 
   // Filtros por líder de producto, empresa y tipo. Se combinan (AND) con la
   // etapa y el buscador, y se guardan igual que ellos. Las opciones salen de
@@ -94,7 +134,12 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   const clearBoardFilters = () => {
     setSearchQuery("");
     setBoardFilters(EMPTY_KAM_BOARD_FILTERS);
+    setCommercialFilter("");
+    setAdjustmentFilter("");
   };
+  const hasAnyBoardFilter = Boolean(searchQuery.trim() || hasBoardFilters || commercialFilter || adjustmentFilter);
+  // El contador de la cabecera cuenta sobre todo el conjunto del KAM, sin aplicar el propio filtro.
+  const pendingAdjustmentsCount = countPendingAdjustments(activeDataset);
 
   // Conteos por etapa percibida por el KAM (ver kamStageOf) — cada uno mapea
   // 1:1 a una columna del Kanban y a una tarjeta KPI, para que nunca se
@@ -109,7 +154,9 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
   // Contar solo las confirmadas evita que este número (y el aviso de abajo)
   // le diga al KAM que puede entregar algo que el Líder aún está costeando.
   const listasParaEntregarCount = stageCounts["en-costeo"];
-  const entregadasCount = stageCounts.entregada;
+  const entregadasCount = apiMetrics?.entregadas ?? stageCounts.entregada;
+  const deliveredValue = formatCopTotal(apiMetrics?.deliveredValueCop);
+  const deliveredValueUnavailable = metricsError || (!metricsPending && deliveredValue === null);
 
   // Métricas agregadas (no son una etapa del pipeline) — se muestran como
   // dato secundario, no como tarjeta-filtro principal.
@@ -142,12 +189,14 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
     return activeDataset.filter((req) => {
       if (searchQuery.trim() && !matchesSearch(req, searchQuery.toLowerCase().trim())) return false;
       if (!matchesKamBoardFilters(req, boardFilters)) return false;
+      if (!matchesCommercialStatus(req, commercialFilter)) return false;
+      if (!matchesAdjustmentFilter(req, adjustmentFilter)) return false;
       if (activeFilter !== "all") {
         return kamStageOf(req) === activeFilter;
       }
       return true;
     });
-  }, [activeDataset, searchQuery, activeFilter, boardFilters]);
+  }, [activeDataset, searchQuery, activeFilter, boardFilters, commercialFilter, adjustmentFilter]);
 
   // Vista Kanban: la columna ya ES el estado, así que el filtro de estado no debe vaciar el
   // contenido (no aporta nada nuevo) — solo el buscador y los filtros de líder/empresa/tipo, que sí cruzan información que el
@@ -157,9 +206,11 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
     return activeDataset.filter((req) => {
       if (searchQuery.trim() && !matchesSearch(req, searchQuery.toLowerCase().trim())) return false;
       if (!matchesKamBoardFilters(req, boardFilters)) return false;
+      if (!matchesCommercialStatus(req, commercialFilter)) return false;
+      if (!matchesAdjustmentFilter(req, adjustmentFilter)) return false;
       return true;
     });
-  }, [activeDataset, searchQuery, boardFilters]);
+  }, [activeDataset, searchQuery, boardFilters, commercialFilter, adjustmentFilter]);
 
   // Agrupación por etapa percibida por el KAM (ver kamStageOf), para la vista
   // Kanban — así la columna "Lista para Entregar" solo contiene tarjetas que
@@ -175,6 +226,33 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
     "icesi_kam_dashboard_isolated_v1",
     null,
   );
+
+  const visibleRequests =
+    viewMode === "tabla"
+      ? filteredRequests
+      : isolatedStage
+        ? kanbanRequests.filter((request) => kamStageOf(request) === isolatedStage)
+        : kanbanRequests;
+  // Filtros que estrechan lo visible además de la etiqueta comercial. La etiqueta
+  // comercial reescribe la cabecera de la columna Entregada; el resto de filtros
+  // solo se resume en el aviso de abajo (la cabecera sigue siendo el total bruto).
+  const hasOtherVisibleFilters = Boolean(
+    searchQuery.trim() || hasBoardFilters || (viewMode === "tabla" ? activeFilter !== "all" : isolatedStage),
+  );
+  const visibleDeliveredCount = visibleRequests.filter((request) => request.status === "entregada").length;
+  const visibleDeliveredValue = formatCopTotal(sumDeliveredValues(visibleRequests) ?? undefined);
+  // Cabecera de Entregada con la etiqueta comercial o el filtro de ajustes activos: solo el
+  // conjunto filtrado (conteo y suma exacta en BigInt vía sumDeliveredValues).
+  const deliveredHeaderFiltered = Boolean(commercialFilter || adjustmentFilter);
+  const deliveredMatches = deliveredHeaderFiltered
+    ? activeDataset.filter(
+        (request) =>
+          request.status === "entregada" &&
+          matchesCommercialStatus(request, commercialFilter) &&
+          matchesAdjustmentFilter(request, adjustmentFilter),
+      )
+    : [];
+  const deliveredMatchesValue = formatCopTotal(sumDeliveredValues(deliveredMatches) ?? undefined);
 
   const handleCardClick = (stage: RequestStatus) => {
     if (viewMode === "tabla") {
@@ -250,7 +328,9 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
             <div>
               <p className="text-sm font-bold text-foreground">
                 ¡Tienes {misListasParaEntregarCount}{" "}
-                {misListasParaEntregarCount === 1 ? "propuesta lista para entregar" : "propuestas listas para entregar"}
+                {misListasParaEntregarCount === 1
+                  ? "propuesta lista para presentar"
+                  : "propuestas listas para presentar"}
                 !
               </p>
               <p className="text-xs text-muted-foreground">
@@ -283,7 +363,21 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         <span>
           <strong className="font-bold text-foreground">{formatCompactCop(pipelineTotal)}</strong> en pipeline cotizado
         </span>
+        <PendingAdjustmentsCounter
+          count={pendingAdjustmentsCount}
+          filter={adjustmentFilter}
+          onChange={setAdjustmentFilter}
+        />
       </div>
+
+      {deliveredValueUnavailable && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+          <span>No se pudo cargar el valor total de las propuestas presentadas.</span>
+          <button type="button" className="font-semibold underline" onClick={() => void refetchMetrics()}>
+            Reintentar total
+          </button>
+        </div>
+      )}
 
       {/* 2. TARJETAS DE MÉTRICAS INTERACTIVAS — cada una mapea 1:1 a una etapa
           real del pipeline, igual que el Kanban. En Tabla filtran (ocultan
@@ -311,7 +405,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           stage="en-costeo"
           label={KAM_STAGE_LABELS["en-costeo"]}
           count={listasParaEntregarCount}
-          hint="Costeo listo para enviar al cliente"
+          hint="Costeo listo para presentar al cliente"
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
           active={viewMode === "tabla" ? activeFilter === "en-costeo" : isolatedStage === "en-costeo"}
           onClick={() => handleCardClick("en-costeo")}
@@ -319,13 +413,41 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
         <StageKpiCard
           stage="entregada"
           label={KAM_STAGE_LABELS.entregada}
-          count={entregadasCount}
-          hint="Cerradas con el cliente"
+          count={deliveredHeaderFiltered ? deliveredMatches.length : entregadasCount}
+          hint="Propuestas presentadas al cliente"
+          secondaryLine={
+            deliveredHeaderFiltered ? (
+              <span className="font-semibold text-foreground">
+                Filtradas: {deliveredMatches.length} de {entregadasCount} · {deliveredMatchesValue ?? "No disponible"}
+              </span>
+            ) : deliveredValueUnavailable ? (
+              "Total no disponible"
+            ) : deliveredValue !== null ? (
+              <span className="font-semibold text-foreground">{deliveredValue} total entregado</span>
+            ) : (
+              "Calculando total..."
+            )
+          }
           activeHint={viewMode === "tabla" ? "✓ Filtro activo" : "✓ Aislada en el tablero"}
           active={viewMode === "tabla" ? activeFilter === "entregada" : isolatedStage === "entregada"}
           onClick={() => handleCardClick("entregada")}
         />
       </div>
+
+      {hasOtherVisibleFilters && (
+        <div role="status" className="rounded-lg border border-border bg-secondary/20 p-3 text-xs text-foreground">
+          <p>
+            {visibleDeliveredCount}{" "}
+            {visibleDeliveredCount === 1 ? "propuesta entregada visible" : "propuestas entregadas visibles"} · Total
+            visible: {visibleDeliveredValue ?? "No disponible"}
+          </p>
+          {!deliveredHeaderFiltered && (
+            <p className="mt-1 text-muted-foreground">
+              El total entregado superior conserva el volumen bruto de toda tu cartera.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 3. TABLA DE ACTIVIDAD RECIENTE Y SEGUIMIENTO COMERCIAL */}
       <div className="space-y-2.5">
@@ -429,6 +551,70 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
             )}
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+            <label htmlFor="commercial-filter" className="text-xs font-medium text-foreground">
+              Seguimiento comercial
+            </label>
+            <span
+              aria-hidden="true"
+              className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                isCommercialStatus(commercialFilter)
+                  ? COMMERCIAL_STATUS_THEME[commercialFilter].dot
+                  : commercialFilter === "none"
+                    ? COMMERCIAL_STATUS_NONE_THEME.dot
+                    : "bg-transparent",
+              )}
+            />
+            <select
+              id="commercial-filter"
+              aria-label="Filtrar por etiqueta comercial"
+              value={commercialFilter}
+              onChange={(event) => {
+                const value = event.target.value;
+                setCommercialFilter(value === "none" || isCommercialStatus(value) ? value : "");
+              }}
+              className="min-w-0 max-w-full rounded-md border border-input bg-background px-2 py-2 text-xs text-foreground"
+            >
+              <option value="">Todas las etiquetas</option>
+              <option value="none">Sin etiqueta</option>
+              {Object.entries(COMMERCIAL_STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            {commercialFilter && (
+              <button
+                type="button"
+                className="text-xs underline text-muted-foreground"
+                onClick={() => setCommercialFilter("")}
+              >
+                Quitar etiqueta
+              </button>
+            )}
+            <span aria-hidden="true" className="mx-1 hidden h-5 w-px bg-border sm:inline-block" />
+            <AdjustmentFilterSelect value={adjustmentFilter} onChange={setAdjustmentFilter} />
+            <ul
+              aria-label="Leyenda de colores del seguimiento comercial"
+              className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground sm:ml-auto"
+            >
+              {(Object.keys(COMMERCIAL_STATUS_LABELS) as Array<keyof typeof COMMERCIAL_STATUS_LABELS>).map((value) => (
+                <li key={value} className="flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className={cn("h-1.5 w-1.5 rounded-full", COMMERCIAL_STATUS_THEME[value].dot)}
+                  />
+                  {COMMERCIAL_STATUS_LABELS[value]}
+                </li>
+              ))}
+              <li className="flex items-center gap-1.5">
+                <span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full", COMMERCIAL_STATUS_NONE_THEME.dot)} />
+                Sin etiqueta
+              </li>
+            </ul>
+          </div>
+
           {/* Tabla comercial */}
           {viewMode === "tabla" && (
             <div className="overflow-x-auto">
@@ -447,7 +633,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   {isLoading && activeDataset.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                        <div className="flex flex-col items-center justify-center gap-2">
+                        <div role="status" className="flex flex-col items-center justify-center gap-2">
                           <div className="h-6 w-6 animate-spin rounded-full border-2 border-icesi-blue border-t-transparent" />
                           <p className="font-medium text-foreground">Cargando solicitudes desde el servidor...</p>
                         </div>
@@ -471,7 +657,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     <tr>
                       <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         <div className="mx-auto max-w-sm">
-                          {!searchQuery && activeFilter === "all" && myRequests.length === 0 ? (
+                          {!hasAnyBoardFilter && activeFilter === "all" && myRequests.length === 0 ? (
                             <>
                               <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
                               <p className="mt-1 text-xs text-muted-foreground">
@@ -491,11 +677,11 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                             <>
                               <p className="font-medium text-foreground">No se encontraron solicitudes</p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {searchQuery || activeFilter !== "all" || hasBoardFilters
+                                {hasAnyBoardFilter || activeFilter !== "all"
                                   ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
                                   : "No hay registros disponibles en este momento."}
                               </p>
-                              {(searchQuery || activeFilter !== "all" || hasBoardFilters) && (
+                              {(hasAnyBoardFilter || activeFilter !== "all") && (
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -520,6 +706,12 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                       const kamStage = kamStageOf(r);
                       const stageAgeLabel = getStageAgeLabel(r, kamStage);
                       const totalAgeLabel = getTotalAgeLabel(r);
+                      const offeredValueLabel =
+                        r.status === "entregada"
+                          ? formatCopTotal(r.deliveredValueCop ?? undefined)
+                          : r.totalCostCop || r.costing?.totalOfferedCop
+                            ? formatCop(r.totalCostCop || r.costing?.totalOfferedCop || 0)
+                            : null;
 
                       return (
                         <tr
@@ -585,17 +777,19 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                               <span className="inline-block rounded bg-muted/40 px-2 py-0.5 text-xs italic text-muted-foreground border border-border/50">
                                 - Pendiente de costeo -
                               </span>
-                            ) : r.totalCostCop || r.costing?.totalOfferedCop ? (
+                            ) : offeredValueLabel !== null ? (
                               <div className="flex flex-col">
                                 <span className="font-semibold text-foreground text-xs sm:text-sm tracking-tight">
-                                  {formatCop(r.totalCostCop || r.costing?.totalOfferedCop || 0)}
+                                  {offeredValueLabel}
                                 </span>
                                 {isReady && (
                                   <span className="text-[10px] text-icesi-green font-medium">Costeo aprobado</span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-xs italic text-muted-foreground">- Pendiente de costeo -</span>
+                              <span className="text-xs italic text-muted-foreground">
+                                {r.status === "entregada" ? "Valor entregado no disponible" : "- Pendiente de costeo -"}
+                              </span>
                             )}
                           </td>
 
@@ -618,6 +812,19 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                                 {KAM_STAGE_LABELS[kamStage]}
                               </span>
                             )}
+                            {r.status === "entregada" && (
+                              <div className="mt-1">
+                                <CommercialStatusChip
+                                  proposalId={r.id}
+                                  status={r.commercialStatus}
+                                  canEdit={canEditCommercialStatus}
+                                />
+                              </div>
+                            )}
+                            {hasPendingAdjustment(r) && (
+                              <p className="mt-1 text-[10px] font-semibold text-icesi-orange">Sustentación y ajustes</p>
+                            )}
+                            {r.status === "entregada" && <ResentAdjustmentBadge req={r} className="mt-1" />}
                             {stageAgeLabel && (
                               <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                                 <Clock className="h-3 w-3 shrink-0" />
@@ -668,7 +875,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
           {viewMode === "kanban" &&
             (isLoading && activeDataset.length === 0 ? (
               <div className="px-4 py-16 text-center text-sm text-muted-foreground">
-                <div className="flex flex-col items-center justify-center gap-2">
+                <div role="status" className="flex flex-col items-center justify-center gap-2">
                   <div className="h-6 w-6 animate-spin rounded-full border-2 border-icesi-blue border-t-transparent" />
                   <p className="font-medium text-foreground">Cargando tablero...</p>
                 </div>
@@ -676,7 +883,7 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
             ) : kanbanRequests.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                 <div className="mx-auto max-w-sm">
-                  {!searchQuery && myRequests.length === 0 ? (
+                  {!hasAnyBoardFilter && myRequests.length === 0 ? (
                     <>
                       <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -692,11 +899,11 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                     <>
                       <p className="font-medium text-foreground">No se encontraron solicitudes</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {searchQuery || hasBoardFilters
+                        {hasAnyBoardFilter
                           ? "Intenta modificar los términos de búsqueda o limpiar los filtros seleccionados."
                           : "No hay registros disponibles en este momento."}
                       </p>
-                      {(searchQuery || hasBoardFilters) && (
+                      {hasAnyBoardFilter && (
                         <Button variant="outline" size="sm" onClick={clearBoardFilters} className="mt-3 text-xs">
                           Limpiar filtros
                         </Button>
@@ -706,7 +913,15 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                 </div>
               </div>
             ) : (
-              <BoardMotion layoutKey={[isolatedStage ?? "", searchQuery, JSON.stringify(boardFilters)].join("|")}>
+              <BoardMotion
+                layoutKey={[
+                  isolatedStage ?? "",
+                  searchQuery,
+                  JSON.stringify(boardFilters),
+                  commercialFilter,
+                  adjustmentFilter,
+                ].join("|")}
+              >
                 <div
                   className={cn(
                     "grid gap-4 p-4 items-start",
@@ -727,7 +942,12 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                         // Toda tarjeta en "en-costeo" ya pasó por kamStageOf, así que aquí solo
                         // llegan las confirmadas por el Líder — el atajo siempre aplica, igual
                         // que los botones de acción del tablero del Líder de Producto.
-                        <RequestCard req={r} stage={col} cta={col === "en-costeo" ? "Revisar y entregar" : undefined} />
+                        <RequestCard
+                          req={r}
+                          stage={col}
+                          canEditCommercialStatus={canEditCommercialStatus}
+                          cta={col === "en-costeo" ? "Revisar y presentar" : undefined}
+                        />
                       )}
                     />
                   ))}

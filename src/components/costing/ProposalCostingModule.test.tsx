@@ -53,6 +53,23 @@ describe("ProposalCostingModule", () => {
     vi.useRealTimers();
   });
 
+  // UX H13: the Product Leader sees whether the value was really saved.
+  describe("save status", () => {
+    it("shows nothing before any save", () => {
+      setup({ readyForKam: false });
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("says 'Guardando…' while the server is saving and the time once it saved", () => {
+      const view = render(
+        <ProposalCostingModule request={makeRequest({})} onUpdateCosting={vi.fn()} isSaving savedAt="10:42" />,
+      );
+      expect(screen.getByRole("status")).toHaveTextContent("Guardando…");
+      view.rerender(<ProposalCostingModule request={makeRequest({})} onUpdateCosting={vi.fn()} savedAt="10:42" />);
+      expect(screen.getByRole("status")).toHaveTextContent("Guardado a las 10:42");
+    });
+  });
+
   describe("pasted formats (es-CO)", () => {
     it('reads "$32.000.000" in the total as 32000000', () => {
       const { onUpdateCosting } = setup({ readyForKam: false });
