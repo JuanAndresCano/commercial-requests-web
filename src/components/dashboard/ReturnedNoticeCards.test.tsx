@@ -13,7 +13,7 @@ vi.mock("@/hooks/use-reassign-proposal", () => ({
 vi.mock("@/hooks/use-nodes", () => ({ useNodes: () => ({ data: [], isLoading: false }) }));
 vi.mock("@/hooks/use-product-leaders", () => ({ useProductLeaders: () => ({ data: [], isLoading: false }) }));
 
-const NOTICE = "Cliente pidió ajustes";
+const NOTICE = "Sustentación y ajustes";
 
 /** A row of GET /requests or /requests/dashboard/prioritized: latest round only, three fields. */
 function listItem(id: string, title: string, negotiationRounds: unknown): ProposalListItem {

@@ -1,4 +1,5 @@
 import { calculateProCulturaReference, PRO_CULTURA_PERCENT } from "@/lib/currency";
+import type { CommercialStatus } from "@/lib/api/commercial-status";
 
 export type RequestStatus = "nueva" | "en-experto" | "en-costeo" | "entregada" | "rechazada" | "cancelada";
 export type RequestType =
@@ -105,6 +106,8 @@ export interface ProposalCosting {
 }
 
 export interface RequestItem {
+  commercialStatus?: CommercialStatus | null;
+  deliveredValueCop?: string | null;
   id: string;
   /** Human-readable business code (e.g. "REQ-2026-0042"), distinct from `id` (UUID). */
   code?: string;
@@ -190,6 +193,12 @@ export interface RequestItem {
   // Observaciones del cliente cuando pide ajustes tras una entrega — el KAM
   // "devuelve" la propuesta a costeo con esta nota (docs/08, pregunta 13).
   clientObservations?: string;
+
+  // Devoluciones del cliente con observaciones («Sustentación y ajuste N») y si la
+  // última aún no se ha vuelto a presentar. Las envía el servidor; sin ellas la regla
+  // cae al texto de `clientObservations` (ver src/lib/adjustments.ts).
+  adjustmentCount?: number;
+  hasPendingAdjustment?: boolean;
 
   // ISO timestamp de la última vez que el KAM guardó cambios en "Información
   // completa de la solicitud" — para que el Líder note si algo cambió.

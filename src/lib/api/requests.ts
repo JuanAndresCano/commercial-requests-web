@@ -1,6 +1,7 @@
 import { apiRequest } from "./client";
 import type { Company, CompanyType } from "./companies";
 import type { ProfessorInput } from "./professors";
+import type { CommercialStatus, CommercialStatusChange } from "./commercial-status";
 
 export type { Company, CompanyType };
 
@@ -229,6 +230,14 @@ export interface ProposalAttachment {
 }
 
 export interface ProposalListItem {
+  /** Single commercial follow-up tag; it never replaces the operational status. */
+  commercialStatus?: CommercialStatus | null;
+  /** Exact last amount actually delivered to the client, provided by the API. */
+  deliveredValueCop?: string | null;
+  /** Times the client returned the proposal with observations ("Sustentación y ajuste N"). Optional: an older server omits it. */
+  adjustmentCount?: number;
+  /** True while the last return has not been presented to the client again. Optional: an older server omits it. */
+  hasPendingAdjustment?: boolean;
   id: string;
   code: string | null;
   companyId: string;
@@ -270,6 +279,7 @@ export interface ProposalListItem {
 }
 
 export interface ProposalDetail extends ProposalListItem {
+  commercialStatusHistory?: CommercialStatusChange[];
   contact: ProposalContact | null;
   additionalContacts?: ProposalAdditionalContact[];
   node: ProposalNode | null;
@@ -299,6 +309,8 @@ export interface ProposalDashboardMetrics {
   nuevas: number;
   listas: number;
   entregadas: number;
+  /** Exact COP decimal: one last client-facing value per currently delivered proposal. */
+  deliveredValueCop: string;
   urgentes: number;
   proximas: number;
   sinDocente: number;
@@ -309,6 +321,7 @@ export interface ProposalDashboardMetrics {
 }
 
 export interface RequestsQueryParams {
+  commercialStatus?: CommercialStatus | "none";
   q?: string;
   status?: string;
   urgency?: "urgente" | "proximo" | "sinfecha" | "all";
@@ -472,6 +485,7 @@ export const requestsApi = {
   /** Retrieves filtered list of proposals */
   list: (params: RequestsQueryParams = {}) => {
     const search = new URLSearchParams();
+    if (params.commercialStatus) search.set("commercialStatus", params.commercialStatus);
     if (params.q) search.set("q", params.q);
     if (params.status && params.status !== "all") search.set("status", params.status);
     if (params.urgency && params.urgency !== "all") search.set("urgency", params.urgency);
