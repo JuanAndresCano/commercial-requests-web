@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { authApi, type SessionUser } from "@/lib/api/auth";
 import { setUnauthorizedHandler } from "@/lib/api/client";
 import { isSessionActive, mapBackendRoles, msUntilExpiry } from "@/lib/session";
@@ -79,6 +80,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User>(ANONYMOUS_USER);
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
@@ -94,12 +96,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [setTheme]);
 
   const clearSession = useCallback(() => {
+    // Query keys are shared by authenticated screens. Destroying the old queries
+    // also cancels their in-flight results, so a late A response cannot populate
+    // B's dashboard after this tab changes account (money, lists and details).
+    queryClient.clear();
     setUser(ANONYMOUS_USER);
     setUserId(null);
     setExpiresAt(null);
     setStatus("unauthenticated");
     resetUiForNewSession();
-  }, [resetUiForNewSession]);
+  }, [queryClient, resetUiForNewSession]);
 
   // Returns false (and leaves the user signed out) when the session is expired
   // or the account has no role the UI knows about.
@@ -121,6 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const cfg = ROLE_CONFIGS[roles[0]];
       const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
+      queryClient.clear();
       setUser({
         role: roles[0],
         roleLabel: cfg.label,
@@ -133,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setStatus("authenticated");
       return true;
     },
-    [clearSession],
+    [clearSession, queryClient],
   );
 
   // Restore the session from the cookie on load; never trust local state.
@@ -211,6 +218,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [requests]);
 
   const login = async (email: string, password: string) => {
+    // Hide private screens before the cookie changes, including a direct
+    // account replacement without an explicit logout beforehand.
+    clearSession();
     await authApi.login(email, password);
     resetUiForNewSession();
     const session = await authApi.getMe();
