@@ -1,5 +1,7 @@
 # Flujos de usuario (user journeys)
 
+> **Reglas vigentes 2026-11-06:** conservar cuatro etapas operativas KAM, una etiqueta comercial vigente por propuesta entregada, contacto mínimo válido y edición de empresa/contacto separada de la información técnica. Ver [acuerdos finales](13-acuerdos-finales-2026-11-06.md) y `requisitos/2026-10-28/SPEC_ACORDADA.md` (raíz del espacio de trabajo). Las restricciones históricas de edición con docente no aplican al nuevo permiso de datos del cliente. Donde A.3, A.5, A.6 y A.7 difieran, mandan A.3 (creación), A.6 (edición) y las secciones A.8 a A.10 nuevas.
+
 > **Actualización 2026-10-09 (cierre del UAT).** Decisiones del dueño del producto que prevalecen sobre este documento donde lo contradigan:
 > - **Crear:** el **líder de producto es obligatorio** y lo elige el KAM; el **nodo es opcional** (casilla vacía que nunca se rellena sola). El asistente ya no sugiere el líder a partir del nodo.
 > - **Editar y cancelar (KAM):** solo en "Nueva" **y sin docente asignado**. En esa misma ventana puede corregir nodo y líder, con historial visible.
@@ -45,13 +47,15 @@ En Kanban, un clic en una tarjeta KPI **no oculta nada** (las columnas ya son el
 ### A.3 — Registrar una nueva solicitud (`/solicitudes/nueva`)
 Wizard de 5 pasos con stepper clicable (se puede saltar hacia atrás libremente; hacia adelante valida el paso actual). Guardado automático en `localStorage` en cada cambio (si hay contenido significativo), con banner de recuperación de borrador si se detecta uno al entrar.
 
-1. **Paso 1 — Empresa** (`empresaNombre` y `tipoEmpresa` **obligatorios**): buscador con autocompletado contra empresas con convenio existente (`MOCK_COMPANIES`) — al seleccionar una, rellena NIT, dirección, teléfono, correo, CIIU, web y tipo de empresa, **todo editable después**. También se puede escribir una empresa nueva desde cero. Incluye chips de "empresas frecuentes" como atajo de un clic.
-2. **Paso 2 — Contacto** (100% opcional): datos del interlocutor principal + posibilidad de agregar múltiples contactos adicionales (para empresas con varios tomadores de decisión/áreas).
-3. **Paso 3 — Requerimiento** (`nombreReq` y `tipoReq` **obligatorios**; `tipoReqOtro` obligatorio solo si el tipo es "Otro"): aquí se elige el Nodo temático — **opcional y siempre vacío por defecto** (el Líder de Producto, en cambio, es **obligatorio** al crear; *Actualización 2026-10-09*) — el tipo de servicio, y hay una sección "avanzada" colapsable con diagnóstico opcional (necesidad, competencias a fortalecer, resultados esperados, horas, modalidad, participantes, etc.).
+1. **Paso 1 — Empresa** (solo `empresaNombre` **obligatorio**; NIT, dirección, web, CIIU, descripción y naturaleza jurídica pueden quedar «Pendiente», se guardan como ausencia — vigente 2026-11-06): buscador con autocompletado contra empresas con convenio existente (`MOCK_COMPANIES`) — al seleccionar una, rellena NIT, dirección, teléfono, correo, CIIU, web y tipo de empresa, **todo editable después**. También se puede escribir una empresa nueva desde cero. Incluye chips de "empresas frecuentes" como atajo de un clic.
+2. **Paso 2 — Contacto** (vigente 2026-11-06: **al menos un teléfono o correo válido**, de la empresa o del contacto principal; el resto es opcional): datos del interlocutor principal + posibilidad de agregar múltiples contactos adicionales (para empresas con varios tomadores de decisión/áreas). Un canal basta: no se exigen ambos. «Pendiente» o espacios nunca cuentan como canal. El contacto puede completarse aquí aunque falte en el paso 1; la unión de empresa y persona se comprueba al avanzar de este paso y al enviar.
+3. **Paso 3 — Requerimiento** (`ldp` — Líder de Producto, `nombreReq` de **al menos 5 caracteres** y `tipoReq` **obligatorios**; `tipoReqOtro` obligatorio solo si el tipo es "Otro"): aquí se elige el Nodo temático — **opcional y siempre vacío por defecto** (el Líder de Producto, en cambio, es **obligatorio** al crear; *Actualización 2026-10-09*) — el tipo de servicio, y hay una sección "avanzada" colapsable con diagnóstico opcional (necesidad, competencias a fortalecer, resultados esperados, horas, modalidad, participantes, etc.).
 4. **Paso 4 — Formación previa** (`formacionPrevia` y `urgencia` **obligatorios**): si la empresa ya ha tomado servicios similares antes, y el nivel de urgencia de la solicitud.
 5. **Paso 5 — Observaciones y Documentos** (100% opcional): notas libres + adjuntar archivos. Al final del paso, justo antes de enviar, se muestra el historial de propuestas entregadas y en proceso de la misma empresa (con filtro por estado y modal de detalle), para detectar antecedentes o duplicidades.
 
-Al final: botón **"Enviar solicitud a Líder de Producto"**. Son **6 los campos con validación dura** (razón social, naturaleza jurídica, título, tipo de requerimiento + su descripción si es "Otro", formación previa, urgencia) — si falta alguno, salta automáticamente al paso correspondiente con un toast de error y resalta el campo. Todo lo demás es opcional.
+Al final: botón **"Enviar solicitud a Líder de Producto"**. Campos con validación dura (vigente 2026-11-06): razón social, al menos un teléfono o correo válido, Líder de Producto, título (≥5 caracteres), tipo de requerimiento + su descripción si es "Otro", formación previa y urgencia. La naturaleza jurídica **ya no es obligatoria**. Los errores de campo aparecen al pulsar «Continuar» (o al saltar con el stepper), no al salir del campo: el asistente abre el primer paso con error, muestra un aviso y resalta el campo. Si el usuario salta pasos con el stepper se validan todos los pasos intermedios. El servidor repite estas reglas en `POST /api/v1/proposals` (no basta con evitar el formulario).
+
+Formato de lo que se escriba (ver `04`): teléfono de 10 dígitos con `+57` opcional, CIIU de exactamente 4 dígitos (principal y cada secundario), NIT de 9 dígitos (el asistente calcula el dígito de verificación) o de 10 con el dígito correcto, correo con formato válido.
 
 Al enviar: se crea el `RequestItem` con `status: "nueva"` siempre, sin costeo ni docente, y `productLeader` = el líder elegido por el KAM (obligatorio desde el 2026-10-09; ya no se sugiere a partir del nodo). Se limpia el borrador guardado. Se muestra una pantalla de éxito (`SuccessScreen`) antes de volver al tablero.
 
@@ -74,16 +78,51 @@ Más abajo, la sección colapsable **"Información completa de la solicitud"** (
 **Acciones disponibles según el estado, todas arriba a la derecha:**
 - `en-costeo`: botón **"Enviar a cliente"** → cambia el estado a `entregada`. **Deshabilitado si el costeo aún no tiene un valor mayor a $0, o si el Líder de Producto todavía no confirmó explícitamente el envío** (ver B.4 — ya no basta con que exista un valor, el Líder debe darle "Enviar a KAM" primero).
 - `nueva` y sin docente asignado (y la solicitud es suya): botón **"Cancelar solicitud"** → abre un diálogo que exige un **motivo obligatorio** (chips predefinidos o texto libre; el botón de confirmar queda deshabilitado sin motivo) y la marca como cancelada (cancelación lógica, no se elimina físicamente). (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
-- `entregada`: insignia sólida **"Propuesta Entregada"** + botón **"Devolver con observaciones"** (ver A.7).
+- `entregada`: etapa «Entregada» + chip de seguimiento comercial junto a la etapa (A.8) + botón **"Devolver con observaciones"** (ver A.7). La etapa operativa es «Entregada»; el seguimiento comercial es independiente y no cambia el estado.
 
-### A.6 — Editar su propia solicitud (solo mientras "Nueva" y sin docente asignado)
-Si la solicitud sigue en "Nueva", es suya y el Líder de Producto aún no le asignó docente, aparece un botón **"Editar información"** junto a "Información completa de la solicitud". Abre un modal con 6 pestañas (General, Empresa, Contacto, Diagnóstico, Formación, Otros) que cubre prácticamente todos los campos capturados en el wizard, incluyendo título y urgencia (que antes no se podían corregir desde ningún lado). Valida formato de correos/teléfonos, no deja guardar el título vacío, y si se intenta cerrar con cambios sin guardar pide confirmación. **En cuanto el Líder asigna un docente, el botón desaparece** aunque la solicitud siga en "Nueva" (el experto no debe ver información que cambia por debajo); el backend lo rechaza también (400). Si el KAM necesita corregir algo después, por ahora lo hace el Líder (`08`, pregunta 19). *Actualización 2026-10-09:* "Cancelar solicitud" **sí** sigue ahora la misma regla: con docente asignado el KAM no puede cancelar (el backend responde 400; ADMIN conserva el permiso).
+### A.6 — Editar los datos de su solicitud (un solo botón visible según el estado)
+Desde 2026-11-06 hay **un único botón de edición** en la sección «Información completa de la solicitud» (nunca los dos a la vez; `RequestDetail.tsx`):
+
+| Situación | Botón | Qué abre |
+|---|---|---|
+| `nueva` **sin docente** asignado (KAM dueño) | **«Editar información»** | Modal con 6 pestañas (General, Empresa, Contacto, Diagnóstico, Formación, Otros): título, urgencia, diagnóstico y todos los datos del asistente |
+| `nueva` con docente, `en-experto` o `en-costeo` (incluye ciclos de ajustes), KAM dueño | **«Editar empresa y contacto»** (`CustomerInfoEditor`) | Diálogo solo de empresa y contacto (16 campos + naturaleza jurídica + CIIU secundarios) |
+| `entregada` | ninguno | Cerrado hasta una devolución con observaciones |
+
+- **Formulario completo («Editar información»)**: valida formato de correos y teléfonos, no deja guardar el título vacío y, si se cierra con cambios sin guardar, pide confirmar en un diálogo del sistema («Seguir editando» / «Descartar cambios»). En cuanto el Líder asigna docente el botón cambia a «Editar empresa y contacto»; el backend rechaza (400) el formulario completo con docente. Si el KAM necesita corregir algo técnico después, lo hace el Líder (`08`, pregunta 19).
+- **Editar empresa y contacto**: `PATCH /requests/:id/customer`. Los datos vacíos se muestran como «Pendiente». Solo se envían los campos que el KAM cambió, y teléfonos, correos y NIT **se validan únicamente si el KAM los cambió** (un valor heredado inválido no bloquea guardar otro dato). No se puede borrar el último teléfono o correo válido. Si la solicitud no tiene ninguno, aparece el aviso «Falta un teléfono o correo válido; lo necesitarás para enviar la propuesta al cliente». Un NIT repetido de otra empresa muestra «Ya existe otra empresa registrada con ese NIT» (409) y no guarda.
+- **Empresa compartida, contacto local**: corregir la empresa actualiza la ficha común (autocompletados y otras solicitudes de esa empresa); corregir el contacto solo afecta esta solicitud (si era compartido se crea una copia).
+- *Actualización 2026-10-09:* "Cancelar solicitud" sigue la regla anterior: con docente asignado el KAM no puede cancelar (el backend responde 400; ADMIN conserva el permiso).
 
 ### A.7 — Si el cliente pide ajustes después de entregada
 Desde el detalle de una solicitud `entregada`, el KAM puede hacer clic en **"Devolver con observaciones"**: abre un modal para escribir la nota del cliente, y al confirmar:
 - La solicitud vuelve a `en-costeo` con esa nota visible (banner ámbar) tanto para el KAM como para el Líder de Producto, incluyendo en la tarjeta del Kanban del Líder. Al volver a marcarse `entregada`, la nota se limpia automáticamente.
 - La ronda de negociación que estaba pendiente en el **Historial de Negociación** (ver B.4) queda registrada como **rechazada**, con la observación del cliente y la fecha.
 - El gate de envío al KAM se resetea (`readyForKam` vuelve a `false`) — el botón "Enviar a cliente" del KAM se deshabilita otra vez hasta que el Líder confirme el ajuste. Si es la segunda vez (o más) que se reenvía, el Líder debe escribir obligatoriamente un motivo del ajuste (ver B.4).
+- **Nombre visible (vigente 2026-11-06):** la alerta dice **«Sustentación y ajustes»** (tarjeta, insignia de etapa y cuadro del detalle) y cada iteración del Historial de Negociación dice **«Sustentación y ajuste 1»**, **«Sustentación y ajuste 2»**, etc.; la vigente se marca «Sustentación y ajuste vigente». Los códigos internos y la autorización del envío no cambian. Una propuesta vuelve a ser «reenviada» (sin alerta, con insignia «↻ N ajustes») cuando se presenta otra vez al cliente.
+- Mientras la propuesta está de vuelta en costeo, el KAM **no puede editar su etiqueta comercial** (A.8).
+
+### A.8 — Etiqueta comercial de una propuesta entregada
+Solo el KAM dueño, solo con la propuesta en `entregada`:
+1. En el **tablero** (tarjeta de la columna «Entregada») o en la **cabecera del detalle** (junto a la etapa, tras una flecha) aparece un chip. Sin etiqueta dice «+ Asignar estado».
+2. Clic en el chip → menú con las cuatro etiquetas (**Aprobación sin contrato**, **Aprobada con contrato / Orden de servicio**, **Facturada**, **Rechazada**) y, si hay una vigente, **«Quitar etiqueta»**.
+3. El cambio es optimista; si falla, se revierte y un toast avisa. Elegir el mismo valor no hace nada ni duplica historial.
+4. En el detalle, el bloque **«Seguimiento comercial»** lista el **historial de etiquetas** (más reciente arriba: «anterior → nueva», quién y cuándo). Lo ven el KAM dueño y el Líder.
+5. El **Líder** ve el chip sin menú (solo lectura) en el detalle; sus tarjetas del tablero no muestran la etiqueta. Un KAM que no es el dueño no ve la propuesta.
+6. La etiqueta **no cambia el estado operativo** `DELIVERED`, ni sale de la cuenta del total entregado (una «Rechazada» sigue contando en el bruto).
+
+### A.9 — Filtros del tablero y contador de ajustes
+En `KamCommandCenter` (el Líder tiene el equivalente de ajustes en su tablero):
+- Filtro **«Seguimiento comercial»** (lista nativa): «Todas las etiquetas», «Sin etiqueta» y cada etiqueta; enlace «Quitar etiqueta» para limpiarlo. Se combina con búsqueda, Líder, empresa y tipo.
+- Filtro **«Sustentación y ajustes»**: Todas / Pendientes / Ya reenviadas / Sin ajustes, y el atajo del encabezado **«N en sustentación y ajustes»** (un clic muestra solo las pendientes, otro las devuelve).
+- La tarjeta KPI **«Entregada»** muestra «$ X total entregado» (métrica del servidor, bruta, toda la cartera). Con filtro de etiqueta o de ajustes activos pasa a «Filtradas: N de M · $ Y». Con otros filtros (búsqueda, Líder, empresa, tipo) aparece debajo un aviso «N propuestas entregadas visibles · Total visible: $ Z» y se aclara que el total superior conserva el volumen bruto. Las otras tarjetas de etapa no reaccionan a los filtros de etiqueta o ajustes (ver `08`).
+- Los filtros se persisten en `localStorage` como el resto del estado del tablero.
+
+### A.10 — Solicitud heredada sin ningún canal de contacto
+Una solicitud anterior a la regla de contactabilidad puede no tener teléfono ni correo válidos:
+- Se puede **seguir editando otros datos** (la falta del canal no bloquea guardar).
+- El botón «Enviar a cliente» queda **deshabilitado** con el motivo visible: «Completa al menos un teléfono o correo válido en Empresa y contacto antes de enviar.» El servidor también lo exige.
+- «Editar empresa y contacto» muestra el aviso amarillo; al añadir un canal válido el envío se habilita; después ya no se puede borrar el último.
 
 ---
 
@@ -152,8 +191,9 @@ KAM                                    LÍDER DE PRODUCTO
 Detecta necesidad del cliente
         │
         ▼
-Llena wizard (5 pasos,
-6 campos obligatorios)
+Llena wizard (5 pasos;
+obligatorios: razón social, 1 canal,
+Líder, título, tipo, formación, urgencia)
         │
         ▼
 Envía ──────────────────────►  Aparece en columna "Nueva"

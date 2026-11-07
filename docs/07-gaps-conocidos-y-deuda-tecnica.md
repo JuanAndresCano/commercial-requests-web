@@ -73,6 +73,64 @@ Prácticamente el mismo JSX y lógica de reasignación de Líder de Producto est
 ### 10. Documentos adjuntos son solo metadata
 `ProposalDocument` guarda `name`, `size` (como texto, no bytes), `date` (como texto formateado, no `Date`) — sugiere que la subida de archivos en `ProposalDocumentsSection.tsx` simula el registro pero no maneja binarios reales. Válido para prototipo; el backend real necesitará almacenamiento de archivos de verdad (S3, etc.) y metadata numérica/tipada.
 
+## 🆕 Gaps y deuda tras los ajustes acordados (revisión 2026-11-06)
+
+Hallazgos factuales de la implementación de los ajustes del 28 de octubre (reglas en [`13-acuerdos-finales-2026-11-06.md`](13-acuerdos-finales-2026-11-06.md); especificación `requisitos/2026-10-28/SPEC_ACORDADA.md` en la raíz del espacio de trabajo). Los verificados con navegador salen del informe de evidencia visual del 6 de noviembre (capturas fuera del repositorio). Las decisiones de negocio asociadas están en `08`, sección «Decisiones abiertas tras los ajustes del 28 de octubre».
+
+### Deuda técnica
+
+#### 21. 🟡 Abierto — Validación de canales y formatos duplicada en tres sitios
+La regla de contacto (teléfono, correo, «Pendiente», contactabilidad) y de formato (NIT, CIIU) se invoca por separado en `NewRequest.tsx` (asistente), en el modal «Editar información» dentro de `RequestDetail.tsx` y en `CustomerInfoEditor.tsx`. Los helpers (`customer-contact.ts`, `ciiu.ts`, `nit.ts`) son únicos, pero cada pantalla decide cuándo y a qué campos aplicarlos.
+
+#### 22. 🟡 Abierto — `RequestDetail.tsx` tiene unas 3000 líneas (2996 hoy)
+Concentra detalle, costeo, historial, modal de información completa, diálogos de entrega y devolución. Cada cambio nuevo (chip, editor de cliente, ajustes) añade lógica al mismo archivo.
+
+#### 23. 🟡 Abierto — Parche de jsdom en `src/test/setup.ts`
+`Element.prototype.matches` devuelve `false` para `":modal"`: con jsdom 20 (nwsapi 2.2.x) esa consulta desborda la pila y @floating-ui/Radix la llama muchas veces, de modo que cada menú abierto tardaba 10 a 15 s en las pruebas. El parche es correcto mientras jsdom no soporte `<dialog>` modal nativo; hay que revisarlo al actualizar jsdom/nwsapi.
+
+#### 24. 🟡 Abierto — Validación de valores heredados distinta entre los dos editores
+`CustomerInfoEditor` valida teléfonos, correos, NIT y CIIU **solo si el KAM los cambió** (un valor histórico inválido no bloquea guardar otro dato). El modal «Editar información» (formulario completo) valida los campos completos. Un mismo dato heredado malformado puede guardarse por un camino y bloquear por el otro.
+
+#### 25. 🟡 Abierto — Dinero con distinta precisión según la pantalla
+El tablero del KAM muestra el importe exacto (`$ 8.250.000,50`); el detalle de la propuesta y las tarjetas del Líder usan `formatCop` con 0 decimales (`$ 8.250.001` para 8.250.000,50, redondea hacia arriba) y el KPI del Líder abrevia a millones (`$ 272.1M COP`, `formatCompactCop`). Es presentación, no el cálculo del servidor.
+
+#### 26. 🟡 Abierto — Sin bloqueo de fila en la transición de estado
+El cambio de etiqueta y la edición de cliente toman `SELECT … FOR UPDATE` sobre la solicitud; `updateProposalStatus` (transición `DELIVERED` ↔ costeo) no. Una devolución a costeo y un cambio de etiqueta concurrentes pueden competir; hoy el cambio de etiqueta revalida el estado dentro de su transacción.
+
+#### 27. 🟡 Abierto — La etiqueta comercial sobrevive a una devolución a costeo
+Al volver una propuesta a costeo, `commercialStatus` y su historial se conservan (lo pide la especificación) y no se puede editar hasta que se entregue de nuevo, pero durante ese lapso la etiqueta vigente queda guardada sin mostrarse como editable. Al entregar otra vez reaparece tal cual estaba.
+
+#### 28. 🟡 Abierto — Los cambios del maestro de empresa se ven en solicitudes cerradas de otros KAM
+Corregir la ficha de empresa (`PATCH /requests/:id/customer`) actualiza el maestro común: lo ven también las solicitudes ya entregadas y las de otros KAM de esa empresa, sin historial de ese cambio. Es la regla acordada, pero es una decisión abierta (ver `08`).
+
+#### 29. 🟡 Abierto — `AGENTS.md`, regla 4, quedó desactualizada
+La regla 4 dice que el KAM edita su solicitud solo mientras es `nueva` y no tiene docente. Desde el 2026-11-06 el KAM dueño también puede editar **empresa y contacto** en `NEW`, `IN_PROGRESS` e `IN_COSTING` (con docente y en ciclos de ajustes). `AGENTS.md` es un archivo protegido (CODEOWNERS): **hay que señalárselo al lead para que lo actualice**; esta carpeta no lo edita.
+
+#### 30. 🟡 Abierto — Búsqueda difusa
+El buscador del tablero es difuso: `[R1]` coincide también con otros títulos demo. Las guías que dicen «escribe `[R1]` y verás 5 propuestas» no se cumplen al pie de la letra (ya ocurría antes de estos cambios).
+
+#### 31. 🟡 Abierto — Filtro de listado con parámetros sin uso
+`GET /requests` acepta `companyId`, `productLeaderId` y `nodeId`, y `adjustments`; el cliente web no envía los tres primeros ni `adjustments` (filtra en cliente). Ver decisión abierta en `08`.
+
+#### 32. 🟡 Abierto — Numeración de este directorio
+Hay dos archivos numerados 09 (`09-guion-de-prueba-dianis.md`, `09-r7-valor-entregado-kam.md`), dos numerados 10 (`10-ajustes-reunion-2026-10-22.md`, `10-decisiones-pendientes-equipo.md`) y ningún 11. No se renumeró ni renombró nada para preservar el historial de git; basta recordarlo al enlazar.
+
+### Hallazgos de la revisión visual (no corregidos, a decisión del producto)
+
+#### 33. 🟡 Abierto — Asistente «Nueva solicitud»
+- Los errores de campo aparecen al pulsar «Continuar», no al salir del campo; el mensaje del teléfono de 7 dígitos sale arriba del bloque, no pegado al campo (sin borde rojo).
+- En móvil de 390 px el paso 1 desborda horizontalmente (427 px).
+- Una solicitud creada solo con teléfono muestra el bloque EMPRESA vacío **sin** la palabra «Pendiente» en el detalle, aunque la especificación pide comunicar «Pendiente» en la interfaz.
+
+#### 34. 🟡 Abierto — Tema oscuro no persistido en una recarga completa
+Al recargar la página con el tema oscuro activo, vuelve al tema claro.
+
+#### 35. 🟡 Abierto — URL de una propuesta ajena
+Abrir la URL de la solicitud de otro KAM no la muestra (el aislamiento funciona; la API responde 403 con texto en inglés), pero la pantalla dice «problema de conexión o del servidor» en vez de un mensaje de acceso denegado.
+
+#### 36. 🟡 Abierto — Tablero del Líder
+Las tarjetas del Líder no muestran la etiqueta comercial (solo el detalle, en solo lectura) y un encabezado de columna se trunca («En proceso por expe…»). El chip sin etiqueta del KAM dice «+ Asignar estado», mientras el filtro y el historial dicen «Sin etiqueta».
+
 ## Cómo usar este documento
 
 Si estás extendiendo el prototipo de UX/UI: puedes decidir dejar estos gaps tal cual (no son el foco si el objetivo es solo validar interacción/flujo), **pero nunca los repliques como si fueran la especificación correcta** al informar el diseño del backend real. Si estás diseñando el modelo de datos/backend de producción: usa `04-modelo-de-datos-logico.md` como referencia de reglas de negocio *validadas*, y este archivo como lista de lo que **no** se debe copiar literalmente.

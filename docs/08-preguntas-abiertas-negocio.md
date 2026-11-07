@@ -569,11 +569,71 @@ Nodo' son el mismo cargo?"
 
 **Estado:** 🔴 Abierta — acuerdo de la UAT del 2026-09-29 implementado con una respuesta provisional
 
+> **Actualización 2026-11-06:** parcialmente superada. El KAM dueño ya puede corregir **empresa y contacto** con docente asignado (permiso separado, ver `13` y `02`); el resto del formulario sigue bloqueado con docente.
+
 **Contexto:** En la UAT, la Líder de Producto y el KAM acordaron que, una vez la Líder asigna un docente, el KAM **no** puede agregar ni editar información de la propuesta (el experto se confunde si el contenido cambia). Como el docente ya se puede asignar en "Nueva", el bloqueo se aplica **al asignar**, no al cambiar de estado.
 
 **Decisión provisional implementada:** el botón "Editar información" del KAM desaparece cuando hay docente asignado (y el backend rechaza el cambio con 400). El Líder de Producto dueño y ADMIN conservan la edición, así que por ahora **el Líder corrige los errores del KAM**. "Cancelar solicitud" no se bloqueó en ese momento (la bitácora solo habla de agregar información); **desde el 2026-10-09 sí se bloquea con docente asignado**.
 
 **Preguntas:** ¿el Líder debería poder "liberar" la edición para el KAM, o el KAM le pide el cambio por otro canal? ¿El KAM debe seguir pudiendo cancelar con docente asignado? **(Resuelto el 2026-10-09: no puede.)** Efecto lateral a confirmar: en "En Costeo" siempre hay docente, así que el KAM tampoco edita tras un rechazo del cliente (pregunta 16 / B.7).
+
+---
+
+## Decisiones abiertas tras los ajustes del 28 de octubre (registradas 2026-11-06)
+
+Surgidas al implementar y revisar los ajustes acordados (`13-acuerdos-finales-2026-11-06.md`; especificación `requisitos/2026-10-28/SPEC_ACORDADA.md` en la raíz del espacio de trabajo). Son decisiones de producto, no se resolvieron en código. Numeración continua con las preguntas anteriores.
+
+## 20. ¿Se verifica también en el backend el dígito de verificación del NIT?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** el formulario web acepta NITs de 9 dígitos (calcula y añade el dígito de verificación, algoritmo DIAN) o de 10 (comprueba que el último sea el correcto). El backend solo exige 10 dígitos (`src/common/validation/nit.ts`) y **no verifica el dígito**; el propio código lo deja anotado como pregunta abierta.
+
+**Riesgo de verificarlo:** el backend rechazaría NITs que hoy ya están guardados (datos históricos o cargados por otros caminos con dígito incorrecto), y las ediciones de esas empresas fallarían hasta corregirlos.
+
+**Pregunta:** ¿se verifica en el servidor (y qué se hace con los existentes), o se deja la verificación solo en el formulario?
+
+---
+
+## 21. Corregir el CIIU cambia la empresa compartida: ¿se conserva por propuesta?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** el CIIU (como la razón social, el NIT, la dirección y la web) vive en la ficha común de la empresa. Corregirlo desde una solicitud lo cambia para **todas** las solicitudes de esa empresa, incluidas las ya entregadas, y sin historial de ese cambio.
+
+**Pregunta:** ¿está bien que una propuesta entregada refleje un CIIU corregido después, o el CIIU (y quizá otros datos de la ficha) debe guardarse por propuesta/histórico?
+
+---
+
+## 22. Opción B: ¿unificar empresa y contacto en un solo modal para todos los estados?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** hoy hay dos pantallas según el estado: «Editar información» (formulario completo de 6 pestañas) en «Nueva» sin docente, y «Editar empresa y contacto» (solo esos datos) en el resto de ventanas. Se acordó un único botón visible a la vez, pero siguen siendo dos formularios con validaciones distintas (ver `07`).
+
+**Opción B:** un solo modal de empresa y contacto para cualquier estado editable, dejando el formulario técnico aparte.
+
+**Pregunta:** ¿se unifica (menos duplicación y una sola regla de validación) o se mantienen las dos pantallas?
+
+---
+
+## 23. El encabezado de «Entregada» solo reacciona a los filtros de etiqueta y de ajustes
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** la tarjeta «Entregada» del tablero KAM muestra «Filtradas: N de M · $ Y» únicamente con el filtro de etiqueta o el de ajustes. Con búsqueda, Líder, empresa o tipo, la tarjeta conserva el total bruto y un aviso aparte muestra «N propuestas entregadas visibles · Total visible». Las demás tarjetas de etapa no reaccionan a esos filtros.
+
+**Pregunta:** ¿el encabezado debe reaccionar a todos los filtros del tablero, o se mantiene el total bruto de la cartera con el aviso de lo visible?
+
+---
+
+## 24. Filtros extra de `GET /requests` sin uso: ¿se conservan o se quitan?
+
+**Estado:** 🔴 Abierta
+
+**Contexto:** el backend acepta `companyId`, `productLeaderId` y `nodeId` en `GET /requests`, pero ninguna pantalla del cliente los usa (el filtrado de empresa y Líder se hace en el navegador).
+
+**Pregunta:** ¿se mantienen como parte del contrato de la API o se eliminan para reducir superficie?
 
 ---
 
@@ -690,6 +750,7 @@ ronda del 2026-09-15, o son decisiones nuevas tomadas sin ella (ver ronda
 2026-09-19/20 arriba) — repreguntar con ejemplos concretos, no descripciones
 abstractas.)_
 
+- **Preguntas 20 a 24 (nuevas, 2026-11-06):** dígito de verificación del NIT en el backend; CIIU corregido en la empresa compartida (¿por propuesta?); un solo modal de empresa y contacto para todos los estados (opción B); alcance del encabezado «Entregada» frente a los filtros; filtros extra de `GET /requests` sin uso. Detalle en la sección «Decisiones abiertas tras los ajustes del 28 de octubre».
 - **Pregunta 19 (nueva):** con docente asignado el KAM ya no edita; ¿cómo corrige
   un error? Hoy lo corrige el Líder (ver pregunta 19 arriba).
 - **Pregunta 17 (nueva):** ¿una empresa histórica del mismo nombre y sin NIT
