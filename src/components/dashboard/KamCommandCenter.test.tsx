@@ -108,7 +108,7 @@ describe("KamCommandCenter (HU 3.1)", () => {
     expect(screen.getByRole("button", { name: /^Entregada al líder/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /En Proceso/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Lista para Entregar/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Entregada(?! al líder)/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Entregada(?! al)/i })).toBeInTheDocument();
   });
 
   it('labels the "nueva" stage as "Entregada al líder" for the KAM, in the card and in the table row', () => {
@@ -140,7 +140,7 @@ describe("KamCommandCenter (HU 3.1)", () => {
 
   it("displays the contextual banner when proposals are ready to deliver", () => {
     renderWithClient(<KamCommandCenter requests={mockRequests} userName="Andrea Martínez" />);
-    expect(screen.getByText(/¡Tienes 1 propuesta lista para entregar!/i)).toBeInTheDocument();
+    expect(screen.getByText(/¡Tienes 1 propuesta lista para presentar!/i)).toBeInTheDocument();
   });
 
   it("filters the table by search term", () => {
