@@ -161,7 +161,7 @@ export function ProposalDocumentsSection({
               <span className="font-medium text-slate-700 dark:text-slate-200">
                 {isUploading ? "Subiendo archivo…" : "Adjuntar documento para el cliente (.pdf, .docx)"}
               </span>
-              <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o haz clic</span>
+              <span className="text-slate-400 text-xs hidden sm:inline">· Arrastra o haz clic</span>
             </div>
           </div>
 
@@ -182,7 +182,7 @@ export function ProposalDocumentsSection({
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{doc.name}</p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-xs text-slate-400">
                         {doc.size} · Subido el {doc.date} {doc.uploadedBy ? `por ${doc.uploadedBy}` : ""}
                       </p>
                     </div>
@@ -251,7 +251,7 @@ export function ProposalDocumentsSection({
               <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.2 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300">
                 <Eye className="h-2.5 w-2.5" /> KAM y Cliente
               </span>
-              <span className="text-[11px] text-slate-400">({clientKamDocuments.length})</span>
+              <span className="text-xs text-slate-400">({clientKamDocuments.length})</span>
             </TabsTrigger>
 
             {/* TAB B: REPOSITORIO INTERNO */}
@@ -263,7 +263,7 @@ export function ProposalDocumentsSection({
               <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.2 text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300">
                 <Lock className="h-2.5 w-2.5" /> Privado
               </span>
-              <span className="text-[11px] text-slate-400">({internalCostingDocuments.length})</span>
+              <span className="text-xs text-slate-400">({internalCostingDocuments.length})</span>
             </TabsTrigger>
           </TabsList>
 
@@ -310,7 +310,7 @@ export function ProposalDocumentsSection({
                   <span className="font-medium text-slate-700 dark:text-slate-200">
                     {isUploading ? "Subiendo archivo…" : "Subir propuesta comercial (.pdf, .docx)"}
                   </span>
-                  <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o haz clic</span>
+                  <span className="text-slate-400 text-xs hidden sm:inline">· Arrastra o haz clic</span>
                 </div>
               </div>
             )}
@@ -333,7 +333,7 @@ export function ProposalDocumentsSection({
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">{doc.name}</p>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-xs text-slate-400">
                           {doc.size} · Subido el {doc.date} {doc.uploadedBy ? `por ${doc.uploadedBy}` : ""}
                         </p>
                       </div>
@@ -414,7 +414,7 @@ export function ProposalDocumentsSection({
                     <span className="font-medium text-slate-700 dark:text-slate-200">
                       Subir archivo interno (.xlsx, .xlsm, .pdf, .docx)
                     </span>
-                    <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o selecciona</span>
+                    <span className="text-slate-400 text-xs hidden sm:inline">· Arrastra o selecciona</span>
                   </div>
                 </div>
 
@@ -470,7 +470,7 @@ export function ProposalDocumentsSection({
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-xs text-slate-400">
                           {doc.size} · Subido el {doc.date} {doc.uploadedBy ? `por ${doc.uploadedBy}` : ""}
                         </p>
                       </div>
