@@ -9,7 +9,9 @@ import type {
 import type { ClientContact } from "@/lib/mock-data";
 import type { RequestFormData } from "@/views/NewRequest";
 import { cateringToPayload } from "@/lib/catering";
+import { MAX_SECONDARY_CIIU, normalizeCiiuList, parseCiiu } from "@/lib/ciiu";
 import { parseNit } from "@/lib/nit";
+import { pendingValue, phoneValue } from "@/lib/customer-contact";
 
 const COMPANY_TYPE_MAP: Record<string, CompanyType> = {
   Pública: "PUBLICA",
@@ -49,14 +51,17 @@ const MODALITY_MAP: Record<string, ProgramModality> = {
 
 const text = (value: string | undefined) => value?.trim() || undefined;
 
-/** Keeps only the keys that have a value, so an empty contact field is simply not sent. */
+/**
+ * Keeps only the keys that have a value, so an empty contact field is simply not sent.
+ * A phone goes only when valid (10 digits): the wizard blocks an invalid one, and if one slips through it is dropped.
+ */
 function toContactPayload(contact: ClientContact): AdditionalContactPayload | undefined {
   const payload: AdditionalContactPayload = {
-    name: text(contact.nombre),
-    role: text(contact.cargo),
-    area: text(contact.area),
-    phone: text(contact.telefono),
-    email: text(contact.correo),
+    name: pendingValue(contact.nombre),
+    role: pendingValue(contact.cargo),
+    area: pendingValue(contact.area),
+    phone: phoneValue(contact.telefono),
+    email: pendingValue(contact.correo),
   };
   const filled = Object.entries(payload).filter(([, value]) => value !== undefined);
   return filled.length > 0 ? (Object.fromEntries(filled) as AdditionalContactPayload) : undefined;
@@ -75,30 +80,40 @@ interface PayloadContext {
  * is sent: whatever is left out here is lost for good, because files are the only thing uploaded afterwards.
  */
 export function buildCreateProposalPayload(data: RequestFormData, context: PayloadContext): CreateProposalPayload {
-  const mainName = text(data.contactoNombre);
-  // Without a main contact, the first named additional contact takes its place (it is the one the request keeps).
-  const promoted = !mainName && data.contactosAdicionales[0]?.nombre.trim() ? data.contactosAdicionales[0] : undefined;
+  const mainName = pendingValue(data.contactoNombre);
+  const hasPrimaryData = [
+    data.contactoNombre,
+    data.correo,
+    data.telefono,
+    data.cargo,
+    data.area,
+    data.telefonoSecundario,
+    data.correoAlternativo,
+  ].some((value) => Boolean(pendingValue(value)));
+  // Promote an additional contact only when no primary contact data would be lost.
+  const promoted =
+    !hasPrimaryData && pendingValue(data.contactosAdicionales[0]?.nombre) ? data.contactosAdicionales[0] : undefined;
   const additional = (promoted ? data.contactosAdicionales.slice(1) : data.contactosAdicionales)
     .map(toContactPayload)
     .filter((contact): contact is AdditionalContactPayload => contact !== undefined);
 
-  const primary = mainName
+  const primary = hasPrimaryData
     ? {
         name: mainName,
-        email: text(data.correo),
-        phone: text(data.telefono),
-        role: text(data.cargo),
-        area: text(data.area),
-        secondaryPhone: text(data.telefonoSecundario),
-        alternativeEmail: text(data.correoAlternativo),
+        email: pendingValue(data.correo),
+        phone: phoneValue(data.telefono),
+        role: pendingValue(data.cargo),
+        area: pendingValue(data.area),
+        secondaryPhone: phoneValue(data.telefonoSecundario),
+        alternativeEmail: pendingValue(data.correoAlternativo),
       }
     : promoted
       ? {
-          name: text(promoted.nombre),
-          email: text(promoted.correo),
-          phone: text(promoted.telefono),
-          role: text(promoted.cargo),
-          area: text(promoted.area),
+          name: pendingValue(promoted.nombre),
+          email: pendingValue(promoted.correo),
+          phone: phoneValue(promoted.telefono),
+          role: pendingValue(promoted.cargo),
+          area: pendingValue(promoted.area),
           secondaryPhone: undefined,
           alternativeEmail: undefined,
         }
@@ -106,20 +121,26 @@ export function buildCreateProposalPayload(data: RequestFormData, context: Paylo
 
   const catering = cateringToPayload(data.alimentacion);
   // Ten digits only. The wizard blocks an invalid NIT before this runs; if one slips through it is not sent.
-  const nit = parseNit(data.nit);
+  const nit = parseNit(pendingValue(data.nit) ?? "");
+  // Exactly four digits, like the NIT: the wizard blocks an invalid CIIU, and if one slips through it is not sent.
+  const principalCiiu = parseCiiu(data.ciiuPrincipal);
+  const ciiuCode = principalCiiu.ok && principalCiiu.code ? principalCiiu.code : undefined;
+  const secondaryCiiu = normalizeCiiuList(data.ciiusSecundarios, ciiuCode)
+    .filter((code) => parseCiiu(code).ok)
+    .slice(0, MAX_SECONDARY_CIIU);
 
   return {
     companyName: data.empresaNombre.trim() || "Empresa Aliada",
     companyNit: nit.ok && nit.nit ? nit.nit : undefined,
-    companyDescription: text(data.descripcion),
+    companyDescription: pendingValue(data.descripcion),
     companyType: data.tipoEmpresa ? COMPANY_TYPE_MAP[data.tipoEmpresa] : undefined,
-    sector: text(data.ciiuPrincipalDesc),
-    website: text(data.web),
-    companyAddress: text(data.direccion),
-    companyPhone: text(data.telefonoEmpresa),
-    companyEmail: text(data.correoEmpresa),
-    ciiuCode: text(data.ciiuPrincipal),
-    ciiuSecondary: data.ciiusSecundarios.length > 0 ? data.ciiusSecundarios : undefined,
+    sector: pendingValue(data.ciiuPrincipalDesc),
+    website: pendingValue(data.web),
+    companyAddress: pendingValue(data.direccion),
+    companyPhone: phoneValue(data.telefonoEmpresa),
+    companyEmail: pendingValue(data.correoEmpresa),
+    ciiuCode,
+    ciiuSecondary: secondaryCiiu.length ? secondaryCiiu : undefined,
     nodeId: context.nodeId,
     productLeaderId: context.productLeaderId,
     priority: data.urgencia ? PRIORITY_MAP[data.urgencia] : undefined,

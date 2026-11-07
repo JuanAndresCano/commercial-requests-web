@@ -6,7 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NewRequest from "./NewRequest";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { RequireAuth } from "@/components/RequireAuth";
 import { requestsApi } from "@/lib/api/requests";
+import { ApiError } from "@/lib/api/client";
+import { toast } from "sonner";
 import { attachmentsApi } from "@/lib/api/attachments";
 
 // Mock select component for headless jsdom environment
@@ -83,7 +86,27 @@ vi.mock("@/lib/api/users", () => ({
 const mockedRequestsApi = vi.mocked(requestsApi);
 const mockedAttachmentsApi = vi.mocked(attachmentsApi);
 
-function renderNewRequest() {
+// The production wizard mounts only after a real session is restored. Keep that
+// integration boundary here: an anonymous /auth/me response must not race the
+// directory queries of an artificially mounted private screen.
+vi.mock("@/lib/api/auth", () => ({
+  authApi: {
+    getMe: vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        id: "u1",
+        email: "andrea@icesi.edu.co",
+        firstName: "Andrea",
+        lastName: "Martínez",
+        roles: ["KAM"],
+        expiresAt: Date.now() + 60000,
+      }),
+    ),
+    login: vi.fn(),
+    logout: vi.fn(),
+  },
+}));
+
+async function renderNewRequest({ withContact = true }: { withContact?: boolean } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -91,17 +114,24 @@ function renderNewRequest() {
     },
   });
 
-  return render(
+  const result = render(
     <QueryClientProvider client={queryClient}>
       <TestRouter>
         <ThemeProvider>
           <AuthProvider>
-            <NewRequest />
+            <RequireAuth>
+              <NewRequest />
+            </RequireAuth>
           </AuthProvider>
         </ThemeProvider>
       </TestRouter>
     </QueryClientProvider>,
   );
+  await screen.findByLabelText(/Razón Social \/ Nombre de la Empresa/i);
+  // Valid contact is a prerequisite for tests focused on other wizard behaviors.
+  if (withContact)
+    fireEvent.change(screen.getByLabelText(/Correo corporativo/i), { target: { value: "info@empresa.co" } });
+  return result;
 }
 
 // The product leader is mandatory in step 3 and the node is an optional, independent extra.
@@ -111,8 +141,8 @@ async function chooseLeader() {
   fireEvent.click(document.querySelector('[data-value="leader-uuid-1"]') as HTMLElement);
 }
 
-function goToStep3() {
-  renderNewRequest();
+async function goToStep3() {
+  await renderNewRequest();
   fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
     target: { value: "Empresa Test S.A.S" },
   });
@@ -176,8 +206,35 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     });
   });
 
-  it("blocks step 1 when the NIT check digit does not match and says which one it should be", () => {
-    renderNewRequest();
+  it("can leave the company step without legal nature or NIT when the company name is present", async () => {
+    await renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa nueva" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText("2. Contacto del Cliente")).toBeInTheDocument();
+  });
+
+  it("requires a usable channel across company and contact before leaving step 2", async () => {
+    await renderNewRequest({ withContact: false });
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa nueva" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.change(screen.getByLabelText(/Correo electrónico institucional/i), { target: { value: "Pendiente" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText("2. Contacto del Cliente")).toBeInTheDocument();
+    expect(screen.getByText(/Deja al menos un teléfono o correo válido/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Correo electrónico institucional/i), {
+      target: { value: "interlocutor@empresa.co" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
+  });
+
+  it("blocks step 1 when the NIT check digit does not match and says which one it should be", async () => {
+    await renderNewRequest();
     fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
       target: { value: "Empresa Test S.A.S" },
     });
@@ -189,16 +246,16 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(screen.getByText(/1\. Datos de la Empresa/i)).toBeInTheDocument();
   });
 
-  it("shows a valid NIT formatted when leaving the field and a 9-digit one gets its check digit", () => {
-    renderNewRequest();
+  it("shows a valid NIT formatted when leaving the field and a 9-digit one gets its check digit", async () => {
+    await renderNewRequest();
     const nit = screen.getByLabelText(/NIT de la Empresa/i) as HTMLInputElement;
     fireEvent.change(nit, { target: { value: "890903938" } });
     fireEvent.blur(nit);
     expect(nit.value).toBe("890.903.938-8");
   });
 
-  it("does not validate the NIT when it is empty (it is optional)", () => {
-    renderNewRequest();
+  it("does not validate the NIT when it is empty (it is optional)", async () => {
+    await renderNewRequest();
     fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
       target: { value: "Empresa Test S.A.S" },
     });
@@ -207,14 +264,14 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(screen.getByText(/2\. Contacto del Cliente/i)).toBeInTheDocument();
   });
 
-  it("renders the wizard header and first step (Empresa)", () => {
-    renderNewRequest();
+  it("renders the wizard header and first step (Empresa)", async () => {
+    await renderNewRequest();
     expect(screen.getByText("Registro de Solicitud Comercial")).toBeInTheDocument();
     expect(screen.getByText(/1\. Datos de la Empresa/i)).toBeInTheDocument();
   });
 
-  it("validates required fields on step 1 before proceeding", () => {
-    renderNewRequest();
+  it("validates required fields on step 1 before proceeding", async () => {
+    await renderNewRequest();
     const continueBtn = screen.getByRole("button", { name: /Continuar/i });
     fireEvent.click(continueBtn);
 
@@ -222,8 +279,22 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(screen.getByText(/Ingresa o selecciona la Razón Social de la empresa para continuar/i)).toBeInTheDocument();
   });
 
+  it("cannot skip unanswered required steps by clicking the final step", async () => {
+    await renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa con información pendiente" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Paso 5 Observaciones/i }));
+
+    expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
+    expect(screen.getByText(/Selecciona el Líder de Producto que atenderá la solicitud/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Enviar solicitud a Líder de Producto/i })).not.toBeInTheDocument();
+    expect(mockedRequestsApi.create).not.toHaveBeenCalled();
+  });
+
   it("navigates through steps and submits successfully to the backend API", async () => {
-    renderNewRequest();
+    await renderNewRequest();
 
     // Step 1: Fill company name and type
     const companyInput = screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i);
@@ -301,7 +372,7 @@ describe("NewRequest Wizard (HU 3.2)", () => {
   }, 20000);
 
   it("sends the leader and the node the KAM picked, each on its own (UI-001)", async () => {
-    renderNewRequest();
+    await renderNewRequest();
 
     // Step 1: Fill company name and type
     const companyInput = screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i);
@@ -351,8 +422,30 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(callPayload.productLeaderId).toBe("leader-uuid-1");
   }, 20000);
 
+  it("accepts Pending as an unavailable NIT while a valid contact exists", async () => {
+    await renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa nueva" },
+    });
+    fireEvent.change(screen.getByLabelText(/NIT de la Empresa/i), { target: { value: "Pendiente" } });
+    fireEvent.blur(screen.getByLabelText(/NIT de la Empresa/i));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText("2. Contacto del Cliente")).toBeInTheDocument();
+    expect(screen.queryByText(/El NIT debe tener/)).not.toBeInTheDocument();
+  });
+
+  it("keeps titles shorter than five characters in the requirement step", async () => {
+    await goToStep3();
+    await chooseLeader();
+    fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "IA" } });
+    fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText("Ingresa un título de al menos 5 caracteres para continuar.")).toBeInTheDocument();
+    expect(screen.queryByText("4. Formación Previa")).not.toBeInTheDocument();
+  });
+
   it("starts step 3 with no leader and no node chosen, and without any node suggestion", async () => {
-    goToStep3();
+    await goToStep3();
     expect(await screen.findByText("Seleccionar líder de producto")).toBeInTheDocument();
     expect(screen.getByText("Seleccionar nodo (opcional)")).toBeInTheDocument();
     expect(screen.queryByText(/sugerido/i)).not.toBeInTheDocument();
@@ -360,7 +453,7 @@ describe("NewRequest Wizard (HU 3.2)", () => {
   });
 
   it("requires the leader to leave step 3, even with a node chosen, and never drags one from the other", async () => {
-    goToStep3();
+    await goToStep3();
     fireEvent.click(await screen.findByRole("option", { name: /Inteligencia Artificial y Tecnologías Digitales/i }));
     fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "Taller" } });
     fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
@@ -378,7 +471,7 @@ describe("NewRequest Wizard (HU 3.2)", () => {
   });
 
   it("lets the KAM send the request with a leader and no node", async () => {
-    goToStep3();
+    await goToStep3();
     await chooseLeader();
     fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "Taller" } });
     fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
@@ -399,10 +492,84 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(payload.nodeId).toBeUndefined();
   }, 20000);
 
+  // UX H1/H5/H6/H7 (docs/14-spec-mejoras-ux.md)
+  describe("UX: final review and form affordances", () => {
+    async function fillUpToSummary() {
+      await goToStep3();
+      await chooseLeader();
+      fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), {
+        target: { value: "Taller de analítica" },
+      });
+      fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+      fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+      fireEvent.click(screen.getByRole("button", { name: "No" }));
+      fireEvent.click(screen.getByRole("button", { name: /Alto/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    }
+
+    it("shows title, urgency and contact channel in the final summary before sending", async () => {
+      await fillUpToSummary();
+      const summary = screen.getByRole("region", { name: /Resumen de la Solicitud/i });
+      expect(summary).toHaveTextContent("Taller de analítica");
+      expect(summary).toHaveTextContent("info@empresa.co");
+      expect(summary).toHaveTextContent(/Urgencia:\s*Alta/i);
+      expect(summary).toHaveTextContent(/Documentos adjuntos:\s*Ninguno/i);
+    });
+
+    it("lets the KAM go back to the matching step from the summary and keeps what was typed", async () => {
+      await fillUpToSummary();
+      fireEvent.click(screen.getByRole("button", { name: "Modificar requerimiento" }));
+      expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Título o nombre de la propuesta/i)).toHaveValue("Taller de analítica");
+    });
+
+    it("never shows a Pendiente placeholder as the contact channel", async () => {
+      await goToStep3();
+      await chooseLeader();
+      fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "Taller" } });
+      fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+      fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+      fireEvent.click(screen.getByRole("button", { name: "No" }));
+      fireEvent.click(screen.getByRole("button", { name: /Alto/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+      const summary = screen.getByRole("region", { name: /Resumen de la Solicitud/i });
+      expect(summary).not.toHaveTextContent(/Pendiente/i);
+    });
+
+    it("names the remove button of each attached file", async () => {
+      await fillUpToSummary();
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(["contenido"], "rfp.pdf", { type: "application/pdf" });
+      fireEvent.change(input, { target: { files: [file] } });
+      expect(await screen.findByRole("button", { name: "Quitar rfp.pdf" })).toBeInTheDocument();
+    });
+
+    it("gives phone fields the telephone keyboard", async () => {
+      await renderNewRequest();
+      const phone = screen.getByLabelText(/Teléfono corporativo/i);
+      expect(phone).toHaveAttribute("type", "tel");
+      expect(phone).toHaveAttribute("inputmode", "tel");
+    });
+
+    it("names the exit control for screen readers", async () => {
+      await renderNewRequest();
+      expect(screen.getByRole("link", { name: "Salir del registro de solicitud" })).toBeInTheDocument();
+    });
+
+    it("only claims the draft is saved after it was really saved", async () => {
+      await renderNewRequest();
+      expect(screen.queryByText(/Borrador guardado a las/i)).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+        target: { value: "Empresa Test S.A.S" },
+      });
+      expect(await screen.findByText(/Borrador guardado a las/i)).toBeInTheDocument();
+    });
+  });
+
   // Data-loss regressions found on 2026-10-08: "Más de 25" was dropped by the backend and "No" in the catering
   // field was saved as "Sí - No". What the wizard sends must carry both intact.
   it("sends 'Más de 25' as the participant range and 'No' catering as no catering", async () => {
-    renderNewRequest();
+    await renderNewRequest();
 
     fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
       target: { value: "Empresa Test S.A.S" },
@@ -431,8 +598,36 @@ describe("NewRequest Wizard (HU 3.2)", () => {
     expect(payload.cateringNotes).toBeUndefined();
   }, 20000);
 
+  it("shows a server 400 about contactability in Spanish and takes the KAM back to the contact step", async () => {
+    const toastError = vi.spyOn(toast, "error").mockImplementation(() => "");
+    mockedRequestsApi.create.mockRejectedValueOnce(
+      new ApiError(400, "At least one valid customer phone or email is required"),
+    );
+    await renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa Test S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    await chooseLeader();
+    fireEvent.change(screen.getByLabelText(/Título o nombre de la propuesta/i), { target: { value: "Taller" } });
+    fireEvent.click(screen.getByRole("option", { name: "Capacitación" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: "No" }));
+    fireEvent.click(screen.getByRole("button", { name: /Alto/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Enviar solicitud a Líder de Producto/i }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Deja al menos un teléfono o correo válido"));
+    expect(toastError).not.toHaveBeenCalledWith(expect.stringMatching(/At least one/));
+    expect(await screen.findByText("2. Contacto del Cliente")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Deja al menos un teléfono o correo válido");
+    toastError.mockRestore();
+  }, 20000);
+
   it("uploads the real File object, not its metadata, after the proposal is created (UI-006)", async () => {
-    const { container } = renderNewRequest();
+    const { container } = await renderNewRequest();
 
     fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
       target: { value: "Empresa con Adjunto S.A.S" },
@@ -476,4 +671,179 @@ describe("NewRequest Wizard (HU 3.2)", () => {
       mockedAttachmentsApi.upload.mock.invocationCallOrder[0],
     );
   }, 20000);
+});
+
+describe("NewRequest Wizard: CIIU (exactly four digits)", () => {
+  const CIIU_MESSAGE = /El CIIU debe tener exactamente 4 dígitos/;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    mockedRequestsApi.getNodes.mockResolvedValue([]);
+  });
+
+  async function fillStep1() {
+    await renderNewRequest();
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa Test S.A.S" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+  }
+  const principal = () => screen.getByLabelText(/Actividad Económica Principal/i) as HTMLInputElement;
+  const addSecondary = () => fireEvent.click(screen.getByRole("button", { name: /Agregar otra actividad económica/i }));
+  const secondary = (n: number) => screen.getByPlaceholderText(`CIIU #${n + 2} (4 dígitos)`) as HTMLInputElement;
+  const next = () => fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+  const stillInStep1 = () => expect(screen.getByText(/1\. Datos de la Empresa/i)).toBeInTheDocument();
+
+  it("blocks a principal CIIU of three digits and shows the error on the field", async () => {
+    await fillStep1();
+    fireEvent.change(principal(), { target: { value: "854" } });
+    next();
+    stillInStep1();
+    expect(screen.getAllByText(CIIU_MESSAGE).length).toBeGreaterThan(0);
+  });
+
+  it("blocks a pasted value instead of cutting it to four digits", async () => {
+    await fillStep1();
+    fireEvent.change(principal(), { target: { value: "4845858858558" } });
+    expect(principal().value).toBe("4845858858558");
+    next();
+    stillInStep1();
+    expect(screen.getAllByText(CIIU_MESSAGE).length).toBeGreaterThan(0);
+  });
+
+  it("blocks five digits", async () => {
+    await fillStep1();
+    fireEvent.change(principal(), { target: { value: "85445" } });
+    next();
+    stillInStep1();
+    expect(screen.getAllByText(CIIU_MESSAGE).length).toBeGreaterThan(0);
+  });
+
+  it("lets four digits through", async () => {
+    await fillStep1();
+    fireEvent.change(principal(), { target: { value: "8544" } });
+    next();
+    expect(screen.getByText("2. Contacto del Cliente")).toBeInTheDocument();
+  });
+
+  it("blocks a partial secondary row and passes once it has four digits", async () => {
+    await fillStep1();
+    addSecondary();
+    fireEvent.change(secondary(0), { target: { value: "70" } });
+    next();
+    stillInStep1();
+    expect(screen.getAllByText(CIIU_MESSAGE).length).toBeGreaterThan(0);
+    fireEvent.change(secondary(0), { target: { value: "7020" } });
+    next();
+    expect(screen.getByText("2. Contacto del Cliente")).toBeInTheDocument();
+  });
+
+  it("treats an empty secondary row as absence", async () => {
+    await fillStep1();
+    addSecondary();
+    next();
+    expect(screen.getByText("2. Contacto del Cliente")).toBeInTheDocument();
+  });
+
+  function seedDraft(overrides: Record<string, unknown>) {
+    window.localStorage.setItem(
+      "icesi_kam_new_request_draft_v1",
+      JSON.stringify({
+        data: { empresaNombre: "Empresa Test S.A.S", tipoEmpresa: "Privada", ...overrides },
+        timestamp: "10:00",
+      }),
+    );
+  }
+
+  it("blocks an invalid CIIU that comes back inside a restored draft", async () => {
+    seedDraft({ ciiuPrincipal: "4845858858558", ciiusSecundarios: ["70"], correoEmpresa: "info@empresa.co" });
+    await renderNewRequest({ withContact: false });
+    fireEvent.click(await screen.findByRole("button", { name: /Recuperar datos/i }));
+    expect(principal().value).toBe("4845858858558");
+    next();
+    stillInStep1();
+    expect(screen.getAllByText(CIIU_MESSAGE).length).toBeGreaterThan(0);
+  });
+
+  it("treats Pendiente in a restored draft as absence", async () => {
+    seedDraft({ ciiuPrincipal: "Pendiente", ciiusSecundarios: ["Pendiente", " "], correoEmpresa: "info@empresa.co" });
+    await renderNewRequest({ withContact: false });
+    fireEvent.click(await screen.findByRole("button", { name: /Recuperar datos/i }));
+    next();
+    expect(screen.getByText("2. Contacto del Cliente")).toBeInTheDocument();
+  });
+});
+
+describe("NewRequest step 2: Colombian phone rule (10 digits, optional +57) and minimum channel", () => {
+  const PHONE_MESSAGE = "El teléfono debe tener 10 dígitos (puede iniciar con +57)";
+  const CHANNEL_MESSAGE = "Deja al menos un teléfono o correo válido";
+
+  // The company phone lives in step 1; the wizard validates it when leaving step 2.
+  async function goToStep2(companyPhone = "") {
+    await renderNewRequest({ withContact: false });
+    fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
+      target: { value: "Empresa nueva" },
+    });
+    if (companyPhone)
+      fireEvent.change(screen.getByLabelText(/Teléfono corporativo/i), { target: { value: companyPhone } });
+    fireEvent.click(screen.getByRole("button", { name: "Privada" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+    expect(screen.getByText("2. Contacto del Cliente")).toBeInTheDocument();
+  }
+  const next = () => fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+  const onStep2 = () => screen.queryByText("2. Contacto del Cliente") !== null;
+
+  it.each([
+    ["contact phone", /Teléfono de contacto principal/i],
+    ["secondary phone", /Teléfono de contacto secundario/i],
+  ])("blocks a 7-digit %s with the Spanish message and lets a 10-digit one pass", async (_name, label) => {
+    await goToStep2();
+    fireEvent.change(screen.getByLabelText(/Correo electrónico institucional/i), {
+      target: { value: "interlocutor@empresa.co" },
+    });
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "5551234" } });
+    next();
+    expect(onStep2()).toBe(true);
+    expect((await screen.findAllByText(PHONE_MESSAGE)).length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "+57 300 123 4567" } });
+    next();
+    expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
+  });
+
+  it("a valid company phone alone is a valid channel and the contact may stay empty", async () => {
+    await goToStep2("(602) 555 1234");
+    next();
+    expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
+  });
+
+  it("a 7-digit company phone is blocked and is not a channel: both messages in Spanish", async () => {
+    await goToStep2("5551234");
+    next();
+    expect(onStep2()).toBe(true);
+    expect(screen.getByText(CHANNEL_MESSAGE)).toBeInTheDocument();
+    expect(screen.getByText(PHONE_MESSAGE)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Anterior/i }));
+    fireEvent.change(screen.getByLabelText(/Teléfono corporativo/i), { target: { value: "3001234567" } });
+    next();
+    next();
+    expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
+  });
+
+  it("blocks an additional contact's phone that does not have 10 digits", async () => {
+    await goToStep2();
+    fireEvent.change(screen.getByLabelText(/Correo electrónico institucional/i), {
+      target: { value: "interlocutor@empresa.co" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Agregar otro contacto/i }));
+    const phone = screen.getByPlaceholderText("Ej. +57 310 555 1234");
+    fireEvent.change(phone, { target: { value: "5551234" } });
+    next();
+    expect(onStep2()).toBe(true);
+    expect((await screen.findAllByText(PHONE_MESSAGE)).length).toBeGreaterThan(0);
+    fireEvent.change(phone, { target: { value: "3101234567" } });
+    next();
+    expect(screen.getByText(/3\. Requerimiento del Servicio/i)).toBeInTheDocument();
+  });
 });

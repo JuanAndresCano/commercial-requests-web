@@ -39,19 +39,23 @@ import {
   type RequestType,
   type Urgency,
   type ClientContact,
+  URGENCY_META,
 } from "@/lib/mock-data";
 import type { Company } from "@/lib/api/companies";
 import { companyTypeLabel } from "@/lib/company";
+import { ciiuListError, normalizeCiiuList, parseCiiu, sanitizeCiiuInput } from "@/lib/ciiu";
 import { displayNit, formatNit, parseNit } from "@/lib/nit";
 import { buildCreateProposalPayload } from "@/lib/create-proposal-payload";
 import { leaderDisplayName, resolveNodeId, resolveProductLeaderId, toLeaderOptions } from "@/lib/wizard-assignment";
 import { restoreDraftData } from "@/lib/wizard-draft";
+import { customerContactErrors, customerContactServerMessage, pendingValue, phoneError } from "@/lib/customer-contact";
 import { CompanyAutocomplete } from "@/components/CompanyAutocomplete";
 import { ProposalHistorySection } from "@/components/wizard/ProposalHistorySection";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { useCreateProposal } from "@/hooks/use-create-proposal";
 import { useNodes } from "@/hooks/use-nodes";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { useProductLeaders } from "@/hooks/use-product-leaders";
 import { attachmentsApi } from "@/lib/api/attachments";
 
@@ -190,6 +194,8 @@ export default function NewRequest() {
 
   const [data, setData] = useState<RequestFormData>(initialFormData);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Hora del último guardado real del borrador; null mientras no se haya guardado nada.
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
 
   // Verificar si existe un borrador guardado en localStorage al montar
   useEffect(() => {
@@ -214,15 +220,11 @@ export default function NewRequest() {
     // Solo guardar si hay información significativa
     if (data.empresaNombre.trim() || data.nombreReq.trim() || data.necesidad.trim()) {
       try {
-        localStorage.setItem(
-          DRAFT_STORAGE_KEY,
-          JSON.stringify({
-            data,
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          }),
-        );
+        const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ data, timestamp }));
+        setDraftSavedAt(timestamp);
       } catch {
-        // ignore
+        setDraftSavedAt(null);
       }
     }
   }, [data]);
@@ -282,6 +284,8 @@ export default function NewRequest() {
   const FIELD_SCROLL_TARGETS: Record<string, string> = {
     empresaNombre: "empresa-nombre",
     nit: "empresa-nit",
+    ciiuPrincipal: "ciiu-principal",
+    ciiusSecundarios: "ciiu-secundarios-group",
     tipoEmpresa: "tipo-empresa-group",
     ldp: "ldp-select",
     nombreReq: "nombre-req",
@@ -289,6 +293,24 @@ export default function NewRequest() {
     tipoReqOtro: "tipo-otro-input",
     formacionPrevia: "formacion-previa-group",
     urgencia: "urgencia-group",
+    contactoMinimo: "contacto-nombre",
+    telefonoEmpresa: "empresa-tel",
+    correoEmpresa: "empresa-correo",
+    telefono: "contacto-tel",
+    correo: "contacto-correo",
+  };
+
+  // El CIIU es opcional, pero si hay uno debe tener exactamente 4 dígitos (principal y cada secundario).
+  // También cubre lo que vuelve en un borrador restaurado: nada pasa sin revisarse.
+  const ciiuErrors = (): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    const principal = parseCiiu(data.ciiuPrincipal);
+    if (!principal.ok) errors.ciiuPrincipal = principal.error;
+    const listError = ciiuListError(
+      normalizeCiiuList(data.ciiusSecundarios, principal.ok ? principal.code : undefined),
+    );
+    if (listError) errors.ciiusSecundarios = listError;
+    return errors;
   };
 
   // Validación estricta al avanzar entre pasos: nunca deja pasar un campo obligatorio sin marcar
@@ -299,20 +321,41 @@ export default function NewRequest() {
       if (!data.empresaNombre.trim()) {
         newErrors.empresaNombre = "Ingresa o selecciona la Razón Social de la empresa para continuar.";
       }
-      if (!data.tipoEmpresa) {
-        newErrors.tipoEmpresa = "Selecciona la naturaleza jurídica de la empresa para continuar.";
-      }
-      const nit = parseNit(data.nit);
+      const nit = parseNit(pendingValue(data.nit) ?? "");
       if (!nit.ok) newErrors.nit = nit.error;
+      Object.assign(newErrors, ciiuErrors());
     } else if (currentStep === 2) {
-      // Paso 2 (Contactos) es 100% opcional según directriz de Líder de Producto
-      return true;
+      const channelFields: Record<string, string> = {
+        companyPhone: "telefonoEmpresa",
+        companyEmail: "correoEmpresa",
+        contactPhone: "telefono",
+        contactEmail: "correo",
+        contactability: "contactoMinimo",
+        contactSecondaryPhone: "telefonoSecundario",
+        contactAlternativeEmail: "correoAlternativo",
+      };
+      for (const [field, message] of Object.entries(
+        customerContactErrors({
+          companyPhone: data.telefonoEmpresa,
+          companyEmail: data.correoEmpresa,
+          contactPhone: data.telefono,
+          contactEmail: data.correo,
+          contactSecondaryPhone: data.telefonoSecundario,
+          contactAlternativeEmail: data.correoAlternativo,
+        }),
+      ))
+        newErrors[channelFields[field]] = message;
+      // Additional contacts are sent too (and the first one may be promoted to main), so their phones follow the same rule.
+      for (const contact of data.contactosAdicionales) {
+        const error = phoneError(contact.telefono);
+        if (error) newErrors[additionalPhoneKey(contact.id)] = error;
+      }
     } else if (currentStep === 3) {
       if (!data.ldp) {
         newErrors.ldp = LEADER_REQUIRED_MESSAGE;
       }
-      if (!data.nombreReq.trim()) {
-        newErrors.nombreReq = "Ingresa un título o nombre de la propuesta para continuar.";
+      if (data.nombreReq.trim().length < 5) {
+        newErrors.nombreReq = "Ingresa un título de al menos 5 caracteres para continuar.";
       }
       if (!data.tipoReq) {
         newErrors.tipoReq = "Selecciona el tipo de requerimiento para continuar.";
@@ -340,9 +383,14 @@ export default function NewRequest() {
   };
 
   const handleStepClick = (targetStep: number) => {
-    // Si intenta avanzar más allá del paso actual sin validar lo obligatorio
+    // Validate every prerequisite, including steps skipped through the stepper.
     if (targetStep > step) {
-      if (!validateCurrentStep(step)) return;
+      for (let prerequisite = 1; prerequisite < targetStep; prerequisite++) {
+        if (!validateCurrentStep(prerequisite)) {
+          setStep(prerequisite);
+          return;
+        }
+      }
     }
     setStep(targetStep);
   };
@@ -368,7 +416,7 @@ export default function NewRequest() {
 
   // Al salir del campo NIT: si es válido se muestra con formato (y con su dígito de verificación); si no, se marca.
   const commitNit = () => {
-    const nit = parseNit(data.nit);
+    const nit = parseNit(pendingValue(data.nit) ?? "");
     if (!nit.ok) {
       setFieldErrors((prev) => ({ ...prev, nit: nit.error }));
     } else if (nit.nit) {
@@ -378,10 +426,17 @@ export default function NewRequest() {
 
   const handleFinish = async (kind: "draft" | "sent") => {
     // El NIT es opcional, pero si se escribió debe ser un NIT real: aplica a cualquier envío.
-    const nit = parseNit(data.nit);
+    const nit = parseNit(pendingValue(data.nit) ?? "");
     if (!nit.ok) {
       toast.error(nit.error);
       setFieldErrors((prev) => ({ ...prev, nit: nit.error }));
+      setStep(1);
+      return;
+    }
+    const ciiu = ciiuErrors();
+    if (Object.keys(ciiu).length > 0) {
+      toast.error(Object.values(ciiu)[0]);
+      setFieldErrors((prev) => ({ ...prev, ...ciiu }));
       setStep(1);
       return;
     }
@@ -395,13 +450,8 @@ export default function NewRequest() {
         setStep(1);
         return;
       }
-      if (!data.tipoEmpresa) {
-        toast.error("Por favor selecciona la Naturaleza Jurídica de la empresa en el Paso 1.");
-        setFieldErrors((prev) => ({
-          ...prev,
-          tipoEmpresa: "Selecciona la naturaleza jurídica de la empresa para continuar.",
-        }));
-        setStep(1);
+      if (!validateCurrentStep(2)) {
+        setStep(2);
         return;
       }
       if (!data.ldp) {
@@ -410,11 +460,11 @@ export default function NewRequest() {
         setStep(3);
         return;
       }
-      if (!data.nombreReq.trim()) {
-        toast.error("Por favor ingresa el título de la propuesta en el Paso 3.");
+      if (data.nombreReq.trim().length < 5) {
+        toast.error("Ingresa un título de al menos 5 caracteres en el Paso 3.");
         setFieldErrors((prev) => ({
           ...prev,
-          nombreReq: "Ingresa un título o nombre de la propuesta para continuar.",
+          nombreReq: "Ingresa un título de al menos 5 caracteres para continuar.",
         }));
         setStep(3);
         return;
@@ -511,9 +561,16 @@ export default function NewRequest() {
       }
       setSubmitted(kind);
     } catch (err: unknown) {
-      const errorMessage = (err as Error)?.message || "Error al registrar la propuesta en el servidor";
       console.error("Failed to create proposal on backend:", err);
-      toast.error(errorMessage);
+      // A contact/phone 400 is shown in Spanish next to the contact fields, never as the server's English text.
+      const contactMessage = customerContactServerMessage(err);
+      if (contactMessage) {
+        setFieldErrors((prev) => ({ ...prev, contactoMinimo: contactMessage }));
+        setStep(2);
+        toast.error(contactMessage);
+        return;
+      }
+      toast.error((err as Error)?.message || "Error al registrar la propuesta en el servidor");
       return;
     }
   };
@@ -551,12 +608,15 @@ export default function NewRequest() {
           </div>
           <Link
             href="/dashboard"
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary dark:hover:bg-[#1a1c28]"
+            aria-label="Salir del registro de solicitud"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
           >
             <X className="h-4 w-4" />
           </Link>
         </div>
       </header>
+
+      <OfflineBanner />
 
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Banner de recuperación de borrador automático */}
@@ -622,7 +682,7 @@ export default function NewRequest() {
                       {done ? <Check className="h-4 w-4 stroke-[3]" /> : <Icon className="h-3.5 w-3.5" />}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
                         Paso {s.id}
                       </span>
                       <span
@@ -656,10 +716,10 @@ export default function NewRequest() {
         {/* Step container */}
         <div className="rounded-xl border border-border dark:border-[#252838] bg-card dark:bg-[#141622] p-5 sm:p-8 shadow-xs">
           {step === 1 && <Step1 data={data} update={update} errors={fieldErrors} onNitBlur={commitNit} />}
-          {step === 2 && <Step2 data={data} update={update} />}
+          {step === 2 && <Step2 data={data} update={update} errors={fieldErrors} />}
           {step === 3 && <Step3 data={data} update={update} errors={fieldErrors} />}
           {step === 4 && <Step4 data={data} update={update} errors={fieldErrors} />}
-          {step === 5 && <Step5 data={data} update={update} />}
+          {step === 5 && <Step5 data={data} update={update} onEditStep={handleStepClick} />}
         </div>
 
         {/* Action Buttons */}
@@ -669,10 +729,15 @@ export default function NewRequest() {
               <ArrowLeft className="h-4 w-4 mr-1.5" />
               Anterior
             </Button>
-            <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-muted-foreground pl-1">
-              <CheckCircle className="h-3.5 w-3.5 text-success" />
-              Guardado automático en segundo plano
-            </span>
+            {draftSavedAt && (
+              <span
+                role="status"
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground pl-1"
+              >
+                <CheckCircle className="h-3.5 w-3.5 text-success" />
+                Borrador guardado a las {draftSavedAt}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -862,7 +927,7 @@ function Step1({
 
   const updateSecondaryCiiu = (index: number, val: string) => {
     const updated = [...data.ciiusSecundarios];
-    updated[index] = val.replace(/[^0-9]/g, "").slice(0, 4);
+    updated[index] = sanitizeCiiuInput(val, updated[index]);
     update("ciiusSecundarios", updated);
   };
 
@@ -961,6 +1026,9 @@ function Step1({
         <Field label="Teléfono corporativo" hint="Línea principal de la empresa" id="empresa-tel">
           <Input
             id="empresa-tel"
+            type="tel"
+            inputMode="tel"
+            autoComplete="off"
             placeholder="Ej. (604) 510 9000"
             value={data.telefonoEmpresa}
             onChange={(e) => update("telefonoEmpresa", e.target.value)}
@@ -992,22 +1060,21 @@ function Step1({
             <Field
               label="Actividad Económica Principal (Código CIIU)"
               showOptionalBadge
-              hint="Código numérico opcional (CIIU Rev. 4 A.C.)"
+              hint={!errors.ciiuPrincipal ? "Código numérico opcional de 4 dígitos (CIIU Rev. 4 A.C.)" : undefined}
               id="ciiu-principal"
             >
-              <div className="relative">
+              <FieldErrorFrame show={!!errors.ciiuPrincipal}>
                 <Input
                   id="ciiu-principal"
                   placeholder="Ej. 8544 (opcional)"
-                  maxLength={4}
+                  inputMode="numeric"
                   value={data.ciiuPrincipal}
-                  onChange={(e) => {
-                    const cleanNum = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
-                    update("ciiuPrincipal", cleanNum);
-                  }}
+                  aria-invalid={!!errors.ciiuPrincipal}
+                  onChange={(e) => update("ciiuPrincipal", sanitizeCiiuInput(e.target.value, data.ciiuPrincipal))}
                   className="font-mono text-base font-semibold tracking-wider"
                 />
-              </div>
+              </FieldErrorFrame>
+              {errors.ciiuPrincipal && <FieldErrorText>{errors.ciiuPrincipal}</FieldErrorText>}
             </Field>
 
             <Field label="Descripción de la actividad principal" hint="Opcional: detalle de la actividad económica">
@@ -1021,7 +1088,7 @@ function Step1({
 
           {/* Códigos CIIU Secundarios Opcionales */}
           {data.ciiusSecundarios.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-border">
+            <div id="ciiu-secundarios-group" className="space-y-2 pt-2 border-t border-border">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Códigos CIIU Secundarios (Opcionales)
               </Label>
@@ -1031,10 +1098,14 @@ function Step1({
                     <div className="w-36">
                       <Input
                         placeholder={`CIIU #${idx + 2} (4 dígitos)`}
-                        maxLength={4}
+                        inputMode="numeric"
                         value={ciiu}
+                        aria-invalid={!!errors.ciiusSecundarios && !parseCiiu(ciiu).ok}
                         onChange={(e) => updateSecondaryCiiu(idx, e.target.value)}
-                        className="font-mono text-sm"
+                        className={cn(
+                          "font-mono text-sm",
+                          errors.ciiusSecundarios && !parseCiiu(ciiu).ok && "border-destructive",
+                        )}
                       />
                     </div>
                     <span className="text-xs text-muted-foreground">Actividad complementaria #{idx + 1}</span>
@@ -1050,6 +1121,7 @@ function Step1({
                   </div>
                 ))}
               </div>
+              {errors.ciiusSecundarios && <FieldErrorText>{errors.ciiusSecundarios}</FieldErrorText>}
             </div>
           )}
 
@@ -1061,7 +1133,7 @@ function Step1({
         <div className="md:col-span-2">
           <Field
             label="Naturaleza jurídica de la empresa"
-            required
+            showOptionalBadge
             hint={
               !errors.tipoEmpresa
                 ? "Selección consciente: para empresas nuevas no se asume un valor por defecto"
@@ -1098,12 +1170,17 @@ function Step1({
 
 /* -------------- Step 2: Contacto del Cliente -------------- */
 
+/** Error key (and input id) of an additional contact's phone. */
+const additionalPhoneKey = (contactId: string) => `contacto-adicional-tel-${contactId}`;
+
 function Step2({
   data,
   update,
+  errors,
 }: {
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
+  errors: Record<string, string>;
 }) {
   const addAdditionalContact = () => {
     const newContact: ClientContact = {
@@ -1136,9 +1213,26 @@ function Step2({
     <div className="space-y-6">
       <SectionHeader
         title="2. Contacto del Cliente"
-        description="Datos del interlocutor comercial y equipo de la empresa. Los campos no son obligatorios al inicio y puedes registrar múltiples contactos según las áreas involucradas."
+        description="Registra al menos un teléfono o correo válido de la empresa o del contacto. Los demás datos pueden quedar Pendientes y completarse antes del envío al cliente."
       />
 
+      {Object.entries(errors)
+        .filter(([key]) =>
+          [
+            "contactoMinimo",
+            "telefonoEmpresa",
+            "correoEmpresa",
+            "telefono",
+            "correo",
+            "telefonoSecundario",
+            "correoAlternativo",
+          ].includes(key),
+        )
+        .map(([key, message]) => (
+          <p key={key} role="alert" className="text-sm text-destructive">
+            {message}
+          </p>
+        ))}
       {/* Tarjeta de Contacto Principal */}
       <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
         <div className="flex items-center justify-between pb-2 border-b border-border/60">
@@ -1180,6 +1274,9 @@ function Step2({
           >
             <Input
               id="contacto-tel"
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
               placeholder="Ej. +57 315 889 4433"
               value={data.telefono}
               onChange={(e) => update("telefono", e.target.value)}
@@ -1194,6 +1291,9 @@ function Step2({
           >
             <Input
               id="contacto-tel2"
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
               placeholder="Ej. +57 (602) 667 5000 ext. 124"
               value={data.telefonoSecundario}
               onChange={(e) => update("telefonoSecundario", e.target.value)}
@@ -1327,11 +1427,21 @@ function Step2({
                   <div>
                     <Label className="text-xs text-muted-foreground">Teléfono / Celular</Label>
                     <Input
+                      id={additionalPhoneKey(c.id)}
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="off"
                       placeholder="Ej. +57 310 555 1234"
                       value={c.telefono}
+                      aria-invalid={Boolean(errors[additionalPhoneKey(c.id)] && phoneError(c.telefono))}
                       onChange={(e) => updateAdditionalContact(c.id, "telefono", e.target.value)}
                       className="text-xs mt-1"
                     />
+                    {errors[additionalPhoneKey(c.id)] && phoneError(c.telefono) && (
+                      <p role="alert" className="mt-1 text-xs font-semibold text-destructive">
+                        {phoneError(c.telefono)}
+                      </p>
+                    )}
                   </div>
                   <div className="sm:col-span-2">
                     <Label className="text-xs text-muted-foreground">Correo electrónico</Label>
@@ -1656,7 +1766,7 @@ function Step3({
                       className="bg-card text-sm resize-y"
                     />
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                      <span className="text-[11px] font-medium text-muted-foreground">Sugerencias rápidas:</span>
+                      <span className="text-xs font-medium text-muted-foreground">Sugerencias rápidas:</span>
                       {[
                         "Refrigerios AM/PM",
                         "Almuerzos de trabajo",
@@ -1676,7 +1786,7 @@ function Step3({
                               update("alimentacion", `${cur}, ${item}`);
                             }
                           }}
-                          className="rounded-md border border-border bg-card px-2 py-0.5 text-[11px] text-muted-foreground hover:border-accent/40 hover:text-foreground transition-colors"
+                          className="rounded-md border border-border bg-card px-2 py-0.5 text-xs text-muted-foreground hover:border-accent/40 hover:text-foreground transition-colors"
                         >
                           + {item}
                         </button>
@@ -1696,7 +1806,7 @@ function Step3({
                     Diagnóstico y objetivos del proceso
                   </h4>
                 </div>
-                <span className="text-[11px] text-muted-foreground">Sin límite de caracteres</span>
+                <span className="text-xs text-muted-foreground">Sin límite de caracteres</span>
               </div>
 
               <div className="space-y-4">
@@ -1713,7 +1823,7 @@ function Step3({
                       onChange={(e) => update("necesidad", e.target.value)}
                       className="bg-card resize-y min-h-[100px] text-sm"
                     />
-                    <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
                         Campo libre y expansible para especificaciones completas
                       </span>
@@ -1928,7 +2038,7 @@ function Step4({
                         <span className={cn("h-2.5 w-2.5 rounded-full", opt.dot)} />
                         <span className="text-sm font-semibold">{opt.label}</span>
                       </div>
-                      <span className="text-[11px] opacity-75 mt-1">{opt.desc}</span>
+                      <span className="text-xs opacity-75 mt-1">{opt.desc}</span>
                     </button>
                   );
                 })}
@@ -1947,11 +2057,18 @@ function Step4({
 function Step5({
   data,
   update,
+  onEditStep,
 }: {
   data: RequestFormData;
   update: <K extends keyof RequestFormData>(k: K, v: RequestFormData[K]) => void;
+  onEditStep: (step: number) => void;
 }) {
   const { data: dbLeaders } = useProductLeaders();
+  // Pendiente cuenta como ausencia: solo se muestra un canal real (docs/13).
+  const contactChannel =
+    [data.telefono, data.correo, data.telefonoEmpresa, data.correoEmpresa]
+      .map((value) => pendingValue(value))
+      .find(Boolean) ?? "Sin canal registrado";
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -2060,7 +2177,7 @@ function Step5({
                     <FileText className="h-4 w-4 text-accent shrink-0" />
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground text-xs sm:text-sm">{file.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{file.size}</p>
+                      <p className="text-xs text-muted-foreground">{file.size}</p>
                     </div>
                   </div>
                   <Button
@@ -2068,6 +2185,7 @@ function Step5({
                     variant="ghost"
                     size="sm"
                     onClick={() => removeFile(file.id)}
+                    aria-label={`Quitar ${file.name}`}
                     className="text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -2079,47 +2197,125 @@ function Step5({
         )}
       </div>
 
-      {/* Resumen de validación rápida antes de enviar */}
-      <div className="rounded-md border border-border bg-secondary/30 p-4 space-y-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground">Resumen de la Solicitud</h4>
-        <dl className="grid gap-2 text-xs sm:grid-cols-3">
-          <div>
-            <dt className="text-muted-foreground">Empresa / Razón Social:</dt>
-            <dd className="font-semibold text-foreground truncate">{data.empresaNombre || "Sin especificar"}</dd>
-            <dt className="text-muted-foreground mt-1">NIT:</dt>
-            <dd className="font-mono text-foreground">{data.nit ? displayNit(data.nit) : "No registrado"}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Contacto:</dt>
-            <dd className="font-medium text-foreground truncate">
-              {data.contactoNombre ||
-                (data.contactosAdicionales.length > 0 ? data.contactosAdicionales[0].nombre : "Por definir")}
-              {data.contactosAdicionales.length > 0
-                ? ` (+${data.contactosAdicionales.length} adicional${data.contactosAdicionales.length > 1 ? "es" : ""})`
-                : ""}
-            </dd>
-            <dt className="text-muted-foreground mt-1">Líder de Producto:</dt>
-            <dd className="font-medium text-accent truncate">
-              {leaderDisplayName(data.ldp, dbLeaders) || "Sin asignar"}
-            </dd>
-            <dt className="text-muted-foreground mt-1">Nodo:</dt>
-            <dd className="font-medium text-foreground truncate">{data.nodo || "Sin nodo"}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Tipo de Requerimiento:</dt>
-            <dd className="font-medium text-foreground">
-              {data.tipoReq === "Otro" && data.tipoReqOtro
-                ? `Otro (${data.tipoReqOtro})`
-                : data.tipoReq || "Sin especificar"}
-            </dd>
-            <dt className="text-muted-foreground mt-1">CIIU Principal:</dt>
-            <dd className="font-mono font-semibold text-foreground">{data.ciiuPrincipal || "Sin código"}</dd>
-          </div>
-        </dl>
-      </div>
+      {/* Resumen revisable antes de enviar: cada bloque se puede modificar en su paso */}
+      <section aria-labelledby="resumen-solicitud" className="rounded-md border border-border bg-secondary/30 p-4">
+        <h4 id="resumen-solicitud" className="text-xs font-semibold uppercase tracking-wider text-foreground">
+          Resumen de la Solicitud
+        </h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Revisa los datos antes de enviar. Puedes corregir cualquier bloque con «Modificar».
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <SummaryBlock title="Empresa" editLabel="Modificar empresa" onEdit={() => onEditStep(1)}>
+            <SummaryItem label="Empresa / Razón Social" value={data.empresaNombre || "Sin especificar"} />
+            <SummaryItem label="NIT" mono value={data.nit ? displayNit(data.nit) : "No registrado"} />
+            <SummaryItem label="CIIU Principal" mono value={data.ciiuPrincipal || "Sin código"} />
+          </SummaryBlock>
+
+          <SummaryBlock title="Contacto" editLabel="Modificar contacto" onEdit={() => onEditStep(2)}>
+            <SummaryItem
+              label="Contacto"
+              value={
+                (data.contactoNombre ||
+                  (data.contactosAdicionales.length > 0 ? data.contactosAdicionales[0].nombre : "Por definir")) +
+                (data.contactosAdicionales.length > 0
+                  ? ` (+${data.contactosAdicionales.length} adicional${data.contactosAdicionales.length > 1 ? "es" : ""})`
+                  : "")
+              }
+            />
+            <SummaryItem label="Canal de contacto" value={contactChannel} />
+          </SummaryBlock>
+
+          <SummaryBlock title="Requerimiento" editLabel="Modificar requerimiento" onEdit={() => onEditStep(3)}>
+            <SummaryItem label="Título de la propuesta" value={data.nombreReq.trim() || "Sin especificar"} />
+            <SummaryItem
+              label="Tipo de Requerimiento"
+              value={
+                data.tipoReq === "Otro" && data.tipoReqOtro
+                  ? `Otro (${data.tipoReqOtro})`
+                  : data.tipoReq || "Sin especificar"
+              }
+            />
+            <SummaryItem
+              label="Líder de Producto"
+              accent
+              value={leaderDisplayName(data.ldp, dbLeaders) || "Sin asignar"}
+            />
+            <SummaryItem label="Nodo" value={data.nodo || "Sin nodo"} />
+          </SummaryBlock>
+
+          <SummaryBlock
+            title="Prioridad y formación previa"
+            editLabel="Modificar prioridad"
+            onEdit={() => onEditStep(4)}
+          >
+            <SummaryItem
+              label="Urgencia"
+              value={data.urgencia ? URGENCY_META[data.urgencia].label : "Sin especificar"}
+            />
+            <SummaryItem label="Formación previa" value={data.formacionPrevia || "Sin especificar"} />
+            <SummaryItem
+              label="Documentos adjuntos"
+              value={data.archivos.length > 0 ? `${data.archivos.length} archivo(s)` : "Ninguno"}
+            />
+          </SummaryBlock>
+        </div>
+      </section>
 
       {/* Historial de propuestas de la empresa: al final, justo antes de enviar */}
       <ProposalHistorySection empresaNombre={data.empresaNombre} empresaNit={data.nit} />
+    </div>
+  );
+}
+
+function SummaryBlock({
+  title,
+  editLabel,
+  onEdit,
+  children,
+}: {
+  title: string;
+  editLabel: string;
+  onEdit: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-card p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h5 className="text-xs font-semibold text-foreground">{title}</h5>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onEdit}
+          aria-label={editLabel}
+          className="h-9 px-2 text-xs font-semibold text-accent"
+        >
+          Modificar
+        </Button>
+      </div>
+      <dl className="mt-1 space-y-1.5 text-xs">{children}</dl>
+    </div>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+  mono = false,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  accent?: boolean;
+}) {
+  return (
+    <div>
+      <dt className="text-muted-foreground">{label}:</dt>
+      <dd className={cn("break-words font-medium", accent ? "text-accent" : "text-foreground", mono && "font-mono")}>
+        {value}
+      </dd>
     </div>
   );
 }
