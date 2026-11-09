@@ -10,9 +10,17 @@ describe("getNavItems", () => {
     expect(getNavItems("lider-producto").map((i) => i.to)).toEqual(["/dashboard"]);
   });
 
-  it("gives the administrator executive summary and company 360 links", () => {
-    expect(getNavItems("administrador").map((i) => i.label)).toEqual(["Resumen Ejecutivo", "Impacto por Empresa"]);
-    expect(getNavItems("administrador").map((i) => i.to)).toEqual(["/dashboard", "/dashboard?tab=empresas"]);
+  it("gives the administrator executive summary, company 360 links, and access management", () => {
+    expect(getNavItems("administrador").map((i) => i.label)).toEqual([
+      "Resumen Ejecutivo",
+      "Impacto por Empresa",
+      "Gestión de Accesos",
+    ]);
+    expect(getNavItems("administrador").map((i) => i.to)).toEqual([
+      "/dashboard",
+      "/dashboard?tab=empresas",
+      "/admin/usuarios",
+    ]);
   });
 
   it("never offers the wizard to roles other than the KAM", () => {
@@ -28,6 +36,11 @@ describe("isNavItemActive", () => {
     expect(isNavItemActive("/dashboard", "/", "")).toBe(true);
     expect(isNavItemActive("/dashboard", "/dashboard", "")).toBe(true);
     expect(isNavItemActive("/dashboard", "/solicitudes", "")).toBe(false);
+  });
+
+  it("marks /admin/usuarios active at /admin/usuarios", () => {
+    expect(isNavItemActive("/admin/usuarios", "/admin/usuarios", "")).toBe(true);
+    expect(isNavItemActive("/admin/usuarios", "/dashboard", "")).toBe(false);
   });
 
   it("keeps /solicitudes active on detail pages but not on the wizard", () => {

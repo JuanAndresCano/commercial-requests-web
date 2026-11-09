@@ -9,7 +9,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
-    if (status === "pending-role") router.replace("/onboarding/select-role");
+    if (status === "pending-role") router.replace("/onboarding/pending");
   }, [status, router]);
 
   if (status === "loading") {

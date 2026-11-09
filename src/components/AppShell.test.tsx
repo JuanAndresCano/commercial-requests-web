@@ -50,7 +50,7 @@ describe("AppShell role-based menu", () => {
   it.each<[UserRole, string[]]>([
     ["kam", ["Solicitudes", "Nueva solicitud"]],
     ["lider-producto", ["Solicitudes"]],
-    ["administrador", ["Resumen Ejecutivo", "Impacto por Empresa"]],
+    ["administrador", ["Resumen Ejecutivo", "Impacto por Empresa", "Gestión de Accesos"]],
   ])("shows only the modules of %s", (role, labels) => {
     renderShell(role);
     expect(linkLabels()).toEqual(labels);

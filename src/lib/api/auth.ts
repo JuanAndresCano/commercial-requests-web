@@ -26,14 +26,6 @@ export const authApi = {
       body: { email },
       skipUnauthorizedHandler: true,
     }),
-  assignInitialRole: (roleCode: string) =>
-    apiRequest<{ success: boolean; role: string; accessToken: string; expiresAt: number }>(
-      "/auth/assign-initial-role",
-      {
-        method: "POST",
-        body: { roleCode },
-      },
-    ),
   /** Fails with 401 when there is no valid session cookie. */
   getMe: () => apiRequest<SessionUser>("/auth/me"),
   logout: () => apiRequest<void>("/auth/logout", { method: "POST" }),

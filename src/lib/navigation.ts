@@ -1,4 +1,4 @@
-import { FileText, PlusCircle, LayoutGrid, Building2, type Home } from "@/components/icons";
+import { FileText, PlusCircle, LayoutGrid, Building2, UserCheck, type Home } from "@/components/icons";
 import type { UserRole } from "@/context/AuthContext";
 
 export interface NavItem {
@@ -21,6 +21,7 @@ export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
   administrador: [
     { to: "/dashboard", label: "Resumen Ejecutivo", icon: LayoutGrid },
     { to: "/dashboard?tab=empresas", label: "Impacto por Empresa", icon: Building2 },
+    { to: "/admin/usuarios", label: "Gestión de Accesos", icon: UserCheck },
   ],
 };
 
@@ -33,6 +34,9 @@ export function isNavItemActive(itemTo: string, pathname: string, search: string
   const [itemPath, itemQuery] = itemTo.split("?");
 
   if (itemQuery) return pathname === itemPath && search.includes(itemQuery);
+  if (itemTo === "/admin/usuarios") {
+    return pathname === "/admin/usuarios" || pathname.startsWith("/admin/usuarios/");
+  }
   if (itemTo === "/dashboard") {
     if (search.includes("tab=empresas")) return false;
     return pathname === "/dashboard" || pathname === "/";

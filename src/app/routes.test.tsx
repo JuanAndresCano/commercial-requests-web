@@ -7,6 +7,8 @@ import NotFoundPage from "./not-found";
 import DashboardPage from "./(private)/dashboard/page";
 import NewRequestPage from "./(private)/solicitudes/nueva/page";
 import RequestDetailPage from "./(private)/solicitudes/[id]/page";
+import PendingApprovalPage from "./onboarding/pending/page";
+import UserManagementPage from "./(private)/admin/usuarios/page";
 import PrivateLayout from "./(private)/layout";
 
 vi.mock("@/views/Index", () => ({ default: () => <div>vista-index</div> }));
@@ -15,6 +17,8 @@ vi.mock("@/views/NotFound", () => ({ default: () => <div>vista-404</div> }));
 vi.mock("@/views/Dashboard", () => ({ default: () => <div>vista-dashboard</div> }));
 vi.mock("@/views/NewRequest", () => ({ default: () => <div>vista-nueva</div> }));
 vi.mock("@/views/RequestDetail", () => ({ default: () => <div>vista-detalle</div> }));
+vi.mock("@/views/PendingApproval", () => ({ default: () => <div>vista-pending</div> }));
+vi.mock("@/views/admin/UserManagementView", () => ({ default: () => <div>vista-usuarios</div> }));
 vi.mock("@/components/RequireAuth", () => ({
   RequireAuth: ({ children }: { children: ReactElement }) => <div data-testid="guard">{children}</div>,
 }));
@@ -28,6 +32,8 @@ describe("app routes", () => {
     ["/dashboard", DashboardPage, "vista-dashboard"],
     ["/solicitudes/nueva", NewRequestPage, "vista-nueva"],
     ["/solicitudes/[id]", RequestDetailPage, "vista-detalle"],
+    ["/onboarding/pending", PendingApprovalPage, "vista-pending"],
+    ["/admin/usuarios", UserManagementPage, "vista-usuarios"],
   ])("%s renders its view", async (_route, Page, marker) => {
     render(<Page />);
     expect(await screen.findByText(marker)).toBeInTheDocument();

@@ -50,7 +50,7 @@ interface AuthContextType {
   status: AuthStatus;
   login: (email: string, password?: string) => Promise<void>;
   devLogin: (email: string) => Promise<void>;
-  assignInitialRole: (roleCode: string) => Promise<void>;
+  refreshSession: () => Promise<SessionUser | null>;
   logout: () => void;
   /**
    * Another tab of this browser signed in as someone else (or signed out), so the
@@ -110,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
         setUser({
           role: "kam",
-          roleLabel: "Pendiente de Selección",
+          roleLabel: "Pendiente de Aprobación",
           name: fullName || session.email,
           email: session.email,
         });
@@ -229,18 +229,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [applySession, announce, resetUiForNewSession],
   );
 
-  const assignInitialRole = useCallback(
-    async (roleCode: string) => {
-      await authApi.assignInitialRole(roleCode);
-      resetUiForNewSession();
+  const refreshSession = useCallback(async (): Promise<SessionUser | null> => {
+    try {
       const session = await authApi.getMe();
-      if (!applySession(session)) {
-        throw new Error("Error al aplicar el rol institucional.");
-      }
-      announce({ type: "login", userId: session.id });
-    },
-    [applySession, announce, resetUiForNewSession],
-  );
+      applySession(session);
+      return session;
+    } catch {
+      clearSession();
+      return null;
+    }
+  }, [applySession, clearSession]);
 
   const login = useCallback(
     async (email: string, _password?: string) => {
@@ -348,7 +346,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status,
         login,
         devLogin,
-        assignInitialRole,
+        refreshSession,
         logout,
         sessionConflict,
         requests,

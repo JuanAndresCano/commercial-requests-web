@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import { ThemeProvider, useTheme } from "./ThemeContext";
 
 vi.mock("@/lib/api/auth", () => ({
-  authApi: { login: vi.fn(), devLogin: vi.fn(), assignInitialRole: vi.fn(), getMe: vi.fn(), logout: vi.fn() },
+  authApi: { login: vi.fn(), devLogin: vi.fn(), getMe: vi.fn(), logout: vi.fn() },
 }));
 
 const tabChannel = vi.hoisted(() => ({
@@ -113,7 +113,7 @@ describe("AuthProvider session handling", () => {
     const auth = mountProvider();
 
     await waitFor(() => expect(auth.current.status).toBe("pending-role"));
-    expect(auth.current.user.roleLabel).toBe("Pendiente de Selección");
+    expect(auth.current.user.roleLabel).toBe("Pendiente de Aprobación");
   });
 
   it("signs in and takes the role from the backend session", async () => {
