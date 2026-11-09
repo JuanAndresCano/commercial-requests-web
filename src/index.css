@@ -172,3 +172,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(84, 84, 233, 0.5);
 }
+
+/* Zonas táctiles: en pantallas táctiles los botones del contenido y de los diálogos miden
+   al menos 44 px de alto (guía UX, WCAG). En escritorio se conserva la densidad actual. */
+@media (pointer: coarse) {
+  main button,
+  [role="dialog"] button {
+    min-height: 44px;
+  }
+}

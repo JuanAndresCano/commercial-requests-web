@@ -1,5 +1,7 @@
 # Modelo de datos lógico (del prototipo)
 
+> **Reglas vigentes 2026-11-06:** conservar cuatro etapas operativas KAM, una etiqueta comercial vigente por propuesta entregada, contacto mínimo válido y edición de empresa/contacto separada de la información técnica. Ver [acuerdos finales](13-acuerdos-finales-2026-11-06.md) y `requisitos/2026-10-28/SPEC_ACORDADA.md` (raíz del espacio de trabajo). Las restricciones históricas de edición con docente no aplican al nuevo permiso de datos del cliente. Los campos y reglas nuevos están en la sección «Seguimiento comercial, ajustes, empresa/contacto y formatos» más abajo.
+
 > **Actualización 2026-10-09 (esquema real tras el UAT).** Este documento describe el prototipo; el esquema del backend cambió así (migraciones aditivas, ver `prisma/migrations` del backend):
 > - `nodeId` de la solicitud **admite nulo** (clave foránea `ON DELETE SET NULL`); nuevos `center` y `costCenter` en texto libre.
 > - Historial de equipo `proposal_team_change_logs` (cambios de nodo y líder: quién, cuándo y por qué) e historial de estados (`statusHistory`). `officialNumber` ("CP/CT AAAA-NNNN") se deriva del consecutivo y solo existe con la solicitud entregada.
@@ -224,6 +226,50 @@ interface NegotiationRound {
 4. Como puede haber varias rondas `"pendiente"` en el historial (las que el Líder reemplazó con un envío más reciente antes de que el KAM llegara a entregarlas), los pasos 2 y 3 identifican la ronda a modificar **por posición (la última del arreglo), no solo por `clientResponse === "pendiente"`** — de lo contrario se marcarían todas las pendientes a la vez. Las rondas pendientes que no son la última se muestran en el Historial como "reemplazada por una ronda posterior", no como rechazadas.
 5. La UI exige un `leaderNote` desde la ronda 2 en adelante, sin excepción — explicando qué cambió frente a la ronda anterior.
 6. **Cualquier edición posterior a la confirmación** — no solo del valor final o el margen, también de los campos que cada ronda congela (`participantes`, `modalidad`, `horas`, `type`, `necesidad`, vía "Especificaciones del Servicio" o "Información completa de la solicitud") — invalida `readyForKam` igual que editar el precio. Antes solo el precio invalidaba el gate, dejando que el alcance cambiara sin que el KAM se enterara de que la propuesta que iba a entregar ya no era la que el Líder confirmó por última vez.
+
+## Seguimiento comercial, ajustes, empresa/contacto y formatos (vigente 2026-11-06)
+
+Fuente: [`13-acuerdos-finales-2026-11-06.md`](13-acuerdos-finales-2026-11-06.md). Tipos del cliente en `src/lib/api/requests.ts` (`ProposalListItem`, `ProposalDetail`, `ProposalDashboardMetrics`) y `src/lib/api/commercial-status.ts`; tablas en `prisma/schema.prisma` del backend.
+
+### Etiqueta comercial e historial
+
+| Campo | Dónde | Descripción |
+|---|---|---|
+| `commercialStatus` | `Proposal` (también en `ProposalListItem`/`ProposalDetail`) | `CommercialStatus \| null`. Como máximo **una** vigente. `null` = «Sin etiqueta». Índice `(creatorId, commercialStatus)`. |
+| `CommercialStatus` | enum | `APPROVED_WITHOUT_CONTRACT` (Aprobación sin contrato), `APPROVED_WITH_CONTRACT` (Aprobada con contrato / Orden de servicio), `INVOICED` (Facturada), `REJECTED` (Rechazada). |
+| `commercialStatusHistory` | tabla `proposal_commercial_status_history` | `id`, `proposalId`, `previousStatus`, `status`, `changedById`, `changedAt`. Una fila por cambio real; guardar el mismo valor **no** crea fila. En la API: `CommercialStatusChange` con `changedBy {id, firstName, lastName}`. |
+
+Reglas: solo el KAM creador cambia la etiqueta (403 a otros); solo con el estado `DELIVERED` (400 en otro caso); el cambio se hace dentro de una transacción con bloqueo de fila (`SELECT … FOR UPDATE`) y no toca el estado operativo. Una devolución a costeo **no borra** la etiqueta ni el historial (ver `07`).
+
+### Ajustes («Sustentación y ajuste N») y valor entregado
+
+| Campo | Descripción |
+|---|---|
+| `adjustmentCount` | Cuántas veces el cliente devolvió la propuesta con observaciones (la pendiente incluida). Opcional en el cliente: un servidor antiguo lo omite. |
+| `hasPendingAdjustment` | `true` mientras la última devolución no se haya presentado otra vez al cliente. |
+| Estado derivado (`src/lib/adjustments.ts`) | `pending` (en costeo y con devolución sin reenviar), `resent` (devuelta al menos una vez y ya presentada de nuevo), `none`. Si el servidor no envía los campos, el front lo deduce del texto de las observaciones y de las rondas `rechazada`. |
+| Filtro de listado | `GET /requests?adjustments=pending\|resent\|none` (el front filtra en cliente con la misma regla). |
+| `deliveredValueCop` | Decimal exacto en texto (`"8250000.50"`): el último valor realmente remitido al cliente, solo en propuestas entregadas; no suma rondas ni expone un recosteo no confirmado. |
+| `GET /requests/dashboard/metrics` → `deliveredValueCop`, `entregadas` | Total bruto de la cartera del KAM (incluye Facturada y Rechazada), calculado en el servidor con aritmética decimal. El front lo formatea sin convertirlo a `number` (`src/lib/cop-total.ts`) y suma subtotales filtrados con `BigInt` (`sumDeliveredValues`). |
+
+El nombre «Sustentación y ajuste N» es solo de presentación: los códigos internos (`IN_COSTING`, rondas `rechazada`) y la autorización de envío no cambian. Ver `09-r7-valor-entregado-kam.md` para el detalle de R7.
+
+### Empresa compartida y contacto local
+
+- **Empresa** (`Company`): maestro común. Corregir razón social, NIT, dirección, web, CIIU (principal y secundarios), teléfono, correo, descripción o naturaleza jurídica con `PATCH /requests/:id/customer` modifica la ficha para **todas** sus solicitudes y los autocompletados. NIT repetido en otra empresa: 409. Las solicitudes de otros KAM de la misma empresa ven el cambio (ver `07`).
+- **Contacto** (`Contact`): pertenece a la solicitud. Si el registro era compartido entre solicitudes, la edición crea **una copia** vinculada a la propuesta editada y deja intactos los contactos de las demás. Los cambios compuestos (empresa + contacto) son transaccionales; el servidor bloquea la fila de la solicitud y la de la empresa.
+- Contactabilidad: debe quedar al menos un teléfono o correo válido (empresa o contacto principal); no se puede borrar el último ni enviar al cliente sin él.
+- «Pendiente» es **ausencia** (`null`/vacío), nunca un NIT, teléfono o correo falso (`pendingValue` en `src/lib/customer-contact.ts`). La naturaleza jurídica puede ser `null` («Pendiente»); las opciones son `PUBLICA`, `PRIVADA`, `MIXTA`, `SIN_ANIMO_LUCRO`.
+
+### Reglas de formato
+
+| Dato | Regla | Quién la aplica |
+|---|---|---|
+| Teléfono (empresa, contacto, secundario, adicionales) | 10 dígitos con prefijo `+57`/`57` opcional; se ignoran espacios, guiones, puntos y paréntesis. Ejemplo válido: `+57 300 123 4567`. | Front (`isValidPhone`) y backend (`/^(?:\+?57)?\d{10}$/`), mismo contrato |
+| CIIU principal y cada secundario | **Exactamente 4 dígitos**; máx. 20 secundarios; sin repetidos ni igual al principal. Un valor pegado de más de 4 dígitos se reporta, no se recorta. | Front (`src/lib/ciiu.ts`) y backend |
+| NIT | Se acepta con puntos, guiones o espacios. **El front** acepta 9 dígitos (calcula y añade el dígito de verificación, algoritmo DIAN) o 10 dígitos (comprueba que el último sea el correcto) y guarda 10 dígitos. **El backend** solo exige 10 dígitos (`isNitFormat`): **no verifica el dígito de verificación** (pregunta abierta en `08`). | Front (`src/lib/nit.ts`) / backend (`src/common/validation/nit.ts`) |
+| Correo | Formato `algo@dominio.ext`. | Front y backend |
+| Título de la propuesta | ≥5 caracteres útiles. | Front y backend |
 
 ## `ClientContact` (contacto adicional de la empresa cliente)
 

@@ -14,7 +14,7 @@ interface AdvisorContactDialogProps {
   onChange: () => void;
 }
 
-const LABEL = "text-[10px] font-medium uppercase tracking-wider text-slate-400 block";
+const LABEL = "text-xs font-medium uppercase tracking-wider text-slate-400 block";
 
 /** Quick read-only view of the assigned professor/advisor's data (either kind). */
 export function AdvisorContactDialog({
@@ -97,7 +97,7 @@ export function AdvisorContactDialog({
             {data?.perfil && (
               <div className="pt-1">
                 <span className={LABEL}>Perfil Profesional</span>
-                <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">{data.perfil}</p>
+                <p className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed">{data.perfil}</p>
               </div>
             )}
 
@@ -109,7 +109,7 @@ export function AdvisorContactDialog({
           <div className="flex justify-end gap-2 pt-2">
             {isLeader && !canChange && (
               <span
-                className="mr-auto self-center text-[10px] italic text-muted-foreground"
+                className="mr-auto self-center text-xs italic text-muted-foreground"
                 title='No editable: la solicitud ya pasó por "En proceso por experto"'
               >
                 No editable

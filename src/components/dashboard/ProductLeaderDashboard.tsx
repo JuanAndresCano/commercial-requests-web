@@ -31,6 +31,15 @@ import { formatCop, formatCompactCop, type RequestItem, type RequestStatus } fro
 import { LEADER_BOARD_STAGES, countByStage, groupByStage, leaderStageOf, type BoardStage } from "@/lib/board-stages";
 import { getLeaderStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
 import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
+import { ResentAdjustmentBadge } from "@/components/ResentAdjustmentBadge";
+import { AdjustmentFilterSelect, PendingAdjustmentsCounter } from "@/components/dashboard/AdjustmentFilterControls";
+import {
+  countPendingAdjustments,
+  hasPendingAdjustment,
+  isAdjustmentFilter,
+  matchesAdjustmentFilter,
+  type AdjustmentFilter,
+} from "@/lib/adjustments";
 import {
   Dialog,
   DialogContent,
@@ -104,6 +113,11 @@ export function ProductLeaderDashboard({
   // las que más llevan esperando). Sigue sirviendo con todas las fases a la
   // vista para aislar esa etapa sin salir de la vista general.
   const [onlyWaitingForKam, setOnlyWaitingForKam] = usePersistentState("icesi_lp_dashboard_esperando_kam_v1", false);
+  const [storedAdjustmentFilter, setAdjustmentFilter] = usePersistentState<AdjustmentFilter>(
+    "icesi_lp_dashboard_adjustment_filter_v1",
+    "",
+  );
+  const adjustmentFilter: AdjustmentFilter = isAdjustmentFilter(storedAdjustmentFilter) ? storedAdjustmentFilter : "";
   const [viewMode, setViewMode] = usePersistentState<"kanban" | "tabla">("icesi_lp_dashboard_view_v1", "kanban");
 
   // En Kanban, las columnas ya son el filtro — la tarjeta KPI en esa vista no
@@ -218,6 +232,9 @@ export function ProductLeaderDashboard({
     0,
   );
 
+  // El contador de la cabecera cuenta sobre todo el conjunto del Líder, sin aplicar el propio filtro.
+  const pendingAdjustmentsCount = countPendingAdjustments(activeDataset);
+
   const sinDocenteCount = activeDataset.filter((r) => !r.professor && r.status !== "entregada").length;
   const waitingForKamCount = countEnviadasKam;
 
@@ -254,6 +271,7 @@ export function ProductLeaderDashboard({
       if (activeStageFilter !== "todas" && leaderStageOf(r) !== activeStageFilter) return false;
       if (onlyMissingProfessor && missingProfessorRelevant && (r.professor || r.status === "entregada")) return false;
       if (onlyWaitingForKam && waitingForKamRelevant && leaderStageOf(r) !== "enviada-kam") return false;
+      if (!matchesAdjustmentFilter(r, adjustmentFilter)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -277,6 +295,7 @@ export function ProductLeaderDashboard({
     onlyWaitingForKam,
     waitingForKamRelevant,
     searchQuery,
+    adjustmentFilter,
   ]);
 
   // Vista Kanban: la columna ya ES el estado, así que el filtro de estado no debe vaciar el
@@ -287,6 +306,7 @@ export function ProductLeaderDashboard({
     const result = activeDataset.filter((r) => {
       if (onlyMissingProfessor && missingProfessorRelevant && (r.professor || r.status === "entregada")) return false;
       if (onlyWaitingForKam && waitingForKamRelevant && leaderStageOf(r) !== "enviada-kam") return false;
+      if (!matchesAdjustmentFilter(r, adjustmentFilter)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matches =
@@ -309,6 +329,7 @@ export function ProductLeaderDashboard({
     onlyWaitingForKam,
     waitingForKamRelevant,
     searchQuery,
+    adjustmentFilter,
   ]);
 
   // Group by status for the single unified Kanban
@@ -371,6 +392,11 @@ export function ProductLeaderDashboard({
         <span>
           <strong className="font-bold text-foreground">{formatCompactCop(pipelineTotal)}</strong> en pipeline cotizado
         </span>
+        <PendingAdjustmentsCounter
+          count={pendingAdjustmentsCount}
+          filter={adjustmentFilter}
+          onChange={setAdjustmentFilter}
+        />
       </div>
 
       {/* 2. Interactive Stages / KPIs Bar with Official Icesi Colors */}
@@ -413,12 +439,12 @@ export function ProductLeaderDashboard({
         />
         <StageKpiCard
           stage="entregada"
-          label="5. Entregadas"
+          label="5. Entregada"
           count={countEntregadas}
-          hint="Sin propuestas entregadas al cliente aún"
+          hint="Sin propuestas presentadas al cliente aún"
           secondaryLine={
             <span className="font-semibold text-[#4cb979]">
-              {formatCompactCop(entregadasValue)} en valor real aprobado
+              {formatCompactCop(entregadasValue)} en valor presentado al cliente
             </span>
           }
           active={viewMode === "tabla" ? activeStageFilter === "entregada" : isolatedStage === "entregada"}
@@ -438,7 +464,10 @@ export function ProductLeaderDashboard({
           />
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2">
+            <AdjustmentFilterSelect value={adjustmentFilter} onChange={setAdjustmentFilter} />
+          </div>
           {missingProfessorRelevant && (
             <button
               type="button"
@@ -535,14 +564,18 @@ export function ProductLeaderDashboard({
                   ? "Ninguna de tus solicitudes activas está sin docente en este momento."
                   : onlyWaitingForKam && waitingForKamRelevant
                     ? "Ninguna de tus solicitudes está enviada al KAM esperando que la entregue."
-                    : "No se encontraron solicitudes con esta búsqueda."}
+                    : adjustmentFilter
+                      ? "Ninguna propuesta coincide con los filtros."
+                      : "No se encontraron solicitudes con esta búsqueda."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {onlyMissingProfessor && missingProfessorRelevant
                   ? 'El filtro "Sin docente" excluye además las que ya están Entregadas.'
                   : onlyWaitingForKam && waitingForKamRelevant
                     ? 'El filtro "Esperando al KAM" solo muestra las solicitudes que ya confirmaste y enviaste al KAM.'
-                    : "Intenta con otro término de búsqueda."}
+                    : adjustmentFilter
+                      ? 'Prueba con otra opción de "Sustentación y ajustes" o quita los filtros.'
+                      : "Intenta con otro término de búsqueda."}
               </p>
               <Button
                 variant="outline"
@@ -551,6 +584,7 @@ export function ProductLeaderDashboard({
                   setOnlyMissingProfessor(false);
                   setOnlyWaitingForKam(false);
                   setSearchQuery("");
+                  setAdjustmentFilter("");
                 }}
                 className="mt-3 text-xs"
               >
@@ -559,7 +593,13 @@ export function ProductLeaderDashboard({
             </div>
           )}
           <BoardMotion
-            layoutKey={[isolatedStage ?? "", searchQuery, onlyMissingProfessor, onlyWaitingForKam].join("|")}
+            layoutKey={[
+              isolatedStage ?? "",
+              searchQuery,
+              onlyMissingProfessor,
+              onlyWaitingForKam,
+              adjustmentFilter,
+            ].join("|")}
           >
             <div
               className={cn(
@@ -601,14 +641,14 @@ export function ProductLeaderDashboard({
                             <div
                               className={cn(
                                 "flex items-center gap-1.5 border-b px-3 py-1.5",
-                                req.clientObservations
+                                hasPendingAdjustment(req)
                                   ? "bg-amber-100 dark:bg-amber-950/40 border-amber-300/60 dark:border-amber-900/50"
                                   : "invisible border-transparent",
                               )}
                             >
                               <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                               <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                                Cliente pidió ajustes
+                                Sustentación y ajustes
                               </span>
                             </div>
 
@@ -638,6 +678,7 @@ export function ProductLeaderDashboard({
                                     {formatCop(req.costing!.totalOfferedCop)}
                                   </span>
                                 )}
+                                {stage.id === "entregada" && <ResentAdjustmentBadge req={req} />}
                               </div>
 
                               {/* Docente / Profesor status */}
@@ -836,7 +877,11 @@ export function ProductLeaderDashboard({
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       <p>No se encontraron solicitudes con estos filtros.</p>
-                      {(onlyMissingProfessor || onlyWaitingForKam || searchQuery || activeStageFilter !== "todas") && (
+                      {(onlyMissingProfessor ||
+                        onlyWaitingForKam ||
+                        searchQuery ||
+                        adjustmentFilter ||
+                        activeStageFilter !== "todas") && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -844,6 +889,7 @@ export function ProductLeaderDashboard({
                             setOnlyMissingProfessor(false);
                             setOnlyWaitingForKam(false);
                             setSearchQuery("");
+                            setAdjustmentFilter("");
                             setActiveStageFilter("todas");
                           }}
                           className="mt-3 text-xs"
@@ -912,7 +958,8 @@ export function ProductLeaderDashboard({
                           )}
                         </td>
                         <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                          <StatusBadge status={leaderStageOf(r)} />
+                          <StatusBadge status={leaderStageOf(r)} pendingAdjustment={hasPendingAdjustment(r)} />
+                          {r.status === "entregada" && <ResentAdjustmentBadge req={r} className="mt-1" />}
                           {stageAgeLabel && (
                             <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                               <Clock className="h-3 w-3 shrink-0" />

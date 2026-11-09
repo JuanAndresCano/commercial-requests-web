@@ -33,6 +33,7 @@ export function StageKpiCard({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         "relative flex flex-col justify-between rounded-xl border p-4 text-left shadow-xs transition-all cursor-pointer",

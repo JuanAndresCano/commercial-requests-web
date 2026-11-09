@@ -138,6 +138,7 @@ export const Phone = makeIcon("call");
 export const Plus = makeIcon("add");
 export const PlusCircle = makeIcon("add_circle");
 export const Printer = makeIcon("print");
+export const RotateCw = makeIcon("autorenew");
 export const Rocket = makeIcon("rocket_launch");
 export const RotateCcw = makeIcon("restart_alt");
 export const Save = makeIcon("save");

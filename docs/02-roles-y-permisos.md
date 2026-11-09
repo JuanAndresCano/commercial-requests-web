@@ -1,5 +1,7 @@
 # Roles y permisos
 
+> **Reglas vigentes 2026-11-06:** conservar cuatro etapas operativas KAM, una etiqueta comercial vigente por propuesta entregada, contacto mínimo válido y edición de empresa/contacto separada de la información técnica. Ver [acuerdos finales](13-acuerdos-finales-2026-11-06.md) y la especificación de origen `requisitos/2026-10-28/SPEC_ACORDADA.md` (raíz del espacio de trabajo). Las restricciones históricas de edición con docente no aplican al nuevo permiso de datos del cliente. El detalle de permisos está en la sección «Etiqueta comercial y edición de datos del cliente» más abajo.
+
 > **Actualización 2026-10-09 (cierre del UAT).** Decisiones del dueño del producto que prevalecen sobre lo que sigue donde lo contradigan:
 > - El KAM **no edita ni cancela** su solicitud si ya tiene docente asignado (antes bastaba con que estuviera en "Nueva"). ADMIN conserva ambos permisos.
 > - El KAM **no ve el Valor Total Ofertado ni la nota de alcance** hasta que el Líder confirma "Enviar a KAM"; antes el backend los devuelve `null`.
@@ -34,7 +36,7 @@ Es el dueño comercial de la relación con el cliente corporativo. Su "resultado
 - Crear nuevas solicitudes (wizard de 5 pasos) — acción principal, accesible desde múltiples puntos (botón "Nueva Solicitud" en su dashboard, en la barra superior, en `/solicitudes`).
 - Ver **únicamente sus propias solicitudes** — confirmado con la Líder de Producto (`08`, pregunta 1): el KAM es dueño de su propia cartera de clientes, no tiene acceso al pipeline comercial de sus compañeros. Se eliminó el toggle "Mis Solicitudes / Todas" que existía antes.
 - Ver el detalle de sus solicitudes (`/solicitudes/:id`) en **modo mayormente solo-lectura**: ve el **Valor Total Ofertado** (solo cuando el Líder confirmó "Enviar a KAM"; antes recibe `null`; *Actualización 2026-10-09*) y, si el tipo es "Capacitación", la Estampilla Pro-Cultura — pero **no ve el Costo Base Directo ni el Margen de Contribución** (información interna de costeo, exclusiva del Líder de Producto — `08`, pregunta 3). No edita el costeo.
-- **Editar la información completa de su propia solicitud** (empresa, contacto, diagnóstico, formación previa, observaciones, título y urgencia) **mientras esté en estado "Nueva" y el Líder de Producto no le haya asignado docente** — es el dueño de esos datos y es quien debe corregirlos si se equivocó al diligenciarlos (`08`, preguntas 4 y 8). Se edita desde un modal con pestañas (General/Empresa/Contacto/Diagnóstico/Formación/Otros), con validación de formato en correos/teléfonos, aviso si se cierra con cambios sin guardar, y un contador de "X de Y campos diligenciados" visible incluso sin abrir el modal. Una vez el Líder de Producto empieza a trabajarla (estado distinto de "Nueva") **o le asigna un docente/experto** (lo que ocurra primero, incluso si sigue en "Nueva"), deja de ser editable para el KAM: así el experto no trabaja sobre información que cambia por debajo (acuerdo de la UAT del 2026-09-29 entre la Líder y el KAM). Si el KAM se equivocó, por ahora lo corrige el Líder de Producto (`08`, pregunta 19). *Actualización 2026-10-09:* el botón de cancelar **sí** se bloquea para el KAM con docente asignado (el backend responde 400; ADMIN conserva el permiso).
+- **Editar la información completa de su propia solicitud** (empresa, contacto, diagnóstico, formación previa, observaciones, título y urgencia) **mientras esté en estado "Nueva" y el Líder de Producto no le haya asignado docente** — es el dueño de esos datos y es quien debe corregirlos si se equivocó al diligenciarlos (`08`, preguntas 4 y 8). Se edita desde un modal con pestañas (General/Empresa/Contacto/Diagnóstico/Formación/Otros), con validación de formato en correos/teléfonos, aviso si se cierra con cambios sin guardar, y un contador de "X de Y campos diligenciados" visible incluso sin abrir el modal. Una vez el Líder de Producto empieza a trabajarla (estado distinto de "Nueva") **o le asigna un docente/experto** (lo que ocurra primero, incluso si sigue en "Nueva"), deja de ser editable para el KAM: así el experto no trabaja sobre información que cambia por debajo (acuerdo de la UAT del 2026-09-29 entre la Líder y el KAM). Si el KAM se equivocó, por ahora lo corrige el Líder de Producto (`08`, pregunta 19). *Actualización 2026-11-06:* esto aplica al formulario técnico completo; los datos de **empresa y contacto** tienen su propia ventana de edición, que sí sigue abierta con docente asignado (ver «Etiqueta comercial y edición de datos del cliente»). *Actualización 2026-10-09:* el botón de cancelar **sí** se bloquea para el KAM con docente asignado (el backend responde 400; ADMIN conserva el permiso).
 - **Cancelar/eliminar su propia solicitud mientras esté en estado "Nueva" y sin docente asignado** (`08`, pregunta 14; el bloqueo con docente es decisión del dueño, 2026-10-09) — para corregir errores de creación (empresa duplicada, datos incorrectos) antes de que nadie la haya trabajado. Es una **cancelación lógica** (soft delete: la solicitud pasa a estado cancelado y no se borra físicamente) y exige un **motivo obligatorio**, que se elige entre motivos predefinidos (chips) o se escribe como texto libre. (Decisión técnica del equipo, 27-sep-2026; pendiente confirmar con Diana).
 - Marcar una solicitud como **"Entregada"** (botón "Enviar a cliente" en el detalle) — esta es su acción de cierre de ciclo, y es **exclusiva del KAM**: el Líder de Producto no tiene ningún botón equivalente (ver más abajo, se corrigió un hueco donde sí lo tenía). **El botón está deshabilitado si el Líder de Producto todavía no definió un Valor Total Ofertado mayor a $0** (se encontró y corrigió un hueco donde se podía entregar con costeo en $0).
 - **Devolver una propuesta "Entregada" a "En proceso de costeo" con observaciones del cliente** (`08`, pregunta 13) — cuando el cliente pide ajustes tras recibir la propuesta. La nota queda visible para ambos roles (banner ámbar en el detalle, y en la tarjeta del Kanban del Líder) hasta que se vuelva a entregar.
@@ -46,7 +48,8 @@ Es el dueño comercial de la relación con el cliente corporativo. Su "resultado
 - No asigna docentes/expertos.
 - No edita el costeo (campos deshabilitados o directamente no se muestran los controles de edición — ve una tarjeta de resumen en vez del módulo de costeo interactivo), ni ve el desglose interno (costo base, margen).
 - No reasigna Líder de Producto (esa acción es exclusiva del rol Líder de Producto).
-- No puede editar ni cancelar la solicitud una vez el Líder de Producto empezó a trabajarla (estado distinto de "Nueva") ni cuando ya tiene docente asignado (*Actualización 2026-10-09*).
+- No puede editar el formulario técnico ni cancelar la solicitud una vez el Líder de Producto empezó a trabajarla (estado distinto de "Nueva") ni cuando ya tiene docente asignado (*Actualización 2026-10-09*). Excepción vigente desde 2026-11-06: puede seguir completando **empresa y contacto** (ventana descrita abajo).
+- No gestiona la etiqueta comercial de propuestas de otro KAM, ni la de las suyas mientras no estén entregadas.
 
 ### Su pantalla principal: `KamCommandCenter`
 
@@ -56,18 +59,45 @@ Estructura (de arriba hacia abajo):
 1. **Saludo personalizado** ("Hola, Andrea" + `RoleBadge` "KAM Icesi") + botón prominente "Nueva Solicitud".
 2. **Banner contextual** que solo aparece si hay ≥1 solicitud propia realmente lista para entregar — es decir, con `readyForKam === true` (el Líder ya confirmó "Enviar a KAM"), **no basta con que esté en estado `en-costeo`**: *"¡Tienes N propuestas listas para entregar!"* — botón "Ver listas" que filtra la tabla (vista Tabla) o aísla la columna "Lista para Entregar" (vista Kanban), según cuál esté activa.
 3. **Dato agregado secundario** (texto, no tarjeta): "N solicitudes en total · $X COP en pipeline cotizado" (suma de `en-costeo` + `entregada`).
-4. **4 tarjetas KPI**, una por cada etapa tal como la percibe el KAM (Entregada al líder / En Proceso / Lista para Entregar / Entregada — mismos 4 estados y colores que usa el Kanban, para que nunca se desalineen entre vistas). **"Entregada al líder" es solo el rótulo que ve el KAM para el estado `nueva`** (la solicitud ya se la entregó al Líder de Producto y aún no la han trabajado); el estado y el reloj no cambian (cuenta desde la creación) y el tablero del Líder sigue mostrando "Nueva". "Lista para Entregar" cuenta y agrupa **solo** lo confirmado por el Líder (`readyForKam`); una solicitud en `en-costeo` que el Líder todavía está trabajando (incluida una con "Cliente pidió ajustes") cae bajo "En Proceso" — se corrigió porque antes el número de la tarjeta ya filtraba así, pero el Kanban seguía agrupando toda la etapa `en-costeo` sin filtrar, y un KAM veía "1" arriba con 3 tarjetas idénticas debajo (`KamCommandCenter.tsx`, función `kamStageOf`, fuente única de verdad para KPI/tabla/Kanban):
+4. **4 tarjetas KPI**, una por cada etapa tal como la percibe el KAM (Entregada al líder / En Proceso / Lista para Entregar / Entregada — mismos 4 estados y colores que usa el Kanban, para que nunca se desalineen entre vistas). **"Entregada al líder" es solo el rótulo que ve el KAM para el estado `nueva`** (la solicitud ya se la entregó al Líder de Producto y aún no la han trabajado); el estado y el reloj no cambian (cuenta desde la creación) y el tablero del Líder sigue mostrando "Nueva". "Lista para Entregar" cuenta y agrupa **solo** lo confirmado por el Líder (`readyForKam`); una solicitud en `en-costeo` que el Líder todavía está trabajando (incluida una con "Sustentación y ajustes") cae bajo "En Proceso" — se corrigió porque antes el número de la tarjeta ya filtraba así, pero el Kanban seguía agrupando toda la etapa `en-costeo` sin filtrar, y un KAM veía "1" arriba con 3 tarjetas idénticas debajo (`KamCommandCenter.tsx`, función `kamStageOf`, fuente única de verdad para KPI/tabla/Kanban):
    - **En vista Tabla**, un clic filtra la tabla (oculta filas que no coinciden) — aquí sí aporta valor porque la tabla mezcla todos los estados en una lista plana.
    - **En vista Kanban**, un clic **no oculta nada** (las columnas del Kanban ya son el filtro) — en cambio **aísla esa columna a pantalla completa**, mostrando las tarjetas en una cuadrícula de hasta 3 por fila en vez de una lista angosta. Un botón "Ver las 4 fases" (en la columna aislada y junto al buscador) regresa a la vista completa, o se hace clic de nuevo en la misma tarjeta **o en el encabezado de la columna** (el encabezado de cada columna del Kanban del KAM es un botón que hace lo mismo que su tarjeta KPI). Cada tarjeta en "Lista para Entregar" muestra además un atajo "Revisar y entregar" al pie, igual que los botones de acción del tablero del Líder.
 5. **Toggle Tabla/Kanban**, buscador (por ID, empresa, título, tipo, Líder de Producto) y **tres filtros combinables** por Líder de Producto, empresa y tipo de solicitud (listas derivadas de las solicitudes cargadas; se combinan entre sí, con la etapa y con el buscador, en Tabla y en Kanban; se persisten como el resto del estado de UI; si nada coincide aparece "No se encontraron solicitudes" con el botón "Limpiar filtros"). Las tarjetas KPI no cambian de conteo con estos filtros.
 6. **Vista Tabla**: columnas ID+fecha relativa, Propuesta+Empresa+tipo de servicio, Líder de Producto, Valor Ofertado (o "Pendiente de costeo"), Estado (4 badges de color, ya no fusiona Nueva+En Proceso; debajo, "Lleva N días en esta etapa"), Acción.
-7. **Vista Kanban**: 4 columnas (o 1 si hay una aislada), tarjetas `RequestCard` compactas (banner ámbar "Cliente pidió ajustes" si tiene `clientObservations`, ID, empresa, título, urgencia, tipo, Líder de Producto, docente o "Sin docente", fecha, "Lleva N días en esta etapa"). Los días se cuentan desde el último cambio de estado (`statusUpdatedAt`, o la creación si no hay) y, en "Lista para Entregar", desde que el Líder envió el costeo al KAM (`costing.costingSentAt`).
+7. **Vista Kanban**: 4 columnas (o 1 si hay una aislada), tarjetas `RequestCard` compactas (banner ámbar "Sustentación y ajustes" si tiene `clientObservations`, ID, empresa, título, urgencia, tipo, Líder de Producto, docente o "Sin docente", fecha, "Lleva N días en esta etapa"). Los días se cuentan desde el último cambio de estado (`statusUpdatedAt`, o la creación si no hay) y, en "Lista para Entregar", desde que el Líder envió el costeo al KAM (`costing.costingSentAt`).
 
 ### Su journey de creación de solicitud
 
-Ver detalle completo en `03-flujos-de-usuario.md`. Resumen: wizard de 5 pasos (`src/views/NewRequest.tsx`) — Empresa → Contacto → Requerimiento → Formación previa → Observaciones y Documentos. **6 campos son obligatorios para enviar** (no solo 2 — esto estaba desactualizado): razón social de la empresa y su naturaleza jurídica (paso 1), título de la propuesta y tipo de requerimiento — con su descripción libre si el tipo es "Otro" (paso 3), y si ha habido formación previa y el nivel de urgencia (paso 4). Todo lo demás es opcional, con autoguardado en `localStorage` y recuperación de borrador. *Actualización 2026-10-09:* el **líder de producto es obligatorio** y lo elige el KAM; el **nodo temático es opcional** y nunca se rellena solo (ya no se sugiere el líder a partir del nodo).
+Ver detalle completo en `03-flujos-de-usuario.md`. Resumen: wizard de 5 pasos (`src/views/NewRequest.tsx`) — Empresa → Contacto → Requerimiento → Formación previa → Observaciones y Documentos. **Obligatorios para enviar** (vigente desde 2026-11-06, ver `13`): razón social de la empresa (paso 1), **al menos un teléfono o correo válido** de la empresa o del contacto principal (paso 2), título de la propuesta de al menos 5 caracteres, tipo de requerimiento — con su descripción libre si es "Otro" — y Líder de Producto elegido explícitamente (paso 3), y si ha habido formación previa y el nivel de urgencia (paso 4). La **naturaleza jurídica, el NIT, la dirección, la web, el CIIU, la descripción de la empresa y el canal de contacto que no se tenga pueden quedar «Pendiente»** (se guardan como ausencia, nunca como un dato falso). Todo lo demás es opcional, con autoguardado en `localStorage` y recuperación de borrador. *Actualización 2026-10-09:* el **líder de producto es obligatorio** y lo elige el KAM; el **nodo temático es opcional** y nunca se rellena solo (ya no se sugiere el líder a partir del nodo).
 
 ---
+
+## 🏷️ Etiqueta comercial y edición de datos del cliente (vigente 2026-11-06)
+
+Fuente: [`13-acuerdos-finales-2026-11-06.md`](13-acuerdos-finales-2026-11-06.md) y `requisitos/2026-10-28/SPEC_ACORDADA.md` (raíz del espacio de trabajo). Los permisos se validan en el servidor y se reflejan en la interfaz.
+
+### Etiqueta comercial (seguimiento comercial)
+
+| Quién | Qué puede hacer con la etiqueta |
+|---|---|
+| **KAM dueño** (el creador de la solicitud) | Asignarla, cambiarla o quitarla (volver a «Sin etiqueta»), **solo si la propuesta está entregada** (`DELIVERED`). Desde la tarjeta del tablero o desde la cabecera del detalle (`CommercialStatusChip`). |
+| **Otro KAM** | Nada: no ve la propuesta (aislamiento de cartera) y el servidor responde 403 si intenta `PATCH /requests/:id/commercial-status`. |
+| **Líder de Producto** | **Solo lectura**: ve el chip (sin menú) y el historial en el detalle (`CommercialStatusPanel`). El tablero del Líder no muestra la etiqueta en sus tarjetas (ver `07`). |
+| Cualquiera, propuesta no entregada | No hay chip editable; el servidor rechaza el cambio con 400. |
+
+La etiqueta no cambia el estado operativo `DELIVERED` ni ejecuta devoluciones. Si la propuesta vuelve a costeo (devolución con observaciones), la etiqueta no se puede editar hasta que se entregue de nuevo; el valor y el historial se conservan (`07`).
+
+### Ventanas de edición de empresa y contacto
+
+| Estado de la solicitud | KAM dueño | Líder de Producto |
+|---|---|---|
+| `NEW`, `IN_PROGRESS`, `IN_COSTING` (incluye ciclos de «Sustentación y ajuste N» y **con docente asignado**) | Puede editar empresa y contacto con `PATCH /requests/:id/customer` (botón «Editar empresa y contacto»; «Editar información» si además aplica el formulario completo) | No edita por este permiso: el servidor solo admite al KAM creador (403 para cualquier otro). Conserva su excepción de `03`, B.7 sobre el formulario completo |
+| `DELIVERED` | **Cerrado** hasta que se devuelva con observaciones | — |
+
+- Es un **permiso separado**: no habilita editar alcance, dinero, docente, nodo ni Líder fuera de las ventanas históricas (formulario completo: solo «Nueva» sin docente, `canEditFullInfo`).
+- No se puede borrar el último teléfono o correo válido ni enviar al cliente una propuesta sin contactabilidad.
+- **Empresa compartida / contacto local**: corregir la empresa actualiza el maestro común (visible en todas sus solicitudes, también las de otros KAM); corregir el contacto solo afecta esa solicitud (ver `04`).
+- **Aislamiento de KAM**: cada KAM solo ve su propia cartera; los filtros no permiten elegir otra identidad o rol, y al cambiar de cuenta se descarta la caché de React Query (incluidas respuestas tardías).
 
 ## 🟪 Líder de Producto
 
@@ -114,7 +144,7 @@ Estructura:
 5. **Buscador** (por empresa, código, docente, título) y botón-filtro **"Sin docente (N)"** — solo cuenta/muestra solicitudes activas (no `entregada`) sin profesor asignado. Si el filtro deja el tablero vacío, se muestra un aviso explícito con botón "Quitar filtros" (antes las 4 columnas se veían vacías sin ninguna pista de que había un filtro activo).
 6. **Toggle Kanban/Tabla** (arranca en Kanban, a diferencia del KAM que arranca en Tabla).
 7. **Kanban de 4 columnas** (o 1 si hay una aislada). Cada tarjeta de solicitud muestra, de arriba hacia abajo:
-   - Banner ámbar "Cliente pidió ajustes" si la solicitud tiene `clientObservations` (viene de una devolución del KAM) — es la señal más prioritaria de la tarjeta.
+   - Banner ámbar "Sustentación y ajustes" si la solicitud tiene `clientObservations` (viene de una devolución del KAM) — es la señal más prioritaria de la tarjeta.
    - ID, empresa, urgencia, título.
    - Tipo de servicio + **valor cotizado** (visible solo si ya hay costeo real, en "En Costeo"/"Entregada").
    - Docente asignado (o "Sin docente").
@@ -160,7 +190,7 @@ Todos los roles tienen, en el menú del avatar (rail lateral), la opción **"Res
 | Ver solicitudes | ✅ (solo las suyas) | ✅ (solo las suyas) | ✅ (implícito, de su nodo) | ❌ (solo las suyas) |
 | Asignar docente/experto | ❌ | ✅ | ❌ | ❌ |
 | Editar costeo | ❌ (no ve costo base ni margen) | ✅ | ❌ | ❌ |
-| Editar información propia de la solicitud (empresa, contacto, diagnóstico) | ✅ (mientras esté "Nueva" y sin docente asignado) | ⚠️ Solo en "En Costeo" y solo tras un rechazo del cliente (`03`, B.7) | — | — |
+| Editar información propia de la solicitud (empresa, contacto, diagnóstico) | ✅ (formulario completo: mientras esté "Nueva" y sin docente asignado) | ⚠️ Solo en "En Costeo" y solo tras un rechazo del cliente (`03`, B.7) | — | — |
 | Editar Especificaciones del Servicio | ❌ | ✅ | — | — |
 | Cancelar solicitud | ✅ (mientras esté "Nueva") | ❌ | — | — |
 | Avanzar etapa del pipeline (Nueva → Experto → Costeo) | ❌ | ✅ | ❌ | ❌ |
@@ -170,3 +200,5 @@ Todos los roles tienen, en el menú del avatar (rail lateral), la opción **"Res
 | Documentos internos de costeo (`internal_costing`): ver/descargar/subir/eliminar | ❌ (ni los ve) | ✅ | — | — |
 | Marcar "Entregada"/"Enviar a cliente" | ✅ (única acción que cierra el ciclo) | ❌ (corregido — antes también podía) | — | — |
 | Devolver propuesta entregada con observaciones | ✅ | ❌ | — | — |
+| Editar solo empresa y contacto (`PATCH /requests/:id/customer`) | ✅ (KAM dueño en `NEW`, `IN_PROGRESS`, `IN_COSTING`, también con docente; `DELIVERED` cerrado) | ❌ | — | — |
+| Asignar/cambiar/quitar etiqueta comercial | ✅ (KAM dueño, solo con la propuesta entregada) | ❌ (solo lectura) | — | — |
