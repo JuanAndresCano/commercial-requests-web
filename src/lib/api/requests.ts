@@ -388,6 +388,54 @@ export interface KamRankingEntry {
   deliveredTotalCop: number;
   pipelineCount: number;
   pipelineTotalCop: number;
+  wonCount?: number;
+  wonTotalCop?: number;
+  rejectedCount?: number;
+  winRatePercentage?: number;
+  averageTicketCop?: number;
+  targetCop?: number;
+  targetProposals?: number;
+  targetCompliancePercentage?: number;
+  shareOfTotalSalesPercentage?: number;
+}
+
+export interface KamSalesTargetSummary {
+  kamId: string;
+  kamName: string;
+  kamEmail: string;
+  annualTargetCop: number;
+  annualTargetProposals: number;
+  monthlyTargets: Array<{
+    month: number;
+    targetCop: number;
+    targetProposals: number;
+  }>;
+}
+
+export interface SalesTargetsResponse {
+  year: number;
+  centerTarget: {
+    annualTargetCop: number;
+    annualTargetProposals: number;
+    monthlyTargets: Array<{
+      month: number;
+      targetCop: number;
+      targetProposals: number;
+    }>;
+  };
+  kamTargets: KamSalesTargetSummary[];
+}
+
+export interface SalesTargetEntryInput {
+  month?: number | null;
+  kamId?: string | null;
+  targetCop: number;
+  targetProposals?: number | null;
+}
+
+export interface UpsertSalesTargetsPayload {
+  year: number;
+  targets: SalesTargetEntryInput[];
 }
 
 export interface NodeDistributionEntry {
@@ -704,6 +752,22 @@ export const requestsApi = {
     const qs = year ? `?year=${year}` : "";
     return apiRequest<MonthlyTrendsData>(`/requests/dashboard/admin/monthly-trends${qs}`);
   },
+
+  /** Retrieves annual and monthly sales targets for the center and KAMs */
+  getSalesTargets: (year?: number, kamId?: string) => {
+    const search = new URLSearchParams();
+    if (year) search.set("year", String(year));
+    if (kamId) search.set("kamId", kamId);
+    const qs = search.toString();
+    return apiRequest<SalesTargetsResponse>(`/requests/dashboard/admin/sales-targets${qs ? `?${qs}` : ""}`);
+  },
+
+  /** Creates or updates sales targets for the center and KAMs */
+  upsertSalesTargets: (payload: UpsertSalesTargetsPayload) =>
+    apiRequest<SalesTargetsResponse>("/requests/dashboard/admin/sales-targets", {
+      method: "PUT",
+      body: payload,
+    }),
 
   /** Retrieves filtered list of proposals */
   list: (params: RequestsQueryParams = {}) => {

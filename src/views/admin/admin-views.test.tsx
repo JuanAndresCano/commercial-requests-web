@@ -27,6 +27,13 @@ vi.mock("@/context/AuthContext", () => ({
   }),
 }));
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as adminHook from "@/hooks/use-admin-dashboard";
+import * as targetsHook from "@/hooks/use-sales-targets";
+
+vi.mock("@/hooks/use-admin-dashboard");
+vi.mock("@/hooks/use-sales-targets");
+
 vi.mock("@/components/dashboard/AdminDashboard", () => ({
   AdminDashboard: () => <div data-testid="mock-admin-dashboard">Tablero Ejecutivo Macro</div>,
 }));
@@ -36,16 +43,98 @@ vi.mock("@/components/dashboard/Company360View", () => ({
 }));
 
 function renderWithShell(ui: React.ReactElement, route: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
-    <ThemeProvider>
-      <TestRouter route={route}>{ui}</TestRouter>
-    </ThemeProvider>,
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <TestRouter route={route}>{ui}</TestRouter>
+      </ThemeProvider>
+    </QueryClientProvider>,
   );
 }
 
 describe("Admin Submodule Views (Phase 2 Routing & Shells)", () => {
   beforeEach(() => {
     mockAuth.logout.mockReset();
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: {
+        timeframe: {
+          selectedYear: 2026,
+          selectedQuarter: null,
+          availableYears: [2025, 2026],
+          startDate: "2026-01-01T00:00:00.000Z",
+          endDate: "2026-12-31T23:59:59.999Z",
+        },
+        macroKpis: {
+          deliveredTotalCop: 2000000000,
+          pipelineTotalCop: 1500000000,
+          deliveredCount: 8,
+          pipelineCount: 12,
+          totalProposals: 20,
+          winRatePercentage: 40,
+          averageCycleDays: 6,
+          wonTotalCop: 2000000000,
+          wonCount: 8,
+          targetCop: 2516000000,
+          targetCompliancePercentage: 79.5,
+        },
+        conversionFunnel: [],
+        kamRanking: [
+          {
+            kamId: "kam-1",
+            name: "Ana Pérez",
+            email: "ana.perez@icesi.edu.co",
+            totalProposals: 10,
+            deliveredCount: 4,
+            deliveredTotalCop: 1100000000,
+            pipelineCount: 6,
+            pipelineTotalCop: 800000000,
+            wonCount: 4,
+            wonTotalCop: 1100000000,
+            winRatePercentage: 25,
+            targetCop: 1000000000,
+            targetCompliancePercentage: 110,
+            shareOfTotalSalesPercentage: 55,
+          },
+          {
+            kamId: "kam-2",
+            name: "Carlos Gómez",
+            email: "carlos.gomez@icesi.edu.co",
+            totalProposals: 10,
+            deliveredCount: 4,
+            deliveredTotalCop: 900000000,
+            pipelineCount: 6,
+            pipelineTotalCop: 700000000,
+            wonCount: 4,
+            wonTotalCop: 900000000,
+            winRatePercentage: 30,
+            targetCop: 1000000000,
+            targetCompliancePercentage: 90,
+            shareOfTotalSalesPercentage: 45,
+          },
+        ],
+        nodeDistribution: [],
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    vi.spyOn(targetsHook, "useSalesTargets").mockReturnValue({
+      data: {
+        year: 2026,
+        centerTarget: {
+          annualTargetCop: 2516000000,
+          annualTargetProposals: 45,
+          monthlyTargets: [],
+        },
+        kamTargets: [],
+      },
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof targetsHook.useSalesTargets>);
   });
 
   it("renders AdminDashboardView (Submódulo 1) with AppShell and executive dashboard", () => {
