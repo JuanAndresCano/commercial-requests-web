@@ -22,13 +22,17 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
     );
   }
 
-  const { year, previousYear, yoyComparison, totalWonCop, previousYearSummary } = data;
+  const yoyComparison = Array.isArray(data.yoyComparison) ? data.yoyComparison : [];
+  const { year, previousYear, totalWonCop = 0, previousYearSummary } = data;
   const prevTotalWon = previousYearSummary?.totalWonCop || 0;
   const netGrowthCop = totalWonCop - prevTotalWon;
   const netGrowthPercentage = prevTotalWon > 0 ? Math.round((netGrowthCop / prevTotalWon) * 1000) / 10 : 0;
 
   // Maximum value for SVG scaling
-  const maxVal = Math.max(...yoyComparison.map((d) => Math.max(d.currentYearWonCop, d.previousYearWonCop)), 10_000_000);
+  const maxVal = Math.max(
+    ...(yoyComparison.length > 0 ? yoyComparison.map((d) => Math.max(d.currentYearWonCop, d.previousYearWonCop)) : [0]),
+    10_000_000,
+  );
 
   // SVG dimensions
   const svgWidth = 800;

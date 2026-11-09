@@ -133,7 +133,10 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
     );
   }
 
-  const { timeframe, macroKpis, conversionFunnel, kamRanking, nodeDistribution } = data;
+  const { timeframe, macroKpis } = data;
+  const conversionFunnel = Array.isArray(data.conversionFunnel) ? data.conversionFunnel : [];
+  const kamRanking = Array.isArray(data.kamRanking) ? data.kamRanking : [];
+  const nodeDistribution = Array.isArray(data.nodeDistribution) ? data.nodeDistribution : [];
   const availableYears = timeframe.availableYears.length > 0 ? timeframe.availableYears : [currentYear];
 
   const getKamInitials = (name: string) => {

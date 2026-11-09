@@ -21,10 +21,17 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
     );
   }
 
-  const { monthlyData, totalQuotedCop, totalWonCop, totalWonCount, annualCompliancePercentage } = data;
+  const monthlyData = Array.isArray(data.monthlyData) ? data.monthlyData : [];
+  const totalQuotedCop = data.totalQuotedCop ?? 0;
+  const totalWonCop = data.totalWonCop ?? 0;
+  const totalWonCount = data.totalWonCount ?? 0;
+  const annualCompliancePercentage = data.annualCompliancePercentage ?? 0;
 
   // Find max value to normalize bar heights
-  const maxMonthlyVal = Math.max(...monthlyData.map((d) => Math.max(d.quotedCop, d.wonCop, d.targetCop || 0)), 1);
+  const maxMonthlyVal = Math.max(
+    ...(monthlyData.length > 0 ? monthlyData.map((d) => Math.max(d.quotedCop, d.wonCop, d.targetCop || 0)) : [0]),
+    1,
+  );
 
   const activePoint: MonthlyDataPoint | null =
     activeMonthIndex !== null ? (monthlyData[activeMonthIndex] ?? null) : null;

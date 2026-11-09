@@ -791,9 +791,62 @@ export const requestsApi = {
   },
 
   /** Retrieves monthly sales and quoting trends plus YoY comparison */
-  getMonthlyTrends: (year?: number) => {
+  getMonthlyTrends: async (year?: number) => {
     const qs = year ? `?year=${year}` : "";
-    return apiRequest<MonthlyTrendsData>(`/requests/dashboard/admin/monthly-trends${qs}`);
+    const res = await apiRequest<Record<string, unknown>>(`/requests/dashboard/admin/monthly-trends${qs}`);
+    const monthlyData = Array.isArray(res.monthlyData) ? (res.monthlyData as MonthlyTrendsData["monthlyData"]) : [];
+    const prevComparison = res.previousYearComparison as
+      | {
+          year?: number;
+          totalQuotedCop?: number;
+          totalWonCop?: number;
+          totalWonCount?: number;
+          monthlyWonCop?: number[];
+        }
+      | undefined;
+    const annualSummary = res.annualSummary as
+      | {
+          totalQuotedCop?: number;
+          totalWonCop?: number;
+          totalWonCount?: number;
+          annualTargetCop?: number;
+          annualTargetProposals?: number;
+          annualCompliancePercentage?: number;
+        }
+      | undefined;
+
+    const yoyComparison =
+      Array.isArray(res.yoyComparison) && res.yoyComparison.length > 0
+        ? (res.yoyComparison as MonthlyTrendsData["yoyComparison"])
+        : monthlyData.map((d, i) => ({
+            month: d.month,
+            monthName: d.monthName,
+            currentYearWonCop: d.wonCop,
+            previousYearWonCop: prevComparison?.monthlyWonCop?.[i] ?? 0,
+            growthPercentage: 0,
+          }));
+
+    const normalized: MonthlyTrendsData = {
+      year: (res.year as number) ?? new Date().getFullYear(),
+      previousYear:
+        (res.previousYear as number) ?? (typeof res.year === "number" ? res.year - 1 : new Date().getFullYear() - 1),
+      annualTargetCop: (res.annualTargetCop as number) ?? annualSummary?.annualTargetCop ?? 0,
+      annualTargetProposals: (res.annualTargetProposals as number) ?? annualSummary?.annualTargetProposals ?? 0,
+      totalQuotedCop: (res.totalQuotedCop as number) ?? annualSummary?.totalQuotedCop ?? 0,
+      totalWonCop: (res.totalWonCop as number) ?? annualSummary?.totalWonCop ?? 0,
+      totalWonCount: (res.totalWonCount as number) ?? annualSummary?.totalWonCount ?? 0,
+      annualCompliancePercentage:
+        (res.annualCompliancePercentage as number) ?? annualSummary?.annualCompliancePercentage ?? 0,
+      monthlyData,
+      yoyComparison,
+      previousYearSummary: (res.previousYearSummary as MonthlyTrendsData["previousYearSummary"]) ?? {
+        year: prevComparison?.year ?? (typeof res.year === "number" ? res.year - 1 : new Date().getFullYear() - 1),
+        totalQuotedCop: prevComparison?.totalQuotedCop ?? 0,
+        totalWonCop: prevComparison?.totalWonCop ?? 0,
+        totalWonCount: prevComparison?.totalWonCount ?? 0,
+      },
+    };
+    return normalized;
   },
 
   /** Retrieves annual and monthly sales targets for the center and KAMs */
