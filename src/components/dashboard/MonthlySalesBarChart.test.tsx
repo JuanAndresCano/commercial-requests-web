@@ -175,11 +175,12 @@ describe("MonthlySalesBarChart", () => {
 
   it("renders title, year badge, legend and all 12 month labels", () => {
     render(<MonthlySalesBarChart data={mockTrendsData} />);
-    expect(screen.getByText("Valores Cotizados vs. Vendidos Mes a Mes")).toBeInTheDocument();
+    expect(screen.getByText("Cotizado vs. Vendido por Mes")).toBeInTheDocument();
     expect(screen.getByText("2026")).toBeInTheDocument();
     expect(screen.getByText("Cotizado ($)")).toBeInTheDocument();
     expect(screen.getByText("Vendido ($)")).toBeInTheDocument();
     expect(screen.getByText("Meta Base")).toBeInTheDocument();
+    expect(screen.getByText(/Meta:/)).toBeInTheDocument();
 
     const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     for (const m of months) {

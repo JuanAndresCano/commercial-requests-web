@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { RoleBadge } from "@/components/RoleBadge";
 import { Network, Calendar, Layers, Clock } from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminDashboard } from "@/hooks/use-admin-dashboard";
@@ -80,12 +79,9 @@ export default function AdminNodosView() {
         {/* Cabecera del Submódulo y Selector Temporal */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Nodos Temáticos & Portafolio Académico
-              </h1>
-              <RoleBadge label="Administrador Icesi" />
-            </div>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Nodos Temáticos & Portafolio Académico
+            </h1>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
               Desempeño de los 7 centros de conocimiento, productividad de Líderes de Producto y tiempos de respuesta de
               la fábrica académica

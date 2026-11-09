@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "@/lib/app-router";
 import { AppShell } from "@/components/AppShell";
-import { RoleBadge } from "@/components/RoleBadge";
 import { Users, Calendar, Target, Award, ArrowUpRight } from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminDashboard } from "@/hooks/use-admin-dashboard";
@@ -25,7 +25,9 @@ export default function AdminKamsView() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedQuarter, setSelectedQuarter] = useState<number | undefined>(undefined);
-  const [activeTab, setActiveTab] = useState<"desempeno" | "metas">("desempeno");
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") === "metas" ? "metas" : "desempeno";
+  const [activeTab, setActiveTab] = useState<"desempeno" | "metas">(initialTab);
 
   const { data: dashboardData, isLoading: isDashboardLoading } = useAdminDashboard({
     year: selectedYear,
@@ -71,12 +73,9 @@ export default function AdminKamsView() {
         {/* Cabecera del Submódulo y Selector Temporal */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Rendimiento Comercial & Metas de Venta
-              </h1>
-              <RoleBadge label="Administrador Icesi" />
-            </div>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Rendimiento Comercial & Metas de Venta
+            </h1>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
               Productividad profunda de Key Account Managers (KAMs), cuotas presupuestales fijadas por Lina y
               efectividad de conversión

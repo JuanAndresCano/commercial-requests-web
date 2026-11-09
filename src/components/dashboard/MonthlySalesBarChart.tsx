@@ -27,11 +27,17 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
   const totalWonCount = data.totalWonCount ?? 0;
   const annualCompliancePercentage = data.annualCompliancePercentage ?? 0;
 
+  const monthlyTargetCop = Math.round((data.annualTargetCop || 0) / 12);
+
   // Find max value to normalize bar heights
   const maxMonthlyVal = Math.max(
     ...(monthlyData.length > 0 ? monthlyData.map((d) => Math.max(d.quotedCop, d.wonCop, d.targetCop || 0)) : [0]),
+    monthlyTargetCop,
     1,
   );
+
+  const targetPct =
+    maxMonthlyVal > 0 && monthlyTargetCop > 0 ? Math.min(Math.round((monthlyTargetCop / maxMonthlyVal) * 100), 92) : 0;
 
   const activePoint: MonthlyDataPoint | null =
     activeMonthIndex !== null ? (monthlyData[activeMonthIndex] ?? null) : null;
@@ -46,11 +52,13 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
       {/* 1. Cabecera y Leyenda */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-display text-base font-bold text-foreground sm:text-lg">
-              Valores Cotizados vs. Vendidos Mes a Mes
+              Cotizado vs. Vendido por Mes
             </h2>
-            <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{data.year}</span>
+            <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary shrink-0">
+              {data.year}
+            </span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Estacionalidad de la tubería comercial: propuestas radicadas en el mercado vs. propuestas efectivamente
@@ -75,9 +83,18 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
         </div>
       </div>
 
-      {/* 2. Área del Gráfico de Barras Agrupadas */}
-      <div className="mt-6">
-        <div className="relative h-64 w-full flex items-end gap-1.5 sm:gap-3 pt-6 pb-2 border-b border-border">
+      {/* 2. Área del Gráfico de Barras Agrupadas con Eje Y */}
+      <div className="mt-6 flex items-stretch gap-2">
+        {/* Eje Y: Índices de Valor */}
+        <div className="flex flex-col justify-between py-2 text-[10px] font-mono text-muted-foreground select-none shrink-0 text-right w-11 sm:w-14">
+          <span>{formatCompactCop(maxMonthlyVal)}</span>
+          <span>{formatCompactCop(maxMonthlyVal * 0.66)}</span>
+          <span>{formatCompactCop(maxMonthlyVal * 0.33)}</span>
+          <span>$ 0</span>
+        </div>
+
+        {/* Contenedor del Gráfico */}
+        <div className="relative h-64 flex-1 flex items-end gap-1.5 sm:gap-3 pt-6 pb-2 border-b border-l border-border/80">
           {/* Líneas guía de fondo */}
           <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
             <div className="w-full border-b border-border border-dashed" />
@@ -85,6 +102,18 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
             <div className="w-full border-b border-border border-dashed" />
             <div className="w-full border-b border-border" />
           </div>
+
+          {/* Línea horizontal de Meta Base mensual */}
+          {targetPct > 0 && (
+            <div
+              className="absolute left-0 right-0 border-t-2 border-dashed border-zinc-400 dark:border-zinc-500 z-10 pointer-events-none transition-all"
+              style={{ bottom: `calc(${targetPct}% + 14px)` }}
+            >
+              <span className="absolute right-1 -top-4 rounded bg-zinc-700/80 dark:bg-zinc-800 text-white px-1.5 py-0.5 text-[9px] font-mono font-bold shadow-xs">
+                Meta: {formatCompactCop(monthlyTargetCop)}
+              </span>
+            </div>
+          )}
 
           {monthlyData.map((d, index) => {
             const isHovered = activeMonthIndex === index;

@@ -286,7 +286,8 @@ describe("AdminDashboard Component", () => {
 
     // 6. Institutional Sales Target & Trends Charts (Phase 3)
     expect(screen.getByText(/Meta Anual Institucional/)).toBeInTheDocument();
-    expect(screen.getByText("Valores Cotizados vs. Vendidos Mes a Mes")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Asignar Metas/i })).toBeInTheDocument();
+    expect(screen.getByText("Cotizado vs. Vendido por Mes")).toBeInTheDocument();
     expect(screen.getByText("Curva Comparativa Interanual de Ventas (YoY)")).toBeInTheDocument();
   });
 
@@ -355,5 +356,45 @@ describe("AdminDashboard Component", () => {
     expect(screen.queryByText("Administrador Icesi")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Impacto por Empresa/i })).not.toBeInTheDocument();
     expect(screen.getByText("Embudo de Conversión Comercial")).toBeInTheDocument();
+  });
+
+  it("paginates KAM ranking table by 10 items when there are multiple KAMs", () => {
+    const manyKams = Array.from({ length: 15 }, (_, i) => ({
+      kamId: `kam-${i + 1}`,
+      name: `Ejecutivo Comercial ${i + 1}`,
+      email: `kam${i + 1}@icesi.edu.co`,
+      totalProposals: 5,
+      pipelineCount: 3,
+      deliveredCount: 2,
+      deliveredTotalCop: 100000000,
+      pipelineTotalCop: 50000000,
+      winRatePercentage: 40,
+    }));
+
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: {
+        ...mockAdminData,
+        kamRanking: manyKams,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    // First page shows KAM 1 and KAM 10, but not KAM 11
+    expect(screen.getByText("Ejecutivo Comercial 1")).toBeInTheDocument();
+    expect(screen.getByText("Ejecutivo Comercial 10")).toBeInTheDocument();
+    expect(screen.queryByText("Ejecutivo Comercial 11")).not.toBeInTheDocument();
+
+    // Click "Siguiente"
+    const nextBtn = screen.getByRole("button", { name: "Siguiente" });
+    fireEvent.click(nextBtn);
+
+    // Second page shows KAM 11 and KAM 15
+    expect(screen.queryByText("Ejecutivo Comercial 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Ejecutivo Comercial 11")).toBeInTheDocument();
+    expect(screen.getByText("Ejecutivo Comercial 15")).toBeInTheDocument();
   });
 });

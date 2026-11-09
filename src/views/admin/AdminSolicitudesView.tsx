@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
-import { RoleBadge } from "@/components/RoleBadge";
 import { AdminAuditTable } from "@/components/dashboard/AdminAuditTable";
 import { useRequests } from "@/hooks/use-requests";
 import { FileSpreadsheet, AlertTriangle, Clock, CheckCircle2, RefreshCw, AlertCircle } from "@/components/icons";
@@ -64,12 +63,9 @@ export default function AdminSolicitudesView() {
         {/* Cabecera del Submódulo */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Gestión y Auditoría Global de Solicitudes
-              </h1>
-              <RoleBadge label="Administrador Icesi" />
-            </div>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Gestión y Auditoría Global de Solicitudes
+            </h1>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
               Visor tabular maestro para auditar el expediente completo, supervisar cuellos de botella y exportar
               informes directivos de Rectoría

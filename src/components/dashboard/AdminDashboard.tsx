@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { Link } from "@/lib/app-router";
 import { Calendar, Users, Layers, AlertCircle, RefreshCw, Target, CheckCircle2 } from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminDashboard } from "@/hooks/use-admin-dashboard";
@@ -62,6 +63,12 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedQuarter, setSelectedQuarter] = useState<number | undefined>(undefined);
+  const [kamPage, setKamPage] = useState<number>(1);
+  const KAM_PAGE_SIZE = 10;
+
+  useEffect(() => {
+    setKamPage(1);
+  }, [selectedYear, selectedQuarter]);
 
   const { data, isLoading, isFetching, isError, refetch } = useAdminDashboard({
     year: selectedYear,
@@ -69,6 +76,14 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
   });
 
   const { data: trendsData, isLoading: isTrendsLoading } = useMonthlyTrends(selectedYear);
+
+  const kamRanking = useMemo(() => (Array.isArray(data?.kamRanking) ? data.kamRanking : []), [data?.kamRanking]);
+
+  const totalKamPages = Math.max(1, Math.ceil(kamRanking.length / KAM_PAGE_SIZE));
+  const paginatedKams = useMemo(() => {
+    const start = (kamPage - 1) * KAM_PAGE_SIZE;
+    return kamRanking.slice(start, start + KAM_PAGE_SIZE);
+  }, [kamRanking, kamPage]);
 
   const firstName = user.name.split(" ")[0] || "Administrador";
 
@@ -101,7 +116,6 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
 
   const { timeframe, macroKpis } = data;
   const conversionFunnel = Array.isArray(data.conversionFunnel) ? data.conversionFunnel : [];
-  const kamRanking = Array.isArray(data.kamRanking) ? data.kamRanking : [];
   const nodeDistribution = Array.isArray(data.nodeDistribution) ? data.nodeDistribution : [];
   const availableYears = timeframe.availableYears.length > 0 ? timeframe.availableYears : [currentYear];
 
@@ -248,21 +262,32 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
               </div>
             </div>
 
-            {/* Indicador de Avance Presupuestal */}
-            <div className="flex flex-col gap-1.5 min-w-[200px]">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-muted-foreground">Avance Presupuestal</span>
-                <span className="text-foreground">{budgetProgressPct}%</span>
+            {/* Indicador de Avance Presupuestal y Botón Directo a Metas */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <div className="flex flex-col gap-1.5 min-w-[190px]">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-muted-foreground">Avance Presupuestal</span>
+                  <span className="text-foreground">{budgetProgressPct}%</span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-500",
+                      isSurplus ? "bg-emerald-500" : "bg-primary",
+                    )}
+                    style={{ width: `${Math.min(budgetProgressPct, 100)}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all duration-500",
-                    isSurplus ? "bg-emerald-500" : "bg-primary",
-                  )}
-                  style={{ width: `${Math.min(budgetProgressPct, 100)}%` }}
-                />
-              </div>
+
+              <Link
+                href="/admin/kams?tab=metas"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-bold text-foreground shadow-xs hover:border-icesi-blue hover:text-icesi-blue transition-colors cursor-pointer shrink-0"
+                title="Configurar y asignar metas de venta institucionales y por KAM"
+              >
+                <Target className="h-3.5 w-3.5 text-icesi-blue" />
+                <span>Asignar Metas</span>
+              </Link>
             </div>
           </div>
         </div>
@@ -473,7 +498,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {kamRanking.map((kam) => (
+                  {paginatedKams.map((kam) => (
                     <tr key={kam.kamId} className="hover:bg-muted/20 transition-colors">
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2.5">
@@ -515,9 +540,41 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                 </tbody>
               </table>
             </div>
+
+            {/* Paginación de Ejecutivos Comerciales (10 por página) */}
+            {totalKamPages > 1 && (
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-border/60 pt-3 text-xs">
+                <span className="text-muted-foreground">
+                  Mostrando <strong>{(kamPage - 1) * KAM_PAGE_SIZE + 1}</strong> a{" "}
+                  <strong>{Math.min(kamPage * KAM_PAGE_SIZE, kamRanking.length)}</strong> de{" "}
+                  <strong>{kamRanking.length}</strong> ejecutivos
+                </span>
+                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    disabled={kamPage === 1}
+                    onClick={() => setKamPage((p) => Math.max(1, p - 1))}
+                    className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    Anterior
+                  </button>
+                  <span className="px-2 font-semibold text-muted-foreground">
+                    {kamPage} / {totalKamPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={kamPage >= totalKamPages}
+                    onClick={() => setKamPage((p) => Math.min(totalKamPages, p + 1))}
+                    className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Columna Derecha (1 col): Distribución por Nodo Temático */}
+          {/* Columna Derecha (1 col): Distribución por Nodo Temático (Sin Scroll) */}
           <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -527,7 +584,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
               <Layers className="h-4 w-4 text-muted-foreground" />
             </div>
 
-            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+            <div className="space-y-2.5">
               {nodeDistribution.map((node) => (
                 <div
                   key={node.nodeId}
