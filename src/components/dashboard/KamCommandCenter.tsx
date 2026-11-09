@@ -165,6 +165,18 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
     0,
   );
 
+  const entregadasList = activeDataset.filter((r) => r.status === "entregada");
+  const fallbackEntregadasValue = entregadasList.reduce(
+    (sum, r) => sum + (r.totalCostCop || r.costing?.totalOfferedCop || 0),
+    0,
+  );
+  const displayDeliveredValue =
+    deliveredValue !== null
+      ? deliveredValue
+      : fallbackEntregadasValue > 0
+        ? formatCompactCop(fallbackEntregadasValue)
+        : null;
+
   // Métricas agregadas (no son una etapa del pipeline) — se muestran como
   // dato secundario, no como tarjeta-filtro principal.
   const totalCount = apiMetrics?.total ?? activeDataset.length;
@@ -434,10 +446,10 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
               <span className="font-semibold text-foreground">
                 Filtradas: {deliveredMatches.length} de {entregadasCount} · {deliveredMatchesValue ?? "No disponible"}
               </span>
+            ) : displayDeliveredValue !== null ? (
+              <span className="font-semibold text-foreground">{displayDeliveredValue} total entregado</span>
             ) : deliveredValueUnavailable ? (
               "Total no disponible"
-            ) : deliveredValue !== null ? (
-              <span className="font-semibold text-foreground">{deliveredValue} total entregado</span>
             ) : (
               "Calculando total..."
             )
