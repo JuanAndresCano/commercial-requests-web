@@ -320,6 +320,55 @@ export interface AdminMacroKpis {
   totalProposals: number;
   winRatePercentage: number;
   averageCycleDays: number;
+  wonTotalCop?: number;
+  wonCount?: number;
+  rejectedTotalCop?: number;
+  rejectedCount?: number;
+  targetCop?: number;
+  targetProposals?: number;
+  targetCompliancePercentage?: number;
+  gapToTargetCop?: number;
+}
+
+export interface MonthlyDataPoint {
+  month: number;
+  monthName: string;
+  quotedCop: number;
+  wonCop: number;
+  pipelineCop: number;
+  proposalsQuotedCount: number;
+  proposalsWonCount: number;
+  targetCop: number;
+  targetProposals: number;
+  compliancePercentage: number;
+}
+
+export interface YoYComparisonPoint {
+  month: number;
+  monthName: string;
+  currentYearWonCop: number;
+  previousYearWonCop: number;
+  varianceCop: number;
+  growthPercentage: number;
+}
+
+export interface MonthlyTrendsData {
+  year: number;
+  previousYear: number;
+  annualTargetCop: number;
+  annualTargetProposals: number;
+  totalQuotedCop: number;
+  totalWonCop: number;
+  totalWonCount: number;
+  annualCompliancePercentage: number;
+  monthlyData: MonthlyDataPoint[];
+  yoyComparison: YoYComparisonPoint[];
+  previousYearSummary: {
+    year: number;
+    totalQuotedCop: number;
+    totalWonCop: number;
+    totalWonCount: number;
+  };
 }
 
 export interface FunnelStage {
@@ -648,6 +697,12 @@ export const requestsApi = {
     if (params?.quarter) search.set("quarter", String(params.quarter));
     const qs = search.toString();
     return apiRequest<AdminDashboardData>(`/requests/dashboard/admin${qs ? `?${qs}` : ""}`);
+  },
+
+  /** Retrieves monthly sales and quoting trends plus YoY comparison */
+  getMonthlyTrends: (year?: number) => {
+    const qs = year ? `?year=${year}` : "";
+    return apiRequest<MonthlyTrendsData>(`/requests/dashboard/admin/monthly-trends${qs}`);
   },
 
   /** Retrieves filtered list of proposals */

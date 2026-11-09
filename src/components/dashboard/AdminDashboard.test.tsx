@@ -5,9 +5,11 @@ import { TestRouter } from "@/test/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AdminDashboard } from "./AdminDashboard";
 import * as adminHook from "@/hooks/use-admin-dashboard";
-import type { AdminDashboardData } from "@/lib/api/requests";
+import * as trendsHook from "@/hooks/use-monthly-trends";
+import type { AdminDashboardData, MonthlyTrendsData } from "@/lib/api/requests";
 
 vi.mock("@/hooks/use-admin-dashboard");
+vi.mock("@/hooks/use-monthly-trends");
 
 const SelectContext = React.createContext<(val: string) => void>(() => {});
 
@@ -155,9 +157,55 @@ function renderComponent(initialEntries?: string[] | string) {
   );
 }
 
+const mockTrendsData: MonthlyTrendsData = {
+  year: 2026,
+  previousYear: 2025,
+  annualTargetCop: 2516000000,
+  annualTargetProposals: 45,
+  totalQuotedCop: 18800000000,
+  totalWonCop: 2420000000,
+  totalWonCount: 64,
+  annualCompliancePercentage: 96.2,
+  monthlyData: [
+    {
+      month: 1,
+      monthName: "Ene",
+      quotedCop: 1200000000,
+      wonCop: 150000000,
+      pipelineCop: 1050000000,
+      proposalsQuotedCount: 15,
+      proposalsWonCount: 3,
+      targetCop: 209600000,
+      targetProposals: 4,
+      compliancePercentage: 71.6,
+    },
+  ],
+  yoyComparison: [
+    {
+      month: 1,
+      monthName: "Ene",
+      currentYearWonCop: 150000000,
+      previousYearWonCop: 120000000,
+      varianceCop: 30000000,
+      growthPercentage: 25.0,
+    },
+  ],
+  previousYearSummary: {
+    year: 2025,
+    totalQuotedCop: 16000000000,
+    totalWonCop: 2100000000,
+    totalWonCount: 55,
+  },
+};
+
 describe("AdminDashboard Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(trendsHook, "useMonthlyTrends").mockReturnValue({
+      data: mockTrendsData,
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof trendsHook.useMonthlyTrends>);
   });
 
   it("renders loading skeleton when fetching data", () => {
@@ -235,6 +283,11 @@ describe("AdminDashboard Component", () => {
     expect(screen.getByText("Demanda por Nodo")).toBeInTheDocument();
     expect(screen.getByText("Gestión de Innovación")).toBeInTheDocument();
     expect(screen.getByText("IA+ Tech Digital")).toBeInTheDocument();
+
+    // 6. Institutional Sales Target & Trends Charts (Phase 3)
+    expect(screen.getByText(/Meta Anual Institucional/)).toBeInTheDocument();
+    expect(screen.getByText("Valores Cotizados vs. Vendidos Mes a Mes")).toBeInTheDocument();
+    expect(screen.getByText("Curva Comparativa Interanual de Ventas (YoY)")).toBeInTheDocument();
   });
 
   it("allows selecting quarters to filter the dashboard", () => {

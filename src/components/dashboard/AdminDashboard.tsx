@@ -1,9 +1,22 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "@/lib/app-router";
-import { Calendar, Users, Layers, AlertCircle, RefreshCw, Building2, LayoutGrid } from "@/components/icons";
+import {
+  Calendar,
+  Users,
+  Layers,
+  AlertCircle,
+  RefreshCw,
+  Building2,
+  LayoutGrid,
+  Target,
+  CheckCircle2,
+} from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RoleBadge } from "@/components/RoleBadge";
 import { useAdminDashboard } from "@/hooks/use-admin-dashboard";
+import { useMonthlyTrends } from "@/hooks/use-monthly-trends";
+import { MonthlySalesBarChart } from "./MonthlySalesBarChart";
+import { YoySalesCurveChart } from "./YoySalesCurveChart";
 import { AdminDashboardSkeleton } from "./AdminDashboardSkeleton";
 import { Company360View } from "./Company360View";
 import { formatCompactCop } from "@/lib/mock-data";
@@ -89,6 +102,8 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
     quarter: selectedQuarter,
   });
 
+  const { data: trendsData, isLoading: isTrendsLoading } = useMonthlyTrends(selectedYear);
+
   const firstName = user.name.split(" ")[0] || "Administrador";
 
   // Only show full skeleton on initial mount when there is no data yet
@@ -132,6 +147,19 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
   };
 
   const totalPortfolioCop = macroKpis.deliveredTotalCop + macroKpis.pipelineTotalCop;
+
+  const centerTargetCop = macroKpis.targetCop ?? trendsData?.annualTargetCop ?? 2516000000;
+  const budgetProgressPct =
+    macroKpis.targetCompliancePercentage ??
+    trendsData?.annualCompliancePercentage ??
+    (centerTargetCop > 0
+      ? Math.round(((macroKpis.wonTotalCop ?? macroKpis.deliveredTotalCop) / centerTargetCop) * 1000) / 10
+      : 0);
+
+  const currentMonthNumber = new Date().getMonth() + 1;
+  const expectedToDateCop = Math.round((centerTargetCop / 12) * currentMonthNumber);
+  const diffToExpectedDateCop = (macroKpis.wonTotalCop ?? macroKpis.deliveredTotalCop) - expectedToDateCop;
+  const isSurplus = diffToExpectedDateCop >= 0;
 
   return (
     <div className="space-y-6">
@@ -256,6 +284,58 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
             </div>
           </div>
 
+          {/* Banner Institucional de Metas Financieras y Semáforo de Cumplimiento a la Fecha */}
+          <div className="rounded-2xl border border-border bg-gradient-to-r from-card via-card to-muted/20 p-5 sm:p-6 shadow-xs">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3.5">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Target className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-display text-base font-bold text-foreground">
+                      Meta Anual Institucional: {formatCompactCop(centerTargetCop)}
+                    </h3>
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-0.5 text-[11px] font-bold inline-flex items-center gap-1",
+                        isSurplus
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                      )}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {isSurplus
+                        ? `Superávit: +${formatCompactCop(diffToExpectedDateCop)} por encima de lo esperado a la fecha`
+                        : `Déficit: ${formatCompactCop(diffToExpectedDateCop)} frente al ritmo proyectado`}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Cuota presupuestal fijada por Dirección Financiera ({selectedYear}) · Ritmo esperado acumulado:{" "}
+                    {formatCompactCop(expectedToDateCop)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Indicador de Avance Presupuestal */}
+              <div className="flex flex-col gap-1.5 min-w-[200px]">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-muted-foreground">Avance Presupuestal</span>
+                  <span className="text-foreground">{budgetProgressPct}%</span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-500",
+                      isSurplus ? "bg-emerald-500" : "bg-primary",
+                    )}
+                    style={{ width: `${Math.min(budgetProgressPct, 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* 2. TARJETAS DE MÉTRICAS MACRO (Diseño fiel al estándar de tarjetas de Icesi) */}
           <div
             className={cn(
@@ -334,6 +414,12 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
             </div>
           </div>
 
+          {/* 3. TENDENCIAS MENSUALES Y CURVA COMPARATIVA INTERANUAL (YOY) */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <MonthlySalesBarChart data={trendsData} isLoading={isTrendsLoading} />
+            <YoySalesCurveChart data={trendsData} isLoading={isTrendsLoading} />
+          </div>
+
           {/* 3. EMBUDO DE CONVERSIÓN COMERCIAL */}
           <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -384,6 +470,45 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                         style={{ width: `${Math.max(item.percentage, item.count > 0 ? 5 : 0)}%` }}
                       />
                     </div>
+
+                    {/* Desglose de Ramas en Entrega al Cliente (Ganadas vs Negociación vs Rechazadas) */}
+                    {item.stage === "DELIVERED" && macroKpis.wonTotalCop !== undefined && (
+                      <div className="mt-2 pt-2 border-t border-border/40 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                        <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 px-2.5 py-1 text-emerald-700 dark:text-emerald-400 font-semibold">
+                          <span>Ganadas (Aprobadas)</span>
+                          <span className="font-mono">
+                            {macroKpis.wonCount ?? 0} ({formatCompactCop(macroKpis.wonTotalCop ?? 0)})
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg bg-sky-500/10 px-2.5 py-1 text-sky-700 dark:text-sky-400 font-semibold">
+                          <span>En Negociación</span>
+                          <span className="font-mono">
+                            {Math.max(
+                              0,
+                              (macroKpis.deliveredCount ?? 0) -
+                                (macroKpis.wonCount ?? 0) -
+                                (macroKpis.rejectedCount ?? 0),
+                            )}{" "}
+                            (
+                            {formatCompactCop(
+                              Math.max(
+                                0,
+                                (macroKpis.deliveredTotalCop ?? 0) -
+                                  (macroKpis.wonTotalCop ?? 0) -
+                                  (macroKpis.rejectedTotalCop ?? 0),
+                              ),
+                            )}
+                            )
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg bg-red-500/10 px-2.5 py-1 text-red-700 dark:text-red-400 font-semibold">
+                          <span>Rechazadas</span>
+                          <span className="font-mono">
+                            {macroKpis.rejectedCount ?? 0} ({formatCompactCop(macroKpis.rejectedTotalCop ?? 0)})
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
