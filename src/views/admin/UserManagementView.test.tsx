@@ -14,6 +14,10 @@ vi.mock("@/lib/api/users", () => ({
   },
 }));
 
+vi.mock("@/components/AppShell", () => ({
+  AppShell: ({ children }: { children: React.ReactNode }) => <div data-testid="mock-app-shell">{children}</div>,
+}));
+
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),

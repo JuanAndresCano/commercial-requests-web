@@ -15,6 +15,7 @@ import {
 import { assignProfessorWithHistory } from "@/lib/professor-assignment";
 import { resetDashboardUiState } from "@/lib/dashboard-ui-state";
 import { useTheme } from "@/context/ThemeContext";
+import { toTitleCase } from "@/lib/format-name";
 
 export type UserRole = "kam" | "lider-producto" | "administrador";
 
@@ -107,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const roles = mapBackendRoles(session.roles);
       if (session.isPendingRole || roles.length === 0) {
-        const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
+        const fullName = toTitleCase([session.firstName, session.lastName].filter(Boolean).join(" "));
         setUser({
           role: "kam",
           roleLabel: "Pendiente de Aprobación",
@@ -126,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
       }
       const cfg = ROLE_CONFIGS[roles[0]];
-      const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
+      const fullName = toTitleCase([session.firstName, session.lastName].filter(Boolean).join(" "));
       setUser({
         role: roles[0],
         roleLabel: cfg.label,

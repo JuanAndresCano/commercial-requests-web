@@ -13,6 +13,10 @@ vi.mock("@/lib/app-router", () => ({
   useRouter: vi.fn(),
 }));
 
+vi.mock("@/components/ThemeToggle", () => ({
+  ThemeToggle: () => <button aria-label="Cambiar tema">Tema</button>,
+}));
+
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
@@ -96,7 +100,7 @@ describe("PendingApproval view (Onboarding)", () => {
 
     await waitFor(() => {
       expect(refreshSessionMock).toHaveBeenCalled();
-      expect(toast.info).toHaveBeenCalledWith("Solicitud aún en revisión", expect.any(Object));
+      expect(toast.info).toHaveBeenCalledWith("Aún no tienes rol asignado", expect.any(Object));
     });
   });
 

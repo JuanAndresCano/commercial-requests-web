@@ -1,10 +1,14 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { useRouter } from "@/lib/app-router";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
-import { Clock, RefreshCw, LogOut } from "@/components/icons";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { RefreshCw, LogOut } from "@/components/icons";
+import { toTitleCase } from "@/lib/format-name";
 
 export default function PendingApproval() {
   const router = useRouter();
@@ -30,8 +34,8 @@ export default function PendingApproval() {
         });
         router.replace("/dashboard");
       } else {
-        toast.info("Solicitud aún en revisión", {
-          description: "El administrador aún no ha asignado tu rol. Por favor, intenta de nuevo más tarde.",
+        toast.info("Aún no tienes rol asignado", {
+          description: "El administrador aún no ha autorizado tu solicitud. Intenta de nuevo en unos momentos.",
         });
       }
     } catch (error) {
@@ -48,100 +52,108 @@ export default function PendingApproval() {
     router.replace("/login");
   };
 
-  const displayName = user?.name || user?.email || "Colaborador Icesi";
-  const userInitial = displayName.charAt(0).toUpperCase();
+  const formattedName = toTitleCase(user?.name) || user?.email || "Colaborador Icesi";
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0f111a] flex flex-col justify-between p-4 sm:p-8">
-      {/* Top Header */}
-      <header className="max-w-4xl mx-auto w-full flex items-center justify-between pb-6 border-b border-border/80">
-        <div className="flex items-center gap-3">
-          <IcesiLogo variant="horizontal" colorScheme="blue" size="md" />
-        </div>
-        <div className="flex items-center gap-3 bg-white dark:bg-[#1a1c28] border border-border px-3.5 py-1.5 rounded-full shadow-xs">
-          <div className="h-7 w-7 rounded-full bg-[#5454e9] text-white flex items-center justify-center text-xs font-bold">
-            {userInitial}
+    <div className="min-h-screen bg-background text-foreground flex flex-col justify-between antialiased selection:bg-primary selection:text-white">
+      {/* Institutional Top Blue Band */}
+      <div className="h-1.5 w-full bg-primary shrink-0" />
+
+      {/* Top Application Bar */}
+      <header className="border-b border-border bg-card/95 backdrop-blur-md px-4 sm:px-8 py-3 transition-colors">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <IcesiLogo variant="horizontal" size="sm" withDescriptor={true} />
+            <div className="hidden sm:flex flex-col border-l border-border pl-3">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-primary dark:text-icesi-purple">
+                Solicitudes Comerciales
+              </span>
+              <span className="text-[10px] text-muted-foreground">Dirección de Extensión y Consultoría</span>
+            </div>
           </div>
-          <div className="text-left pr-1">
-            <span className="text-xs font-medium text-foreground block leading-tight">{displayName}</span>
-            <span className="text-[10px] text-muted-foreground block leading-tight">{user?.email}</span>
+
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-xl mx-auto w-full my-auto py-8">
-        <div className="bg-white dark:bg-[#141522] border border-border rounded-3xl p-8 sm:p-10 shadow-sm text-center">
-          {/* Status Icon */}
-          <div className="h-16 w-16 mx-auto mb-6 rounded-2xl bg-[#5454e9]/10 text-[#5454e9] dark:text-[#7f7fff] flex items-center justify-center">
-            <Clock className="h-8 w-8" />
+      <main className="max-w-xl mx-auto w-full my-auto px-4 py-12">
+        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden transition-colors">
+          {/* Subtle Institutional Header Accent */}
+          <div className="bg-primary/5 dark:bg-primary/10 border-b border-border px-6 py-4 flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-primary dark:text-icesi-purple">
+              Universidad Icesi · Acceso Institucional
+            </span>
+            <IcesiCenefa barsCount={12} height={6} className="opacity-40" />
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 mb-4">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-            Solicitud en revisión
-          </div>
+          <div className="p-6 sm:p-8 text-center">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mb-3">
+              Tu cuenta está pendiente de aprobación
+            </h1>
 
-          <h1 className="text-2xl font-bold tracking-tight text-foreground mb-3">
-            Tu cuenta está pendiente de aprobación
-          </h1>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+              Hemos registrado tu ingreso con tu cuenta de correo institucional. Para acceder a la plataforma, un
+              administrador debe verificar tu perfil y asignarte tu rol operativo (KAM o Líder de Producto).
+            </p>
 
-          <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-            Hemos registrado tu acceso institucional con Microsoft Entra ID. Por políticas de seguridad y control de
-            información comercial de la Universidad Icesi, un administrador debe verificar tu solicitud y asignarte un
-            rol operativo.
-          </p>
-
-          {/* User details card */}
-          <div className="bg-muted/40 dark:bg-muted/20 border border-border/80 rounded-2xl p-4 mb-8 text-left text-xs space-y-2">
-            <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground">Colaborador:</span>
-              <span className="font-semibold text-foreground">{displayName}</span>
+            {/* Collaborator Details Card */}
+            <div className="bg-muted/40 dark:bg-muted/20 border border-border rounded-xl p-4 mb-6 text-left text-xs space-y-2.5">
+              <div className="flex items-center justify-between py-1 border-b border-border/50">
+                <span className="text-muted-foreground">Colaborador:</span>
+                <span className="font-semibold text-foreground">{formattedName}</span>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-border/50">
+                <span className="text-muted-foreground">Correo institucional:</span>
+                <span className="font-medium text-foreground">{user?.email}</span>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-muted-foreground">Estado de la cuenta:</span>
+                <span className="text-amber-600 dark:text-amber-400 font-semibold inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  Pendiente de asignación de rol
+                </span>
+              </div>
             </div>
-            <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground">Correo institucional:</span>
-              <span className="font-medium text-foreground">{user?.email}</span>
-            </div>
-            <div className="flex items-center justify-between py-1">
-              <span className="text-muted-foreground">Estado actual:</span>
-              <span className="text-amber-600 dark:text-amber-400 font-semibold">En cola de aprobación</span>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                size="lg"
+                disabled={checking}
+                onClick={handleCheckStatus}
+                className="bg-[#5454e9] hover:bg-[#4343d0] text-white font-medium px-6 rounded-xl flex items-center justify-center gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${checking ? "animate-spin" : ""}`} />
+                <span>{checking ? "Comprobando..." : "Comprobar estado"}</span>
+              </Button>
+
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={handleLogout}
+                className="rounded-xl flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Cerrar sesión</span>
+              </Button>
             </div>
           </div>
-
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button
-              size="lg"
-              disabled={checking}
-              onClick={handleCheckStatus}
-              className="bg-[#5454e9] hover:bg-[#4343d0] text-white font-medium px-6 rounded-xl flex items-center justify-center gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${checking ? "animate-spin" : ""}`} />
-              <span>{checking ? "Comprobando..." : "Comprobar estado"}</span>
-            </Button>
-
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={handleLogout}
-              className="rounded-xl flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Cerrar sesión</span>
-            </Button>
-          </div>
-
-          <p className="mt-8 text-xs text-muted-foreground">
-            ¿Tienes dudas o requieres acceso prioritario? Comunícate con la Dirección Comercial o el administrador del
-            sistema.
-          </p>
         </div>
+
+        <p className="text-center text-xs text-muted-foreground mt-6 leading-relaxed">
+          ¿Tienes dudas o requieres acceso prioritario? Comunícate con la Dirección Comercial o el administrador del
+          sistema.
+        </p>
       </main>
 
-      {/* Footer */}
-      <footer className="max-w-4xl mx-auto w-full pt-6 border-t border-border/80 flex flex-col sm:flex-row items-center justify-between text-xs text-muted-foreground gap-3">
-        <IcesiCenefa barsCount={18} height={6} />
-        <div>Universidad Icesi · Solicitudes Comerciales</div>
+      {/* Institutional Footer */}
+      <footer className="border-t border-border bg-card py-4 px-4 sm:px-8 text-center text-xs text-muted-foreground transition-colors">
+        <p className="text-[11px]">
+          Universidad Icesi, Calle 18 No. 122–135, Cali - Colombia · Dirección de Extensión y Consultoría
+        </p>
       </footer>
     </div>
   );

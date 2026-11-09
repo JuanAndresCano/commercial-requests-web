@@ -66,7 +66,7 @@ export default function Login() {
     if (status === "authenticated") {
       router.replace("/dashboard");
     } else if (status === "pending-role") {
-      router.replace("/onboarding/select-role");
+      router.replace("/onboarding/pending");
     }
   }, [status, router]);
 
