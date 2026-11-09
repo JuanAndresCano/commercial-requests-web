@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useRouter, useSearchParams } from "@/lib/app-router";
-import { ArrowLeft } from "@/components/icons";
+import { ArrowLeft, AlertCircle } from "@/components/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,12 @@ export default function Login() {
         setErrorMessage("El inicio de sesión institucional fue cancelado por el usuario.");
       } else if (decoded === "missing_code") {
         setErrorMessage("No se recibió el código de autorización desde Microsoft. Por favor intenta de nuevo.");
+      } else if (
+        decoded === "account_deactivated" ||
+        decoded.toLowerCase().includes("deactivated") ||
+        decoded.toLowerCase().includes("inhabilitad")
+      ) {
+        setErrorMessage("account_deactivated");
       } else {
         setErrorMessage(decoded);
       }
@@ -183,12 +189,25 @@ export default function Login() {
           </div>
 
           {/* Error Banner if SSO returned an issue */}
-          {errorMessage && (
-            <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
-              <p className="font-semibold mb-0.5">No fue posible completar el acceso</p>
-              <p>{errorMessage}</p>
-            </div>
-          )}
+          {errorMessage &&
+            (errorMessage === "account_deactivated" ? (
+              <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-4 text-xs">
+                <div className="flex items-center gap-2 font-bold text-sm mb-1.5 text-amber-900 dark:text-amber-200">
+                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>Acceso no habilitado</span>
+                </div>
+                <p className="text-amber-950 dark:text-amber-100/90 leading-relaxed">
+                  Tu cuenta institucional no cuenta actualmente con autorización para ingresar al Sistema de Solicitudes
+                  Comerciales. Si requieres acceso para tus labores o consideras que se trata de un error, por favor
+                  comunícate con la Dirección de Extensión y Consultoría o con el administrador del sistema.
+                </p>
+              </div>
+            ) : (
+              <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+                <p className="font-semibold mb-0.5">No fue posible completar el acceso</p>
+                <p>{errorMessage}</p>
+              </div>
+            ))}
 
           {/* Primary Institutional SSO Button */}
           <div className="space-y-4">

@@ -179,18 +179,24 @@ export default function UserManagementView() {
     setPreRegisterSubmitting(true);
 
     try {
-      await usersApi.preRegisterUser({
+      const result = await usersApi.preRegisterUser({
         email,
         roleCode: preRegisterForm.roleCode,
         firstName: preRegisterForm.firstName ? toTitleCase(preRegisterForm.firstName) : undefined,
         lastName: preRegisterForm.lastName ? toTitleCase(preRegisterForm.lastName) : undefined,
       });
 
-      toast.success("Colaborador pre-registrado exitosamente", {
-        description: `${email} tiene asignado el rol ${
-          preRegisterForm.roleCode === "KAM" ? "KAM" : "Líder de Producto"
-        }. Entrará directo con su cuenta institucional.`,
-      });
+      const roleLabel = preRegisterForm.roleCode === "KAM" ? "KAM" : "Líder de Producto";
+
+      if (result.status === "REACTIVATED") {
+        toast.success("Colaborador reactivado y autorizado exitosamente", {
+          description: `${email} fue reactivado con el rol ${roleLabel}. Ya puede ingresar directamente con su cuenta institucional.`,
+        });
+      } else {
+        toast.success("Colaborador pre-registrado exitosamente", {
+          description: `${email} tiene asignado el rol ${roleLabel}. Entrará directo con su cuenta institucional.`,
+        });
+      }
 
       setPreRegisterOpen(false);
       setPreRegisterForm({
@@ -385,12 +391,6 @@ export default function UserManagementView() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-sm text-foreground truncate">{fullName}</span>
-                            <Badge
-                              variant="outline"
-                              className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]"
-                            >
-                              Pendiente de rol
-                            </Badge>
                           </div>
                           <div className="flex items-center gap-2 sm:gap-4 mt-0.5 text-xs text-muted-foreground flex-wrap">
                             <span className="truncate">{u.email}</span>
@@ -416,7 +416,7 @@ export default function UserManagementView() {
                               <SelectValue placeholder="Seleccionar rol" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="KAM">Key Account Manager (KAM)</SelectItem>
+                              <SelectItem value="KAM">KAM</SelectItem>
                               <SelectItem value="PRODUCT_LEADER">Líder de Producto</SelectItem>
                             </SelectContent>
                           </Select>
