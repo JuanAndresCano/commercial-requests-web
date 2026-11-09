@@ -18,6 +18,8 @@
 > (repositorio del backend). Donde un documento de esta carpeta contradiga esa tabla, **manda
 > la tabla**; los puntos corregidos aquí están marcados con "Actualización 2026-10-09".
 
+> **Actualización (2026-11-06, ajustes acordados del 28-oct).** Se añadieron la etiqueta comercial (seguimiento) de las propuestas entregadas, los filtros y el contador de «Sustentación y ajustes», el total entregado exacto, la creación flexible (un teléfono o correo basta; el resto puede quedar «Pendiente») y la edición de empresa y contacto por el KAM dueño hasta la entrega y durante los ajustes. Reglas en [`13-acuerdos-finales-2026-11-06.md`](./13-acuerdos-finales-2026-11-06.md) y en `requisitos/2026-10-28/SPEC_ACORDADA.md` (raíz del espacio de trabajo); donde un documento anterior las contradiga, manda `13`.
+
 ## ⚠️ Qué es (y qué NO es) esta documentación
 
 Lo que sigue documenta **el prototipo de UX/UI** tal como se validó (React + TypeScript + Vite + Tailwind + shadcn/ui, con datos simulados y persistencia en `localStorage`; el prototipo era Vite, **hoy el cliente es Next.js 16 (App Router) usado como cascarón SPA**, ver ADR-0006 del backend; los nombres de archivo de estos documentos ya apuntan a `src/views` y `src/app`, pero las pantallas y reglas descritas son las del prototipo validado) — es la referencia de **reglas de negocio y experiencia validadas**, no un esquema del backend final.
@@ -47,8 +49,15 @@ La aplicación se pondrá en producción en pocos días. El objetivo central de 
 | [`07-gaps-conocidos-y-deuda-tecnica.md`](./07-gaps-conocidos-y-deuda-tecnica.md) | Inventario de huecos funcionales, placeholders sin conectar y atajos de prototipo que **no deben replicarse en producción**. |
 | [`08-preguntas-abiertas-negocio.md`](./08-preguntas-abiertas-negocio.md) | Bitácora de preguntas de negocio que necesitaban decisión de la Líder de Producto (Dianis) — la mayoría ya respondidas e implementadas; quedan unas pocas pendientes de una siguiente ronda. |
 | [`09-guion-de-prueba-dianis.md`](./09-guion-de-prueba-dianis.md) | Guion corto, click a click, para que la Líder de Producto pruebe el prototipo de punta a punta y dé el aval para construir la versión real. |
+| [`09-r7-valor-entregado-kam.md`](./09-r7-valor-entregado-kam.md) | R7: valor total presentado al cliente en el tablero del KAM (total entregado exacto). |
 | [`10-decisiones-pendientes-equipo.md`](./10-decisiones-pendientes-equipo.md) | Decisiones de gobernanza del repositorio (no de negocio) que deben resolverse entre Tomás y Juan Andrés antes de ejecutarse. |
+| [`10-ajustes-reunion-2026-10-22.md`](./10-ajustes-reunion-2026-10-22.md) | Registro histórico de la primera interpretación (4-nov) de los ajustes de la reunión del 22-oct; lo vigente está en `13`. |
 | [`11-metricas-y-racional-analitico.md`](./11-metricas-y-racional-analitico.md) | Catálogo de métricas y sustentación analítica para Administrador, KAM y Líder de Producto: decisiones de inclusión/exclusión y guía UAT. |
+| [`12-campos-obligatorios-r4.md`](./12-campos-obligatorios-r4.md) | R4: campos obligatorios al enviar una solicitud y datos que pueden quedar «Pendiente». |
+| [`12-blueprint-analitica-admin-y-metas.md`](./12-blueprint-analitica-admin-y-metas.md) | **Master Blueprint Analítica y Metas**: Arquitectura de los 5 submódulos de administración, fórmulas y hoja de ruta. |
+| [`13-acuerdos-finales-2026-11-06.md`](./13-acuerdos-finales-2026-11-06.md) | **Acuerdos finales del 6-nov**: etiqueta comercial, total bruto, sustentación y ajustes, creación flexible, edición del cliente. Prevalece sobre los textos históricos. |
+| [`14-spec-mejoras-ux.md`](./14-spec-mejoras-ux.md) | Evaluación heurística UX/UI (Nielsen, Norman, Krug) y qué se implementó. |
+| [`CAMBIOS_UX.md`](./CAMBIOS_UX.md) | Registro de cambios UX, cada uno ligado a su hallazgo de `14`. |
 
 ## Cómo correr el prototipo localmente
 

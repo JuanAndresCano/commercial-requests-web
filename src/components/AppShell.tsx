@@ -4,6 +4,7 @@ import { Menu } from "@/components/icons";
 import { useAuth } from "@/context/AuthContext";
 import { SidebarContent } from "@/components/SidebarContent";
 import { IcesiLogo, IcesiCenefa } from "@/components/IcesiLogo";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
 interface AppShellProps {
@@ -104,6 +105,8 @@ export function AppShell({ children }: AppShellProps) {
               </div>
             </div>
           </div>
+
+          <OfflineBanner />
 
           {/* Page Body */}
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">{children}</main>

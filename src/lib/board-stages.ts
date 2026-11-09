@@ -80,7 +80,7 @@ export const LEADER_BOARD_STAGES: LeaderBoardStage[] = [
   {
     id: "entregada",
     title: "Entregada",
-    description: "Propuestas entregadas por el KAM a la empresa cliente",
+    description: "Propuestas presentadas por el KAM; pendientes de respuesta del cliente",
   },
 ];
 

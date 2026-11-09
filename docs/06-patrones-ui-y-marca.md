@@ -61,6 +61,50 @@ Patrón del Paso 1 del wizard: buscador con dropdown de coincidencias + fila de 
 ### Toasts (`sonner`)
 Toda acción de escritura (guardar, asignar, reasignar, avanzar estado) dispara un toast de confirmación breve. Es el mecanismo de feedback estándar — no hay modales de confirmación bloqueantes para acciones no destructivas.
 
+## Etiquetas comerciales, ajustes y vocabulario (2026-11-06)
+
+Solo se documenta lo que existe en `src/lib/commercial-status.ts`, `src/lib/adjustments.ts` y los componentes que los usan; no es una propuesta de cambio de colores. La paleta de marca Icesi no se modifica.
+
+### Paleta del seguimiento comercial (una sola, compartida por chip, menú y filtro)
+
+El progreso del negocio usa clases de la paleta de Tailwind (no hex ni los colores de las etapas del pipeline): texto `-800` sobre relleno `-50` en claro; texto `-300` sobre un tinte oscuro `-950/40` en oscuro, con borde al 30 % del tono. Los neutros usan tokens del tema.
+
+| Etiqueta | Texto mostrado | Tono (chip y punto) |
+|---|---|---|
+| `APPROVED_WITHOUT_CONTRACT` | Aprobación sin contrato | `indigo` (`border-indigo-600/30 bg-indigo-50 text-indigo-800`; oscuro `border-indigo-400/30 bg-indigo-950/40 text-indigo-300`; punto `bg-indigo-600` / `dark:bg-indigo-400`) |
+| `APPROVED_WITH_CONTRACT` | Aprobada con contrato / Orden de servicio | `teal` (misma estructura) |
+| `INVOICED` | Facturada | `emerald` (misma estructura) |
+| `REJECTED` | Rechazada | `rose` (misma estructura) |
+| Sin etiqueta (KAM dueño) | «+ Asignar estado» | Gris suave: `border-dashed border-border bg-transparent text-muted-foreground`, punto `bg-muted-foreground/50` |
+| Sin etiqueta (quien no edita) | «Presentación de propuesta» | `border-border bg-muted/50 text-muted-foreground` |
+
+Forma del chip (`CommercialStatusChip`): píldora `rounded-full border`, punto de 6 px + texto, `text-[11px]`, truncado con `title` con el texto completo (la etiqueta larga «Aprobada con contrato / Orden de servicio» se trunca en la tarjeta). Editable: lleva un `ChevronDown` y anillo de foco visible. El filtro «Seguimiento comercial» y su leyenda reutilizan los mismos puntos.
+
+### Sustentación y ajustes
+
+- Aviso pendiente: ámbar (`amber`), en la tarjeta (cabecera «Sustentación y ajustes», `text-[10px] font-bold`), junto a la etapa (`StatusBadge`) y como cuadro en el detalle. El ámbar queda **reservado** para lo pendiente.
+- Ya reenviada: `ResentAdjustmentBadge`, píldora con borde neutro y texto `text-muted-foreground`, `text-[10px]`, icono `RotateCw` y «N ajuste(s)».
+- Contador del encabezado (`PendingAdjustmentsCounter`): píldora ámbar `text-xs`, con estado presionado (`aria-pressed`, anillo).
+- El estado de ajuste nunca se comunica solo con color: siempre hay texto.
+
+### Zonas táctiles de 44 px
+
+`src/index.css` define `@media (pointer: coarse) { main button, [role="dialog"] button { min-height: 44px; } }`. En pantallas táctiles todo botón del contenido y de los diálogos mide al menos 44 px; en escritorio se conserva la densidad actual (28 a 36 px). El icono de salir del asistente tiene además `aria-label` y zona táctil propia. Los controles que no son `button` (por ejemplo las listas nativas `select` de los filtros) no entran en esa regla.
+
+### Tamaño mínimo de texto
+
+La regla es **`text-xs` (12 px) como mínimo** para etiquetas, ayudas, errores, enlaces y pestañas (el barrido de H12 subió 97 sitios, ver `14-spec-mejoras-ux.md`). Excepciones deliberadas que existen hoy: las insignias (`text-[10px]`: `ResentAdjustmentBadge`, aviso de ajuste de las tarjetas Kanban) y las tarjetas Kanban se conservaron por densidad; el chip comercial y la leyenda del filtro usan `text-[11px]`.
+
+### Vocabulario de estado y etiqueta
+
+| Concepto | Texto en la interfaz | Nota |
+|---|---|---|
+| Etapa operativa `DELIVERED` / `entregada` | **Entregada** (KAM y Líder) | Es el nombre operativo (`KAM_STAGE_LABELS.entregada`). La especificación la llama «Entregada al cliente»; la pantalla dice «Entregada». Significa propuesta presentada al cliente, no compra. |
+| Etapas KAM | Entregada al líder · En Proceso · Lista para Entregar · Entregada | El Líder añade «Enviada al KAM» en su tablero. |
+| Seguimiento comercial | «Seguimiento comercial», «Sin etiqueta», «Etiqueta comercial desconocida» (valor no reconocido del servidor) | Independiente de la etapa. |
+| Devolución del cliente | **Sustentación y ajustes** (aviso) · **Sustentación y ajuste 1, 2, 3…** (iteraciones del Historial de Negociación; «Sustentación y ajuste vigente») | Ya no se usa «Cliente pidió ajustes» ni «Presentación de propuesta» como nombre de etapa. |
+| Dato no disponible | **Pendiente** | Representa ausencia, no un valor. |
+
 ## Layout general (`AppShell.tsx`)
 
 - Rail lateral de 64px (`w-16`) en reposo, expandido a 256px (`w-64`) en hover, solo en desktop (`lg:flex`) — oculto en móvil a favor de un botón de menú hamburguesa que despliega un drawer con los mismos ítems.

@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 import type { RequestItem, RequestStatus } from "@/lib/mock-data";
 import { getStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
 import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
+import { CommercialStatusChip } from "@/components/CommercialStatusChip";
+import { ResentAdjustmentBadge } from "@/components/ResentAdjustmentBadge";
+import { hasPendingAdjustment } from "@/lib/adjustments";
 
 interface RequestCardProps {
   req: RequestItem;
@@ -24,9 +27,11 @@ interface RequestCardProps {
    * etapa"; si no se pasa, se usa el estado real de la solicitud.
    */
   stage?: RequestStatus;
+  /** True when the viewer is the owner KAM and the proposal comes from the API: the chip becomes a menu. */
+  canEditCommercialStatus?: boolean;
 }
 
-export function RequestCard({ req, cta, stage }: RequestCardProps) {
+export function RequestCard({ req, cta, stage, canEditCommercialStatus = false }: RequestCardProps) {
   const stageAgeLabel = getStageAgeLabel(req, stage ?? req.status);
   const totalAgeLabel = getTotalAgeLabel(req);
 
@@ -43,13 +48,13 @@ export function RequestCard({ req, cta, stage }: RequestCardProps) {
       <div
         className={cn(
           "flex items-center gap-1.5 border-b px-3.5 py-1.5",
-          req.clientObservations
+          hasPendingAdjustment(req)
             ? "bg-amber-100 dark:bg-amber-950/40 border-amber-300/60 dark:border-amber-900/50"
             : "invisible border-transparent",
         )}
       >
         <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Cliente pidió ajustes</span>
+        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Sustentación y ajustes</span>
       </div>
 
       {/* flex-1: in a row of cards (isolated stage grid) the CTA stays at the bottom of every card. */}
@@ -70,6 +75,10 @@ export function RequestCard({ req, cta, stage }: RequestCardProps) {
           <span className="rounded-md border border-border dark:border-[#2b2d3d] bg-secondary/50 dark:bg-[#1c1e2b] px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
             {req.type}
           </span>
+          {req.status === "entregada" && (
+            <CommercialStatusChip proposalId={req.id} status={req.commercialStatus} canEdit={canEditCommercialStatus} />
+          )}
+          {req.status === "entregada" && <ResentAdjustmentBadge req={req} />}
         </div>
 
         <div className="mt-3 space-y-1.5 border-t border-border dark:border-[#222434] pt-2.5 text-xs text-muted-foreground">

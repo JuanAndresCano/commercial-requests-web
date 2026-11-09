@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TestRouter } from "@/test/router";
 import { describe, expect, it } from "vitest";
 import { RequestCard } from "./RequestCard";
@@ -90,5 +91,41 @@ describe("RequestCard total age and official number", () => {
   it("shows no official number when it is null", () => {
     renderCard(<RequestCard req={baseRequest} />);
     expect(screen.queryByTitle("Número oficial")).not.toBeInTheDocument();
+  });
+});
+
+describe("RequestCard commercial follow-up chip", () => {
+  const delivered: RequestItem = { ...baseRequest, status: "entregada", commercialStatus: "INVOICED" };
+
+  it("shows the tag as a static chip in the badge row, next to type and priority, for a read-only viewer", () => {
+    renderCard(<RequestCard req={delivered} />);
+    const chip = screen.getByText("Facturada");
+    expect(chip.closest("[data-commercial-status]")).toHaveAttribute("data-commercial-status", "INVOICED");
+    expect(chip.closest("div")).toContainElement(screen.getByText("Capacitación"));
+    expect(screen.queryByRole("button", { name: /seguimiento comercial/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a neutral 'Presentación de propuesta' chip when a read-only viewer sees an untagged delivery", () => {
+    renderCard(<RequestCard req={{ ...delivered, commercialStatus: null }} />);
+    expect(screen.getByText("Presentación de propuesta")).toBeInTheDocument();
+  });
+
+  it("does not show any chip outside the delivered stage", () => {
+    renderCard(<RequestCard req={{ ...baseRequest, commercialStatus: "INVOICED" }} />);
+    expect(screen.queryByText("Facturada")).not.toBeInTheDocument();
+    expect(screen.queryByText("Presentación de propuesta")).not.toBeInTheDocument();
+  });
+
+  it("gives the owner an interactive chip that does not open the proposal detail", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TestRouter route="/dashboard">
+          <RequestCard req={{ ...delivered, commercialStatus: null }} canEditCommercialStatus />
+        </TestRouter>
+      </QueryClientProvider>,
+    );
+    const chip = screen.getByRole("button", { name: "Asignar seguimiento comercial" });
+    expect(chip).toHaveTextContent("+ Asignar estado");
+    expect(fireEvent.click(chip)).toBe(false);
   });
 });

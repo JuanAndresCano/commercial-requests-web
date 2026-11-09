@@ -71,7 +71,7 @@ export function CompanyAutocomplete({ onSelect }: CompanyAutocompleteProps) {
           <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-popover shadow-lg overflow-hidden max-h-60 overflow-y-auto">
             {displayedCompanies.length > 0 && (
               <>
-                <div className="p-1.5 text-[11px] font-semibold text-muted-foreground bg-secondary/50 px-3">
+                <div className="p-1.5 text-xs font-semibold text-muted-foreground bg-secondary/50 px-3">
                   Coincidencias encontradas en el directorio:
                 </div>
                 {displayedCompanies.map((c) => (
@@ -83,11 +83,11 @@ export function CompanyAutocomplete({ onSelect }: CompanyAutocompleteProps) {
                   >
                     <div>
                       <span className="font-semibold text-foreground block text-sm">{c.name}</span>
-                      <span className="text-[11px] text-muted-foreground font-mono">
+                      <span className="text-xs text-muted-foreground font-mono">
                         {c.nit ? `NIT: ${formatNit(c.nit)}` : "Sin NIT registrado"}
                       </span>
                     </div>
-                    <span className="text-[10px] bg-accent/15 text-accent font-semibold px-2 py-0.5 rounded">
+                    <span className="text-xs bg-accent/15 text-accent font-semibold px-2 py-0.5 rounded">
                       Seleccionar
                     </span>
                   </button>

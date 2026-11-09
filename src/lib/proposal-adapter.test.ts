@@ -1272,3 +1272,17 @@ describe("mapProposalToRequestItem (optional node, center, official number, stat
     expect(mapProposalToRequestItem(baseProposal()).statusHistory).toBeUndefined();
   });
 });
+
+describe("mapProposalToRequestItem - adjustment fields of the server", () => {
+  it("maps adjustmentCount and hasPendingAdjustment as sent", () => {
+    const item = mapProposalToRequestItem(baseProposal({ adjustmentCount: 2, hasPendingAdjustment: false }));
+    expect(item.adjustmentCount).toBe(2);
+    expect(item.hasPendingAdjustment).toBe(false);
+  });
+
+  it("leaves both undefined for an older server so the text rule takes over", () => {
+    const item = mapProposalToRequestItem(baseProposal());
+    expect(item.adjustmentCount).toBeUndefined();
+    expect(item.hasPendingAdjustment).toBeUndefined();
+  });
+});

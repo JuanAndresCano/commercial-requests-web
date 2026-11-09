@@ -1,5 +1,6 @@
 import { act, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiError, apiRequest } from "@/lib/api/client";
 import { authApi, type SessionUser } from "@/lib/api/auth";
 import type { SessionSignal } from "@/lib/session-sync";
@@ -44,11 +45,13 @@ function mountProvider() {
     return null;
   }
   render(
-    <ThemeProvider>
-      <AuthProvider>
-        <Probe />
-      </AuthProvider>
-    </ThemeProvider>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <ThemeProvider>
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>,
   );
   return ref as { current: Auth };
 }

@@ -34,13 +34,13 @@ export function CenterFields({ center, costCenter, editable, saving = false, onS
       <>
         {center?.trim() && (
           <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
-            <span className="text-[11px] font-medium text-muted-foreground">Centro</span>
+            <span className="text-xs font-medium text-muted-foreground">Centro</span>
             <p className="font-semibold text-foreground">{center}</p>
           </div>
         )}
         {costCenter?.trim() && (
           <div className="space-y-0.5 pt-2 border-t border-border dark:border-[#252838]">
-            <span className="text-[11px] font-medium text-muted-foreground">CENCO (centro de costos)</span>
+            <span className="text-xs font-medium text-muted-foreground">CENCO (centro de costos)</span>
             <p className="font-semibold text-foreground">{costCenter}</p>
           </div>
         )}
@@ -53,7 +53,7 @@ export function CenterFields({ center, costCenter, editable, saving = false, onS
   return (
     <div className="space-y-2 pt-2 border-t border-border dark:border-[#252838]">
       <div className="space-y-1">
-        <Label htmlFor="request-center" className="text-[11px] font-medium text-muted-foreground">
+        <Label htmlFor="request-center" className="text-xs font-medium text-muted-foreground">
           Centro
         </Label>
         <Input
@@ -65,7 +65,7 @@ export function CenterFields({ center, costCenter, editable, saving = false, onS
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="request-cost-center" className="text-[11px] font-medium text-muted-foreground">
+        <Label htmlFor="request-cost-center" className="text-xs font-medium text-muted-foreground">
           CENCO (centro de costos)
         </Label>
         <Input
