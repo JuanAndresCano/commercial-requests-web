@@ -1,4 +1,14 @@
-import { Home, FileText, PlusCircle, Network, GraduationCap, LayoutGrid, Building2 } from "@/components/icons";
+import {
+  Home,
+  FileText,
+  PlusCircle,
+  Network,
+  GraduationCap,
+  Building2,
+  TrendingUp,
+  Users,
+  FileSpreadsheet,
+} from "@/components/icons";
 import type { UserRole } from "@/context/AuthContext";
 
 export interface NavItem {
@@ -27,8 +37,11 @@ export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { to: "/solicitudes/nueva", label: "Nueva solicitud", icon: PlusCircle },
   ],
   administrador: [
-    { to: "/dashboard", label: "Resumen Ejecutivo", icon: LayoutGrid },
-    { to: "/dashboard?tab=empresas", label: "Impacto por Empresa", icon: Building2 },
+    { to: "/admin/dashboard", label: "Resumen Ejecutivo", icon: TrendingUp },
+    { to: "/admin/kams", label: "Rendimiento KAMs", icon: Users },
+    { to: "/admin/nodos", label: "Nodos y Portafolio", icon: Network },
+    { to: "/admin/empresas", label: "Inteligencia Empresas", icon: Building2 },
+    { to: "/admin/solicitudes", label: "Gestión Solicitudes", icon: FileSpreadsheet },
   ],
 };
 
@@ -41,6 +54,31 @@ export function isNavItemActive(itemTo: string, pathname: string, search: string
   const [itemPath, itemQuery] = itemTo.split("?");
 
   if (itemQuery) return pathname === itemPath && search.includes(itemQuery);
+
+  // Admin submodules
+  if (itemTo === "/admin/dashboard" || itemTo === "/admin/resumen") {
+    if (pathname === "/admin/dashboard" || pathname === "/admin/resumen") return true;
+    if ((pathname === "/dashboard" || pathname === "/") && !search.includes("tab=empresas")) {
+      return true;
+    }
+    return false;
+  }
+  if (itemTo === "/admin/empresas") {
+    if (pathname === "/admin/empresas" || pathname.startsWith("/admin/empresas/")) return true;
+    if (pathname === "/dashboard" && search.includes("tab=empresas")) return true;
+    return false;
+  }
+  if (itemTo === "/admin/kams") {
+    return pathname === "/admin/kams" || pathname.startsWith("/admin/kams/");
+  }
+  if (itemTo === "/admin/nodos") {
+    return pathname === "/admin/nodos" || pathname.startsWith("/admin/nodos/");
+  }
+  if (itemTo === "/admin/solicitudes") {
+    return pathname === "/admin/solicitudes" || pathname.startsWith("/admin/solicitudes/");
+  }
+
+  // General dashboard
   if (itemTo === "/dashboard") {
     if (search.includes("tab=empresas")) return false;
     return pathname === "/dashboard" || pathname === "/";

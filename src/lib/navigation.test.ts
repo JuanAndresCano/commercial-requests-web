@@ -14,15 +14,36 @@ describe("getNavItems", () => {
     expect(getNavItems("lider-nodo").map((i) => i.label)).toEqual(["Inicio", "Solicitudes de nodo"]);
   });
 
-  it("gives the administrator executive summary and company 360 links", () => {
-    expect(getNavItems("administrador").map((i) => i.label)).toEqual(["Resumen Ejecutivo", "Impacto por Empresa"]);
-    expect(getNavItems("administrador").map((i) => i.to)).toEqual(["/dashboard", "/dashboard?tab=empresas"]);
+  it("gives the administrator the 5 specialized executive submodules", () => {
+    expect(getNavItems("administrador").map((i) => i.label)).toEqual([
+      "Resumen Ejecutivo",
+      "Rendimiento KAMs",
+      "Nodos y Portafolio",
+      "Inteligencia Empresas",
+      "Gestión Solicitudes",
+    ]);
+    expect(getNavItems("administrador").map((i) => i.to)).toEqual([
+      "/admin/dashboard",
+      "/admin/kams",
+      "/admin/nodos",
+      "/admin/empresas",
+      "/admin/solicitudes",
+    ]);
   });
 
   it("never offers the wizard to roles other than the KAM", () => {
     for (const [role, items] of Object.entries(NAV_ITEMS)) {
       if (role === "kam") continue;
       expect(items.map((i) => i.to)).not.toContain("/solicitudes/nueva");
+    }
+  });
+
+  it("never exposes administrative submodules to non-admin roles", () => {
+    for (const [role, items] of Object.entries(NAV_ITEMS)) {
+      if (role === "administrador") continue;
+      for (const item of items) {
+        expect(item.to.startsWith("/admin")).toBe(false);
+      }
     }
   });
 });
@@ -34,9 +55,27 @@ describe("isNavItemActive", () => {
     expect(isNavItemActive("/dashboard", "/solicitudes", "")).toBe(false);
   });
 
-  it("keeps /solicitudes active on detail pages but not on the wizard", () => {
+  it("marks admin executive summary active on /admin/dashboard, /admin/resumen and landing /dashboard", () => {
+    expect(isNavItemActive("/admin/dashboard", "/admin/dashboard", "")).toBe(true);
+    expect(isNavItemActive("/admin/dashboard", "/admin/resumen", "")).toBe(true);
+    expect(isNavItemActive("/admin/dashboard", "/dashboard", "")).toBe(true);
+    expect(isNavItemActive("/admin/dashboard", "/", "")).toBe(true);
+    expect(isNavItemActive("/admin/dashboard", "/dashboard", "?tab=empresas")).toBe(false);
+    expect(isNavItemActive("/admin/dashboard", "/admin/kams", "")).toBe(false);
+  });
+
+  it("marks admin submodules active for their respective paths", () => {
+    expect(isNavItemActive("/admin/kams", "/admin/kams", "")).toBe(true);
+    expect(isNavItemActive("/admin/nodos", "/admin/nodos", "")).toBe(true);
+    expect(isNavItemActive("/admin/solicitudes", "/admin/solicitudes", "")).toBe(true);
+    expect(isNavItemActive("/admin/empresas", "/admin/empresas", "")).toBe(true);
+    expect(isNavItemActive("/admin/empresas", "/dashboard", "?tab=empresas")).toBe(true);
+  });
+
+  it("keeps /solicitudes active on detail pages but not on the wizard or admin audit", () => {
     expect(isNavItemActive("/solicitudes", "/solicitudes/REQ-1", "")).toBe(true);
     expect(isNavItemActive("/solicitudes", "/solicitudes/nueva", "")).toBe(false);
+    expect(isNavItemActive("/solicitudes", "/admin/solicitudes", "")).toBe(false);
     expect(isNavItemActive("/solicitudes/nueva", "/solicitudes/nueva", "")).toBe(true);
   });
 
