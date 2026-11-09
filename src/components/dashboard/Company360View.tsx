@@ -12,18 +12,17 @@ import {
   MapPin,
   Network,
   Phone,
-  RefreshCw,
   User,
   Users,
   Briefcase,
   AlertCircle,
   ArrowLeft,
-  ShieldCheck,
+  RefreshCw,
 } from "@/components/icons";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CompanySelectCombobox } from "./CompanySelectCombobox";
 import { useAdminCompanies, useAdminCompany360 } from "@/hooks/use-admin-company-360";
 import { Company360Skeleton } from "./Company360Skeleton";
-import { formatCop, formatCompactCop } from "@/lib/mock-data";
+import { formatCop } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 interface Company360ViewProps {
@@ -104,12 +103,11 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
   const {
     data: company360,
     isLoading: isLoadingDetails,
-    isFetching: isFetchingDetails,
     isError: isDetailsError,
     refetch: refetchDetails,
   } = useAdminCompany360(selectedCompanyId);
 
-  const timeline = company360?.timeline ?? [];
+  const timeline = useMemo(() => company360?.timeline ?? [], [company360?.timeline]);
   const metrics = company360?.metrics;
 
   // Extract distinct years present in the company's timeline
@@ -127,6 +125,20 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
     const y = Number(selectedYear);
     return timeline.filter((ev) => ev.year === y);
   }, [timeline, selectedYear]);
+
+  // Timeline pagination (10 initiatives per page)
+  const [timelinePage, setTimelinePage] = useState<number>(1);
+  const TIMELINE_PAGE_SIZE = 10;
+
+  useEffect(() => {
+    setTimelinePage(1);
+  }, [selectedCompanyId, selectedYear]);
+
+  const totalTimelinePages = Math.max(1, Math.ceil(displayTimeline.length / TIMELINE_PAGE_SIZE));
+  const paginatedTimeline = useMemo(() => {
+    const start = (timelinePage - 1) * TIMELINE_PAGE_SIZE;
+    return displayTimeline.slice(start, start + TIMELINE_PAGE_SIZE);
+  }, [displayTimeline, timelinePage]);
 
   // Retention health and months since last engagement
   const monthsSinceLastEngagement = useMemo(() => {
@@ -351,45 +363,18 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
             </div>
           </div>
 
-          {/* Selector de Empresa con Radix UI Select */}
+          {/* Selector de Empresa con Buscador Difuso y NIT integrado */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
               <Building2 className="h-4 w-4" />
               <span>Empresa:</span>
             </div>
-            <Select value={selectedCompanyId ?? ""} onValueChange={(val) => setSelectedCompanyId(val)}>
-              <SelectTrigger
-                aria-label="Seleccionar empresa aliada"
-                className="h-9 w-60 sm:w-72 rounded-lg border-border bg-card px-3 text-xs font-bold text-foreground shadow-xs focus:ring-1 focus:ring-icesi-blue cursor-pointer"
-              >
-                <SelectValue placeholder="Seleccionar empresa..." />
-              </SelectTrigger>
-              <SelectContent className="bg-card border-border max-h-72">
-                {companies.map((comp) => (
-                  <SelectItem key={comp.id} value={comp.id} className="text-xs font-medium cursor-pointer py-2">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-foreground">{comp.name}</span>
-                      <span className="text-[11px] text-muted-foreground">
-                        NIT: {comp.nit} • {comp.totalProposals} propuestas •{" "}
-                        {formatCompactCop(comp.deliveredTotalCop + comp.pipelineTotalCop)}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CompanySelectCombobox
+              companies={companies}
+              selectedCompanyId={selectedCompanyId}
+              onSelect={(val) => setSelectedCompanyId(val)}
+            />
           </div>
-
-          {/* Botón de Refresco con indicador de actualización en background */}
-          <button
-            type="button"
-            onClick={() => void refetchDetails()}
-            aria-label="Actualizar datos de la empresa"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground shadow-xs transition-colors cursor-pointer"
-            title="Refrescar métricas"
-          >
-            <RefreshCw className={cn("h-4 w-4", isFetchingDetails && "animate-spin text-icesi-blue")} />
-          </button>
         </div>
       </div>
 
@@ -401,19 +386,38 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-display text-xl font-bold text-foreground">{company.name}</h3>
               <span className="inline-flex items-center rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-                NIT: {company.nit}
+                NIT: {company.nit || "Sin NIT"}
               </span>
-              {company.sector && (
+              {company.sector ? (
                 <span className="inline-flex items-center rounded-md border border-icesi-blue/30 bg-icesi-blue/10 px-2 py-0.5 text-xs font-semibold text-icesi-blue">
                   {company.sector}
                 </span>
-              )}
-              {company.type && (
+              ) : null}
+              {company.type ? (
                 <span className="inline-flex items-center rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-700 dark:text-slate-300">
                   {company.type}
                 </span>
-              )}
-              {company.ciiuCode && <span className="text-xs text-muted-foreground">(CIIU {company.ciiuCode})</span>}
+              ) : null}
+              {company.ciiuCode ? (
+                <span className="text-xs text-muted-foreground">(CIIU {company.ciiuCode})</span>
+              ) : null}
+            </div>
+
+            {/* Badges de Totales Consolidados de la Cuenta (reubicados desde el selector) */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1 font-semibold text-foreground shadow-2xs">
+                <Layers className="h-3.5 w-3.5 text-icesi-blue" />
+                <span>
+                  Total Iniciativas: <strong className="text-foreground">{metrics.totalProposals} propuestas</strong>
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-700 dark:text-emerald-400 shadow-2xs">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>
+                  Cartera Institucional Acumulada:{" "}
+                  <strong>{formatCop(metrics.deliveredTotalCop + metrics.pipelineTotalCop)}</strong>
+                </span>
+              </span>
             </div>
 
             {company.description && (
@@ -457,20 +461,13 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
               )}
             </div>
 
-            {/* Alerta de Retención y Fidelización */}
-            {monthsSinceLastEngagement !== null && (
+            {/* Alerta de Retención (Únicamente en caso de riesgo de abandono > 12 meses) */}
+            {monthsSinceLastEngagement !== null && monthsSinceLastEngagement > 12 && (
               <div className="pt-2">
-                {monthsSinceLastEngagement > 12 ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:text-amber-400">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    <span>Riesgo de abandono: Sin nuevas solicitudes hace {monthsSinceLastEngagement} meses</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    <span>Cuenta fidelizada y activa (última intervención reciente)</span>
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>Riesgo de abandono: Sin nuevas solicitudes hace {monthsSinceLastEngagement} meses</span>
+                </span>
               </div>
             )}
           </div>
@@ -612,7 +609,7 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
                 <div className="absolute left-[23px] top-3 bottom-4 w-0.5 bg-border" aria-hidden="true" />
 
                 <div className="space-y-6">
-                  {displayTimeline.map((event) => {
+                  {paginatedTimeline.map((event) => {
                     const stageKey = event.statusCode || event.status || "NEW";
                     const stage = STAGE_CONFIG[stageKey] || {
                       label: event.statusLabel || stageKey,
@@ -746,6 +743,38 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Paginación de la Línea de Tiempo (10 iniciativas por página) */}
+            {totalTimelinePages > 1 && (
+              <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border pt-4 text-xs">
+                <span className="text-muted-foreground">
+                  Mostrando <strong>{(timelinePage - 1) * TIMELINE_PAGE_SIZE + 1}</strong> a{" "}
+                  <strong>{Math.min(timelinePage * TIMELINE_PAGE_SIZE, displayTimeline.length)}</strong> de{" "}
+                  <strong>{displayTimeline.length}</strong> iniciativas
+                </span>
+                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    disabled={timelinePage === 1}
+                    onClick={() => setTimelinePage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg border border-border bg-card px-3 py-1 font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    Anterior
+                  </button>
+                  <span className="px-2 font-semibold text-muted-foreground">
+                    {timelinePage} de {totalTimelinePages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={timelinePage >= totalTimelinePages}
+                    onClick={() => setTimelinePage((p) => Math.min(totalTimelinePages, p + 1))}
+                    className="rounded-lg border border-border bg-card px-3 py-1 font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    Siguiente
+                  </button>
                 </div>
               </div>
             )}

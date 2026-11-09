@@ -345,8 +345,7 @@ describe("Company360View Component", () => {
     expect(screen.getByText("4 propuestas (33%)")).toBeInTheDocument();
   });
 
-  it("handles refetching details when clicking refresh button", () => {
-    const refetchDetailsMock = vi.fn();
+  it("renders consolidated account totals in identity card", () => {
     vi.spyOn(companyHooks, "useAdminCompanies").mockReturnValue({
       data: mockCompanies,
       isLoading: false,
@@ -359,15 +358,13 @@ describe("Company360View Component", () => {
       isLoading: false,
       isFetching: false,
       isError: false,
-      refetch: refetchDetailsMock,
+      refetch: vi.fn(),
     } as unknown as ReturnType<typeof companyHooks.useAdminCompany360>);
 
     renderComponent();
 
-    const refreshBtn = screen.getByRole("button", { name: "Actualizar datos de la empresa" });
-    fireEvent.click(refreshBtn);
-
-    expect(refetchDetailsMock).toHaveBeenCalled();
+    expect(screen.getByText("Total Iniciativas:")).toBeInTheDocument();
+    expect(screen.getByText("Cartera Institucional Acumulada:")).toBeInTheDocument();
   });
 
   it("handles company with empty proposals and missing metadata gracefully without crashing (edge case)", () => {
@@ -452,7 +449,7 @@ describe("Company360View Component", () => {
     expect(screen.getByText("Sin vinculación a nodos académicos aún.")).toBeInTheDocument();
   });
 
-  it("allows switching selected company via dropdown", () => {
+  it("allows switching selected company via searchable combobox", () => {
     const hookSpy = vi.spyOn(companyHooks, "useAdminCompany360").mockReturnValue({
       data: mockCompany360,
       isLoading: false,
@@ -472,9 +469,13 @@ describe("Company360View Component", () => {
 
     expect(hookSpy).toHaveBeenCalledWith("comp-1");
 
-    // Click select mock container to trigger change to comp-2
-    const selectTrigger = screen.getByTestId("mock-select");
-    fireEvent.click(selectTrigger);
+    // Click trigger to open combobox
+    const trigger = screen.getByRole("button", { name: "Seleccionar empresa aliada" });
+    fireEvent.click(trigger);
+
+    // Click Nutresa
+    const nutresaOption = screen.getByText("Nutresa Grupo Empresarial");
+    fireEvent.click(nutresaOption);
 
     expect(hookSpy).toHaveBeenCalledWith("comp-2");
   });

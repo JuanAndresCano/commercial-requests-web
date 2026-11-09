@@ -248,7 +248,7 @@ describe("AdminDashboard Component", () => {
 
     // 1. Header
     expect(screen.getByText("Hola, Lina")).toBeInTheDocument();
-    expect(screen.getByText("Administrador Icesi")).toBeInTheDocument();
+    expect(screen.queryByText("Administrador Icesi")).not.toBeInTheDocument();
 
     // 2. Macro KPIs
     expect(screen.getByText("Total entregado")).toBeInTheDocument();
@@ -341,7 +341,7 @@ describe("AdminDashboard Component", () => {
     );
   });
 
-  it("switches smoothly between 'Resumen Ejecutivo' and 'Impacto por Empresa' tabs", () => {
+  it("renders the Executive Summary directly without tab toggles or redundant role badge", () => {
     vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
       data: mockAdminData,
       isLoading: false,
@@ -351,37 +351,9 @@ describe("AdminDashboard Component", () => {
 
     renderComponent();
 
-    // Initially in Resumen Ejecutivo
+    expect(screen.getByText("Hola, Lina")).toBeInTheDocument();
+    expect(screen.queryByText("Administrador Icesi")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Impacto por Empresa/i })).not.toBeInTheDocument();
     expect(screen.getByText("Embudo de Conversión Comercial")).toBeInTheDocument();
-    expect(screen.queryByTestId("mock-company-360-view")).not.toBeInTheDocument();
-
-    // Click "Impacto por Empresa"
-    const companyTabBtn = screen.getByRole("button", { name: /Impacto por Empresa/i });
-    fireEvent.click(companyTabBtn);
-
-    // Now Company 360 view is active
-    expect(screen.getByTestId("mock-company-360-view")).toBeInTheDocument();
-    expect(screen.queryByText("Embudo de Conversión Comercial")).not.toBeInTheDocument();
-
-    // Switch back to "Resumen Ejecutivo"
-    const resumenTabBtn = screen.getByRole("button", { name: /Resumen Ejecutivo/i });
-    fireEvent.click(resumenTabBtn);
-
-    expect(screen.getByText("Embudo de Conversión Comercial")).toBeInTheDocument();
-    expect(screen.queryByTestId("mock-company-360-view")).not.toBeInTheDocument();
-  });
-
-  it("renders Company 360 view directly when URL query has tab=empresas", () => {
-    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
-      data: mockAdminData,
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
-
-    renderComponent(["/dashboard?tab=empresas"]);
-
-    expect(screen.getByTestId("mock-company-360-view")).toBeInTheDocument();
-    expect(screen.queryByText("Embudo de Conversión Comercial")).not.toBeInTheDocument();
   });
 });

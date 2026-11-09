@@ -4,7 +4,6 @@ import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Company360View } from "@/components/dashboard/Company360View";
 import { CompanyDirectoryRankingTable } from "@/components/dashboard/CompanyDirectoryRankingTable";
-import { RoleBadge } from "@/components/RoleBadge";
 import { Building2, Layers, Award, TrendingUp } from "@/components/icons";
 import { useAdminCompanies } from "@/hooks/use-admin-company-360";
 import { formatCompactCop } from "@/lib/mock-data";
@@ -40,12 +39,9 @@ export default function AdminEmpresasView() {
       <div data-testid="admin-empresas-view" className="space-y-6">
         {/* Cabecera del Submódulo */}
         <div className="flex flex-col gap-2 border-b border-border/60 pb-4">
-          <div className="flex items-center gap-2.5">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              Inteligencia 360° de Empresas Aliadas
-            </h1>
-            <RoleBadge label="Administrador Icesi" />
-          </div>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Inteligencia 360° de Empresas Aliadas
+          </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Directorio maestro de cuentas corporativas, historial de intervenciones, valor acumulado generado y
             penetración de facultades

@@ -1,24 +1,11 @@
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "@/lib/app-router";
-import {
-  Calendar,
-  Users,
-  Layers,
-  AlertCircle,
-  RefreshCw,
-  Building2,
-  LayoutGrid,
-  Target,
-  CheckCircle2,
-} from "@/components/icons";
+import { useState } from "react";
+import { Calendar, Users, Layers, AlertCircle, RefreshCw, Target, CheckCircle2 } from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RoleBadge } from "@/components/RoleBadge";
 import { useAdminDashboard } from "@/hooks/use-admin-dashboard";
 import { useMonthlyTrends } from "@/hooks/use-monthly-trends";
 import { MonthlySalesBarChart } from "./MonthlySalesBarChart";
 import { YoySalesCurveChart } from "./YoySalesCurveChart";
 import { AdminDashboardSkeleton } from "./AdminDashboardSkeleton";
-import { Company360View } from "./Company360View";
 import { formatCompactCop } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -72,27 +59,6 @@ const STAGE_COLORS: Record<string, { bg: string; fill: string; text: string; bor
 };
 
 export function AdminDashboard({ user }: AdminDashboardProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const currentTab = searchParams.get("tab") === "empresas" ? "empresas" : "resumen";
-  const [activeTab, setActiveTabState] = useState<"resumen" | "empresas">(currentTab);
-
-  useEffect(() => {
-    setActiveTabState(currentTab);
-  }, [currentTab]);
-
-  const handleTabChange = (tab: "resumen" | "empresas") => {
-    setActiveTabState(tab);
-    const params = new URLSearchParams(searchParams.toString());
-    if (tab === "resumen") {
-      params.delete("tab");
-    } else {
-      params.set("tab", tab);
-    }
-    const qs = params.toString();
-    router.replace(qs ? `/dashboard?${qs}` : "/dashboard");
-  };
-
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedQuarter, setSelectedQuarter] = useState<number | undefined>(undefined);
@@ -166,473 +132,432 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
 
   return (
     <div className="space-y-6">
-      {/* 1. CABECERA EJECUTIVA Y PESTAÑAS DE VISTA */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              Hola, {firstName}
-            </h1>
-            <RoleBadge label="Administrador Icesi" />
-          </div>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            {activeTab === "resumen"
-              ? "Visión global del pipeline comercial, desempeño de ejecutivos y volumen de consultoría"
-              : "Historial completo de intervenciones, valor generado, penetración por nodos y logros clave con empresas aliadas"}
-          </p>
-        </div>
-
-        {/* Pestañas Superiores de Vista Administrativa */}
-        <div className="flex items-center rounded-xl border border-border bg-muted/40 p-1 shadow-xs shrink-0">
-          <button
-            type="button"
-            onClick={() => handleTabChange("resumen")}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer",
-              activeTab === "resumen"
-                ? "bg-card text-foreground shadow-xs border border-border/60"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <LayoutGrid className="h-4 w-4" />
-            <span>Resumen Ejecutivo</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabChange("empresas")}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer",
-              activeTab === "empresas"
-                ? "bg-card text-foreground shadow-xs border border-border/60"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Building2 className="h-4 w-4" />
-            <span>Impacto por Empresa</span>
-          </button>
-        </div>
+      {/* 1. CABECERA EJECUTIVA */}
+      <div className="flex flex-col gap-2 border-b border-border/60 pb-4">
+        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          Hola, {firstName}
+        </h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Visión global del pipeline comercial, desempeño de ejecutivos y volumen de consultoría
+        </p>
       </div>
 
-      {activeTab === "resumen" ? (
-        <div className="space-y-6">
-          {/* Fila de Controles Temporales y Resumen Contextual */}
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-border/60 pb-4">
-            {/* Resumen contextual superior */}
-            <div className="flex flex-wrap items-center gap-6 px-0.5 text-xs sm:text-sm">
-              <div className="flex items-center gap-1.5 font-bold text-foreground">
-                <span className="font-display text-base font-bold text-foreground">{macroKpis.totalProposals}</span>
-                <span className="text-muted-foreground font-normal">solicitudes en total</span>
+      <div className="space-y-6">
+        {/* Fila de Controles Temporales y Resumen Contextual */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-border/60 pb-4">
+          {/* Resumen contextual superior */}
+          <div className="flex flex-wrap items-center gap-6 px-0.5 text-xs sm:text-sm">
+            <div className="flex items-center gap-1.5 font-bold text-foreground">
+              <span className="font-display text-base font-bold text-foreground">{macroKpis.totalProposals}</span>
+              <span className="text-muted-foreground font-normal">solicitudes en total</span>
+            </div>
+            <div className="flex items-center gap-1.5 font-bold text-foreground">
+              <span className="font-display text-base font-bold text-foreground">
+                {formatCompactCop(totalPortfolioCop)}
+              </span>
+              <span className="text-muted-foreground font-normal">en cartera institucional</span>
+            </div>
+          </div>
+
+          {/* Controles de Selección de Año y Trimestre */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Selector de Año con Radix UI Select */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span>Año:</span>
               </div>
-              <div className="flex items-center gap-1.5 font-bold text-foreground">
-                <span className="font-display text-base font-bold text-foreground">
-                  {formatCompactCop(totalPortfolioCop)}
-                </span>
-                <span className="text-muted-foreground font-normal">en cartera institucional</span>
+              <Select value={String(selectedYear)} onValueChange={(val) => setSelectedYear(Number(val))}>
+                <SelectTrigger
+                  aria-label="Seleccionar año"
+                  className="h-8 w-24 rounded-lg border-border bg-card px-2.5 text-xs font-bold text-foreground shadow-xs focus:ring-1 focus:ring-icesi-blue cursor-pointer"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={String(year)} className="text-xs font-semibold cursor-pointer">
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Selector de Trimestres (Pills) */}
+            <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs shadow-xs">
+              {QUARTERS.map((q) => {
+                const active = selectedQuarter === q.value;
+                return (
+                  <button
+                    key={q.label}
+                    type="button"
+                    onClick={() => setSelectedQuarter(q.value)}
+                    className={cn(
+                      "rounded-md px-3 py-1 font-semibold transition-all cursor-pointer",
+                      active
+                        ? "bg-card text-foreground shadow-xs border border-border/60"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {q.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Indicador de actualización sutil en segundo plano */}
+            {isFetching && (
+              <div className="flex items-center gap-1 text-[11px] text-muted-foreground animate-pulse">
+                <RefreshCw className="h-3 w-3 animate-spin text-icesi-blue" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Banner Institucional de Metas Financieras y Semáforo de Cumplimiento a la Fecha */}
+        <div className="rounded-2xl border border-border bg-gradient-to-r from-card via-card to-muted/20 p-5 sm:p-6 shadow-xs">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Target className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Meta Anual Institucional: {formatCompactCop(centerTargetCop)}
+                  </h3>
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[11px] font-bold inline-flex items-center gap-1",
+                      isSurplus
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                    )}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {isSurplus
+                      ? `Superávit: +${formatCompactCop(diffToExpectedDateCop)} por encima de lo esperado a la fecha`
+                      : `Déficit: ${formatCompactCop(diffToExpectedDateCop)} frente al ritmo proyectado`}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Cuota presupuestal fijada por Dirección Financiera ({selectedYear}) · Ritmo esperado acumulado:{" "}
+                  {formatCompactCop(expectedToDateCop)}
+                </p>
               </div>
             </div>
 
-            {/* Controles de Selección de Año y Trimestre */}
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Selector de Año con Radix UI Select */}
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span>Año:</span>
+            {/* Indicador de Avance Presupuestal */}
+            <div className="flex flex-col gap-1.5 min-w-[200px]">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-muted-foreground">Avance Presupuestal</span>
+                <span className="text-foreground">{budgetProgressPct}%</span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    isSurplus ? "bg-emerald-500" : "bg-primary",
+                  )}
+                  style={{ width: `${Math.min(budgetProgressPct, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. TARJETAS DE MÉTRICAS MACRO (Diseño fiel al estándar de tarjetas de Icesi) */}
+        <div
+          className={cn(
+            "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 transition-opacity duration-200",
+            isFetching ? "opacity-85" : "opacity-100",
+          )}
+        >
+          {/* KPI 1: Total Entregado al Cliente */}
+          <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
+            <div>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground">Total entregado</span>
+              <div className="mt-2.5">
+                <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                  {formatCompactCop(macroKpis.deliveredTotalCop)}
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {macroKpis.deliveredCount}{" "}
+                    {macroKpis.deliveredCount === 1 ? "propuesta radicada" : "propuestas radicadas"}
+                  </span>{" "}
+                  • Total acumulado
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 h-1 w-full rounded-full bg-emerald-500" />
+          </div>
+
+          {/* KPI 2: Tubería Activa (Pipeline) */}
+          <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
+            <div>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground">Tubería activa</span>
+              <div className="mt-2.5">
+                <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                  {formatCompactCop(macroKpis.pipelineTotalCop)}
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  <span className="font-semibold text-icesi-blue">{macroKpis.pipelineCount} en proceso</span> •
+                  Negociación / Costeo
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 h-1 w-full rounded-full bg-icesi-blue" />
+          </div>
+
+          {/* KPI 3: Volumen de Solicitudes y Tasa de Entrega */}
+          <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
+            <div>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground">Volumen total</span>
+              <div className="mt-2.5">
+                <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                  {macroKpis.totalProposals}
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  <span className="font-semibold text-purple-600 dark:text-purple-400">
+                    {macroKpis.winRatePercentage}% tasa de entrega
+                  </span>{" "}
+                  en este periodo
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 h-1 w-full rounded-full bg-purple-500" />
+          </div>
+
+          {/* KPI 4: Ciclo Promedio de Venta */}
+          <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
+            <div>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground">Ciclo de cierre</span>
+              <div className="mt-2.5">
+                <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                  {macroKpis.averageCycleDays} días
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">Promedio desde creación hasta entrega</p>
+              </div>
+            </div>
+            <div className="mt-4 h-1 w-full rounded-full bg-amber-500" />
+          </div>
+        </div>
+
+        {/* 3. TENDENCIAS MENSUALES Y CURVA COMPARATIVA INTERANUAL (YOY) */}
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <MonthlySalesBarChart data={trendsData} isLoading={isTrendsLoading} />
+          <YoySalesCurveChart data={trendsData} isLoading={isTrendsLoading} />
+        </div>
+
+        {/* 3. EMBUDO DE CONVERSIÓN COMERCIAL */}
+        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
+            <div>
+              <h2 className="font-display text-base font-bold text-foreground">Embudo de Conversión Comercial</h2>
+              <p className="text-xs text-muted-foreground">
+                Seguimiento del flujo de avance por etapa y capital acumulado en la tubería
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-muted-foreground">
+              {macroKpis.totalProposals} solicitudes en el periodo
+            </span>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            {conversionFunnel.map((item, index) => {
+              const colors = STAGE_COLORS[item.stage] || STAGE_COLORS.NEW;
+              return (
+                <div
+                  key={item.stage}
+                  className="group flex flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/20 p-3.5 transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted font-bold text-xs text-muted-foreground">
+                        {index + 1}
+                      </span>
+                      <span className="font-bold text-foreground">{item.label}</span>
+                      <span
+                        className={cn("rounded-md px-1.5 py-0.5 text-[11px] font-semibold", colors.bg, colors.text)}
+                      >
+                        {item.count} {item.count === 1 ? "solicitud" : "solicitudes"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-foreground">
+                        {item.totalCop > 0 ? formatCompactCop(item.totalCop) : "Sin costeo"}
+                      </span>
+                      <span className="text-muted-foreground w-10 text-right font-medium">{item.percentage}%</span>
+                    </div>
+                  </div>
+
+                  {/* Barra de Progreso Proporcional */}
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn("h-full transition-all duration-500", colors.fill)}
+                      style={{ width: `${Math.max(item.percentage, item.count > 0 ? 5 : 0)}%` }}
+                    />
+                  </div>
+
+                  {/* Desglose de Ramas en Entrega al Cliente (Ganadas vs Negociación vs Rechazadas) */}
+                  {item.stage === "DELIVERED" && macroKpis.wonTotalCop !== undefined && (
+                    <div className="mt-2 pt-2 border-t border-border/40 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                      <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 px-2.5 py-1 text-emerald-700 dark:text-emerald-400 font-semibold">
+                        <span>Ganadas (Aprobadas)</span>
+                        <span className="font-mono">
+                          {macroKpis.wonCount ?? 0} ({formatCompactCop(macroKpis.wonTotalCop ?? 0)})
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-sky-500/10 px-2.5 py-1 text-sky-700 dark:text-sky-400 font-semibold">
+                        <span>En Negociación</span>
+                        <span className="font-mono">
+                          {Math.max(
+                            0,
+                            (macroKpis.deliveredCount ?? 0) -
+                              (macroKpis.wonCount ?? 0) -
+                              (macroKpis.rejectedCount ?? 0),
+                          )}{" "}
+                          (
+                          {formatCompactCop(
+                            Math.max(
+                              0,
+                              (macroKpis.deliveredTotalCop ?? 0) -
+                                (macroKpis.wonTotalCop ?? 0) -
+                                (macroKpis.rejectedTotalCop ?? 0),
+                            ),
+                          )}
+                          )
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-red-500/10 px-2.5 py-1 text-red-700 dark:text-red-400 font-semibold">
+                        <span>Rechazadas</span>
+                        <span className="font-mono">
+                          {macroKpis.rejectedCount ?? 0} ({formatCompactCop(macroKpis.rejectedTotalCop ?? 0)})
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <Select value={String(selectedYear)} onValueChange={(val) => setSelectedYear(Number(val))}>
-                  <SelectTrigger
-                    aria-label="Seleccionar año"
-                    className="h-8 w-24 rounded-lg border-border bg-card px-2.5 text-xs font-bold text-foreground shadow-xs focus:ring-1 focus:ring-icesi-blue cursor-pointer"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {availableYears.map((year) => (
-                      <SelectItem key={year} value={String(year)} className="text-xs font-semibold cursor-pointer">
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              );
+            })}
+          </div>
+        </div>
 
-              {/* Selector de Trimestres (Pills) */}
-              <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs shadow-xs">
-                {QUARTERS.map((q) => {
-                  const active = selectedQuarter === q.value;
-                  return (
-                    <button
-                      key={q.label}
-                      type="button"
-                      onClick={() => setSelectedQuarter(q.value)}
-                      className={cn(
-                        "rounded-md px-3 py-1 font-semibold transition-all cursor-pointer",
-                        active
-                          ? "bg-card text-foreground shadow-xs border border-border/60"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {q.label}
-                    </button>
-                  );
-                })}
+        {/* 4. DOS COLUMNAS: RANKING DE KAMS Y DISTRIBUCIÓN POR NODO */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Columna Izquierda (2 cols): Ranking de Ejecutivos Comerciales (KAMs) */}
+          <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-display text-base font-bold text-foreground">
+                  Rendimiento por Ejecutivo Comercial (KAM)
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Resumen comparativo de ventas entregadas y gestión de cartera activa
+                </p>
               </div>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </div>
 
-              {/* Indicador de actualización sutil en segundo plano */}
-              {isFetching && (
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground animate-pulse">
-                  <RefreshCw className="h-3 w-3 animate-spin text-icesi-blue" />
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-border bg-muted/30 text-muted-foreground font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">Ejecutivo Comercial</th>
+                    <th className="py-2.5 px-3 text-center">Total Solicitudes</th>
+                    <th className="py-2.5 px-3 text-right">En Tubería</th>
+                    <th className="py-2.5 px-3 text-right">Total Entregado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {kamRanking.map((kam) => (
+                    <tr key={kam.kamId} className="hover:bg-muted/20 transition-colors">
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-icesi-blue/10 text-icesi-blue font-bold text-xs">
+                            {getKamInitials(kam.name)}
+                          </div>
+                          <div>
+                            <p className="font-bold text-foreground">{kam.name}</p>
+                            <p className="text-[11px] text-muted-foreground">{kam.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span className="rounded-md bg-muted px-2 py-0.5 font-bold text-foreground">
+                          {kam.totalProposals}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="font-bold text-foreground">
+                          {kam.pipelineTotalCop > 0 ? formatCompactCop(kam.pipelineTotalCop) : "$ 0 COP"}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">{kam.pipelineCount} en proceso</span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {kam.deliveredTotalCop > 0 ? formatCompactCop(kam.deliveredTotalCop) : "$ 0 COP"}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">{kam.deliveredCount} entregadas</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {kamRanking.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                        No hay datos de ejecutivos comerciales en este periodo.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Columna Derecha (1 col): Distribución por Nodo Temático */}
+          <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-display text-base font-bold text-foreground">Demanda por Nodo</h2>
+                <p className="text-xs text-muted-foreground">Distribución por área académica</p>
+              </div>
+              <Layers className="h-4 w-4 text-muted-foreground" />
+            </div>
+
+            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+              {nodeDistribution.map((node) => (
+                <div
+                  key={node.nodeId}
+                  className="flex items-center justify-between rounded-xl border border-border/50 bg-muted/20 p-3 text-xs hover:bg-muted/40 transition-colors"
+                >
+                  <div>
+                    <p className="font-bold text-foreground line-clamp-1">{node.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {node.totalProposals} {node.totalProposals === 1 ? "propuesta" : "propuestas"}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-bold text-emerald-600 dark:text-emerald-400">
+                      {node.deliveredTotalCop > 0 ? formatCompactCop(node.deliveredTotalCop) : "$ 0"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Tub: {node.pipelineTotalCop > 0 ? formatCompactCop(node.pipelineTotalCop) : "$ 0"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {nodeDistribution.length === 0 && (
+                <div className="py-8 text-center text-muted-foreground text-xs">
+                  Sin datos de nodos en este periodo.
                 </div>
               )}
             </div>
           </div>
-
-          {/* Banner Institucional de Metas Financieras y Semáforo de Cumplimiento a la Fecha */}
-          <div className="rounded-2xl border border-border bg-gradient-to-r from-card via-card to-muted/20 p-5 sm:p-6 shadow-xs">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-start gap-3.5">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Target className="h-6 w-6" />
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-display text-base font-bold text-foreground">
-                      Meta Anual Institucional: {formatCompactCop(centerTargetCop)}
-                    </h3>
-                    <span
-                      className={cn(
-                        "rounded-full px-2.5 py-0.5 text-[11px] font-bold inline-flex items-center gap-1",
-                        isSurplus
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-                      )}
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      {isSurplus
-                        ? `Superávit: +${formatCompactCop(diffToExpectedDateCop)} por encima de lo esperado a la fecha`
-                        : `Déficit: ${formatCompactCop(diffToExpectedDateCop)} frente al ritmo proyectado`}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Cuota presupuestal fijada por Dirección Financiera ({selectedYear}) · Ritmo esperado acumulado:{" "}
-                    {formatCompactCop(expectedToDateCop)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Indicador de Avance Presupuestal */}
-              <div className="flex flex-col gap-1.5 min-w-[200px]">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-muted-foreground">Avance Presupuestal</span>
-                  <span className="text-foreground">{budgetProgressPct}%</span>
-                </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-500",
-                      isSurplus ? "bg-emerald-500" : "bg-primary",
-                    )}
-                    style={{ width: `${Math.min(budgetProgressPct, 100)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. TARJETAS DE MÉTRICAS MACRO (Diseño fiel al estándar de tarjetas de Icesi) */}
-          <div
-            className={cn(
-              "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 transition-opacity duration-200",
-              isFetching ? "opacity-85" : "opacity-100",
-            )}
-          >
-            {/* KPI 1: Total Entregado al Cliente */}
-            <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
-              <div>
-                <span className="text-xs sm:text-sm font-medium text-muted-foreground">Total entregado</span>
-                <div className="mt-2.5">
-                  <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                    {formatCompactCop(macroKpis.deliveredTotalCop)}
-                  </p>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      {macroKpis.deliveredCount}{" "}
-                      {macroKpis.deliveredCount === 1 ? "propuesta radicada" : "propuestas radicadas"}
-                    </span>{" "}
-                    • Total acumulado
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 h-1 w-full rounded-full bg-emerald-500" />
-            </div>
-
-            {/* KPI 2: Tubería Activa (Pipeline) */}
-            <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
-              <div>
-                <span className="text-xs sm:text-sm font-medium text-muted-foreground">Tubería activa</span>
-                <div className="mt-2.5">
-                  <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                    {formatCompactCop(macroKpis.pipelineTotalCop)}
-                  </p>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    <span className="font-semibold text-icesi-blue">{macroKpis.pipelineCount} en proceso</span> •
-                    Negociación / Costeo
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 h-1 w-full rounded-full bg-icesi-blue" />
-            </div>
-
-            {/* KPI 3: Volumen de Solicitudes y Tasa de Entrega */}
-            <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
-              <div>
-                <span className="text-xs sm:text-sm font-medium text-muted-foreground">Volumen total</span>
-                <div className="mt-2.5">
-                  <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                    {macroKpis.totalProposals}
-                  </p>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    <span className="font-semibold text-purple-600 dark:text-purple-400">
-                      {macroKpis.winRatePercentage}% tasa de entrega
-                    </span>{" "}
-                    en este periodo
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 h-1 w-full rounded-full bg-purple-500" />
-            </div>
-
-            {/* KPI 4: Ciclo Promedio de Venta */}
-            <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
-              <div>
-                <span className="text-xs sm:text-sm font-medium text-muted-foreground">Ciclo de cierre</span>
-                <div className="mt-2.5">
-                  <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                    {macroKpis.averageCycleDays} días
-                  </p>
-                  <p className="mt-1.5 text-xs text-muted-foreground">Promedio desde creación hasta entrega</p>
-                </div>
-              </div>
-              <div className="mt-4 h-1 w-full rounded-full bg-amber-500" />
-            </div>
-          </div>
-
-          {/* 3. TENDENCIAS MENSUALES Y CURVA COMPARATIVA INTERANUAL (YOY) */}
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <MonthlySalesBarChart data={trendsData} isLoading={isTrendsLoading} />
-            <YoySalesCurveChart data={trendsData} isLoading={isTrendsLoading} />
-          </div>
-
-          {/* 3. EMBUDO DE CONVERSIÓN COMERCIAL */}
-          <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
-              <div>
-                <h2 className="font-display text-base font-bold text-foreground">Embudo de Conversión Comercial</h2>
-                <p className="text-xs text-muted-foreground">
-                  Seguimiento del flujo de avance por etapa y capital acumulado en la tubería
-                </p>
-              </div>
-              <span className="text-xs font-semibold text-muted-foreground">
-                {macroKpis.totalProposals} solicitudes en el periodo
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              {conversionFunnel.map((item, index) => {
-                const colors = STAGE_COLORS[item.stage] || STAGE_COLORS.NEW;
-                return (
-                  <div
-                    key={item.stage}
-                    className="group flex flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/20 p-3.5 transition-colors hover:bg-muted/40"
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted font-bold text-xs text-muted-foreground">
-                          {index + 1}
-                        </span>
-                        <span className="font-bold text-foreground">{item.label}</span>
-                        <span
-                          className={cn("rounded-md px-1.5 py-0.5 text-[11px] font-semibold", colors.bg, colors.text)}
-                        >
-                          {item.count} {item.count === 1 ? "solicitud" : "solicitudes"}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-foreground">
-                          {item.totalCop > 0 ? formatCompactCop(item.totalCop) : "Sin costeo"}
-                        </span>
-                        <span className="text-muted-foreground w-10 text-right font-medium">{item.percentage}%</span>
-                      </div>
-                    </div>
-
-                    {/* Barra de Progreso Proporcional */}
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={cn("h-full transition-all duration-500", colors.fill)}
-                        style={{ width: `${Math.max(item.percentage, item.count > 0 ? 5 : 0)}%` }}
-                      />
-                    </div>
-
-                    {/* Desglose de Ramas en Entrega al Cliente (Ganadas vs Negociación vs Rechazadas) */}
-                    {item.stage === "DELIVERED" && macroKpis.wonTotalCop !== undefined && (
-                      <div className="mt-2 pt-2 border-t border-border/40 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-                        <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 px-2.5 py-1 text-emerald-700 dark:text-emerald-400 font-semibold">
-                          <span>Ganadas (Aprobadas)</span>
-                          <span className="font-mono">
-                            {macroKpis.wonCount ?? 0} ({formatCompactCop(macroKpis.wonTotalCop ?? 0)})
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg bg-sky-500/10 px-2.5 py-1 text-sky-700 dark:text-sky-400 font-semibold">
-                          <span>En Negociación</span>
-                          <span className="font-mono">
-                            {Math.max(
-                              0,
-                              (macroKpis.deliveredCount ?? 0) -
-                                (macroKpis.wonCount ?? 0) -
-                                (macroKpis.rejectedCount ?? 0),
-                            )}{" "}
-                            (
-                            {formatCompactCop(
-                              Math.max(
-                                0,
-                                (macroKpis.deliveredTotalCop ?? 0) -
-                                  (macroKpis.wonTotalCop ?? 0) -
-                                  (macroKpis.rejectedTotalCop ?? 0),
-                              ),
-                            )}
-                            )
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg bg-red-500/10 px-2.5 py-1 text-red-700 dark:text-red-400 font-semibold">
-                          <span>Rechazadas</span>
-                          <span className="font-mono">
-                            {macroKpis.rejectedCount ?? 0} ({formatCompactCop(macroKpis.rejectedTotalCop ?? 0)})
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 4. DOS COLUMNAS: RANKING DE KAMS Y DISTRIBUCIÓN POR NODO */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* Columna Izquierda (2 cols): Ranking de Ejecutivos Comerciales (KAMs) */}
-            <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="font-display text-base font-bold text-foreground">
-                    Rendimiento por Ejecutivo Comercial (KAM)
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    Resumen comparativo de ventas entregadas y gestión de cartera activa
-                  </p>
-                </div>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-border bg-muted/30 text-muted-foreground font-semibold">
-                    <tr>
-                      <th className="py-2.5 px-3">Ejecutivo Comercial</th>
-                      <th className="py-2.5 px-3 text-center">Total Solicitudes</th>
-                      <th className="py-2.5 px-3 text-right">En Tubería</th>
-                      <th className="py-2.5 px-3 text-right">Total Entregado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {kamRanking.map((kam) => (
-                      <tr key={kam.kamId} className="hover:bg-muted/20 transition-colors">
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-icesi-blue/10 text-icesi-blue font-bold text-xs">
-                              {getKamInitials(kam.name)}
-                            </div>
-                            <div>
-                              <p className="font-bold text-foreground">{kam.name}</p>
-                              <p className="text-[11px] text-muted-foreground">{kam.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <span className="rounded-md bg-muted px-2 py-0.5 font-bold text-foreground">
-                            {kam.totalProposals}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <div className="font-bold text-foreground">
-                            {kam.pipelineTotalCop > 0 ? formatCompactCop(kam.pipelineTotalCop) : "$ 0 COP"}
-                          </div>
-                          <span className="text-[11px] text-muted-foreground">{kam.pipelineCount} en proceso</span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <div className="font-bold text-emerald-600 dark:text-emerald-400">
-                            {kam.deliveredTotalCop > 0 ? formatCompactCop(kam.deliveredTotalCop) : "$ 0 COP"}
-                          </div>
-                          <span className="text-[11px] text-muted-foreground">{kam.deliveredCount} entregadas</span>
-                        </td>
-                      </tr>
-                    ))}
-                    {kamRanking.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center text-muted-foreground">
-                          No hay datos de ejecutivos comerciales en este periodo.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Columna Derecha (1 col): Distribución por Nodo Temático */}
-            <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="font-display text-base font-bold text-foreground">Demanda por Nodo</h2>
-                  <p className="text-xs text-muted-foreground">Distribución por área académica</p>
-                </div>
-                <Layers className="h-4 w-4 text-muted-foreground" />
-              </div>
-
-              <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
-                {nodeDistribution.map((node) => (
-                  <div
-                    key={node.nodeId}
-                    className="flex items-center justify-between rounded-xl border border-border/50 bg-muted/20 p-3 text-xs hover:bg-muted/40 transition-colors"
-                  >
-                    <div>
-                      <p className="font-bold text-foreground line-clamp-1">{node.name}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {node.totalProposals} {node.totalProposals === 1 ? "propuesta" : "propuestas"}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-bold text-emerald-600 dark:text-emerald-400">
-                        {node.deliveredTotalCop > 0 ? formatCompactCop(node.deliveredTotalCop) : "$ 0"}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Tub: {node.pipelineTotalCop > 0 ? formatCompactCop(node.pipelineTotalCop) : "$ 0"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {nodeDistribution.length === 0 && (
-                  <div className="py-8 text-center text-muted-foreground text-xs">
-                    Sin datos de nodos en este periodo.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
-      ) : (
-        <Company360View />
-      )}
+      </div>
     </div>
   );
 }
