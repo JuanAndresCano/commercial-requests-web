@@ -65,12 +65,26 @@ describe("Colombian phone: exactly 10 digits, optional +57 or 57", () => {
 
 describe("customerContactServerMessage", () => {
   it("translates the contactability and phone messages of a 400", () => {
-    expect(
-      customerContactServerMessage(new ApiError(400, "At least one valid customer phone or email is required")),
-    ).toBe(CONTACTABILITY_ERROR);
+    expect(customerContactServerMessage(new ApiError(400, "Deja al menos un teléfono o correo válido"))).toBe(
+      CONTACTABILITY_ERROR,
+    );
     expect(customerContactServerMessage(new ApiError(400, "contactPhone must be a valid phone number"))).toBe(
       PHONE_ERROR,
     );
+  });
+
+  it("maps the exact Spanish messages the backend sends, without confusing them with a phone format error", () => {
+    // Messages copied from the backend: create/edit, and the check when sending to the client.
+    const contactability = [
+      "Deja al menos un teléfono o correo válido",
+      "Antes de enviar al cliente, la solicitud necesita al menos un teléfono o correo válido",
+    ];
+    for (const message of contactability) {
+      expect(customerContactServerMessage(new ApiError(400, message))).toBe(CONTACTABILITY_ERROR);
+    }
+    expect(
+      customerContactServerMessage(new ApiError(400, "El teléfono debe tener 10 dígitos (puede iniciar con +57)")),
+    ).toBe(PHONE_ERROR);
   });
 
   it("returns undefined for anything it does not know", () => {

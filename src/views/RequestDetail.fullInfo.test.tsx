@@ -410,9 +410,7 @@ describe("Edit request information: minimum contact channel (checked on the clie
   });
 
   it("if the server still answers 400 about contactability it is shown in Spanish, never in English", async () => {
-    vi.mocked(requestsApi.updateInfo).mockRejectedValue(
-      new ApiError(400, "At least one valid customer phone or email is required"),
-    );
+    vi.mocked(requestsApi.updateInfo).mockRejectedValue(new ApiError(400, "Deja al menos un teléfono o correo válido"));
     await open({ phone: "3001234567" });
     goTo("Empresa");
     fireEvent.change(await screen.findByLabelText("Dirección"), { target: { value: "Calle 1" } });

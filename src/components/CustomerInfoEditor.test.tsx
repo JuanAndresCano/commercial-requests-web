@@ -198,9 +198,7 @@ describe("proposal-scoped customer editing", () => {
   });
 
   it("shows a server 400 about contactability in Spanish, never the English text", async () => {
-    vi.mocked(customerApi.update).mockRejectedValue(
-      new ApiError(400, "At least one valid customer phone or email is required"),
-    );
+    vi.mocked(customerApi.update).mockRejectedValue(new ApiError(400, "Deja al menos un teléfono o correo válido"));
     mount();
     fireEvent.change(screen.getByLabelText("Teléfono del contacto"), { target: { value: "3155559999" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar empresa y contacto" }));

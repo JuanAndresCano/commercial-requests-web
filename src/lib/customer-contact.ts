@@ -44,7 +44,7 @@ export function phoneValue(raw: string | null | undefined): string | undefined {
 export function customerContactServerMessage(error: unknown): string | undefined {
   if (error instanceof ApiError && error.status === 409 && /\bNIT\b/i.test(error.message)) return NIT_IN_USE_ERROR;
   if (!(error instanceof ApiError) || error.status !== 400) return undefined;
-  if (/at least one valid customer phone or email/i.test(error.message)) return CONTACTABILITY_ERROR;
+  if (/al menos un tel[eé]fono o correo/i.test(error.message)) return CONTACTABILITY_ERROR;
   if (/phone|tel[eé]fono/i.test(error.message)) return PHONE_ERROR;
   return undefined;
 }

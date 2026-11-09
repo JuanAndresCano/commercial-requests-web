@@ -600,9 +600,7 @@ describe("NewRequest Wizard (HU 3.2)", () => {
 
   it("shows a server 400 about contactability in Spanish and takes the KAM back to the contact step", async () => {
     const toastError = vi.spyOn(toast, "error").mockImplementation(() => "");
-    mockedRequestsApi.create.mockRejectedValueOnce(
-      new ApiError(400, "At least one valid customer phone or email is required"),
-    );
+    mockedRequestsApi.create.mockRejectedValueOnce(new ApiError(400, "Deja al menos un teléfono o correo válido"));
     await renderNewRequest();
     fireEvent.change(screen.getByLabelText(/Razón Social \/ Nombre de la Empresa/i), {
       target: { value: "Empresa Test S.A.S" },
