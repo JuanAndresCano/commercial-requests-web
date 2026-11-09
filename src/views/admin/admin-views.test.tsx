@@ -158,7 +158,8 @@ describe("Admin Submodule Views (Phase 2 Routing & Shells)", () => {
     expect(screen.getByText("Nodos Temáticos & Portafolio Académico")).toBeInTheDocument();
     expect(screen.getByText("Nodo con Mayor Recaudo")).toBeInTheDocument();
     expect(screen.getByText("Líder de Producto Destacado")).toBeInTheDocument();
-    expect(screen.getByText("Tiempo Promedio de Diseño Técnico")).toBeInTheDocument();
+    expect(screen.getByText("Tiempo Promedio en Fábrica")).toBeInTheDocument();
+    expect(screen.getByText("Nodos Temáticos & Mix de Servicios")).toBeInTheDocument();
   });
 
   it("renders AdminEmpresasView (Submódulo 4) with Company360 component", () => {

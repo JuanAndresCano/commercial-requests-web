@@ -444,6 +444,34 @@ export interface NodeDistributionEntry {
   totalProposals: number;
   deliveredTotalCop: number;
   pipelineTotalCop: number;
+  wonTotalCop?: number;
+  wonCount?: number;
+  winRatePercentage?: number;
+  shareOfTotalSalesPercentage?: number;
+  avgTechnicalDesignDays?: number;
+  avgCostingDays?: number;
+}
+
+export interface ProductLeaderEntry {
+  leaderId: string;
+  name: string;
+  email: string;
+  totalAssigned: number;
+  quotedTotalCop: number;
+  wonTotalCop: number;
+  wonCount: number;
+  winRatePercentage: number;
+  shareOfTotalSalesPercentage?: number;
+}
+
+export interface ServiceMixEntry {
+  category: string;
+  label: string;
+  proposalsCount: number;
+  quotedCop: number;
+  wonCop: number;
+  wonCount: number;
+  shareOfWonPercentage: number;
 }
 
 export interface AdminDashboardData {
@@ -452,6 +480,8 @@ export interface AdminDashboardData {
   conversionFunnel: FunnelStage[];
   kamRanking: KamRankingEntry[];
   nodeDistribution: NodeDistributionEntry[];
+  productLeaders?: ProductLeaderEntry[];
+  serviceMix?: ServiceMixEntry[];
 }
 
 export interface CompanyListItem {

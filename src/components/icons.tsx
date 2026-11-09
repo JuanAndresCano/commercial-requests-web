@@ -137,6 +137,7 @@ export const Network = makeIcon("hub");
 export const PanelLeft = makeIcon("view_sidebar");
 export const Percent = makeIcon("percent");
 export const Phone = makeIcon("call");
+export const PieChart = makeIcon("pie_chart");
 export const Plus = makeIcon("add");
 export const PlusCircle = makeIcon("add_circle");
 export const Printer = makeIcon("print");
