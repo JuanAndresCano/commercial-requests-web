@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "@/lib/app-router";
 import {
   Building2,
@@ -17,6 +17,8 @@ import {
   Users,
   Briefcase,
   AlertCircle,
+  ArrowLeft,
+  ShieldCheck,
 } from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminCompanies, useAdminCompany360 } from "@/hooks/use-admin-company-360";
@@ -26,6 +28,7 @@ import { cn } from "@/lib/utils";
 
 interface Company360ViewProps {
   initialCompanyId?: string;
+  onBackToDirectory?: () => void;
 }
 
 const STAGE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
@@ -80,7 +83,7 @@ const STAGE_CONFIG: Record<string, { label: string; bg: string; text: string; bo
   },
 };
 
-export function Company360View({ initialCompanyId }: Company360ViewProps) {
+export function Company360View({ initialCompanyId, onBackToDirectory }: Company360ViewProps) {
   const {
     data: companies = [],
     isLoading: isLoadingCompanies,
@@ -89,6 +92,7 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
   } = useAdminCompanies();
 
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(initialCompanyId ?? null);
+  const [selectedYear, setSelectedYear] = useState<string>("ALL");
 
   // Sync selected company when list is loaded
   useEffect(() => {
@@ -104,6 +108,32 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
     isError: isDetailsError,
     refetch: refetchDetails,
   } = useAdminCompany360(selectedCompanyId);
+
+  const timeline = company360?.timeline ?? [];
+  const metrics = company360?.metrics;
+
+  // Extract distinct years present in the company's timeline
+  const availableYears = useMemo(() => {
+    const set = new Set<number>();
+    for (const ev of timeline) {
+      if (ev.year) set.add(ev.year);
+    }
+    return Array.from(set).sort((a, b) => b - a);
+  }, [timeline]);
+
+  // Filter timeline by selected year
+  const displayTimeline = useMemo(() => {
+    if (selectedYear === "ALL") return timeline;
+    const y = Number(selectedYear);
+    return timeline.filter((ev) => ev.year === y);
+  }, [timeline, selectedYear]);
+
+  // Retention health and months since last engagement
+  const monthsSinceLastEngagement = useMemo(() => {
+    if (!metrics?.lastEngagementDate) return null;
+    const diffMs = new Date().getTime() - new Date(metrics.lastEngagementDate).getTime();
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.4375));
+  }, [metrics?.lastEngagementDate]);
 
   // Initial loading state
   if (isLoadingCompanies && companies.length === 0) {
@@ -152,7 +182,7 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
     return <Company360Skeleton />;
   }
 
-  if (isDetailsError || !company360) {
+  if (isDetailsError || !company360 || !metrics) {
     return (
       <div className="mx-auto max-w-xl py-16 text-center" data-testid="company-details-error">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive mb-3">
@@ -174,24 +204,39 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
     );
   }
 
-  const { company, metrics, timeline = [], nodeBreakdown = [] } = company360;
+  const { company, impact, nodeBreakdown = [] } = company360;
   const contacts = company?.contacts && Array.isArray(company.contacts) ? company.contacts : [];
 
-  const impact = company360.impact ||
-    metrics?.impact || {
-      totalHours: metrics?.totalHours ?? 0,
-      totalParticipants: metrics?.impactedParticipants ?? 0,
-      successMetrics: [],
-      expectedResults: [],
-      competencies: [],
-    };
-
-  const hoursTotal = metrics?.totalHours ?? impact?.totalHours ?? 0;
-  const participantsTotal = metrics?.impactedParticipants ?? impact?.totalParticipants ?? 0;
+  // Recalculate metrics for displayTimeline (or use all-time metrics when ALL is selected)
+  const isAllYears = selectedYear === "ALL";
+  const displayDeliveredCount = isAllYears
+    ? metrics.deliveredCount
+    : displayTimeline.filter((ev) => ev.statusCode === "DELIVERED").length;
+  const displayDeliveredTotalCop = isAllYears
+    ? metrics.deliveredTotalCop
+    : displayTimeline
+        .filter((ev) => ev.statusCode === "DELIVERED")
+        .reduce((acc, ev) => acc + (ev.grossValue ?? ev.estimatedValueCop ?? 0), 0);
+  const displayPipelineCount = isAllYears
+    ? metrics.pipelineCount
+    : displayTimeline.filter(
+        (ev) => ev.statusCode !== "DELIVERED" && ev.statusCode !== "REJECTED" && ev.statusCode !== "CANCELLED",
+      ).length;
+  const displayPipelineTotalCop = isAllYears
+    ? metrics.pipelineTotalCop
+    : displayTimeline
+        .filter((ev) => ev.statusCode !== "DELIVERED" && ev.statusCode !== "REJECTED" && ev.statusCode !== "CANCELLED")
+        .reduce((acc, ev) => acc + (ev.grossValue ?? ev.estimatedValueCop ?? 0), 0);
+  const hoursTotal = isAllYears
+    ? (metrics?.totalHours ?? impact?.totalHours ?? 0)
+    : displayTimeline.reduce((acc, ev) => acc + (ev.totalHours ?? 0), 0);
+  const participantsTotal = isAllYears
+    ? (metrics?.impactedParticipants ?? impact?.totalParticipants ?? 0)
+    : displayTimeline.reduce((acc, ev) => acc + (ev.participants ?? 0), 0);
 
   // 1. Desglose analítico por línea de servicio
   const serviceTypeMap = new Map<string, { count: number; totalCop: number }>();
-  for (const ev of timeline) {
+  for (const ev of displayTimeline) {
     const rawType = ev.serviceType || ev.programType || "Consultoría Especializada";
     const val = ev.grossValue ?? ev.estimatedValueCop ?? 0;
     const curr = serviceTypeMap.get(rawType) ?? { count: 0, totalCop: 0 };
@@ -205,21 +250,21 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
       name,
       count: data.count,
       totalCop: data.totalCop,
-      percentage: metrics.totalProposals > 0 ? Math.round((data.count / metrics.totalProposals) * 100) : 0,
+      percentage: displayTimeline.length > 0 ? Math.round((data.count / displayTimeline.length) * 100) : 0,
     }))
     .sort((a, b) => b.totalCop - a.totalCop);
 
   // 2. Salud comercial y gestión de la cuenta
   const averageTicket =
-    metrics.deliveredCount > 0
-      ? Math.round(metrics.deliveredTotalCop / metrics.deliveredCount)
-      : metrics.totalProposals > 0
-        ? Math.round((metrics.deliveredTotalCop + metrics.pipelineTotalCop) / metrics.totalProposals)
+    displayDeliveredCount > 0
+      ? Math.round(displayDeliveredTotalCop / displayDeliveredCount)
+      : displayTimeline.length > 0
+        ? Math.round((displayDeliveredTotalCop + displayPipelineTotalCop) / displayTimeline.length)
         : 0;
 
   // KAMs involucrados
   const kamMap = new Map<string, number>();
-  for (const ev of timeline) {
+  for (const ev of displayTimeline) {
     const kam = ev.kamName || (typeof ev.kam === "object" ? ev.kam?.name : null) || "Sin asignar";
     kamMap.set(kam, (kamMap.get(kam) ?? 0) + 1);
   }
@@ -244,18 +289,68 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
     <div className="space-y-6" data-testid="company-360-view">
       {/* 1. BARRA DE SELECCIÓN Y CONTROLES SUPERIORES */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-              Inteligencia de Cuenta y Trayectoria (360°)
-            </h2>
+        <div className="flex items-center gap-3">
+          {onBackToDirectory && (
+            <button
+              type="button"
+              onClick={onBackToDirectory}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground shadow-xs hover:border-icesi-blue hover:text-icesi-blue transition-colors cursor-pointer shrink-0"
+              title="Volver al directorio maestro de cuentas"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Volver al Ranking</span>
+            </button>
+          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+                Inteligencia de Cuenta y Trayectoria (360°)
+              </h2>
+            </div>
+            <p className="mt-0.5 text-xs sm:text-sm text-muted-foreground">
+              Línea de tiempo histórica, impacto tangible de negocio y penetración por nodos académicos
+            </p>
           </div>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            Línea de tiempo histórica, impacto tangible de negocio y penetración por nodos académicos
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Selector Temporal de Año */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>Año:</span>
+            </div>
+            <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs shadow-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedYear("ALL")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer",
+                  selectedYear === "ALL"
+                    ? "bg-card text-foreground shadow-xs border border-border/60"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Histórico
+              </button>
+              {availableYears.map((yr) => (
+                <button
+                  key={yr}
+                  type="button"
+                  onClick={() => setSelectedYear(String(yr))}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer",
+                    selectedYear === String(yr)
+                      ? "bg-card text-foreground shadow-xs border border-border/60"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {yr}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Selector de Empresa con Radix UI Select */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
@@ -265,7 +360,7 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
             <Select value={selectedCompanyId ?? ""} onValueChange={(val) => setSelectedCompanyId(val)}>
               <SelectTrigger
                 aria-label="Seleccionar empresa aliada"
-                className="h-9 w-64 sm:w-80 rounded-lg border-border bg-card px-3 text-xs font-bold text-foreground shadow-xs focus:ring-1 focus:ring-icesi-blue cursor-pointer"
+                className="h-9 w-60 sm:w-72 rounded-lg border-border bg-card px-3 text-xs font-bold text-foreground shadow-xs focus:ring-1 focus:ring-icesi-blue cursor-pointer"
               >
                 <SelectValue placeholder="Seleccionar empresa..." />
               </SelectTrigger>
@@ -361,6 +456,23 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
                 </div>
               )}
             </div>
+
+            {/* Alerta de Retención y Fidelización */}
+            {monthsSinceLastEngagement !== null && (
+              <div className="pt-2">
+                {monthsSinceLastEngagement > 12 ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span>Riesgo de abandono: Sin nuevas solicitudes hace {monthsSinceLastEngagement} meses</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    <span>Cuenta fidelizada y activa (última intervención reciente)</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Columna Derecha: Contactos / Interlocutores Registrados */}
@@ -411,11 +523,11 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
           </div>
           <div className="mt-3">
             <div className="font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-              {formatCop(metrics.deliveredTotalCop)}
+              {formatCop(displayDeliveredTotalCop)}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{metrics.deliveredCount}</span>{" "}
-              {metrics.deliveredCount === 1 ? "propuesta finalizada" : "propuestas finalizadas"}
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{displayDeliveredCount}</span>{" "}
+              {displayDeliveredCount === 1 ? "propuesta finalizada" : "propuestas finalizadas"}
             </p>
           </div>
         </div>
@@ -430,11 +542,11 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
           </div>
           <div className="mt-3">
             <div className="font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-              {formatCop(metrics.pipelineTotalCop)}
+              {formatCop(displayPipelineTotalCop)}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              <span className="font-semibold text-amber-600 dark:text-amber-400">{metrics.pipelineCount}</span>{" "}
-              {metrics.pipelineCount === 1 ? "solicitud en proceso" : "solicitudes en proceso"}
+              <span className="font-semibold text-amber-600 dark:text-amber-400">{displayPipelineCount}</span>{" "}
+              {displayPipelineCount === 1 ? "solicitud en proceso" : "solicitudes en proceso"}
             </p>
           </div>
         </div>
@@ -486,11 +598,11 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
                 </p>
               </div>
               <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
-                {timeline.length} {timeline.length === 1 ? "iniciativa" : "iniciativas"}
+                {displayTimeline.length} {displayTimeline.length === 1 ? "iniciativa" : "iniciativas"}
               </span>
             </div>
 
-            {timeline.length === 0 ? (
+            {displayTimeline.length === 0 ? (
               <div className="py-12 text-center text-xs text-muted-foreground">
                 No hay iniciativas registradas para esta empresa.
               </div>
@@ -500,7 +612,7 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
                 <div className="absolute left-[23px] top-3 bottom-4 w-0.5 bg-border" aria-hidden="true" />
 
                 <div className="space-y-6">
-                  {timeline.map((event) => {
+                  {displayTimeline.map((event) => {
                     const stageKey = event.statusCode || event.status || "NEW";
                     const stage = STAGE_CONFIG[stageKey] || {
                       label: event.statusLabel || stageKey,
@@ -557,16 +669,31 @@ export function Company360View({ initialCompanyId }: Company360ViewProps) {
                               </Link>
                             </div>
 
-                            <span
-                              className={cn(
-                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-                                stage.bg,
-                                stage.text,
-                                stage.border,
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                                  stage.bg,
+                                  stage.text,
+                                  stage.border,
+                                )}
+                              >
+                                {stage.label}
+                              </span>
+
+                              {event.commercialStatusLabel && (
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold",
+                                    event.commercialStatus === "REJECTED"
+                                      ? "bg-red-500/10 text-red-600 border-red-500/30"
+                                      : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+                                  )}
+                                >
+                                  {event.commercialStatusLabel}
+                                </span>
                               )}
-                            >
-                              {stage.label}
-                            </span>
+                            </div>
                           </div>
 
                           {/* Título de la propuesta */}

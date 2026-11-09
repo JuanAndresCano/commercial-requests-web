@@ -478,4 +478,40 @@ describe("Company360View Component", () => {
 
     expect(hookSpy).toHaveBeenCalledWith("comp-2");
   });
+
+  it("renders onBackToDirectory button and triggers callback when clicked", () => {
+    const onBack = vi.fn();
+    vi.spyOn(companyHooks, "useAdminCompanies").mockReturnValue({
+      data: mockCompanies,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof companyHooks.useAdminCompanies>);
+
+    vi.spyOn(companyHooks, "useAdminCompany360").mockReturnValue({
+      data: mockCompany360,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof companyHooks.useAdminCompany360>);
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Company360View initialCompanyId="comp-1" onBackToDirectory={onBack} />
+      </QueryClientProvider>,
+    );
+
+    const backButton = screen.getByRole("button", { name: /volver al ranking/i });
+    expect(backButton).toBeInTheDocument();
+    fireEvent.click(backButton);
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    // Verify temporal year buttons exist
+    expect(screen.getByRole("button", { name: /histórico/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "2026" })).toBeInTheDocument();
+  });
 });

@@ -494,6 +494,9 @@ export interface CompanyListItem {
   deliveredCount: number;
   deliveredTotalCop: number;
   pipelineTotalCop: number;
+  wonCount?: number;
+  wonTotalCop?: number;
+  winRatePercentage?: number;
 }
 
 export interface CompanyTimelineEvent {
@@ -508,6 +511,8 @@ export interface CompanyTimelineEvent {
   statusCode?: string;
   status?: string;
   statusLabel?: string;
+  commercialStatus?: string | null;
+  commercialStatusLabel?: string | null;
   grossValue?: number;
   estimatedValueCop?: number;
   nodeName: string;
@@ -571,6 +576,10 @@ export interface Company360Response {
     deliveredTotalCop: number;
     pipelineTotalCop: number;
     totalPortfolioCop?: number;
+    wonCount?: number;
+    wonTotalCop?: number;
+    winRatePercentage?: number;
+    averageTicketCop?: number;
     totalHours: number;
     impactedParticipants: number;
     activeNodesCount: number;

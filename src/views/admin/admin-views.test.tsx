@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TestRouter } from "@/test/router";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -33,6 +33,31 @@ import * as targetsHook from "@/hooks/use-sales-targets";
 
 vi.mock("@/hooks/use-admin-dashboard");
 vi.mock("@/hooks/use-sales-targets");
+
+vi.mock("@/hooks/use-admin-company-360", () => ({
+  useAdminCompanies: () => ({
+    data: [
+      {
+        id: "comp-1",
+        name: "Banco W",
+        nit: "890300279-4",
+        sector: "Banca y Finanzas",
+        type: "PRIVADA",
+        totalProposals: 7,
+        deliveredCount: 3,
+        deliveredTotalCop: 375968000,
+        pipelineTotalCop: 46176000,
+        wonTotalCop: 375968000,
+        winRatePercentage: 89.1,
+      },
+    ],
+    isLoading: false,
+  }),
+  useAdminCompany360: () => ({
+    data: null,
+    isLoading: false,
+  }),
+}));
 
 vi.mock("@/components/dashboard/AdminDashboard", () => ({
   AdminDashboard: () => <div data-testid="mock-admin-dashboard">Tablero Ejecutivo Macro</div>,
@@ -162,10 +187,15 @@ describe("Admin Submodule Views (Phase 2 Routing & Shells)", () => {
     expect(screen.getByText("Nodos Temáticos & Mix de Servicios")).toBeInTheDocument();
   });
 
-  it("renders AdminEmpresasView (Submódulo 4) with Company360 component", () => {
+  it("renders AdminEmpresasView (Submódulo 4) with directory ranking and 360 view tab", () => {
     renderWithShell(<AdminEmpresasView />, "/admin/empresas");
     expect(screen.getByTestId("admin-empresas-view")).toBeInTheDocument();
     expect(screen.getByText("Inteligencia 360° de Empresas Aliadas")).toBeInTheDocument();
+    expect(screen.getByText("Top Cliente en Facturación")).toBeInTheDocument();
+    expect(screen.getByTestId("company-directory-ranking-table")).toBeInTheDocument();
+
+    // Switch to Ficha 360 tab
+    fireEvent.click(screen.getByText("Ficha de Inteligencia 360°"));
     expect(screen.getByTestId("mock-company-360")).toBeInTheDocument();
   });
 
