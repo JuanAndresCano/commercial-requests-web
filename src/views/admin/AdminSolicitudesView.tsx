@@ -1,12 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
 import { RoleBadge } from "@/components/RoleBadge";
-import { FileSpreadsheet, Search, Filter, Download } from "@/components/icons";
+import { AdminAuditTable } from "@/components/dashboard/AdminAuditTable";
+import { useRequests } from "@/hooks/use-requests";
+import { FileSpreadsheet, AlertTriangle, Clock, CheckCircle2, RefreshCw, AlertCircle } from "@/components/icons";
+import { formatCompactCop } from "@/lib/mock-data";
 
 export default function AdminSolicitudesView() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const { data: proposals = [], isLoading, isError, refetch } = useRequests();
+
+  // Top Audit KPIs
+  const summaryKpis = useMemo(() => {
+    let totalActive = 0;
+    let totalDelivered = 0;
+    let totalRiskSla = 0;
+    let totalVolumeCop = 0;
+
+    for (const p of proposals) {
+      const code = p.workflow?.statusCode ?? "NEW";
+      const daysElapsed = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+      );
+      const hasProfessor = Boolean(
+        p.assignments && p.assignments.some((a) => a.role === "PROFESSOR" || Boolean(a.professor)),
+      );
+      const isPendingProfessorAlert = (code === "NEW" || code === "IN_PROGRESS") && !hasProfessor && daysElapsed >= 5;
+      const isBottleneckAlert =
+        code !== "DELIVERED" && code !== "REJECTED" && code !== "CANCELLED" && daysElapsed >= 20;
+
+      if (code === "DELIVERED") {
+        totalDelivered++;
+      } else if (code !== "REJECTED" && code !== "CANCELLED") {
+        totalActive++;
+      }
+
+      if (isPendingProfessorAlert || isBottleneckAlert) {
+        totalRiskSla++;
+      }
+
+      const amt = p.deliveredValueCop
+        ? Number(p.deliveredValueCop)
+        : p.economics && p.economics[0]?.grossValue
+          ? Number(p.economics[0].grossValue)
+          : 0;
+      totalVolumeCop += amt;
+    }
+
+    return {
+      total: proposals.length,
+      active: totalActive,
+      delivered: totalDelivered,
+      riskSla: totalRiskSla,
+      volumeCop: totalVolumeCop,
+    };
+  }, [proposals]);
 
   return (
     <AppShell>
@@ -21,54 +71,128 @@ export default function AdminSolicitudesView() {
               <RoleBadge label="Administrador Icesi" />
             </div>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              Visor tabular maestro para auditar, supervisar SLAs de envejecimiento y exportar propuestas de la
-              Universidad
+              Visor tabular maestro para auditar el expediente completo, supervisar cuellos de botella y exportar
+              informes directivos de Rectoría
             </p>
           </div>
 
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/90 cursor-pointer self-start sm:self-auto"
-            onClick={() => {}}
-          >
-            <Download className="h-4 w-4" />
-            <span>Exportar Informe CSV</span>
-          </button>
-        </div>
-
-        {/* Barra de Búsqueda y Filtros Rápidos */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-card border border-border rounded-xl p-3 shadow-xs">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Buscar por código (REQ-...), empresa o título..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background py-1.5 pl-9 pr-3 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
+              onClick={() => void refetch()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-2xs hover:bg-muted transition-colors cursor-pointer"
+              title="Refrescar listado maestro de propuestas"
             >
-              <Filter className="h-3.5 w-3.5" />
-              <span>Filtros avanzados</span>
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Actualizar</span>
             </button>
           </div>
         </div>
 
-        {/* Contenedor de Módulo en Construcción (Fase 7) */}
-        <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 p-8 text-center">
-          <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground/60 mb-2" />
-          <h3 className="font-display text-base font-bold text-foreground">Visor Tabular de Auditoría Directiva</h3>
-          <p className="mt-1 text-xs text-muted-foreground max-w-lg mx-auto">
-            La tabla paginada de propuestas con alertas de estancamiento de SLAs, buscador instantáneo y exportación a
-            Excel / CSV se conectarán en la Fase 7.
-          </p>
+        {/* 4 TARJETAS KPI DE RESUMEN DE AUDITORÍA */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* KPI 1: Total Radicadas */}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Radicadas</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-icesi-blue/10 text-icesi-blue">
+                <FileSpreadsheet className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="font-display text-2xl font-bold text-foreground">
+                {isLoading ? "..." : summaryKpis.total}
+              </span>
+              <span className="text-xs text-muted-foreground font-mono">{formatCompactCop(summaryKpis.volumeCop)}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Propuestas registradas en el repositorio institucional
+            </p>
+          </div>
+
+          {/* KPI 2: En Tubería Activa */}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                En Tubería Activa
+              </span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                <Clock className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="font-display text-2xl font-bold text-sky-600 dark:text-sky-400">
+                {isLoading ? "..." : summaryKpis.active}
+              </span>
+              <span className="text-xs text-muted-foreground">en diseño o costeo</span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Iniciativas en curso antes de entrega formal al cliente
+            </p>
+          </div>
+
+          {/* KPI 3: Entregadas / Cerradas */}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Entregadas al Cliente
+              </span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {isLoading ? "..." : summaryKpis.delivered}
+              </span>
+              <span className="text-xs text-muted-foreground">con número oficial</span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">Ofertas radicadas y presentadas formalmente</p>
+          </div>
+
+          {/* KPI 4: Alertas SLA y Cuellos */}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">En Riesgo SLA</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="font-display text-2xl font-bold text-amber-600 dark:text-amber-400">
+                {isLoading ? "..." : summaryKpis.riskSla}
+              </span>
+              <span className="text-xs text-muted-foreground">solicitudes</span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">Con más de 20 días en curso o sin docente asignado</p>
+          </div>
         </div>
+
+        {/* ESTADO DE ERROR */}
+        {isError && (
+          <div
+            className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center"
+            data-testid="audit-error-state"
+          >
+            <AlertCircle className="mx-auto h-8 w-8 text-destructive mb-2" />
+            <h3 className="font-bold text-foreground text-sm">Error al cargar solicitudes de auditoría</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+              No fue posible recuperar el inventario global de propuestas comerciales. Por favor verifica tu conexión o
+              intenta nuevamente.
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-icesi-blue px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-icesi-blue/90 cursor-pointer"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Reintentar</span>
+            </button>
+          </div>
+        )}
+
+        {/* TABLA MAESTRA INTERACTIVA */}
+        {!isError && <AdminAuditTable proposals={proposals} isLoading={isLoading} />}
       </div>
     </AppShell>
   );

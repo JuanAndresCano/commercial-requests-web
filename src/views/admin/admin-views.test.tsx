@@ -33,6 +33,14 @@ import * as targetsHook from "@/hooks/use-sales-targets";
 
 vi.mock("@/hooks/use-admin-dashboard");
 vi.mock("@/hooks/use-sales-targets");
+vi.mock("@/hooks/use-requests", () => ({
+  useRequests: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+}));
 
 vi.mock("@/hooks/use-admin-company-360", () => ({
   useAdminCompanies: () => ({
@@ -204,6 +212,6 @@ describe("Admin Submodule Views (Phase 2 Routing & Shells)", () => {
     expect(screen.getByTestId("admin-solicitudes-view")).toBeInTheDocument();
     expect(screen.getByText("Gestión y Auditoría Global de Solicitudes")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/buscar por código/i)).toBeInTheDocument();
-    expect(screen.getByText("Exportar Informe CSV")).toBeInTheDocument();
+    expect(screen.getByText(/exportar csv/i)).toBeInTheDocument();
   });
 });

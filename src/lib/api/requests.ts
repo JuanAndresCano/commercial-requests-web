@@ -244,6 +244,7 @@ export interface ProposalListItem {
   contactId: string | null;
   /** The node is optional (C-06): a request may have none. */
   nodeId: string | null;
+  node?: ProposalNode | null;
   title: string | null;
   generalDescription: string | null;
   creatorId: string;
@@ -610,6 +611,9 @@ export interface ProposalDashboardMetrics {
 
 export interface RequestsQueryParams {
   commercialStatus?: CommercialStatus | "none";
+  creatorId?: string;
+  companyId?: string;
+  nodeId?: string;
   q?: string;
   status?: string;
   urgency?: "urgente" | "proximo" | "sinfecha" | "all";
@@ -812,6 +816,9 @@ export const requestsApi = {
   list: (params: RequestsQueryParams = {}) => {
     const search = new URLSearchParams();
     if (params.commercialStatus) search.set("commercialStatus", params.commercialStatus);
+    if (params.creatorId) search.set("creatorId", params.creatorId);
+    if (params.companyId) search.set("companyId", params.companyId);
+    if (params.nodeId) search.set("nodeId", params.nodeId);
     if (params.q) search.set("q", params.q);
     if (params.status && params.status !== "all") search.set("status", params.status);
     if (params.urgency && params.urgency !== "all") search.set("urgency", params.urgency);
