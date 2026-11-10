@@ -288,7 +288,7 @@ describe("AdminDashboard Component", () => {
     expect(screen.getByText(/Meta Anual Institucional/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Asignar Metas/i })).toBeInTheDocument();
     expect(screen.getByText("Cotizado vs. Vendido por Mes")).toBeInTheDocument();
-    expect(screen.getByText("Curva Comparativa Interanual de Ventas (YoY)")).toBeInTheDocument();
+    expect(screen.getByText("Curva Comparativa Interanual de Ventas")).toBeInTheDocument();
   });
 
   it("allows selecting quarters to filter the dashboard", () => {

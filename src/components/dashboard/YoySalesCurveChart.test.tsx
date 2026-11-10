@@ -127,8 +127,8 @@ describe("YoySalesCurveChart", () => {
 
   it("renders title, YoY badge, SVG lines and legend", () => {
     render(<YoySalesCurveChart data={mockYoyTrendsData} />);
-    expect(screen.getByText("Curva Comparativa Interanual de Ventas (YoY)")).toBeInTheDocument();
-    expect(screen.getByText("+10.3% YoY")).toBeInTheDocument();
+    expect(screen.getByText("Curva Comparativa Interanual de Ventas")).toBeInTheDocument();
+    expect(screen.getAllByText("+10.3%").length).toBeGreaterThan(0);
     expect(screen.getByText("2026 (Actual)")).toBeInTheDocument();
     expect(screen.getByText("2025 (Previo)")).toBeInTheDocument();
   });
@@ -137,7 +137,7 @@ describe("YoySalesCurveChart", () => {
     render(<YoySalesCurveChart data={mockYoyTrendsData} />);
     expect(screen.getByText("Ritmo Anual de Facturación Interanual")).toBeInTheDocument();
     expect(screen.getByText("Diferencia Neta")).toBeInTheDocument();
-    expect(screen.getByText("+10.3%")).toBeInTheDocument();
+    expect(screen.getAllByText("+10.3%").length).toBeGreaterThan(0);
   });
 
   it("displays month comparison drilldown on month button click", () => {
@@ -146,7 +146,7 @@ describe("YoySalesCurveChart", () => {
     fireEvent.click(octBtn);
 
     expect(screen.getByText("Comparativo de Oct")).toBeInTheDocument();
-    expect(screen.getByText("+30.8% YoY")).toBeInTheDocument();
+    expect(screen.getByText("+30.8%")).toBeInTheDocument();
     expect(screen.getByText(/Variación neta en el mes/)).toBeInTheDocument();
     expect(screen.getByText("Ventas 2026")).toBeInTheDocument();
     expect(screen.getByText("Ventas 2025")).toBeInTheDocument();

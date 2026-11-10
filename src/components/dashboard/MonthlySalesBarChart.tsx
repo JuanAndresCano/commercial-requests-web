@@ -109,16 +109,16 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
               className="absolute left-0 right-0 border-t-2 border-dashed border-zinc-400 dark:border-zinc-500 z-10 pointer-events-none transition-all"
               style={{ bottom: `calc(${targetPct}% + 14px)` }}
             >
-              <span className="absolute right-1 -top-4 rounded bg-zinc-700/80 dark:bg-zinc-800 text-white px-1.5 py-0.5 text-[9px] font-mono font-bold shadow-xs">
-                Meta: {formatCompactCop(monthlyTargetCop)}
+              <span className="absolute right-1 -top-4 rounded bg-zinc-700/80 dark:bg-zinc-800 text-white px-2 py-0.5 text-[10px] font-mono font-bold shadow-xs whitespace-nowrap">
+                Meta Mensual: {formatCompactCop(monthlyTargetCop)}
               </span>
             </div>
           )}
 
           {monthlyData.map((d, index) => {
             const isHovered = activeMonthIndex === index;
-            const quotedHeight = Math.max(Math.round((d.quotedCop / maxMonthlyVal) * 100), d.quotedCop > 0 ? 6 : 2);
-            const wonHeight = Math.max(Math.round((d.wonCop / maxMonthlyVal) * 100), d.wonCop > 0 ? 6 : 2);
+            const quotedHeight = d.quotedCop > 0 ? Math.max(Math.round((d.quotedCop / maxMonthlyVal) * 100), 4) : 0;
+            const wonHeight = d.wonCop > 0 ? Math.max(Math.round((d.wonCop / maxMonthlyVal) * 100), 4) : 0;
 
             return (
               <div
@@ -137,22 +137,28 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
                   <div
                     className={cn(
                       "w-1/2 rounded-t-sm bg-primary transition-all duration-300",
-                      isHovered ? "opacity-100 ring-2 ring-primary/40 shadow-md" : "opacity-85 group-hover:opacity-100",
+                      quotedHeight > 0
+                        ? isHovered
+                          ? "opacity-100 ring-2 ring-primary/40 shadow-md"
+                          : "opacity-85 group-hover:opacity-100"
+                        : "h-0 opacity-0 pointer-events-none",
                     )}
                     style={{ height: `${quotedHeight}%` }}
-                    title={`Cotizado: ${formatCop(d.quotedCop)}`}
+                    title={d.quotedCop > 0 ? `Cotizado: ${formatCop(d.quotedCop)}` : "Sin cotizaciones"}
                   />
 
                   {/* Barra Vendido (Verde Esmeralda) */}
                   <div
                     className={cn(
                       "w-1/2 rounded-t-sm bg-emerald-500 transition-all duration-300",
-                      isHovered
-                        ? "opacity-100 ring-2 ring-emerald-500/40 shadow-md"
-                        : "opacity-85 group-hover:opacity-100",
+                      wonHeight > 0
+                        ? isHovered
+                          ? "opacity-100 ring-2 ring-emerald-500/40 shadow-md"
+                          : "opacity-85 group-hover:opacity-100"
+                        : "h-0 opacity-0 pointer-events-none",
                     )}
                     style={{ height: `${wonHeight}%` }}
-                    title={`Vendido: ${formatCop(d.wonCop)}`}
+                    title={d.wonCop > 0 ? `Vendido: ${formatCop(d.wonCop)}` : "Sin ventas"}
                   />
                 </div>
 
@@ -171,68 +177,78 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
         </div>
       </div>
 
-      {/* 3. Panel de Detalle del Mes Seleccionado (o resumen por defecto) */}
-      <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3 sm:p-4">
+      {/* 3. Panel de Detalle del Mes Seleccionado (o resumen por defecto) con altura estable */}
+      <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3 sm:p-4 min-h-[84px] flex flex-col justify-center">
         {activePoint ? (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs animate-in fade-in-50 duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-in fade-in-50 duration-200">
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-display font-bold text-sm text-foreground">
+                <span className="font-display font-bold text-sm sm:text-base text-foreground">
                   Mes de {activePoint.monthName} ({data.year})
                 </span>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                   {activePoint.compliancePercentage}% meta del mes
                 </span>
               </div>
-              <p className="mt-0.5 text-muted-foreground">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {activePoint.proposalsWonCount} de {activePoint.proposalsQuotedCount} propuestas cerradas exitosamente
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs">
-              <div>
-                <span className="text-muted-foreground block text-[11px]">Cotizado</span>
-                <span className="font-bold text-primary font-mono sm:text-sm">
+            <div className="flex items-center gap-6 text-xs shrink-0">
+              <div className="text-left sm:text-right">
+                <span className="text-xs text-muted-foreground block whitespace-nowrap">Cotizado</span>
+                <span className="font-display text-sm sm:text-base font-bold text-primary font-mono whitespace-nowrap">
                   {formatCompactCop(activePoint.quotedCop)}
                 </span>
               </div>
-              <div>
-                <span className="text-muted-foreground block text-[11px]">Vendido</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono sm:text-sm">
+              <div className="text-left sm:text-right">
+                <span className="text-xs text-muted-foreground block whitespace-nowrap">Vendido</span>
+                <span className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
                   {formatCompactCop(activePoint.wonCop)}
                 </span>
               </div>
-              <div>
-                <span className="text-muted-foreground block text-[11px]">Meta Mensual</span>
-                <span className="font-bold text-foreground font-mono sm:text-sm">
-                  {formatCompactCop(activePoint.targetCop)}
+              <div className="text-left sm:text-right">
+                <span className="text-xs text-muted-foreground block whitespace-nowrap">Efectividad</span>
+                <span className="font-display text-sm sm:text-base font-bold text-foreground font-mono whitespace-nowrap">
+                  {activePoint.quotedCop > 0
+                    ? `${Math.round((activePoint.wonCop / activePoint.quotedCop) * 1000) / 10}%`
+                    : "0%"}
                 </span>
               </div>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center sm:text-left">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-left">
             <div>
-              <span className="text-[11px] font-medium text-muted-foreground">Total Cotizado {data.year}</span>
-              <p className="font-display text-sm sm:text-base font-bold text-primary mt-0.5">
+              <span className="text-xs font-semibold text-muted-foreground block whitespace-nowrap">
+                Total Cotizado {data.year}
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-primary mt-0.5 whitespace-nowrap">
                 {formatCompactCop(totalQuotedCop)}
               </p>
             </div>
             <div>
-              <span className="text-[11px] font-medium text-muted-foreground">Total Vendido {data.year}</span>
-              <p className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+              <span className="text-xs font-semibold text-muted-foreground block whitespace-nowrap">
+                Total Vendido {data.year}
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 whitespace-nowrap">
                 {formatCompactCop(totalWonCop)}
               </p>
             </div>
             <div>
-              <span className="text-[11px] font-medium text-muted-foreground">Efectividad Global (Win Rate)</span>
-              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-0.5">
+              <span className="text-xs font-semibold text-muted-foreground block whitespace-nowrap">
+                Efectividad Global (Win Rate)
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-0.5 whitespace-nowrap">
                 {annualConversionRate}% ({totalWonCount} ganadas)
               </p>
             </div>
             <div>
-              <span className="text-[11px] font-medium text-muted-foreground">Avance sobre Meta Anual</span>
-              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-0.5">
+              <span className="text-xs font-semibold text-muted-foreground block whitespace-nowrap">
+                Avance sobre Meta Anual
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-0.5 whitespace-nowrap">
                 {annualCompliancePercentage}% de {formatCompactCop(data.annualTargetCop)}
               </p>
             </div>

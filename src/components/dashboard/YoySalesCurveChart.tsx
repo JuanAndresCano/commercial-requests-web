@@ -76,18 +76,18 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
         <div>
           <div className="flex items-center gap-2">
             <h2 className="font-display text-base font-bold text-foreground sm:text-lg">
-              Curva Comparativa Interanual de Ventas (YoY)
+              Curva Comparativa Interanual de Ventas
             </h2>
             <span
               className={cn(
-                "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold",
+                "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold whitespace-nowrap shrink-0",
                 netGrowthCop >= 0
                   ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                   : "bg-destructive/10 text-destructive",
               )}
             >
-              <ArrowUpRight className="h-3.5 w-3.5" />
-              {netGrowthPercentage > 0 ? `+${netGrowthPercentage}%` : `${netGrowthPercentage}%`} YoY
+              <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+              <span>{netGrowthPercentage > 0 ? `+${netGrowthPercentage}%` : `${netGrowthPercentage}%`}</span>
             </span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -215,8 +215,8 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
         </div>
       </div>
 
-      {/* 3. Panel de Detalle YoY */}
-      <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3 sm:p-4">
+      {/* 3. Panel de Detalle Comparativo Interanual */}
+      <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3 sm:p-4 min-h-[82px] flex flex-col justify-center">
         {activePoint ? (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs animate-in fade-in-50 duration-200">
             <div>
@@ -226,7 +226,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
                 </span>
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-[11px] font-bold",
+                    "rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap shrink-0",
                     activePoint.varianceCop >= 0
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                       : "bg-destructive/10 text-destructive",
@@ -234,61 +234,68 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
                 >
                   {activePoint.growthPercentage > 0
                     ? `+${activePoint.growthPercentage}%`
-                    : `${activePoint.growthPercentage}%`}{" "}
-                  YoY
+                    : `${activePoint.growthPercentage}%`}
                 </span>
               </div>
-              <p className="mt-0.5 text-muted-foreground">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 Variación neta en el mes: {formatCompactCop(activePoint.varianceCop)}
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs">
-              <div>
-                <span className="text-muted-foreground block text-[11px]">Ventas {year}</span>
-                <span className="font-bold text-primary font-mono sm:text-sm">
+            <div className="flex items-center gap-6 text-xs shrink-0">
+              <div className="text-left sm:text-right">
+                <span className="text-[11px] text-muted-foreground block whitespace-nowrap">Ventas {year}</span>
+                <span className="font-bold text-primary font-mono sm:text-sm whitespace-nowrap">
                   {formatCompactCop(activePoint.currentYearWonCop)}
                 </span>
               </div>
-              <div>
-                <span className="text-muted-foreground block text-[11px]">Ventas {previousYear}</span>
-                <span className="font-bold text-muted-foreground font-mono sm:text-sm">
+              <div className="text-left sm:text-right">
+                <span className="text-[11px] text-muted-foreground block whitespace-nowrap">Ventas {previousYear}</span>
+                <span className="font-bold text-muted-foreground font-mono sm:text-sm whitespace-nowrap">
                   {formatCompactCop(activePoint.previousYearWonCop)}
                 </span>
               </div>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <TrendingUp className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-display font-bold text-foreground sm:text-sm">
-                  Ritmo Anual de Facturación Interanual
-                </p>
-                <p className="text-muted-foreground text-[11px]">
+                <p className="font-display font-bold text-foreground text-sm">Ritmo Anual de Facturación Interanual</p>
+                <p className="text-muted-foreground text-xs">
                   {year} acumula {formatCompactCop(totalWonCop)} frente a {formatCompactCop(prevTotalWon)} de{" "}
                   {previousYear}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4 font-mono text-xs sm:text-sm font-bold">
-              <div>
-                <span className="text-[10px] text-muted-foreground block font-sans">Diferencia Neta</span>
-                <span className={netGrowthCop >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>
+            <div className="flex items-center gap-6 shrink-0 sm:self-auto">
+              <div className="text-left sm:text-right">
+                <span className="text-xs text-muted-foreground block font-sans whitespace-nowrap">Diferencia Neta</span>
+                <p
+                  className={cn(
+                    "font-display text-sm sm:text-base font-bold whitespace-nowrap",
+                    netGrowthCop >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
+                  )}
+                >
                   {netGrowthCop >= 0 ? `+${formatCompactCop(netGrowthCop)}` : formatCompactCop(netGrowthCop)}
-                </span>
+                </p>
               </div>
-              <div>
-                <span className="text-[10px] text-muted-foreground block font-sans">Crecimiento Global</span>
-                <span
-                  className={netGrowthPercentage >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}
+              <div className="text-left sm:text-right">
+                <span className="text-xs text-muted-foreground block font-sans whitespace-nowrap">
+                  Crecimiento Global
+                </span>
+                <p
+                  className={cn(
+                    "font-display text-sm sm:text-base font-bold whitespace-nowrap",
+                    netGrowthPercentage >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
+                  )}
                 >
                   {netGrowthPercentage > 0 ? `+${netGrowthPercentage}%` : `${netGrowthPercentage}%`}
-                </span>
+                </p>
               </div>
             </div>
           </div>

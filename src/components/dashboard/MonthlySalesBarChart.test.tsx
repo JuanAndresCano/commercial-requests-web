@@ -180,7 +180,7 @@ describe("MonthlySalesBarChart", () => {
     expect(screen.getByText("Cotizado ($)")).toBeInTheDocument();
     expect(screen.getByText("Vendido ($)")).toBeInTheDocument();
     expect(screen.getByText("Meta Base")).toBeInTheDocument();
-    expect(screen.getByText(/Meta:/)).toBeInTheDocument();
+    expect(screen.getByText(/Meta Mensual:/)).toBeInTheDocument();
 
     const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     for (const m of months) {
