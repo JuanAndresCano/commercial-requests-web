@@ -1,6 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "@/lib/app-router";
-import { Calendar, Users, Layers, AlertCircle, RefreshCw, Target, CheckCircle2 } from "@/components/icons";
+import {
+  Calendar,
+  Users,
+  Layers,
+  AlertCircle,
+  AlertTriangle,
+  RefreshCw,
+  Target,
+  CheckCircle2,
+  TrendingUp,
+  TrendingDown,
+  Search,
+  X,
+} from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminDashboard } from "@/hooks/use-admin-dashboard";
 import { useMonthlyTrends } from "@/hooks/use-monthly-trends";
@@ -8,6 +21,7 @@ import { MonthlySalesBarChart } from "./MonthlySalesBarChart";
 import { YoySalesCurveChart } from "./YoySalesCurveChart";
 import { AdminDashboardSkeleton } from "./AdminDashboardSkeleton";
 import { formatCompactCop } from "@/lib/mock-data";
+import { fuzzyScore, normalizeText } from "@/lib/fuzzy";
 import { cn } from "@/lib/utils";
 
 interface AdminDashboardProps {
@@ -59,16 +73,58 @@ const STAGE_COLORS: Record<string, { bg: string; fill: string; text: string; bor
   },
 };
 
+function getBudgetPacingTier(paceDeviationPct: number, diffToExpectedDateCop: number) {
+  if (paceDeviationPct >= 20) {
+    return {
+      level: "strong-surplus" as const,
+      label: "Superávit Destacado",
+      detail: `+${paceDeviationPct}% (+${formatCompactCop(diffToExpectedDateCop)}) sobre la meta a la fecha`,
+      badgeClass: "bg-emerald-600/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/40",
+      progressClass: "bg-emerald-600",
+      icon: TrendingUp,
+    };
+  }
+  if (paceDeviationPct >= 0) {
+    return {
+      level: "surplus" as const,
+      label: "En Ritmo Esperado",
+      detail: `+${paceDeviationPct}% (+${formatCompactCop(diffToExpectedDateCop)}) por encima de lo proyectado`,
+      badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+      progressClass: "bg-emerald-500",
+      icon: CheckCircle2,
+    };
+  }
+  if (paceDeviationPct >= -20) {
+    return {
+      level: "mild-deficit" as const,
+      label: "Alerta Moderada",
+      detail: `${paceDeviationPct}% (${formatCompactCop(diffToExpectedDateCop)}) frente al ritmo proyectado`,
+      badgeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
+      progressClass: "bg-amber-500",
+      icon: AlertTriangle,
+    };
+  }
+  return {
+    level: "critical-deficit" as const,
+    label: "Déficit Crítico",
+    detail: `${paceDeviationPct}% (${formatCompactCop(diffToExpectedDateCop)}) bajo el ritmo proyectado`,
+    badgeClass: "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/40",
+    progressClass: "bg-rose-500",
+    icon: TrendingDown,
+  };
+}
+
 export function AdminDashboard({ user }: AdminDashboardProps) {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedQuarter, setSelectedQuarter] = useState<number | undefined>(undefined);
   const [kamPage, setKamPage] = useState<number>(1);
-  const KAM_PAGE_SIZE = 10;
+  const [kamPageSize, setKamPageSize] = useState<number>(10);
+  const [kamSearch, setKamSearch] = useState<string>("");
 
   useEffect(() => {
     setKamPage(1);
-  }, [selectedYear, selectedQuarter]);
+  }, [selectedYear, selectedQuarter, kamSearch, kamPageSize]);
 
   const { data, isLoading, isFetching, isError, refetch } = useAdminDashboard({
     year: selectedYear,
@@ -79,11 +135,23 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
 
   const kamRanking = useMemo(() => (Array.isArray(data?.kamRanking) ? data.kamRanking : []), [data?.kamRanking]);
 
-  const totalKamPages = Math.max(1, Math.ceil(kamRanking.length / KAM_PAGE_SIZE));
+  const filteredKams = useMemo(() => {
+    const q = kamSearch.trim();
+    if (!q) return kamRanking;
+    const normQ = normalizeText(q);
+    return kamRanking.filter((kam) => {
+      const normName = normalizeText(kam.name);
+      const normEmail = normalizeText(kam.email);
+      if (normName.includes(normQ) || normEmail.includes(normQ)) return true;
+      return fuzzyScore(q, kam.name) > 0.45 || fuzzyScore(q, kam.email) > 0.45;
+    });
+  }, [kamRanking, kamSearch]);
+
+  const totalKamPages = Math.max(1, Math.ceil(filteredKams.length / kamPageSize));
   const paginatedKams = useMemo(() => {
-    const start = (kamPage - 1) * KAM_PAGE_SIZE;
-    return kamRanking.slice(start, start + KAM_PAGE_SIZE);
-  }, [kamRanking, kamPage]);
+    const start = (kamPage - 1) * kamPageSize;
+    return filteredKams.slice(start, start + kamPageSize);
+  }, [filteredKams, kamPage, kamPageSize]);
 
   const firstName = user.name.split(" ")[0] || "Administrador";
 
@@ -141,8 +209,14 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
 
   const currentMonthNumber = new Date().getMonth() + 1;
   const expectedToDateCop = Math.round((centerTargetCop / 12) * currentMonthNumber);
-  const diffToExpectedDateCop = (macroKpis.wonTotalCop ?? macroKpis.deliveredTotalCop) - expectedToDateCop;
-  const isSurplus = diffToExpectedDateCop >= 0;
+  const actualWonCop = macroKpis.wonTotalCop ?? macroKpis.deliveredTotalCop;
+  const diffToExpectedDateCop = actualWonCop - expectedToDateCop;
+
+  // Desviación porcentual frente a la cuota proyectada a la fecha
+  const paceDeviationPct =
+    expectedToDateCop > 0 ? Math.round((diffToExpectedDateCop / expectedToDateCop) * 1000) / 10 : 0;
+
+  const budgetPacingTier = getBudgetPacingTier(paceDeviationPct, diffToExpectedDateCop);
 
   return (
     <div className="space-y-6">
@@ -243,21 +317,19 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                   </h3>
                   <span
                     className={cn(
-                      "rounded-full px-2.5 py-0.5 text-[11px] font-bold inline-flex items-center gap-1",
-                      isSurplus
-                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                      "rounded-full px-2.5 py-0.5 text-[11px] font-bold inline-flex items-center gap-1.5 border",
+                      budgetPacingTier.badgeClass,
                     )}
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    {isSurplus
-                      ? `Superávit: +${formatCompactCop(diffToExpectedDateCop)} por encima de lo esperado a la fecha`
-                      : `Déficit: ${formatCompactCop(diffToExpectedDateCop)} frente al ritmo proyectado`}
+                    <budgetPacingTier.icon className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      {budgetPacingTier.label}: {budgetPacingTier.detail}
+                    </span>
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Cuota presupuestal fijada por Dirección Financiera ({selectedYear}) · Ritmo esperado acumulado:{" "}
-                  {formatCompactCop(expectedToDateCop)}
+                  Cuota presupuestal fijada por Dirección Financiera ({selectedYear}) · Ritmo esperado acumulado (Mes{" "}
+                  {currentMonthNumber}/12): {formatCompactCop(expectedToDateCop)}
                 </p>
               </div>
             </div>
@@ -271,10 +343,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                 </div>
                 <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
                   <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-500",
-                      isSurplus ? "bg-emerald-500" : "bg-primary",
-                    )}
+                    className={cn("h-full rounded-full transition-all duration-500", budgetPacingTier.progressClass)}
                     style={{ width: `${Math.min(budgetProgressPct, 100)}%` }}
                   />
                 </div>
@@ -474,81 +543,148 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
         {/* 4. DOS COLUMNAS: RANKING DE KAMS Y DISTRIBUCIÓN POR NODO */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Columna Izquierda (2 cols): Ranking de Ejecutivos Comerciales (KAMs) */}
-          <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="font-display text-base font-bold text-foreground">
-                  Rendimiento por Ejecutivo Comercial (KAM)
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Resumen comparativo de ventas entregadas y gestión de cartera activa
-                </p>
+          <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="font-display text-base font-bold text-foreground">
+                    Rendimiento por Ejecutivo Comercial (KAM)
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Resumen comparativo de ventas entregadas y gestión de cartera activa
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {/* Buscador Fuzzy en Tiempo Real */}
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      value={kamSearch}
+                      onChange={(e) => {
+                        setKamSearch(e.target.value);
+                        setKamPage(1);
+                      }}
+                      placeholder="Buscar KAM por nombre o correo..."
+                      className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-7 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-icesi-blue transition-colors"
+                    />
+                    {kamSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setKamSearch("");
+                          setKamPage(1);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-0.5 rounded"
+                        aria-label="Limpiar búsqueda"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  <Users className="h-4 w-4 text-muted-foreground hidden sm:block shrink-0" />
+                </div>
               </div>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-muted/30 text-muted-foreground font-semibold">
-                  <tr>
-                    <th className="py-2.5 px-3">Ejecutivo Comercial</th>
-                    <th className="py-2.5 px-3 text-center">Total Solicitudes</th>
-                    <th className="py-2.5 px-3 text-right">En Tubería</th>
-                    <th className="py-2.5 px-3 text-right">Total Entregado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {paginatedKams.map((kam) => (
-                    <tr key={kam.kamId} className="hover:bg-muted/20 transition-colors">
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-icesi-blue/10 text-icesi-blue font-bold text-xs">
-                            {getKamInitials(kam.name)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-foreground">{kam.name}</p>
-                            <p className="text-[11px] text-muted-foreground">{kam.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <span className="rounded-md bg-muted px-2 py-0.5 font-bold text-foreground">
-                          {kam.totalProposals}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <div className="font-bold text-foreground">
-                          {kam.pipelineTotalCop > 0 ? formatCompactCop(kam.pipelineTotalCop) : "$ 0 COP"}
-                        </div>
-                        <span className="text-[11px] text-muted-foreground">{kam.pipelineCount} en proceso</span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <div className="font-bold text-emerald-600 dark:text-emerald-400">
-                          {kam.deliveredTotalCop > 0 ? formatCompactCop(kam.deliveredTotalCop) : "$ 0 COP"}
-                        </div>
-                        <span className="text-[11px] text-muted-foreground">{kam.deliveredCount} entregadas</span>
-                      </td>
-                    </tr>
-                  ))}
-                  {kamRanking.length === 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-border bg-muted/30 text-muted-foreground font-semibold">
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-muted-foreground">
-                        No hay datos de ejecutivos comerciales en este periodo.
-                      </td>
+                      <th className="py-2.5 px-3">Ejecutivo Comercial</th>
+                      <th className="py-2.5 px-3 text-center">Total Solicitudes</th>
+                      <th className="py-2.5 px-3 text-right">En Tubería</th>
+                      <th className="py-2.5 px-3 text-right">Total Entregado</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {paginatedKams.map((kam) => (
+                      <tr key={kam.kamId} className="hover:bg-muted/20 transition-colors">
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-icesi-blue/10 text-icesi-blue font-bold text-xs">
+                              {getKamInitials(kam.name)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-foreground">{kam.name}</p>
+                              <p className="text-[11px] text-muted-foreground">{kam.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="rounded-md bg-muted px-2 py-0.5 font-bold text-foreground">
+                            {kam.totalProposals}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <div className="font-bold text-foreground">
+                            {kam.pipelineTotalCop > 0 ? formatCompactCop(kam.pipelineTotalCop) : "$ 0 COP"}
+                          </div>
+                          <span className="text-[11px] text-muted-foreground">{kam.pipelineCount} en proceso</span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                            {kam.deliveredTotalCop > 0 ? formatCompactCop(kam.deliveredTotalCop) : "$ 0 COP"}
+                          </div>
+                          <span className="text-[11px] text-muted-foreground">{kam.deliveredCount} entregadas</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredKams.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                          {kamSearch ? (
+                            <div className="flex flex-col items-center gap-1.5">
+                              <span>No se encontraron ejecutivos con el término &ldquo;{kamSearch}&rdquo;.</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setKamSearch("");
+                                  setKamPage(1);
+                                }}
+                                className="text-xs font-semibold text-icesi-blue hover:underline cursor-pointer"
+                              >
+                                Limpiar filtro de búsqueda
+                              </button>
+                            </div>
+                          ) : (
+                            "No hay datos de ejecutivos comerciales en este periodo."
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            {/* Paginación de Ejecutivos Comerciales (10 por página) */}
-            {totalKamPages > 1 && (
-              <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-border/60 pt-3 text-xs">
-                <span className="text-muted-foreground">
-                  Mostrando <strong>{(kamPage - 1) * KAM_PAGE_SIZE + 1}</strong> a{" "}
-                  <strong>{Math.min(kamPage * KAM_PAGE_SIZE, kamRanking.length)}</strong> de{" "}
-                  <strong>{kamRanking.length}</strong> ejecutivos
-                </span>
+            {/* Paginación y Selector de Filas por Página */}
+            {filteredKams.length > 0 && (
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border/60 pt-3 text-xs">
+                <div className="flex items-center gap-3">
+                  <span className="text-muted-foreground">
+                    Mostrando <strong>{(kamPage - 1) * kamPageSize + 1}</strong> a{" "}
+                    <strong>{Math.min(kamPage * kamPageSize, filteredKams.length)}</strong> de{" "}
+                    <strong>{filteredKams.length}</strong> ejecutivos
+                    {kamSearch && ` (filtrado de ${kamRanking.length})`}
+                  </span>
+                  <div className="hidden sm:flex items-center gap-1.5 text-muted-foreground">
+                    <span>Filas:</span>
+                    <select
+                      value={kamPageSize}
+                      onChange={(e) => {
+                        setKamPageSize(Number(e.target.value));
+                        setKamPage(1);
+                      }}
+                      className="rounded border border-border bg-background px-1.5 py-0.5 text-xs text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-icesi-blue"
+                      aria-label="Filas por página"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-1.5 self-end sm:self-auto">
                   <button
                     type="button"
@@ -559,7 +695,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                     Anterior
                   </button>
                   <span className="px-2 font-semibold text-muted-foreground">
-                    {kamPage} / {totalKamPages}
+                    Página {kamPage} de {totalKamPages}
                   </span>
                   <button
                     type="button"

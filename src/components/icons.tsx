@@ -154,6 +154,7 @@ export const Sun = makeIcon("light_mode");
 export const Tag = makeIcon("sell");
 export const Target = makeIcon("track_changes");
 export const Trash2 = makeIcon("delete");
+export const TrendingDown = makeIcon("trending_down");
 export const TrendingUp = makeIcon("trending_up");
 export const UploadCloud = makeIcon("cloud_upload");
 export const User = makeIcon("person");

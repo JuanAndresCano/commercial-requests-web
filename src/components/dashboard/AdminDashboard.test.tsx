@@ -397,4 +397,49 @@ describe("AdminDashboard Component", () => {
     expect(screen.getByText("Ejecutivo Comercial 11")).toBeInTheDocument();
     expect(screen.getByText("Ejecutivo Comercial 15")).toBeInTheDocument();
   });
+
+  it("filters KAM ranking table in real-time with fuzzy search", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
+    expect(screen.getByText("Carlos Ramírez")).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText("Buscar KAM por nombre o correo...");
+    fireEvent.change(searchInput, { target: { value: "Diana" } });
+
+    expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
+    expect(screen.queryByText("Carlos Ramírez")).not.toBeInTheDocument();
+    expect(screen.getByText(/filtrado de 2/)).toBeInTheDocument();
+
+    // Clear search
+    const clearBtn = screen.getByRole("button", { name: "Limpiar búsqueda" });
+    fireEvent.click(clearBtn);
+
+    expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
+    expect(screen.getByText("Carlos Ramírez")).toBeInTheDocument();
+  });
+
+  it("displays tiered budget pacing badge with deviation percentage", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    // Should render a pacing status with percentage and monetary difference
+    expect(
+      screen.getByText(/Superávit Destacado|En Ritmo Esperado|Alerta Moderada|Déficit Crítico/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Avance Presupuestal/)).toBeInTheDocument();
+  });
 });
