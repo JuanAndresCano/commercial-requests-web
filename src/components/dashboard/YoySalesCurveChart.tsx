@@ -124,6 +124,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
             className="w-full h-full select-none"
             preserveAspectRatio="none"
+            onMouseLeave={() => setActiveMonthIndex(null)}
           >
             {/* Líneas horizontales de referencia */}
             {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
@@ -152,7 +153,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
               strokeDasharray="5 5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="opacity-70"
+              className="opacity-70 pointer-events-none"
             />
 
             {/* Línea Año Actual (Solid Azul Icesi) */}
@@ -163,56 +164,87 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
               strokeWidth="3.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="filter drop-shadow-sm"
+              className="filter drop-shadow-sm pointer-events-none"
             />
 
-            {/* Puntos y Áreas de Clic Interactivas */}
+            {/* Línea vertical indicadora del mes activo */}
+            {activeMonthIndex !== null && pointsCurrent[activeMonthIndex] && (
+              <line
+                x1={pointsCurrent[activeMonthIndex].x}
+                y1={paddingY}
+                x2={pointsCurrent[activeMonthIndex].x}
+                y2={svgHeight - paddingY}
+                stroke="#5454e9"
+                strokeWidth="2"
+                strokeOpacity="0.4"
+                strokeDasharray="3 3"
+                pointerEvents="none"
+              />
+            )}
+
+            {/* Puntos Visibles (Año Previo y Año Actual más grandes) */}
             {pointsCurrent.map((pt, i) => {
               const isHovered = activeMonthIndex === i;
               const ptPrev = pointsPrev[i];
 
               return (
-                <g
-                  key={i}
-                  className="cursor-pointer"
-                  onMouseEnter={() => setActiveMonthIndex(i)}
-                  onMouseLeave={() => setActiveMonthIndex(null)}
-                  onClick={() => setActiveMonthIndex(isHovered ? null : i)}
-                >
-                  {/* Línea vertical indicadora al pasar cursor */}
-                  {isHovered && (
-                    <line
-                      x1={pt.x}
-                      y1={paddingY}
-                      x2={pt.x}
-                      y2={svgHeight - paddingY}
-                      stroke="#5454e9"
-                      strokeWidth="1.5"
-                      strokeOpacity="0.5"
-                      strokeDasharray="2 2"
-                    />
-                  )}
-
+                <g key={`pt-${i}`} pointerEvents="none">
                   {/* Punto Año Anterior */}
                   <circle
                     cx={ptPrev.x}
                     cy={ptPrev.y}
-                    r={isHovered ? 5 : 3.5}
+                    r={isHovered ? 6 : 4}
                     fill="#71717a"
-                    className="transition-all"
+                    stroke="#ffffff"
+                    strokeWidth={isHovered ? 2 : 1}
+                    className="transition-all duration-150"
                   />
+
+                  {/* Halo / Glow para Año Actual cuando está en hover */}
+                  {isHovered && (
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={14}
+                      fill="#5454e9"
+                      opacity={0.2}
+                      className="transition-all duration-150"
+                    />
+                  )}
 
                   {/* Punto Año Actual */}
                   <circle
                     cx={pt.x}
                     cy={pt.y}
-                    r={isHovered ? 6 : 4}
+                    r={isHovered ? 8 : 5}
                     fill="#5454e9"
                     stroke="#ffffff"
-                    strokeWidth="2"
-                    className="transition-all"
+                    strokeWidth={isHovered ? 2.5 : 2}
+                    className="transition-all duration-150 filter drop-shadow-sm"
                   />
                 </g>
+              );
+            })}
+
+            {/* Franjas transparentes continuas de interacción amplia (Hover Slices) */}
+            {pointsCurrent.map((pt, i) => {
+              const sliceWidth = innerWidth / (pointsCurrent.length - 1 || 1);
+              const xStart = i === 0 ? 0 : pt.x - sliceWidth / 2;
+              const xEnd = i === pointsCurrent.length - 1 ? svgWidth : pt.x + sliceWidth / 2;
+              const actualWidth = xEnd - xStart;
+
+              return (
+                <rect
+                  key={`slice-${i}`}
+                  x={xStart}
+                  y={0}
+                  width={actualWidth}
+                  height={svgHeight}
+                  fill="transparent"
+                  className="cursor-pointer"
+                  onMouseEnter={() => setActiveMonthIndex(i)}
+                  onClick={() => setActiveMonthIndex(activeMonthIndex === i ? null : i)}
+                />
               );
             })}
           </svg>
@@ -270,7 +302,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
               </span>
             )}
           </div>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground truncate max-w-xs sm:max-w-md">
             {activePoint
               ? `Variación neta en el mes: ${formatCompactCop(activePoint.varianceCop)}`
               : `${year} acumula ${formatCompactCop(totalWonCop)} frente a ${formatCompactCop(prevTotalWon)} de ${previousYear}`}
@@ -279,7 +311,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
 
         {/* Fila Inferior: Métricas Comparativas en 3 columnas simétricas */}
         {activePoint ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-left animate-in fade-in-50 duration-150">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-left">
             <div>
               <span className="text-xs font-semibold text-muted-foreground block leading-tight">Ventas {year}</span>
               <p className="font-display text-sm sm:text-base font-bold text-primary mt-1">
