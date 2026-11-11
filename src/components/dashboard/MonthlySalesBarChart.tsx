@@ -179,43 +179,73 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
 
       {/* 3. Panel de Detalle del Mes Seleccionado (o resumen por defecto) */}
       <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3.5 sm:p-4">
-        {activePoint ? (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 animate-in fade-in-50 duration-200">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-display font-bold text-sm sm:text-base text-foreground">
-                  Mes de {activePoint.monthName} ({data.year})
-                </span>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                  {activePoint.compliancePercentage}% meta del mes
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {activePoint.proposalsWonCount} de {activePoint.proposalsQuotedCount} propuestas cerradas exitosamente
-              </p>
-            </div>
+        {/* Fila Superior: Título de Contexto y Progreso */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-3 border-b border-border/60 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-display font-bold text-sm sm:text-base text-foreground">
+              {activePoint ? `Mes de ${activePoint.monthName} (${data.year})` : `Resumen Anual (${data.year})`}
+            </span>
+            {activePoint ? (
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                {activePoint.compliancePercentage}% meta del mes
+              </span>
+            ) : (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                Acumulado {data.year}
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            {activePoint
+              ? `${activePoint.proposalsWonCount} de ${activePoint.proposalsQuotedCount} propuestas cerradas exitosamente`
+              : `${totalWonCount} propuestas cerradas exitosamente`}
+          </span>
+        </div>
 
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs">
-              <div>
-                <span className="text-xs text-muted-foreground block">Cotizado</span>
-                <span className="font-display text-sm sm:text-base font-bold text-primary font-mono">
-                  {formatCompactCop(activePoint.quotedCop)}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Vendido</span>
-                <span className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                  {formatCompactCop(activePoint.wonCop)}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Efectividad</span>
-                <span className="font-display text-sm sm:text-base font-bold text-foreground font-mono">
-                  {activePoint.quotedCop > 0
-                    ? `${Math.round((activePoint.wonCop / activePoint.quotedCop) * 1000) / 10}%`
-                    : "0%"}
-                </span>
-              </div>
+        {/* Fila Inferior: Cuadrícula fija de 4 columnas (sin saltos ni movimientos) */}
+        {activePoint ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-left animate-in fade-in-50 duration-150">
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
+                Cotizado {activePoint.monthName}
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-primary mt-1">
+                {formatCompactCop(activePoint.quotedCop)}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">
+                {activePoint.proposalsQuotedCount} {activePoint.proposalsQuotedCount === 1 ? "propuesta" : "propuestas"}
+              </span>
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
+                Vendido {activePoint.monthName}
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                {formatCompactCop(activePoint.wonCop)}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">
+                {activePoint.proposalsWonCount} {activePoint.proposalsWonCount === 1 ? "cerrada" : "cerradas"}
+              </span>
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
+                Efectividad {activePoint.monthName}
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-1">
+                {activePoint.quotedCop > 0
+                  ? `${Math.round((activePoint.wonCop / activePoint.quotedCop) * 1000) / 10}%`
+                  : "0%"}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">Tasa del mes</span>
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">Cumplimiento Meta</span>
+              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-1">
+                {activePoint.compliancePercentage}%
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">
+                Meta: {formatCompactCop(activePoint.targetCop)}
+              </span>
             </div>
           </div>
         ) : (

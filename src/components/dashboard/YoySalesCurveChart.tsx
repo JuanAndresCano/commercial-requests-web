@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import type { MonthlyTrendsData, YoYComparisonPoint } from "@/lib/api/requests";
 import { formatCompactCop } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
-import { TrendingUp, ArrowUpRight } from "@/components/icons";
+import { ArrowUpRight } from "@/components/icons";
 
 interface YoySalesCurveChartProps {
   data?: MonthlyTrendsData;
@@ -36,9 +36,9 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
 
   // SVG dimensions
   const svgWidth = 800;
-  const svgHeight = 220;
-  const paddingX = 40;
-  const paddingY = 25;
+  const svgHeight = 230;
+  const paddingX = 25;
+  const paddingY = 20;
   const innerWidth = svgWidth - paddingX * 2;
   const innerHeight = svgHeight - paddingY * 2;
 
@@ -69,7 +69,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
   return (
     <div
       data-testid="yoy-sales-curve-chart"
-      className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs transition-all"
+      className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs transition-all flex flex-col justify-between"
     >
       {/* 1. Cabecera y Leyenda */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4">
@@ -108,195 +108,240 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
         </div>
       </div>
 
-      {/* 2. Gráfico SVG de Líneas Interactivas */}
-      <div className="mt-4 relative overflow-hidden">
-        <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto select-none" preserveAspectRatio="none">
-          {/* Líneas horizontales de referencia */}
-          {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
-            const y = paddingY + (1 - pct) * innerHeight;
-            return (
-              <g key={pct}>
-                <line
-                  x1={paddingX}
-                  y1={y}
-                  x2={svgWidth - paddingX}
-                  y2={y}
-                  stroke="currentColor"
-                  strokeOpacity="0.1"
-                  strokeDasharray="4 4"
-                />
-              </g>
-            );
-          })}
+      {/* 2. Gráfico SVG de Líneas Interactivas con Eje Y */}
+      <div className="mt-6 flex items-stretch gap-2">
+        {/* Eje Y: Índices de Valor */}
+        <div className="flex flex-col justify-between py-2 text-[10px] font-mono text-muted-foreground select-none shrink-0 text-right w-11 sm:w-14">
+          <span>{formatCompactCop(maxVal)}</span>
+          <span>{formatCompactCop(maxVal * 0.66)}</span>
+          <span>{formatCompactCop(maxVal * 0.33)}</span>
+          <span>$ 0</span>
+        </div>
 
-          {/* Línea Año Anterior (Dashed Zinc) */}
-          <path
-            d={pathPrev}
-            fill="none"
-            stroke="#71717a"
-            strokeWidth="2.5"
-            strokeDasharray="5 5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="opacity-70"
-          />
-
-          {/* Línea Año Actual (Solid Azul Icesi) */}
-          <path
-            d={pathCurrent}
-            fill="none"
-            stroke="#5454e9"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="filter drop-shadow-sm"
-          />
-
-          {/* Puntos y Áreas de Clic Interactivas */}
-          {pointsCurrent.map((pt, i) => {
-            const isHovered = activeMonthIndex === i;
-            const ptPrev = pointsPrev[i];
-
-            return (
-              <g
-                key={i}
-                className="cursor-pointer"
-                onMouseEnter={() => setActiveMonthIndex(i)}
-                onMouseLeave={() => setActiveMonthIndex(null)}
-                onClick={() => setActiveMonthIndex(isHovered ? null : i)}
-              >
-                {/* Línea vertical indicadora al pasar cursor */}
-                {isHovered && (
+        {/* Contenedor del Gráfico con Borde */}
+        <div className="relative h-64 flex-1 flex flex-col justify-between pt-2 pb-1 border-b border-l border-border/80">
+          <svg
+            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+            className="w-full h-full select-none"
+            preserveAspectRatio="none"
+          >
+            {/* Líneas horizontales de referencia */}
+            {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
+              const y = paddingY + (1 - pct) * innerHeight;
+              return (
+                <g key={pct}>
                   <line
-                    x1={pt.x}
-                    y1={paddingY}
-                    x2={pt.x}
-                    y2={svgHeight - paddingY}
-                    stroke="#5454e9"
-                    strokeWidth="1.5"
-                    strokeOpacity="0.5"
-                    strokeDasharray="2 2"
+                    x1={paddingX}
+                    y1={y}
+                    x2={svgWidth - paddingX}
+                    y2={y}
+                    stroke="currentColor"
+                    strokeOpacity="0.1"
+                    strokeDasharray="4 4"
                   />
+                </g>
+              );
+            })}
+
+            {/* Línea Año Anterior (Dashed Zinc) */}
+            <path
+              d={pathPrev}
+              fill="none"
+              stroke="#71717a"
+              strokeWidth="2.5"
+              strokeDasharray="5 5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="opacity-70"
+            />
+
+            {/* Línea Año Actual (Solid Azul Icesi) */}
+            <path
+              d={pathCurrent}
+              fill="none"
+              stroke="#5454e9"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="filter drop-shadow-sm"
+            />
+
+            {/* Puntos y Áreas de Clic Interactivas */}
+            {pointsCurrent.map((pt, i) => {
+              const isHovered = activeMonthIndex === i;
+              const ptPrev = pointsPrev[i];
+
+              return (
+                <g
+                  key={i}
+                  className="cursor-pointer"
+                  onMouseEnter={() => setActiveMonthIndex(i)}
+                  onMouseLeave={() => setActiveMonthIndex(null)}
+                  onClick={() => setActiveMonthIndex(isHovered ? null : i)}
+                >
+                  {/* Línea vertical indicadora al pasar cursor */}
+                  {isHovered && (
+                    <line
+                      x1={pt.x}
+                      y1={paddingY}
+                      x2={pt.x}
+                      y2={svgHeight - paddingY}
+                      stroke="#5454e9"
+                      strokeWidth="1.5"
+                      strokeOpacity="0.5"
+                      strokeDasharray="2 2"
+                    />
+                  )}
+
+                  {/* Punto Año Anterior */}
+                  <circle
+                    cx={ptPrev.x}
+                    cy={ptPrev.y}
+                    r={isHovered ? 5 : 3.5}
+                    fill="#71717a"
+                    className="transition-all"
+                  />
+
+                  {/* Punto Año Actual */}
+                  <circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={isHovered ? 6 : 4}
+                    fill="#5454e9"
+                    stroke="#ffffff"
+                    strokeWidth="2"
+                    className="transition-all"
+                  />
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* Eje X con Meses */}
+          <div className="flex justify-between px-2 pt-1 pb-0.5 text-[10px] sm:text-xs font-bold text-muted-foreground border-t border-border/30">
+            {yoyComparison.map((m, i) => (
+              <button
+                key={m.month}
+                type="button"
+                onClick={() => setActiveMonthIndex(activeMonthIndex === i ? null : i)}
+                className={cn(
+                  "transition-colors hover:text-primary cursor-pointer px-1 py-0.5 select-none",
+                  activeMonthIndex === i ? "text-primary font-black underline" : "",
                 )}
-
-                {/* Punto Año Anterior */}
-                <circle cx={ptPrev.x} cy={ptPrev.y} r={isHovered ? 5 : 3.5} fill="#71717a" className="transition-all" />
-
-                {/* Punto Año Actual */}
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={isHovered ? 6 : 4}
-                  fill="#5454e9"
-                  stroke="#ffffff"
-                  strokeWidth="2"
-                  className="transition-all"
-                />
-              </g>
-            );
-          })}
-        </svg>
-
-        {/* Eje X con Meses */}
-        <div className="flex justify-between px-3 sm:px-6 pt-1 text-[10px] sm:text-xs font-bold text-muted-foreground">
-          {yoyComparison.map((m, i) => (
-            <button
-              key={m.month}
-              type="button"
-              onClick={() => setActiveMonthIndex(activeMonthIndex === i ? null : i)}
-              className={cn(
-                "transition-colors hover:text-primary",
-                activeMonthIndex === i ? "text-primary font-black underline" : "",
-              )}
-            >
-              {m.monthName}
-            </button>
-          ))}
+              >
+                {m.monthName}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* 3. Panel de Detalle Comparativo Interanual */}
       <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3.5 sm:p-4">
-        {activePoint ? (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs animate-in fade-in-50 duration-200">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-display font-bold text-sm text-foreground">
-                  Comparativo de {activePoint.monthName}
-                </span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap shrink-0",
-                    activePoint.varianceCop >= 0
-                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "bg-destructive/10 text-destructive",
-                  )}
-                >
-                  {activePoint.growthPercentage > 0
-                    ? `+${activePoint.growthPercentage}%`
-                    : `${activePoint.growthPercentage}%`}
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Variación neta en el mes: {formatCompactCop(activePoint.varianceCop)}
-              </p>
-            </div>
+        {/* Fila Superior: Título de Contexto y Variación */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-3 border-b border-border/60 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-display font-bold text-sm sm:text-base text-foreground">
+              {activePoint ? `Comparativo de ${activePoint.monthName}` : `Ritmo Anual de Facturación Interanual`}
+            </span>
+            {activePoint ? (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap shrink-0",
+                  activePoint.varianceCop >= 0
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    : "bg-destructive/10 text-destructive",
+                )}
+              >
+                {activePoint.growthPercentage > 0
+                  ? `+${activePoint.growthPercentage}%`
+                  : `${activePoint.growthPercentage}%`}
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap shrink-0",
+                  netGrowthPercentage >= 0
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    : "bg-destructive/10 text-destructive",
+                )}
+              >
+                {netGrowthPercentage > 0 ? `+${netGrowthPercentage}%` : `${netGrowthPercentage}%`}
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            {activePoint
+              ? `Variación neta en el mes: ${formatCompactCop(activePoint.varianceCop)}`
+              : `${year} acumula ${formatCompactCop(totalWonCop)} frente a ${formatCompactCop(prevTotalWon)} de ${previousYear}`}
+          </span>
+        </div>
 
-            <div className="flex items-center gap-6 text-xs shrink-0">
-              <div className="text-left sm:text-right">
-                <span className="text-[11px] text-muted-foreground block whitespace-nowrap">Ventas {year}</span>
-                <span className="font-bold text-primary font-mono sm:text-sm whitespace-nowrap">
-                  {formatCompactCop(activePoint.currentYearWonCop)}
-                </span>
-              </div>
-              <div className="text-left sm:text-right">
-                <span className="text-[11px] text-muted-foreground block whitespace-nowrap">Ventas {previousYear}</span>
-                <span className="font-bold text-muted-foreground font-mono sm:text-sm whitespace-nowrap">
-                  {formatCompactCop(activePoint.previousYearWonCop)}
-                </span>
-              </div>
+        {/* Fila Inferior: Métricas Comparativas en 3 columnas simétricas */}
+        {activePoint ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-left animate-in fade-in-50 duration-150">
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">Ventas {year}</span>
+              <p className="font-display text-sm sm:text-base font-bold text-primary mt-1">
+                {formatCompactCop(activePoint.currentYearWonCop)}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">Año en curso</span>
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
+                Ventas {previousYear}
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-muted-foreground mt-1">
+                {formatCompactCop(activePoint.previousYearWonCop)}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">Histórico previo</span>
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">Diferencia Neta</span>
+              <p
+                className={cn(
+                  "font-display text-sm sm:text-base font-bold mt-1",
+                  activePoint.varianceCop >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
+                )}
+              >
+                {activePoint.varianceCop >= 0
+                  ? `+${formatCompactCop(activePoint.varianceCop)}`
+                  : formatCompactCop(activePoint.varianceCop)}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">
+                Crecimiento: {activePoint.growthPercentage}%
+              </span>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <TrendingUp className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-display font-bold text-foreground text-sm">Ritmo Anual de Facturación Interanual</p>
-                <p className="text-muted-foreground text-xs">
-                  {year} acumula {formatCompactCop(totalWonCop)} frente a {formatCompactCop(prevTotalWon)} de{" "}
-                  {previousYear}
-                </p>
-              </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-left">
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">Acumulado {year}</span>
+              <p className="font-display text-sm sm:text-base font-bold text-primary mt-1">
+                {formatCompactCop(totalWonCop)}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">Año en curso</span>
             </div>
-
-            <div className="flex items-center gap-6 shrink-0 sm:self-auto">
-              <div className="text-left sm:text-right">
-                <span className="text-xs text-muted-foreground block font-sans whitespace-nowrap">Diferencia Neta</span>
-                <p
-                  className={cn(
-                    "font-display text-sm sm:text-base font-bold whitespace-nowrap",
-                    netGrowthCop >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
-                  )}
-                >
-                  {netGrowthCop >= 0 ? `+${formatCompactCop(netGrowthCop)}` : formatCompactCop(netGrowthCop)}
-                </p>
-              </div>
-              <div className="text-left sm:text-right">
-                <span className="text-xs text-muted-foreground block font-sans whitespace-nowrap">
-                  Crecimiento Global
-                </span>
-                <p
-                  className={cn(
-                    "font-display text-sm sm:text-base font-bold whitespace-nowrap",
-                    netGrowthPercentage >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
-                  )}
-                >
-                  {netGrowthPercentage > 0 ? `+${netGrowthPercentage}%` : `${netGrowthPercentage}%`}
-                </p>
-              </div>
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
+                Acumulado {previousYear}
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold text-muted-foreground mt-1">
+                {formatCompactCop(prevTotalWon)}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">Histórico previo</span>
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">Diferencia Neta</span>
+              <p
+                className={cn(
+                  "font-display text-sm sm:text-base font-bold mt-1",
+                  netGrowthCop >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
+                )}
+              >
+                {netGrowthCop >= 0 ? `+${formatCompactCop(netGrowthCop)}` : formatCompactCop(netGrowthCop)}
+              </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">Crecimiento global</span>
             </div>
           </div>
         )}
