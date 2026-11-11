@@ -78,8 +78,11 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
             <span className="text-foreground">Vendido ($)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-1.5 w-3 border-t-2 border-dashed border-zinc-400" />
-            <span className="text-muted-foreground">Meta Base</span>
+            <span className="h-1.5 w-3 border-t-2 border-dashed border-zinc-400 dark:border-zinc-500" />
+            <span className="text-muted-foreground">
+              Meta Mensual:{" "}
+              <span className="font-mono font-semibold text-foreground">{formatCompactCop(monthlyTargetCop)}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -111,11 +114,7 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
             <div
               className="absolute left-0 right-0 border-t-2 border-dashed border-zinc-400 dark:border-zinc-500 z-10 pointer-events-none transition-all"
               style={{ bottom: `calc(${targetPct}% + 14px)` }}
-            >
-              <span className="absolute right-1 -top-4 rounded bg-zinc-700/80 dark:bg-zinc-800 text-white px-2 py-0.5 text-[10px] font-mono font-bold shadow-xs whitespace-nowrap">
-                Meta Mensual: {formatCompactCop(monthlyTargetCop)}
-              </span>
-            </div>
+            />
           )}
 
           {monthlyData.map((d, index) => {

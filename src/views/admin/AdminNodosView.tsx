@@ -219,7 +219,7 @@ export default function AdminNodosView() {
             )}
           >
             <Layers className="h-4 w-4" />
-            <span>Líderes de Producto ({productLeaders.length})</span>
+            <span>Líderes de Producto</span>
           </button>
         </div>
 
