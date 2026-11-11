@@ -177,40 +177,40 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
         </div>
       </div>
 
-      {/* 3. Panel de Detalle del Mes Seleccionado (o resumen por defecto) con altura estable */}
-      <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3 sm:p-4 min-h-[84px] flex flex-col justify-center">
+      {/* 3. Panel de Detalle del Mes Seleccionado (o resumen por defecto) */}
+      <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3.5 sm:p-4">
         {activePoint ? (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-in fade-in-50 duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 animate-in fade-in-50 duration-200">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-display font-bold text-sm sm:text-base text-foreground">
                   Mes de {activePoint.monthName} ({data.year})
                 </span>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                   {activePoint.compliancePercentage}% meta del mes
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {activePoint.proposalsWonCount} de {activePoint.proposalsQuotedCount} propuestas cerradas exitosamente
               </p>
             </div>
 
-            <div className="flex items-center gap-6 text-xs shrink-0">
-              <div className="text-left sm:text-right">
-                <span className="text-xs text-muted-foreground block whitespace-nowrap">Cotizado</span>
-                <span className="font-display text-sm sm:text-base font-bold text-primary font-mono whitespace-nowrap">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs">
+              <div>
+                <span className="text-xs text-muted-foreground block">Cotizado</span>
+                <span className="font-display text-sm sm:text-base font-bold text-primary font-mono">
                   {formatCompactCop(activePoint.quotedCop)}
                 </span>
               </div>
-              <div className="text-left sm:text-right">
-                <span className="text-xs text-muted-foreground block whitespace-nowrap">Vendido</span>
-                <span className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
+              <div>
+                <span className="text-xs text-muted-foreground block">Vendido</span>
+                <span className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                   {formatCompactCop(activePoint.wonCop)}
                 </span>
               </div>
-              <div className="text-left sm:text-right">
-                <span className="text-xs text-muted-foreground block whitespace-nowrap">Efectividad</span>
-                <span className="font-display text-sm sm:text-base font-bold text-foreground font-mono whitespace-nowrap">
+              <div>
+                <span className="text-xs text-muted-foreground block">Efectividad</span>
+                <span className="font-display text-sm sm:text-base font-bold text-foreground font-mono">
                   {activePoint.quotedCop > 0
                     ? `${Math.round((activePoint.wonCop / activePoint.quotedCop) * 1000) / 10}%`
                     : "0%"}
@@ -219,38 +219,42 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-left">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-left">
             <div>
-              <span className="text-xs font-semibold text-muted-foreground block whitespace-nowrap">
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
                 Total Cotizado {data.year}
               </span>
-              <p className="font-display text-sm sm:text-base font-bold text-primary mt-0.5 whitespace-nowrap">
+              <p className="font-display text-sm sm:text-base font-bold text-primary mt-1">
                 {formatCompactCop(totalQuotedCop)}
               </p>
             </div>
             <div>
-              <span className="text-xs font-semibold text-muted-foreground block whitespace-nowrap">
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
                 Total Vendido {data.year}
               </span>
-              <p className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 whitespace-nowrap">
+              <p className="font-display text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                 {formatCompactCop(totalWonCop)}
               </p>
             </div>
             <div>
-              <span className="text-xs font-semibold text-muted-foreground block whitespace-nowrap">
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
                 Efectividad Global (Win Rate)
               </span>
-              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-0.5 whitespace-nowrap">
-                {annualConversionRate}% ({totalWonCount} ganadas)
+              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-1">
+                {annualConversionRate}%
               </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">{totalWonCount} ganadas</span>
             </div>
             <div>
-              <span className="text-xs font-semibold text-muted-foreground block whitespace-nowrap">
+              <span className="text-xs font-semibold text-muted-foreground block leading-tight">
                 Avance sobre Meta Anual
               </span>
-              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-0.5 whitespace-nowrap">
-                {annualCompliancePercentage}% de {formatCompactCop(data.annualTargetCop)}
+              <p className="font-display text-sm sm:text-base font-bold text-foreground mt-1">
+                {annualCompliancePercentage}%
               </p>
+              <span className="text-[11px] text-muted-foreground block mt-0.5">
+                Meta: {formatCompactCop(data.annualTargetCop)}
+              </span>
             </div>
           </div>
         )}

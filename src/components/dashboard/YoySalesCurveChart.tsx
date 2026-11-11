@@ -216,7 +216,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
       </div>
 
       {/* 3. Panel de Detalle Comparativo Interanual */}
-      <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3 sm:p-4 min-h-[82px] flex flex-col justify-center">
+      <div className="mt-4 rounded-xl border border-border/80 bg-muted/20 p-3.5 sm:p-4">
         {activePoint ? (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs animate-in fade-in-50 duration-200">
             <div>
