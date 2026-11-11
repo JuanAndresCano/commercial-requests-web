@@ -1,11 +1,9 @@
 import { useState, useMemo } from "react";
-import { Link } from "@/lib/app-router";
 import {
   Search,
   Filter,
   Download,
   RotateCcw,
-  Eye,
   AlertTriangle,
   Clock,
   ChevronLeft,
@@ -740,23 +738,20 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
                     {sortField === "days" && <span>{sortDir === "asc" ? "↑" : "↓"}</span>}
                   </div>
                 </th>
-                <th scope="col" className="py-3 px-3 text-right">
-                  Acción
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border text-foreground">
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={`skel-${i}`} className="animate-pulse">
-                    <td colSpan={10} className="py-4 px-3 text-center text-muted-foreground">
+                    <td colSpan={9} className="py-4 px-3 text-center text-muted-foreground">
                       Cargando registros de auditoría...
                     </td>
                   </tr>
                 ))
               ) : paginatedProposals.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 px-3 text-center">
+                  <td colSpan={9} className="py-12 px-3 text-center">
                     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground mb-2">
                       <Filter className="h-5 w-5" />
                     </div>
@@ -936,18 +931,6 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
                             </span>
                           )}
                         </div>
-                      </td>
-
-                      {/* 10. Acción: Auditar Expediente */}
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
-                        <Link
-                          href={`/solicitudes/${p.id}`}
-                          className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground shadow-2xs hover:border-icesi-blue hover:text-icesi-blue transition-colors cursor-pointer"
-                          title="Inspeccionar costeo, alcance técnico y trazabilidad en modo directivo"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          <span>Auditar</span>
-                        </Link>
                       </td>
                     </tr>
                   );
