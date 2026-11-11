@@ -56,6 +56,7 @@ describe("KamTargetVsWonChart", () => {
       {
         kamId: "kam-3",
         name: "Julián Duque",
+        email: "julian.duque@icesi.edu.co",
         totalProposals: 1,
         deliveredCount: 1,
         deliveredTotalCop: 18000000,

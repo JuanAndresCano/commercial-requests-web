@@ -221,7 +221,7 @@ const mockProposals: ProposalListItem[] = [
     node: null,
     assignments: [],
   },
-];
+] as unknown as ProposalListItem[];
 
 describe("AdminAuditTable Component (Submódulo 5)", () => {
   beforeEach(() => {

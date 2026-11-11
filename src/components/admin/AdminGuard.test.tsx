@@ -81,7 +81,7 @@ describe("AdminGuard (RBAC Protection)", () => {
 
   it("redirects Professor to /dashboard and does not show admin content", async () => {
     authMock.status = "authenticated";
-    authMock.user.role = "profesor";
+    authMock.user.role = "profesor" as unknown as UserRole;
     renderAt("/admin/dashboard");
     expect(await screen.findByTestId("kam-dashboard")).toBeInTheDocument();
     expect(screen.queryByTestId("admin-content")).not.toBeInTheDocument();

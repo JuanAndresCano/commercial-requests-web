@@ -8,7 +8,6 @@ export interface CompanyOption {
   id: string;
   name: string;
   nit?: string | null;
-  [key: string]: unknown;
 }
 
 interface CompanySelectComboboxProps {

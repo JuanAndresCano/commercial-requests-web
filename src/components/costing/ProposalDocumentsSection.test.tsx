@@ -65,6 +65,7 @@ describe("ProposalDocumentsSection .xlsm handling", () => {
         clientKamDocuments={[
           {
             id: "doc-1",
+            category: "client_kam",
             name: "Propuesta_Comercial.pdf",
             type: "pdf",
             size: "1.2 MB",

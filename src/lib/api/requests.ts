@@ -819,13 +819,17 @@ export const requestsApi = {
     const yoyComparison =
       Array.isArray(res.yoyComparison) && res.yoyComparison.length > 0
         ? (res.yoyComparison as MonthlyTrendsData["yoyComparison"])
-        : monthlyData.map((d, i) => ({
-            month: d.month,
-            monthName: d.monthName,
-            currentYearWonCop: d.wonCop,
-            previousYearWonCop: prevComparison?.monthlyWonCop?.[i] ?? 0,
-            growthPercentage: 0,
-          }));
+        : monthlyData.map((d, i) => {
+            const prev = prevComparison?.monthlyWonCop?.[i] ?? 0;
+            return {
+              month: d.month,
+              monthName: d.monthName,
+              currentYearWonCop: d.wonCop,
+              previousYearWonCop: prev,
+              varianceCop: d.wonCop - prev,
+              growthPercentage: 0,
+            };
+          });
 
     const normalized: MonthlyTrendsData = {
       year: (res.year as number) ?? new Date().getFullYear(),

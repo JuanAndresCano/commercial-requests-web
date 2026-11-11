@@ -52,7 +52,7 @@ export const usersApi = {
       firstName: string | null;
       lastName: string | null;
       roles: string[];
-      status: "PRE_REGISTERED" | "APPROVED";
+      status: "PRE_REGISTERED" | "APPROVED" | "REACTIVATED";
     }>("/users/pre-register", {
       method: "POST",
       body: payload,

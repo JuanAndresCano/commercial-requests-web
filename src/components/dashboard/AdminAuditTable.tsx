@@ -376,7 +376,10 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
         ? `${p.productLeader.firstName} ${p.productLeader.lastName}`.trim()
         : "Sin asignar";
       const nodeName = p.node?.name ?? "Sin nodo";
-      const isWon = p.commercialStatus === "APPROVED";
+      const isWon =
+        p.commercialStatus === "APPROVED_WITHOUT_CONTRACT" ||
+        p.commercialStatus === "APPROVED_WITH_CONTRACT" ||
+        p.commercialStatus === "INVOICED";
       const wonAmt = isWon ? amount : 0;
 
       return [
@@ -418,7 +421,10 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
     for (const p of filteredProposals) {
       const kamName = p.creator ? `${p.creator.firstName} ${p.creator.lastName}`.trim() : "Sin asignar";
       const { amount } = getProposalMetrics(p);
-      const isWon = p.commercialStatus === "APPROVED";
+      const isWon =
+        p.commercialStatus === "APPROVED_WITHOUT_CONTRACT" ||
+        p.commercialStatus === "APPROVED_WITH_CONTRACT" ||
+        p.commercialStatus === "INVOICED";
       const isDelivered = getProposalStatusCode(p) === "DELIVERED";
       const curr = kamsAgg.get(kamName) ?? {
         name: kamName,
@@ -490,7 +496,10 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
     for (const p of filteredProposals) {
       const nodeName = p.node?.name ?? "Sin nodo";
       const { amount, daysElapsed } = getProposalMetrics(p);
-      const isWon = p.commercialStatus === "APPROVED";
+      const isWon =
+        p.commercialStatus === "APPROVED_WITHOUT_CONTRACT" ||
+        p.commercialStatus === "APPROVED_WITH_CONTRACT" ||
+        p.commercialStatus === "INVOICED";
       const curr = nodesAgg.get(nodeName) ?? {
         name: nodeName,
         total: 0,
@@ -545,7 +554,10 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
       const compName = p.company?.name ?? "Sin empresa";
       const nit = p.company?.nit ?? "";
       const { amount } = getProposalMetrics(p);
-      const isWon = p.commercialStatus === "APPROVED";
+      const isWon =
+        p.commercialStatus === "APPROVED_WITHOUT_CONTRACT" ||
+        p.commercialStatus === "APPROVED_WITH_CONTRACT" ||
+        p.commercialStatus === "INVOICED";
       const curr = compAgg.get(compName) ?? {
         name: compName,
         nit,
