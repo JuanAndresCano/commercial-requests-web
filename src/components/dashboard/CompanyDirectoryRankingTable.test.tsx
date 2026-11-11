@@ -100,4 +100,50 @@ describe("CompanyDirectoryRankingTable Component", () => {
     // 20 + 7 + 1 = 28 proposals
     expect(screen.getByText("28")).toBeInTheDocument();
   });
+
+  it("sorts companies by name when selected in the sort dropdown", () => {
+    const onSelect = vi.fn();
+    render(<CompanyDirectoryRankingTable companies={mockCompanies} onSelectCompany={onSelect} />);
+
+    const sortSelect = screen.getByLabelText(/ordenar empresas/i);
+    fireEvent.change(sortSelect, { target: { value: "name-desc" } });
+
+    const rows = screen.getAllByRole("row");
+    // Row 0 is header, Row 1 should be Chiper (Z-A)
+    expect(rows[1]).toHaveTextContent("Chiper");
+  });
+
+  it("handles pagination and page size changes for large company lists", () => {
+    const onSelect = vi.fn();
+    const twelveCompanies: CompanyListItem[] = Array.from({ length: 12 }, (_, i) => ({
+      id: `comp-${i + 1}`,
+      name: `Empresa ${String(i + 1).padStart(2, "0")}`,
+      nit: `90000000${i}-1`,
+      sector: "Servicios",
+      type: "PRIVADA",
+      totalProposals: i + 1,
+      deliveredCount: 1,
+      deliveredTotalCop: 10000000 * (i + 1),
+      pipelineTotalCop: 0,
+      wonTotalCop: 10000000 * (i + 1),
+      winRatePercentage: 50,
+    }));
+
+    render(<CompanyDirectoryRankingTable companies={twelveCompanies} onSelectCompany={onSelect} />);
+
+    // Default pageSize is 10, so Empresa 01-10 are on page 1
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    expect(screen.getByTestId("company-next-page")).toBeInTheDocument();
+
+    // Advance to page 2
+    fireEvent.click(screen.getByTestId("company-next-page"));
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+
+    // Change page size to 20
+    const pageSizeSelect = screen.getByLabelText(/empresas por página/i);
+    fireEvent.change(pageSizeSelect, { target: { value: "20" } });
+
+    // Now all 12 are visible on 1 page
+    expect(screen.getByTestId("company-pagination-counter")).toHaveTextContent("Mostrando 1 – 12 de 12 empresas");
+  });
 });

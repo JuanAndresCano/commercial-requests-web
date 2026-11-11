@@ -85,6 +85,7 @@ export const AlertTriangle = makeIcon("warning");
 export const ArrowLeft = makeIcon("arrow_back");
 export const ArrowLeftRight = makeIcon("swap_horiz");
 export const ArrowRight = makeIcon("arrow_forward");
+export const ArrowUpDown = makeIcon("swap_vert");
 export const ArrowUpRight = makeIcon("north_east");
 export const Award = makeIcon("workspace_premium");
 export const Bell = makeIcon("notifications");
