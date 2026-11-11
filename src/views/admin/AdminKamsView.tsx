@@ -248,11 +248,12 @@ export default function AdminKamsView() {
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-muted-foreground">KAM Líder en Ventas</p>
                   <p className="font-display text-lg font-bold text-foreground truncate">
-                    {topSalesKam?.name || "Ana Pérez"}
+                    {topSalesKam ? topSalesKam.name : "Sin registros"}
                   </p>
                   <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold block truncate">
-                    {formatCompactCop(topSalesKam?.wonTotalCop ?? topSalesKam?.deliveredTotalCop ?? 1134000000)}{" "}
-                    cerrados
+                    {topSalesKam
+                      ? `${formatCompactCop(topSalesKam.wonTotalCop ?? topSalesKam.deliveredTotalCop ?? 0)} cerrados`
+                      : "Sin ventas cerradas"}
                   </span>
                 </div>
               </div>
@@ -265,21 +266,21 @@ export default function AdminKamsView() {
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-muted-foreground">Mayor Efectividad (Win Rate)</p>
                   <p className="font-display text-lg font-bold text-foreground truncate">
-                    {topWinRateKam?.name || "Carlos Gómez"}
+                    {topWinRateKam ? topWinRateKam.name : "Sin registros"}
                   </p>
                   <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold block truncate">
-                    {topWinRateKam?.winRatePercentage ?? 18.4}% de conversión
+                    {topWinRateKam ? `${topWinRateKam.winRatePercentage}% de conversión` : "0% de conversión"}
                   </span>
                 </div>
               </div>
 
-              {/* Tarjeta 3: Meta Global del Centro */}
+              {/* Tarjeta 3: Meta Global de la Universidad */}
               <div className="rounded-xl border border-border bg-card p-5 shadow-xs flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-icesi-purple/10 text-icesi-purple shrink-0">
                   <Target className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-muted-foreground">Meta Global del Centro</p>
+                  <p className="text-xs font-semibold text-muted-foreground">Meta Anual de la Universidad</p>
                   <p className="font-display text-lg font-bold text-foreground truncate">
                     {formatCompactCop(centerTargetCop)}
                   </p>

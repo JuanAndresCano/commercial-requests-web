@@ -182,7 +182,7 @@ describe("Admin Submodule Views (Phase 2 Routing & Shells)", () => {
     expect(screen.getByText("Rendimiento Comercial & Metas de Venta")).toBeInTheDocument();
     expect(screen.getByText("KAM Líder en Ventas")).toBeInTheDocument();
     expect(screen.getByText("Mayor Efectividad (Win Rate)")).toBeInTheDocument();
-    expect(screen.getByText("Meta Global del Centro")).toBeInTheDocument();
+    expect(screen.getByText("Meta Anual de la Universidad")).toBeInTheDocument();
   });
 
   it("renders AdminNodosView (Submódulo 3) with academic capacity overview", () => {
