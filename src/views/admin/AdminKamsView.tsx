@@ -133,67 +133,75 @@ export default function AdminKamsView() {
               </Select>
             </div>
 
-            {/* Selector de Trimestres y Todo el Año */}
-            <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs shadow-xs">
-              <button
-                type="button"
-                onClick={() => handleSelectQuarter(undefined)}
-                className={cn(
-                  "rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer",
-                  selectedQuarter === undefined && selectedMonth === undefined
-                    ? "bg-card text-foreground shadow-xs border border-border/60"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                Año Completo
-              </button>
-              {QUARTERS.slice(1).map((q) => {
-                const active = selectedQuarter === q.value;
-                return (
+            {/* Selector de Trimestres y Todo el Año (solo en pestaña de desempeño) */}
+            {activeTab === "desempeno" && (
+              <>
+                <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs shadow-xs">
                   <button
-                    key={q.label}
                     type="button"
-                    onClick={() => handleSelectQuarter(q.value)}
+                    onClick={() => handleSelectQuarter(undefined)}
                     className={cn(
                       "rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer",
-                      active
+                      selectedQuarter === undefined && selectedMonth === undefined
                         ? "bg-card text-foreground shadow-xs border border-border/60"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    {q.label.split(" ")[0]}
+                    Año Completo
                   </button>
-                );
-              })}
-            </div>
+                  {QUARTERS.slice(1).map((q) => {
+                    const active = selectedQuarter === q.value;
+                    return (
+                      <button
+                        key={q.label}
+                        type="button"
+                        onClick={() => handleSelectQuarter(q.value)}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer",
+                          active
+                            ? "bg-card text-foreground shadow-xs border border-border/60"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {q.label.split(" ")[0]}
+                      </button>
+                    );
+                  })}
+                </div>
 
-            {/* Selector Opcional por Mes */}
-            <div className="flex items-center gap-1.5">
-              <Select
-                value={selectedMonth !== undefined ? String(selectedMonth) : "none"}
-                onValueChange={(val) => handleSelectMonth(val === "none" ? undefined : Number(val))}
-              >
-                <SelectTrigger
-                  aria-label="Seleccionar mes específico"
-                  className={cn(
-                    "h-8 w-32 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-foreground shadow-xs focus:ring-1 focus:ring-icesi-blue cursor-pointer",
-                    selectedMonth !== undefined && "border-primary text-primary font-bold bg-primary/5",
-                  )}
-                >
-                  <SelectValue placeholder="Mes específico..." />
-                </SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="none" className="text-xs text-muted-foreground cursor-pointer">
-                    Sin mes específico
-                  </SelectItem>
-                  {MONTHS.map((m) => (
-                    <SelectItem key={m.value} value={String(m.value)} className="text-xs font-semibold cursor-pointer">
-                      {m.label} ({m.fullName})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                {/* Selector Opcional por Mes */}
+                <div className="flex items-center gap-1.5">
+                  <Select
+                    value={selectedMonth !== undefined ? String(selectedMonth) : "none"}
+                    onValueChange={(val) => handleSelectMonth(val === "none" ? undefined : Number(val))}
+                  >
+                    <SelectTrigger
+                      aria-label="Seleccionar mes específico"
+                      className={cn(
+                        "h-8 w-32 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-foreground shadow-xs focus:ring-1 focus:ring-icesi-blue cursor-pointer",
+                        selectedMonth !== undefined && "border-primary text-primary font-bold bg-primary/5",
+                      )}
+                    >
+                      <SelectValue placeholder="Mes específico..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      <SelectItem value="none" className="text-xs text-muted-foreground cursor-pointer">
+                        Sin mes específico
+                      </SelectItem>
+                      {MONTHS.map((m) => (
+                        <SelectItem
+                          key={m.value}
+                          value={String(m.value)}
+                          className="text-xs font-semibold cursor-pointer"
+                        >
+                          {m.label} ({m.fullName})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -224,7 +232,7 @@ export default function AdminKamsView() {
             )}
           >
             <Target className="h-4 w-4" />
-            <span>Gestor de Metas Financieras (Panel de Lina)</span>
+            <span>Gestor de Metas Financieras</span>
           </button>
         </div>
 
