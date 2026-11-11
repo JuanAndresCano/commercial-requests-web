@@ -1,12 +1,12 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TestRouter } from "@/test/router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import Login from "./Login";
 
-const loginMock = vi.hoisted(() => vi.fn());
+const devLoginMock = vi.hoisted(() => vi.fn());
 vi.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ login: loginMock, user: null }),
+  useAuth: () => ({ devLogin: devLoginMock, status: "unauthenticated", user: null }),
 }));
 
 const toastMock = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
@@ -16,36 +16,65 @@ vi.mock("@/context/ThemeContext", () => ({
   useTheme: () => ({ theme: "light", toggleTheme: vi.fn() }),
 }));
 
-function submitCredentials() {
-  render(
-    <TestRouter>
-      <Login />
-    </TestRouter>,
-  );
-  fireEvent.change(document.getElementById("usuario") as HTMLElement, { target: { value: "kam@icesi.edu.co" } });
-  fireEvent.change(document.getElementById("contrasena") as HTMLElement, { target: { value: "una-clave" } });
-  fireEvent.submit((document.getElementById("usuario") as HTMLElement).closest("form") as HTMLFormElement);
-}
-
-describe("Login: what the user is told when the sign-in fails", () => {
+describe("Login view: Microsoft SSO and Dev Impersonation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("says the credentials are wrong on a 401", async () => {
-    loginMock.mockRejectedValue(new ApiError(401, "Unauthorized"));
-    submitCredentials();
-    await waitFor(() =>
-      expect(toastMock.error).toHaveBeenCalledWith("Correo o contraseña incorrectos.", expect.anything()),
+  it("renders the institutional Microsoft SSO button", () => {
+    render(
+      <TestRouter>
+        <Login />
+      </TestRouter>,
     );
+
+    expect(screen.getByText("Iniciar sesión con cuenta Icesi")).toBeInTheDocument();
   });
 
-  it("asks to wait, in Spanish, when the backend blocks after too many failed attempts (429)", async () => {
-    loginMock.mockRejectedValue(new ApiError(429, "Too many failed login attempts. Try again in 15 minutes."));
-    submitCredentials();
-    await waitFor(() =>
-      expect(toastMock.error).toHaveBeenCalledWith("Demasiados intentos fallidos.", expect.anything()),
+  it("renders strictly the 3 essential dev profiles (KAM, LDP, Admin)", () => {
+    render(
+      <TestRouter>
+        <Login />
+      </TestRouter>,
     );
-    expect(toastMock.error).not.toHaveBeenCalledWith("Correo o contraseña incorrectos.", expect.anything());
+
+    expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
+    expect(screen.getByText("Laura Díaz")).toBeInTheDocument();
+    expect(screen.getAllByText("Administrador").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("Carlos Riveros")).not.toBeInTheDocument();
+  });
+
+  it("allows 1-click dev-login with seeded accounts in development mode", async () => {
+    devLoginMock.mockResolvedValue(undefined);
+
+    render(
+      <TestRouter>
+        <Login />
+      </TestRouter>,
+    );
+
+    const dianaButton = screen.getByText("Diana Martínez");
+    fireEvent.click(dianaButton);
+
+    await waitFor(() => {
+      expect(devLoginMock).toHaveBeenCalledWith("diana.martinez@icesi.edu.co");
+    });
+  });
+
+  it("shows an error toast when dev login fails", async () => {
+    devLoginMock.mockRejectedValue(new ApiError(401, "User not found"));
+
+    render(
+      <TestRouter>
+        <Login />
+      </TestRouter>,
+    );
+
+    const dianaButton = screen.getByText("Diana Martínez");
+    fireEvent.click(dianaButton);
+
+    await waitFor(() => {
+      expect(toastMock.error).toHaveBeenCalledWith("Usuario de prueba no encontrado en la base de datos.");
+    });
   });
 });

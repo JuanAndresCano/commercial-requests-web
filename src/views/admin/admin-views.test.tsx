@@ -212,6 +212,7 @@ describe("Admin Submodule Views (Phase 2 Routing & Shells)", () => {
     expect(screen.getByTestId("admin-solicitudes-view")).toBeInTheDocument();
     expect(screen.getByText("Gestión y Auditoría Global de Solicitudes")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/buscar por código/i)).toBeInTheDocument();
-    expect(screen.getByText(/exportar csv/i)).toBeInTheDocument();
+    expect(screen.getByText("CSV")).toBeInTheDocument();
+    expect(screen.getByText(/exportar excel/i)).toBeInTheDocument();
   });
 });

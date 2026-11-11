@@ -8,7 +8,7 @@ import { TestRouter } from "@/test/router";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { ThemeProvider } from "./ThemeContext";
 
-vi.mock("@/lib/api/auth", () => ({ authApi: { login: vi.fn(), getMe: vi.fn(), logout: vi.fn() } }));
+vi.mock("@/lib/api/auth", () => ({ authApi: { login: vi.fn(), devLogin: vi.fn(), getMe: vi.fn(), logout: vi.fn() } }));
 vi.mock("@/lib/api/requests", () => ({ requestsApi: { list: vi.fn(), getDashboardMetrics: vi.fn() } }));
 
 function deferred<T>() {

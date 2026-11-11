@@ -10,17 +10,14 @@ describe("getNavItems", () => {
     expect(getNavItems("lider-producto").map((i) => i.to)).toEqual(["/dashboard"]);
   });
 
-  it("gives the node leader home and node requests", () => {
-    expect(getNavItems("lider-nodo").map((i) => i.label)).toEqual(["Inicio", "Solicitudes de nodo"]);
-  });
-
-  it("gives the administrator the 5 specialized executive submodules", () => {
+  it("gives the administrator the executive submodules and access management", () => {
     expect(getNavItems("administrador").map((i) => i.label)).toEqual([
       "Resumen Ejecutivo",
       "Rendimiento KAMs",
       "Nodos y Portafolio",
       "Inteligencia Empresas",
       "Gestión Solicitudes",
+      "Gestión de Accesos",
     ]);
     expect(getNavItems("administrador").map((i) => i.to)).toEqual([
       "/admin/dashboard",
@@ -28,6 +25,7 @@ describe("getNavItems", () => {
       "/admin/nodos",
       "/admin/empresas",
       "/admin/solicitudes",
+      "/admin/usuarios",
     ]);
   });
 
@@ -70,6 +68,8 @@ describe("isNavItemActive", () => {
     expect(isNavItemActive("/admin/solicitudes", "/admin/solicitudes", "")).toBe(true);
     expect(isNavItemActive("/admin/empresas", "/admin/empresas", "")).toBe(true);
     expect(isNavItemActive("/admin/empresas", "/dashboard", "?tab=empresas")).toBe(true);
+    expect(isNavItemActive("/admin/usuarios", "/admin/usuarios", "")).toBe(true);
+    expect(isNavItemActive("/admin/usuarios", "/dashboard", "")).toBe(false);
   });
 
   it("keeps /solicitudes active on detail pages but not on the wizard or admin audit", () => {

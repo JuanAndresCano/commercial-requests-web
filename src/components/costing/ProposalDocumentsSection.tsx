@@ -44,7 +44,7 @@ export function ProposalDocumentsSection({
   isUploading = false,
   userRole,
 }: ProposalDocumentsSectionProps) {
-  const isLeader = userRole === "lider-producto" || userRole === "lider-nodo";
+  const isLeader = userRole === "lider-producto";
   const isAdmin = userRole === "administrador";
 
   const clientFileInputRef = useRef<HTMLInputElement>(null);

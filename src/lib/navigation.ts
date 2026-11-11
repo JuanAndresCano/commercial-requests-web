@@ -3,11 +3,11 @@ import {
   FileText,
   PlusCircle,
   Network,
-  GraduationCap,
   Building2,
   TrendingUp,
   Users,
   FileSpreadsheet,
+  UserCheck,
 } from "@/components/icons";
 import type { UserRole } from "@/context/AuthContext";
 
@@ -24,14 +24,6 @@ export interface NavItem {
 export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
   // Single unified board (4 states + quick "Sin docente" filter).
   "lider-producto": [{ to: "/dashboard", label: "Solicitudes", icon: FileText }],
-  "lider-nodo": [
-    { to: "/dashboard", label: "Inicio", icon: Home },
-    { to: "/solicitudes", label: "Solicitudes de nodo", icon: Network },
-  ],
-  profesor: [
-    { to: "/dashboard", label: "Inicio", icon: Home },
-    { to: "/solicitudes", label: "Mis propuestas", icon: GraduationCap },
-  ],
   kam: [
     { to: "/dashboard", label: "Solicitudes", icon: FileText },
     { to: "/solicitudes/nueva", label: "Nueva solicitud", icon: PlusCircle },
@@ -42,11 +34,12 @@ export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { to: "/admin/nodos", label: "Nodos y Portafolio", icon: Network },
     { to: "/admin/empresas", label: "Inteligencia Empresas", icon: Building2 },
     { to: "/admin/solicitudes", label: "Gestión Solicitudes", icon: FileSpreadsheet },
+    { to: "/admin/usuarios", label: "Gestión de Accesos", icon: UserCheck },
   ],
 };
 
 export function getNavItems(role: UserRole): NavItem[] {
-  return NAV_ITEMS[role];
+  return NAV_ITEMS[role] ?? [];
 }
 
 /** Whether a nav link is the current location (handles query strings and nested routes). */
@@ -77,6 +70,9 @@ export function isNavItemActive(itemTo: string, pathname: string, search: string
   if (itemTo === "/admin/solicitudes") {
     return pathname === "/admin/solicitudes" || pathname.startsWith("/admin/solicitudes/");
   }
+  if (itemTo === "/admin/usuarios") {
+    return pathname === "/admin/usuarios" || pathname.startsWith("/admin/usuarios/");
+  }
 
   // General dashboard
   if (itemTo === "/dashboard") {
@@ -89,5 +85,6 @@ export function isNavItemActive(itemTo: string, pathname: string, search: string
     if (search.includes("filter=sin-profesor")) return false;
     return pathname.startsWith("/solicitudes");
   }
+
   return pathname === itemPath;
 }
