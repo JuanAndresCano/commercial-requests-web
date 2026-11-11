@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { MonthlyTrendsData, MonthlyDataPoint } from "@/lib/api/requests";
-import { formatCompactCop, formatCop } from "@/lib/mock-data";
+import { formatCompactCop, formatCop, getNiceScale } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 interface MonthlySalesBarChartProps {
@@ -30,11 +30,12 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
   const monthlyTargetCop = Math.round((data.annualTargetCop || 0) / 12);
 
   // Find max value to normalize bar heights
-  const maxMonthlyVal = Math.max(
+  const rawMaxMonthlyVal = Math.max(
     ...(monthlyData.length > 0 ? monthlyData.map((d) => Math.max(d.quotedCop, d.wonCop, d.targetCop || 0)) : [0]),
     monthlyTargetCop,
     1,
   );
+  const { max: maxMonthlyVal, ticks: monthlyTicks } = getNiceScale(rawMaxMonthlyVal, 4);
 
   const targetPct =
     maxMonthlyVal > 0 && monthlyTargetCop > 0 ? Math.min(Math.round((monthlyTargetCop / maxMonthlyVal) * 100), 92) : 0;
@@ -85,18 +86,20 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
 
       {/* 2. Área del Gráfico de Barras Agrupadas con Eje Y */}
       <div className="mt-6 flex items-stretch gap-2">
-        {/* Eje Y: Índices de Valor */}
+        {/* Eje Y: Índices de Valor Sincronizados con la Escala Redondeada */}
         <div className="flex flex-col justify-between py-2 text-[10px] font-mono text-muted-foreground select-none shrink-0 text-right w-11 sm:w-14">
-          <span>{formatCompactCop(maxMonthlyVal)}</span>
-          <span>{formatCompactCop(maxMonthlyVal * 0.66)}</span>
-          <span>{formatCompactCop(maxMonthlyVal * 0.33)}</span>
-          <span>$ 0</span>
+          {monthlyTicks.map((val) => (
+            <span key={val} className="leading-none">
+              {val === 0 ? "$ 0" : formatCompactCop(val)}
+            </span>
+          ))}
         </div>
 
         {/* Contenedor del Gráfico */}
         <div className="relative h-64 flex-1 flex items-end gap-1.5 sm:gap-3 pt-6 pb-2 border-b border-l border-border/80">
-          {/* Líneas guía de fondo */}
-          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
+          {/* Líneas guía de fondo coincidentes con los 5 ticks */}
+          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 py-2">
+            <div className="w-full border-b border-border border-dashed" />
             <div className="w-full border-b border-border border-dashed" />
             <div className="w-full border-b border-border border-dashed" />
             <div className="w-full border-b border-border border-dashed" />

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { MonthlyTrendsData, YoYComparisonPoint } from "@/lib/api/requests";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop, getNiceScale } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { ArrowUpRight } from "@/components/icons";
 
@@ -28,17 +28,18 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
   const netGrowthCop = totalWonCop - prevTotalWon;
   const netGrowthPercentage = prevTotalWon > 0 ? Math.round((netGrowthCop / prevTotalWon) * 1000) / 10 : 0;
 
-  // Maximum value for SVG scaling
-  const maxVal = Math.max(
+  // Maximum value and clean rounded scale for coherent Y-axis and gridlines
+  const rawMax = Math.max(
     ...(yoyComparison.length > 0 ? yoyComparison.map((d) => Math.max(d.currentYearWonCop, d.previousYearWonCop)) : [0]),
     10_000_000,
   );
+  const { max: maxVal, ticks: yTicks } = getNiceScale(rawMax, 4);
 
   // SVG dimensions
   const svgWidth = 800;
   const svgHeight = 230;
   const paddingX = 25;
-  const paddingY = 20;
+  const paddingY = 16;
   const innerWidth = svgWidth - paddingX * 2;
   const innerHeight = svgHeight - paddingY * 2;
 
@@ -116,12 +117,19 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
 
       {/* 2. Gráfico SVG de Líneas Interactivas con Eje Y */}
       <div className="mt-6 flex items-stretch gap-2">
-        {/* Eje Y: Índices de Valor */}
-        <div className="flex flex-col justify-between py-2 text-[10px] font-mono text-muted-foreground select-none shrink-0 text-right w-11 sm:w-14">
-          <span>{formatCompactCop(maxVal)}</span>
-          <span>{formatCompactCop(maxVal * 0.66)}</span>
-          <span>{formatCompactCop(maxVal * 0.33)}</span>
-          <span>$ 0</span>
+        {/* Eje Y: Índices de Valor Sincronizados con la Escala Redondeada */}
+        <div
+          className="flex flex-col justify-between text-[10px] font-mono text-muted-foreground select-none shrink-0 text-right w-11 sm:w-14"
+          style={{
+            paddingTop: `${(paddingY / svgHeight) * 100}%`,
+            paddingBottom: `${(paddingY / svgHeight) * 100}%`,
+          }}
+        >
+          {yTicks.map((val) => (
+            <span key={val} className="leading-none">
+              {val === 0 ? "$ 0" : formatCompactCop(val)}
+            </span>
+          ))}
         </div>
 
         {/* Contenedor del Gráfico con Borde */}
@@ -132,8 +140,8 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
             preserveAspectRatio="none"
             onMouseLeave={() => setActiveMonthIndex(null)}
           >
-            {/* Líneas horizontales de referencia */}
-            {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
+            {/* Líneas horizontales de referencia coincidentes con cada uno de los 5 ticks */}
+            {[1, 0.75, 0.5, 0.25, 0].map((pct) => {
               const y = paddingY + (1 - pct) * innerHeight;
               return (
                 <g key={pct}>

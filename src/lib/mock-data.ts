@@ -1637,3 +1637,48 @@ export function formatCompactCop(amount: number): string {
   }
   return isNegative ? `-${formatCop(abs)}` : formatCop(abs);
 }
+
+/**
+ * Calculates a clean rounded scale (nice max, step size, and tick values)
+ * for charts, ensuring grid lines and axis labels align on friendly numbers.
+ */
+export function getNiceScale(maxValue: number, steps = 4): { max: number; step: number; ticks: number[] } {
+  if (typeof maxValue !== "number" || Number.isNaN(maxValue) || maxValue <= 0) {
+    return { max: 10_000_000, step: 2_500_000, ticks: [10_000_000, 7_500_000, 5_000_000, 2_500_000, 0] };
+  }
+
+  const rawStep = maxValue / steps;
+  const power = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const fraction = rawStep / power;
+
+  let niceFraction = 10;
+  if (fraction <= 1) niceFraction = 1;
+  else if (fraction <= 2) niceFraction = 2;
+  else if (fraction <= 2.5) niceFraction = 2.5;
+  else if (fraction <= 5) niceFraction = 5;
+  else if (fraction <= 7.5) niceFraction = 7.5;
+  else niceFraction = 10;
+
+  let step = niceFraction * power;
+  let max = step * steps;
+
+  // Ensure max strictly covers maxValue with at least 5% breathing room if they are too close
+  if (max < maxValue * 1.05) {
+    if (niceFraction === 1) niceFraction = 2;
+    else if (niceFraction === 2) niceFraction = 2.5;
+    else if (niceFraction === 2.5) niceFraction = 5;
+    else if (niceFraction === 5) niceFraction = 7.5;
+    else if (niceFraction === 7.5) niceFraction = 10;
+    else niceFraction = 20;
+
+    step = niceFraction * power;
+    max = step * steps;
+  }
+
+  const ticks: number[] = [];
+  for (let i = steps; i >= 0; i--) {
+    ticks.push(step * i);
+  }
+
+  return { max, step, ticks };
+}
