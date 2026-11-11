@@ -66,6 +66,12 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
   const activePoint: YoYComparisonPoint | null =
     activeMonthIndex !== null ? (yoyComparison[activeMonthIndex] ?? null) : null;
 
+  const activeVariance = activePoint
+    ? typeof activePoint.varianceCop === "number" && !isNaN(activePoint.varianceCop)
+      ? activePoint.varianceCop
+      : (activePoint.currentYearWonCop ?? 0) - (activePoint.previousYearWonCop ?? 0)
+    : 0;
+
   return (
     <div
       data-testid="yoy-sales-curve-chart"
@@ -280,7 +286,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap shrink-0",
-                  activePoint.varianceCop >= 0
+                  activeVariance >= 0
                     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                     : "bg-destructive/10 text-destructive",
                 )}
@@ -304,7 +310,7 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
           </div>
           <span className="text-[11px] text-muted-foreground truncate max-w-xs sm:max-w-md">
             {activePoint
-              ? `Variación neta en el mes: ${formatCompactCop(activePoint.varianceCop)}`
+              ? `Variación neta en el mes: ${activeVariance >= 0 ? `+${formatCompactCop(activeVariance)}` : formatCompactCop(activeVariance)}`
               : `${year} acumula ${formatCompactCop(totalWonCop)} frente a ${formatCompactCop(prevTotalWon)} de ${previousYear}`}
           </span>
         </div>
@@ -333,12 +339,10 @@ export function YoySalesCurveChart({ data, isLoading }: YoySalesCurveChartProps)
               <p
                 className={cn(
                   "font-display text-sm sm:text-base font-bold mt-1",
-                  activePoint.varianceCop >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
+                  activeVariance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
                 )}
               >
-                {activePoint.varianceCop >= 0
-                  ? `+${formatCompactCop(activePoint.varianceCop)}`
-                  : formatCompactCop(activePoint.varianceCop)}
+                {activeVariance >= 0 ? `+${formatCompactCop(activeVariance)}` : formatCompactCop(activeVariance)}
               </p>
               <span className="text-[11px] text-muted-foreground block mt-0.5">
                 Crecimiento: {activePoint.growthPercentage}%

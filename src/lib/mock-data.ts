@@ -1625,10 +1625,15 @@ export function formatCop(amount: number) {
 }
 
 export function formatCompactCop(amount: number): string {
-  if (amount >= 1_000_000) {
-    const millions = amount / 1_000_000;
-    const formatted = Number.isInteger(millions) ? millions.toString() : millions.toFixed(1);
-    return `$ ${formatted}M COP`;
+  if (typeof amount !== "number" || Number.isNaN(amount)) {
+    return "$ 0 COP";
   }
-  return formatCop(amount);
+  const isNegative = amount < 0;
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000) {
+    const millions = abs / 1_000_000;
+    const formatted = Number.isInteger(millions) ? millions.toString() : millions.toFixed(1);
+    return `${isNegative ? "-$ " : "$ "}${formatted}M COP`;
+  }
+  return isNegative ? `-${formatCop(abs)}` : formatCop(abs);
 }
