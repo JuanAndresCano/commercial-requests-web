@@ -18,7 +18,8 @@ export default function AdminSolicitudesView() {
     let totalVolumeCop = 0;
 
     for (const p of proposals) {
-      const code = p.workflow?.statusCode ?? "NEW";
+      const code =
+        p.workflow?.currentStatus?.code ?? (p.workflow as unknown as { statusCode?: string })?.statusCode ?? "NEW";
       const daysElapsed = Math.max(
         0,
         Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)),

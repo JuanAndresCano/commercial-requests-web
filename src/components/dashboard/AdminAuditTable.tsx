@@ -129,12 +129,16 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
   }, [proposals]);
 
   // Derived days & SLA calculation helper
+  const getProposalStatusCode = (p: ProposalListItem): string => {
+    return p.workflow?.currentStatus?.code ?? (p.workflow as unknown as { statusCode?: string })?.statusCode ?? "NEW";
+  };
+
   const getProposalMetrics = (p: ProposalListItem) => {
     const daysElapsed = Math.max(0, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)));
     const hasProfessor = Boolean(
       p.assignments && p.assignments.some((a) => a.role === "PROFESSOR" || Boolean(a.professor)),
     );
-    const statusCode = p.workflow?.statusCode ?? "NEW";
+    const statusCode = getProposalStatusCode(p);
     const isPendingProfessorAlert =
       (statusCode === "NEW" || statusCode === "IN_PROGRESS") && !hasProfessor && daysElapsed >= 5;
     const isBottleneckAlert =
@@ -196,7 +200,7 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
       }
 
       // 4. Operational Stage filter
-      if (selectedStage !== "ALL" && p.workflow?.statusCode !== selectedStage) {
+      if (selectedStage !== "ALL" && getProposalStatusCode(p) !== selectedStage) {
         return false;
       }
 
@@ -383,7 +387,7 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
         escapeCsv(leaderName),
         escapeCsv(nodeName),
         escapeCsv(amount),
-        escapeCsv(p.workflow?.statusCode ?? ""),
+        escapeCsv(getProposalStatusCode(p)),
         escapeCsv(p.commercialStatus ?? "Sin etiqueta"),
         escapeCsv(daysElapsed),
         escapeCsv(slaAlert),
@@ -423,8 +427,29 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
           />
         </div>
 
-        {/* Acciones de Exportación y Limpieza */}
+        {/* Selector Rápido de Ordenamiento y Acciones */}
         <div className="flex items-center gap-2 self-start lg:self-auto flex-wrap">
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground font-semibold shrink-0">Ordenar:</span>
+            <select
+              value={`${sortField}-${sortDir}`}
+              onChange={(e) => {
+                const [field, dir] = e.target.value.split("-") as [SortField, SortDirection];
+                setSortField(field);
+                setSortDir(dir);
+              }}
+              className="h-8 rounded-lg border border-border bg-background px-2 py-1 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-icesi-blue cursor-pointer"
+            >
+              <option value="createdAt-desc">Más recientes primero</option>
+              <option value="createdAt-asc">Más antiguas primero</option>
+              <option value="amount-desc">Mayor monto COP</option>
+              <option value="amount-asc">Menor monto COP</option>
+              <option value="days-desc">Mayor tiempo en fábrica (SLA)</option>
+              <option value="company-asc">Empresa (A-Z)</option>
+              <option value="code-asc">Código de solicitud</option>
+            </select>
+          </div>
+
           {hasActiveFilters && (
             <button
               type="button"
@@ -755,7 +780,7 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
                 paginatedProposals.map((p) => {
                   const { daysElapsed, isPendingProfessorAlert, isBottleneckAlert, hasAnyAlert, amount } =
                     getProposalMetrics(p);
-                  const stage = STAGE_CONFIG[p.workflow?.statusCode ?? "NEW"] ?? STAGE_CONFIG.NEW;
+                  const stage = STAGE_CONFIG[getProposalStatusCode(p)] ?? STAGE_CONFIG.NEW;
                   const kamName = p.creator ? `${p.creator.firstName} ${p.creator.lastName}`.trim() : "Sin asignar";
                   const leaderName = p.productLeader
                     ? `${p.productLeader.firstName} ${p.productLeader.lastName}`.trim()
@@ -766,7 +791,15 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
                     <tr
                       key={p.id}
                       data-testid={`audit-row-${p.id}`}
-                      className={cn("hover:bg-muted/30 transition-colors", hasAnyAlert && "bg-amber-500/[0.02]")}
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.closest("button") || target.closest("a")) return;
+                        window.location.href = `/solicitudes/${p.id}`;
+                      }}
+                      className={cn(
+                        "hover:bg-muted/40 transition-colors cursor-pointer group",
+                        hasAnyAlert && "bg-amber-500/[0.02]",
+                      )}
                     >
                       {/* 1. Radicado / Código */}
                       <td className="py-3 px-3 whitespace-nowrap">
@@ -871,8 +904,10 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
                       </td>
 
                       {/* 8. Etiqueta Comercial */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <CommercialStatusChip proposalId={p.id} status={p.commercialStatus} canEdit={false} />
+                      <td className="py-3 px-3 max-w-[155px]">
+                        <div className="max-w-[150px] truncate" title={p.commercialStatus ?? undefined}>
+                          <CommercialStatusChip proposalId={p.id} status={p.commercialStatus} canEdit={false} />
+                        </div>
                       </td>
 
                       {/* 9. Envejecimiento y SLA */}
