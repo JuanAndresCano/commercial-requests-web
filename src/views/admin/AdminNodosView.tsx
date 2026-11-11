@@ -51,26 +51,30 @@ export default function AdminNodosView() {
   const productLeaders = dashboardData?.productLeaders || [];
   const serviceMix = dashboardData?.serviceMix || [];
   const macroKpis = dashboardData?.macroKpis;
-  const totalCenterWonCop = macroKpis?.wonTotalCop ?? macroKpis?.deliveredTotalCop ?? 0;
+  const totalCenterWonCop = macroKpis?.wonTotalCop ?? 0;
 
-  // Compute top performers dynamically
-  const topSalesNode = [...nodeDistribution].sort(
-    (a, b) => (b.wonTotalCop ?? b.deliveredTotalCop) - (a.wonTotalCop ?? a.deliveredTotalCop),
-  )[0];
+  // Compute top performers dynamically (only active sales)
+  const nodesWithSales = nodeDistribution.filter((n) => (n.wonTotalCop ?? 0) > 0);
+  const topSalesNode =
+    nodesWithSales.length > 0
+      ? [...nodesWithSales].sort((a, b) => (b.wonTotalCop ?? 0) - (a.wonTotalCop ?? 0))[0]
+      : null;
 
   const topProductLeader = [...productLeaders].sort(
     (a, b) => b.wonTotalCop - a.wonTotalCop || b.totalAssigned - a.totalAssigned,
   )[0];
 
+  const validTechNodes = nodeDistribution.filter(
+    (n) => n.avgTechnicalDesignDays !== null && n.avgTechnicalDesignDays !== undefined,
+  );
   const avgTechnicalDays =
-    nodeDistribution.length > 0
+    validTechNodes.length > 0
       ? Math.round(
-          (nodeDistribution.reduce((acc, n) => acc + (n.avgTechnicalDesignDays ?? 7), 0) / nodeDistribution.length) *
-            10,
+          (validTechNodes.reduce((acc, n) => acc + (n.avgTechnicalDesignDays ?? 0), 0) / validTechNodes.length) * 10,
         ) / 10
-      : 7;
+      : null;
 
-  const topNodeWonCop = topSalesNode?.wonTotalCop ?? topSalesNode?.deliveredTotalCop ?? 0;
+  const topNodeWonCop = topSalesNode?.wonTotalCop ?? 0;
   const topNodeShare = totalCenterWonCop > 0 ? Math.round((topNodeWonCop / totalCenterWonCop) * 1000) / 10 : 0;
 
   return (
@@ -178,16 +182,25 @@ export default function AdminNodosView() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-muted-foreground">Tiempo Promedio en Fábrica</p>
-              <p className="font-display text-base sm:text-lg font-bold text-foreground">{avgTechnicalDays} días</p>
+              <p className="font-display text-base sm:text-lg font-bold text-foreground">
+                {avgTechnicalDays !== null ? `${avgTechnicalDays} días` : "S/D"}
+              </p>
               <span
                 className={cn(
                   "text-[11px] font-bold",
-                  avgTechnicalDays <= 7
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-amber-600 dark:text-amber-400",
+                  avgTechnicalDays === null
+                    ? "text-muted-foreground"
+                    : avgTechnicalDays <= 7
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-600 dark:text-amber-400",
                 )}
+                title={avgTechnicalDays === null ? "Sin datos suficientes (< 3 solicitudes cerradas)" : undefined}
               >
-                {avgTechnicalDays <= 7 ? "Dentro del benchmark operativo" : "Oportunidad de agilización"}
+                {avgTechnicalDays === null
+                  ? "Sin datos suficientes (< 3 solicitudes cerradas)"
+                  : avgTechnicalDays <= 7
+                    ? "Dentro del benchmark operativo"
+                    : "Oportunidad de agilización"}
               </span>
             </div>
           </div>

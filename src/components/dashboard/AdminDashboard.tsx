@@ -199,22 +199,33 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
 
   const totalPortfolioCop = macroKpis.deliveredTotalCop + macroKpis.pipelineTotalCop;
 
-  const centerTargetCop = macroKpis.targetCop ?? trendsData?.annualTargetCop ?? 2516000000;
+  const currentMonthNumber = new Date().getMonth() + 1;
+
+  const universityTargetCop = macroKpis.targetCop ?? trendsData?.annualTargetCop ?? 0;
   const budgetProgressPct =
     macroKpis.targetCompliancePercentage ??
     trendsData?.annualCompliancePercentage ??
-    (centerTargetCop > 0
-      ? Math.round(((macroKpis.wonTotalCop ?? macroKpis.deliveredTotalCop) / centerTargetCop) * 1000) / 10
-      : 0);
+    (universityTargetCop > 0 ? Math.round(((macroKpis.wonTotalCop ?? 0) / universityTargetCop) * 1000) / 10 : 0);
 
-  const currentMonthNumber = new Date().getMonth() + 1;
-  const expectedToDateCop = Math.round((centerTargetCop / 12) * currentMonthNumber);
-  const actualWonCop = macroKpis.wonTotalCop ?? macroKpis.deliveredTotalCop;
-  const diffToExpectedDateCop = actualWonCop - expectedToDateCop;
+  let expectedPeriodCop = 0;
+  if (selectedYear < currentYear) {
+    expectedPeriodCop = universityTargetCop;
+  } else if (selectedYear === currentYear) {
+    if (selectedQuarter) {
+      expectedPeriodCop = Math.round(universityTargetCop / 4);
+    } else {
+      expectedPeriodCop = Math.round((universityTargetCop / 12) * currentMonthNumber);
+    }
+  } else {
+    expectedPeriodCop = 0;
+  }
+
+  const actualWonCop = macroKpis.wonTotalCop ?? 0;
+  const diffToExpectedDateCop = actualWonCop - expectedPeriodCop;
 
   // Desviación porcentual frente a la cuota proyectada a la fecha
   const paceDeviationPct =
-    expectedToDateCop > 0 ? Math.round((diffToExpectedDateCop / expectedToDateCop) * 1000) / 10 : 0;
+    expectedPeriodCop > 0 ? Math.round((diffToExpectedDateCop / expectedPeriodCop) * 1000) / 10 : 0;
 
   const budgetPacingTier = getBudgetPacingTier(paceDeviationPct, diffToExpectedDateCop);
 
@@ -304,62 +315,84 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
         </div>
 
         {/* Banner Institucional de Metas Financieras y Semáforo de Cumplimiento a la Fecha */}
-        <div className="rounded-2xl border border-border bg-gradient-to-r from-card via-card to-muted/20 p-5 sm:p-6 shadow-xs">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-3.5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Target className="h-6 w-6" />
-              </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-display text-base font-bold text-foreground">
-                    Meta Anual Institucional: {formatCompactCop(centerTargetCop)}
-                  </h3>
-                  <span
-                    className={cn(
-                      "rounded-full px-2.5 py-0.5 text-[11px] font-bold inline-flex items-center gap-1.5 border",
-                      budgetPacingTier.badgeClass,
-                    )}
-                  >
-                    <budgetPacingTier.icon className="h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      {budgetPacingTier.label}: {budgetPacingTier.detail}
-                    </span>
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Cuota presupuestal fijada por Dirección Financiera ({selectedYear}) · Ritmo esperado acumulado (Mes{" "}
-                  {currentMonthNumber}/12): {formatCompactCop(expectedToDateCop)}
-                </p>
-              </div>
+        {universityTargetCop === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card/60 p-5 sm:p-6 text-center">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary mb-2">
+              <Target className="h-5 w-5" />
             </div>
-
-            {/* Indicador de Avance Presupuestal y Botón Directo a Metas */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-              <div className="flex flex-col gap-1.5 min-w-[190px]">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-muted-foreground">Avance Presupuestal</span>
-                  <span className="text-foreground">{budgetProgressPct}%</span>
+            <h3 className="font-display text-sm font-bold text-foreground">
+              No se han configurado metas financieras para el año {selectedYear}
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+              Define el presupuesto institucional de la Universidad y distribuye las cuotas comerciales por asesor para
+              habilitar el seguimiento del ritmo financiero.
+            </p>
+            <Link
+              href="/admin/kams?tab=metas"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-primary/90 transition-colors"
+            >
+              <Target className="h-3.5 w-3.5" />
+              <span>Asignar Metas</span>
+            </Link>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-border bg-gradient-to-r from-card via-card to-muted/20 p-5 sm:p-6 shadow-xs">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3.5">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Target className="h-6 w-6" />
                 </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn("h-full rounded-full transition-all duration-500", budgetPacingTier.progressClass)}
-                    style={{ width: `${Math.min(budgetProgressPct, 100)}%` }}
-                  />
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-display text-base font-bold text-foreground">
+                      Meta Anual de la Universidad: {formatCompactCop(universityTargetCop)}
+                    </h3>
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-0.5 text-[11px] font-bold inline-flex items-center gap-1.5 border",
+                        budgetPacingTier.badgeClass,
+                      )}
+                    >
+                      <budgetPacingTier.icon className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        {budgetPacingTier.label}: {budgetPacingTier.detail}
+                      </span>
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Cuota presupuestal fijada por Dirección Financiera ({selectedYear}) · Ritmo esperado acumulado (Mes{" "}
+                    {currentMonthNumber}/12): {formatCompactCop(expectedPeriodCop)}
+                  </p>
                 </div>
               </div>
 
-              <Link
-                href="/admin/kams?tab=metas"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-bold text-foreground shadow-xs hover:border-icesi-blue hover:text-icesi-blue transition-colors cursor-pointer shrink-0"
-                title="Configurar y asignar metas de venta institucionales y por KAM"
-              >
-                <Target className="h-3.5 w-3.5 text-icesi-blue" />
-                <span>Asignar Metas</span>
-              </Link>
+              {/* Indicador de Avance Presupuestal y Botón Directo a Metas */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-muted-foreground">Avance Presupuestal</span>
+                    <span className="text-foreground">{budgetProgressPct}%</span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn("h-full rounded-full transition-all duration-500", budgetPacingTier.progressClass)}
+                      style={{ width: `${Math.min(budgetProgressPct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <Link
+                  href="/admin/kams?tab=metas"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-bold text-foreground shadow-xs hover:border-icesi-blue hover:text-icesi-blue transition-colors cursor-pointer shrink-0"
+                  title="Configurar y asignar metas de venta institucionales y por KAM"
+                >
+                  <Target className="h-3.5 w-3.5 text-icesi-blue" />
+                  <span>Asignar Metas</span>
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* 2. TARJETAS DE MÉTRICAS MACRO (Diseño fiel al estándar de tarjetas de Icesi) */}
         <div
@@ -374,12 +407,12 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
               <span className="text-xs sm:text-sm font-medium text-muted-foreground">Total aprobado / vendido</span>
               <div className="mt-2.5">
                 <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                  {formatCompactCop(macroKpis.wonTotalCop ?? macroKpis.deliveredTotalCop)}
+                  {formatCompactCop(macroKpis.wonTotalCop ?? 0)}
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    {macroKpis.wonCount ?? 12}{" "}
-                    {(macroKpis.wonCount ?? 12) === 1 ? "propuesta ganada" : "propuestas ganadas"}
+                    {macroKpis.wonCount ?? 0}{" "}
+                    {(macroKpis.wonCount ?? 0) === 1 ? "propuesta ganada" : "propuestas ganadas"}
                   </span>{" "}
                   • Facturado real
                 </p>

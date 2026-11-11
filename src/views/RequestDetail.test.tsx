@@ -475,26 +475,11 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       });
     });
 
-    it("falls back to local updateRequest when apiProposal is null (pure mock)", async () => {
-      // Return null from API so it behaves as local mock
+    it("renders not found and does not update when apiProposal is null", async () => {
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
       renderPage("REQ-2026-0001");
 
-      const editBtn = await screen.findByRole("button", { name: /Editar información/i });
-      fireEvent.click(editBtn);
-
-      const titleInput = screen.getByLabelText(/Título de la propuesta/i);
-      fireEvent.change(titleInput, { target: { value: "Edición Local Mock" } });
-
-      const saveBtn = screen.getByRole("button", { name: /Guardar información/i });
-      fireEvent.click(saveBtn);
-
-      expect(authMock.updateRequest).toHaveBeenCalledWith(
-        "REQ-2026-0001",
-        expect.objectContaining({
-          title: "Edición Local Mock",
-        }),
-      );
+      expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
       expect(requestsApi.updateInfo).not.toHaveBeenCalled();
     });
 
@@ -713,23 +698,12 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(await screen.findByText("Tablero Dashboard")).toBeInTheDocument();
     });
 
-    it("falls back to local deleteRequest when apiProposal is null (pure mock)", async () => {
+    it("renders not found and does not delete when apiProposal is null", async () => {
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
       renderPage("REQ-2026-0001");
 
-      const cancelBtn = await screen.findByRole("button", { name: /Cancelar solicitud/i });
-      fireEvent.click(cancelBtn);
-
-      // Select preset
-      const chipPreset = screen.getByRole("button", { name: /Cliente desistió de la propuesta/i });
-      fireEvent.click(chipPreset);
-
-      const confirmBtn = screen.getByRole("button", { name: /Sí, cancelar solicitud/i });
-      fireEvent.click(confirmBtn);
-
-      expect(authMock.deleteRequest).toHaveBeenCalledWith("REQ-2026-0001");
+      expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
       expect(requestsApi.delete).not.toHaveBeenCalled();
-      expect(await screen.findByText("Tablero Dashboard")).toBeInTheDocument();
     });
   });
 
@@ -819,22 +793,11 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(sendBtn).toHaveAttribute("aria-describedby", reason.id);
     });
 
-    it("falls back to local updateRequest when apiProposal is null", async () => {
+    it("renders not found and does not deliver when apiProposal is null", async () => {
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
       renderPage("REQ-2026-0002");
 
-      const sendBtn = await screen.findByRole("button", { name: /Enviar a cliente/i });
-      fireEvent.click(sendBtn);
-
-      const confirmBtn = screen.getByRole("button", { name: /Sí, confirmar presentación/i });
-      fireEvent.click(confirmBtn);
-
-      expect(authMock.updateRequest).toHaveBeenCalledWith(
-        "REQ-2026-0002",
-        expect.objectContaining({
-          status: "entregada",
-        }),
-      );
+      expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
       expect(requestsApi.updateStatus).not.toHaveBeenCalled();
     });
   });
@@ -883,26 +846,11 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(requestsApi.updateStatus).not.toHaveBeenCalled();
     });
 
-    it("falls back to local updateRequest when apiProposal is null", async () => {
+    it("renders not found and does not return when apiProposal is null", async () => {
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
       renderPage("REQ-2026-0003");
 
-      const returnBtn = await screen.findByRole("button", { name: /Devolver con observaciones/i });
-      fireEvent.click(returnBtn);
-
-      const textarea = screen.getByLabelText(/Observaciones del cliente/i);
-      fireEvent.change(textarea, { target: { value: "Ajuste local mock" } });
-
-      const confirmBtn = screen.getByRole("button", { name: /Devolver a costeo/i });
-      fireEvent.click(confirmBtn);
-
-      expect(authMock.updateRequest).toHaveBeenCalledWith(
-        "REQ-2026-0003",
-        expect.objectContaining({
-          status: "en-costeo",
-          clientObservations: "Ajuste local mock",
-        }),
-      );
+      expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
       expect(requestsApi.updateStatus).not.toHaveBeenCalled();
     });
   });
@@ -1323,16 +1271,11 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     );
   });
 
-  it("keeps a mock proposal on the local path: no request to the backend", async () => {
+  it("renders not found and does not update costing when apiProposal is null", async () => {
     vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
     renderPage("REQ-2026-0002");
 
-    await typeMarginPercent("35");
-
-    expect(authMock.updateCosting).toHaveBeenCalledWith(
-      "REQ-2026-0002",
-      expect.objectContaining({ expectedMarginPercent: 35 }),
-    );
+    expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
     expect(requestsApi.upsertCosting).not.toHaveBeenCalled();
   });
 });

@@ -326,6 +326,9 @@ export interface AdminMacroKpis {
   rejectedTotalCop?: number;
   rejectedCount?: number;
   targetCop?: number;
+  targetConversionRate?: number | null;
+  actualWinRatePercentage?: number;
+  conversionCompliancePercentage?: number;
   targetProposals?: number;
   targetCompliancePercentage?: number;
   gapToTargetCop?: number;
@@ -393,8 +396,11 @@ export interface KamRankingEntry {
   wonTotalCop?: number;
   rejectedCount?: number;
   winRatePercentage?: number;
+  actualWinRatePercentage?: number;
   averageTicketCop?: number;
   targetCop?: number;
+  targetConversionRate?: number | null;
+  conversionCompliancePercentage?: number;
   targetProposals?: number;
   targetCompliancePercentage?: number;
   shareOfTotalSalesPercentage?: number;
@@ -405,25 +411,32 @@ export interface KamSalesTargetSummary {
   kamName: string;
   kamEmail: string;
   annualTargetCop: number;
+  annualTargetConversionRate?: number | null;
   annualTargetProposals: number;
   monthlyTargets: Array<{
     month: number;
     targetCop: number;
+    targetConversionRate?: number | null;
+    targetProposals: number;
+  }>;
+}
+
+export interface UniversityTargetSummary {
+  annualTargetCop: number;
+  annualTargetConversionRate?: number | null;
+  annualTargetProposals: number;
+  monthlyTargets: Array<{
+    month: number;
+    targetCop: number;
+    targetConversionRate?: number | null;
     targetProposals: number;
   }>;
 }
 
 export interface SalesTargetsResponse {
   year: number;
-  centerTarget: {
-    annualTargetCop: number;
-    annualTargetProposals: number;
-    monthlyTargets: Array<{
-      month: number;
-      targetCop: number;
-      targetProposals: number;
-    }>;
-  };
+  universityTarget?: UniversityTargetSummary;
+  centerTarget: UniversityTargetSummary;
   kamTargets: KamSalesTargetSummary[];
 }
 
@@ -431,6 +444,7 @@ export interface SalesTargetEntryInput {
   month?: number | null;
   kamId?: string | null;
   targetCop: number;
+  targetConversionRate?: number | null;
   targetProposals?: number | null;
 }
 
@@ -449,8 +463,8 @@ export interface NodeDistributionEntry {
   wonCount?: number;
   winRatePercentage?: number;
   shareOfTotalSalesPercentage?: number;
-  avgTechnicalDesignDays?: number;
-  avgCostingDays?: number;
+  avgTechnicalDesignDays?: number | null;
+  avgCostingDays?: number | null;
 }
 
 export interface ProductLeaderEntry {

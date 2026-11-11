@@ -289,7 +289,7 @@ describe("AdminDashboard Component", () => {
     expect(screen.getByText("IA+ Tech Digital")).toBeInTheDocument();
 
     // 6. Institutional Sales Target & Trends Charts (Phase 3)
-    expect(screen.getByText(/Meta Anual Institucional/)).toBeInTheDocument();
+    expect(screen.getByText(/Meta Anual (de la Universidad|Institucional)/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Asignar Metas/i })).toBeInTheDocument();
     expect(screen.getByText("Cotizado vs. Vendido por Mes")).toBeInTheDocument();
     expect(screen.getByText("Curva Comparativa Interanual de Ventas")).toBeInTheDocument();

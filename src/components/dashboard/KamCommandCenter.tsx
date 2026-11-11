@@ -12,6 +12,7 @@ import { RoleBadge } from "@/components/RoleBadge";
 import { RequestCard } from "@/components/RequestCard";
 import { StageKpiCard } from "@/components/kanban/StageKpiCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
+import { KanbanBoardSkeleton } from "@/components/dashboard/KanbanBoardSkeleton";
 import { BoardMotion } from "@/components/kanban/BoardMotion";
 import { AnimatedNumber } from "@/components/kanban/AnimatedNumber";
 import { usePersistentState } from "@/hooks/use-persistent-state";
@@ -19,6 +20,7 @@ import { useRequests } from "@/hooks/use-requests";
 import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
 import { formatCopTotal } from "@/lib/cop-total";
 import { formatRelativeTime, mapProposalToRequestItem } from "@/lib/proposal-adapter";
+import type { ProposalListItem } from "@/lib/api/requests";
 import { fuzzyMatch } from "@/lib/fuzzy";
 import { getStageAgeLabel, getTotalAgeLabel } from "@/lib/stage-age";
 import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
@@ -63,14 +65,18 @@ const KAM_STAGE_BADGE: Partial<Record<RequestStatus, { tone: string; dot: string
 };
 
 interface KamCommandCenterProps {
-  requests?: RequestItem[];
   userName: string;
+  /** @deprecated Ignored — KamCommandCenter queries proposals directly from React Query */
+  requests?: RequestItem[];
 }
 
 type FilterType = RequestStatus | "all";
 
-export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) {
-  const { data: apiProposals, isLoading, isError, refetch } = useRequests();
+export function KamCommandCenter({ userName, requests }: KamCommandCenterProps) {
+  const requestsQuery = useRequests();
+  const apiProposals = requestsQuery.data;
+  const isLoading = requestsQuery.isLoading && !requests;
+  const isError = requestsQuery.isError && !requests;
   const {
     data: apiMetrics,
     isPending: metricsPending,
@@ -101,18 +107,31 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
 
   const firstName = userName ? userName.split(" ")[0] : "Andrea";
 
-  // El KAM es dueño de su propia cartera de clientes — solo ve sus propias
-  // solicitudes. Si la API responde datos reales, los adaptamos; de lo contrario
-  // se utiliza el dataset fallback.
   const activeDataset = useMemo(() => {
-    if (apiProposals) {
-      return apiProposals.map((p) => mapProposalToRequestItem(p));
+    let dataset: RequestItem[] = [];
+    if (apiProposals && apiProposals.length > 0) {
+      dataset = (apiProposals as unknown[]).map((p) => {
+        if (
+          p &&
+          typeof p === "object" &&
+          ("workflow" in p ||
+            "assignments" in p ||
+            ("company" in p && typeof (p as Record<string, unknown>).company === "object"))
+        ) {
+          return mapProposalToRequestItem(p as ProposalListItem);
+        }
+        return p as RequestItem;
+      });
+    } else if (requests && requests.length > 0) {
+      dataset = requests;
     }
-    return requests ? requests.filter((r) => r.kam === userName) : [];
+    if (requests && userName) {
+      return dataset.filter((r) => !r.kam || r.kam === userName);
+    }
+    return dataset;
   }, [apiProposals, requests, userName]);
 
   const myRequests = activeDataset;
-  // The API only returns the KAM's own proposals; local fallback data is read-only (no PATCH to write to).
   const canEditCommercialStatus = Boolean(apiProposals);
 
   // Filtros por líder de producto, empresa y tipo. Se combinan (AND) con la
@@ -306,6 +325,29 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
       .join("")
       .toUpperCase();
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <KanbanBoardSkeleton />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <section className="mx-auto max-w-xl py-16 text-center">
+        <p className="text-sm font-medium text-destructive">No se pudo cargar el tablero de solicitudes.</p>
+        <button
+          type="button"
+          className="mt-3 text-xs font-semibold text-primary hover:underline cursor-pointer"
+          onClick={() => void requestsQuery.refetch()}
+        >
+          Reintentar
+        </button>
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -656,36 +698,15 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border dark:divide-icesi-border">
-                  {isLoading && activeDataset.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                        <div role="status" className="flex flex-col items-center justify-center gap-2">
-                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-icesi-blue border-t-transparent" />
-                          <p className="font-medium text-foreground">Cargando solicitudes desde el servidor...</p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : isError && activeDataset.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                        <div className="mx-auto max-w-sm">
-                          <p className="font-medium text-destructive">No se pudieron cargar las solicitudes</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Ocurrió un error al consultar el servidor.
-                          </p>
-                          <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3 text-xs">
-                            Reintentar
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : filteredRequests.length === 0 ? (
+                  {filteredRequests.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         <div className="mx-auto max-w-sm">
                           {!hasAnyBoardFilter && activeFilter === "all" && myRequests.length === 0 ? (
                             <>
-                              <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
+                              <p className="font-medium text-foreground">
+                                No tienes solicitudes en tu cartera comercial actualmente
+                              </p>
                               <p className="mt-1 text-xs text-muted-foreground">
                                 Las solicitudes que registres quedarán aquí automáticamente.
                               </p>
@@ -911,7 +932,9 @@ export function KamCommandCenter({ requests, userName }: KamCommandCenterProps) 
                 <div className="mx-auto max-w-sm">
                   {!hasAnyBoardFilter && myRequests.length === 0 ? (
                     <>
-                      <p className="font-medium text-foreground">Aún no tienes solicitudes registradas</p>
+                      <p className="font-medium text-foreground">
+                        No tienes solicitudes en tu cartera comercial actualmente
+                      </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Las solicitudes que registres quedarán aquí automáticamente.
                       </p>

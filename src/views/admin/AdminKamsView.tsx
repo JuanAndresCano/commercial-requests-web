@@ -82,17 +82,27 @@ export default function AdminKamsView() {
 
   const kamRanking = dashboardData?.kamRanking || [];
   const macroKpis = dashboardData?.macroKpis;
-  const totalCenterWonCop = macroKpis?.wonTotalCop ?? macroKpis?.deliveredTotalCop ?? 0;
+  const totalCenterWonCop = macroKpis?.wonTotalCop ?? 0;
 
-  // Compute top performers dynamically
-  const topSalesKam = [...kamRanking].sort(
-    (a, b) => (b.wonTotalCop ?? b.deliveredTotalCop) - (a.wonTotalCop ?? a.deliveredTotalCop),
-  )[0];
+  // Compute top performers dynamically (only consider active results)
+  const kamsWithSales = kamRanking.filter((k) => (k.wonTotalCop ?? 0) > 0);
+  const topSalesKam =
+    kamsWithSales.length > 0 ? [...kamsWithSales].sort((a, b) => (b.wonTotalCop ?? 0) - (a.wonTotalCop ?? 0))[0] : null;
 
-  const topWinRateKam = [...kamRanking].sort((a, b) => (b.winRatePercentage ?? 0) - (a.winRatePercentage ?? 0))[0];
+  const kamsWithWinRate = kamRanking.filter((k) => (k.winRatePercentage ?? 0) > 0);
+  const topWinRateKam =
+    kamsWithWinRate.length > 0
+      ? [...kamsWithWinRate].sort((a, b) => (b.winRatePercentage ?? 0) - (a.winRatePercentage ?? 0))[0]
+      : null;
 
-  const centerTargetCop = salesTargetsData?.centerTarget.annualTargetCop || macroKpis?.targetCop || 2516000000;
-  const annualCompliancePct = centerTargetCop > 0 ? Math.round((totalCenterWonCop / centerTargetCop) * 1000) / 10 : 0;
+  const universityTargetCop =
+    macroKpis?.targetCop ??
+    salesTargetsData?.universityTarget?.annualTargetCop ??
+    salesTargetsData?.centerTarget?.annualTargetCop ??
+    0;
+  const periodCompliancePct =
+    macroKpis?.targetCompliancePercentage ??
+    (universityTargetCop > 0 ? Math.round((totalCenterWonCop / universityTargetCop) * 1000) / 10 : 0);
 
   return (
     <AppShell>
@@ -251,9 +261,7 @@ export default function AdminKamsView() {
                     {topSalesKam ? topSalesKam.name : "Sin registros"}
                   </p>
                   <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold block truncate">
-                    {topSalesKam
-                      ? `${formatCompactCop(topSalesKam.wonTotalCop ?? topSalesKam.deliveredTotalCop ?? 0)} cerrados`
-                      : "Sin ventas cerradas"}
+                    {topSalesKam ? `${formatCompactCop(topSalesKam.wonTotalCop ?? 0)} cerrados` : "Sin ventas cerradas"}
                   </span>
                 </div>
               </div>
@@ -280,12 +288,14 @@ export default function AdminKamsView() {
                   <Target className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-muted-foreground">Meta Anual de la Universidad</p>
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    {selectedQuarter ? `Meta Q${selectedQuarter} de la Universidad` : "Meta Anual de la Universidad"}
+                  </p>
                   <p className="font-display text-lg font-bold text-foreground truncate">
-                    {formatCompactCop(centerTargetCop)}
+                    {formatCompactCop(universityTargetCop)}
                   </p>
                   <span className="text-[11px] text-muted-foreground font-semibold block truncate">
-                    {annualCompliancePct}% de cumplimiento anual
+                    {periodCompliancePct}% de cumplimiento {selectedQuarter ? `Q${selectedQuarter}` : "anual"}
                   </span>
                 </div>
               </div>

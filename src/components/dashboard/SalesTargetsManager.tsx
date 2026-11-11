@@ -44,7 +44,7 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
   const updateTargetsMutation = useUpdateSalesTargets();
 
   // Local state for University global target
-  const [centerCop, setCenterCop] = useState<number>(2516000000);
+  const [centerCop, setCenterCop] = useState<number>(0);
   const [centerConversionRate, setCenterConversionRate] = useState<number>(35);
 
   // Local state for KAM individual quotas
@@ -66,8 +66,13 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
 
   useEffect(() => {
     if (initialData) {
-      setCenterCop(initialData.centerTarget.annualTargetCop || 2516000000);
-      const rawRate = initialData.centerTarget.annualTargetProposals;
+      const uniCop = initialData.universityTarget?.annualTargetCop ?? initialData.centerTarget?.annualTargetCop ?? 0;
+      setCenterCop(uniCop);
+      const rawRate =
+        initialData.universityTarget?.annualTargetConversionRate ??
+        initialData.universityTarget?.annualTargetProposals ??
+        initialData.centerTarget?.annualTargetProposals ??
+        35;
       setCenterConversionRate(rawRate > 0 && rawRate <= 100 ? rawRate : 35);
 
       if (initialData.kamTargets.length > 0) {
@@ -78,7 +83,10 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
             kamEmail: k.kamEmail,
             targetCop: k.annualTargetCop || 0,
             targetProposals:
-              k.annualTargetProposals > 0 && k.annualTargetProposals <= 100 ? k.annualTargetProposals : 35,
+              (k.annualTargetConversionRate ?? k.annualTargetProposals) > 0 &&
+              (k.annualTargetConversionRate ?? k.annualTargetProposals) <= 100
+                ? (k.annualTargetConversionRate ?? k.annualTargetProposals)
+                : 35,
           })),
         );
       }
@@ -161,12 +169,14 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
         month: null,
         kamId: null,
         targetCop: centerCop,
+        targetConversionRate: centerConversionRate,
         targetProposals: centerConversionRate,
       },
       ...kamRows.map((k) => ({
         month: null,
         kamId: k.kamId,
         targetCop: k.targetCop,
+        targetConversionRate: k.targetProposals,
         targetProposals: k.targetProposals,
       })),
     ];

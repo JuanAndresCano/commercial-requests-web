@@ -5,15 +5,6 @@ import { setUnauthorizedHandler } from "@/lib/api/client";
 import { isSessionActive, mapBackendRoles, msUntilExpiry } from "@/lib/session";
 import { useSessionSync } from "@/hooks/use-session-sync";
 import type { SessionConflictReason } from "@/lib/session-sync";
-import {
-  MOCK_REQUESTS,
-  RequestItem,
-  RequestStatus,
-  ProposalCosting,
-  ProposalDocument,
-  ExternalProfessorData,
-} from "@/lib/mock-data";
-import { assignProfessorWithHistory } from "@/lib/professor-assignment";
 import { resetDashboardUiState } from "@/lib/dashboard-ui-state";
 import { useTheme } from "@/context/ThemeContext";
 import { toTitleCase } from "@/lib/format-name";
@@ -37,7 +28,7 @@ export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = 
   administrador: { label: "Administrador" },
 };
 
-// Legacy key of the mock login; the session now lives in an httpOnly cookie.
+// Legacy keys for previous mock login and mock storage; session now lives in httpOnly cookies.
 const LEGACY_STORAGE_KEY_USER = "icesi_auth_user_v3";
 const STORAGE_KEY_REQUESTS = "icesi_requests_data_v3";
 
@@ -59,19 +50,6 @@ interface AuthContextType {
    * session cookie no longer belongs to the user this tab shows. Reload to continue.
    */
   sessionConflict: SessionConflictReason | null;
-  requests: RequestItem[];
-  updateRequest: (id: string, updates: Partial<RequestItem>) => void;
-  deleteRequest: (id: string) => void;
-  assignProfessorDetailed: (
-    id: string,
-    professorName: string,
-    type: "planta" | "externo",
-    externalData?: ExternalProfessorData,
-  ) => void;
-  updateCosting: (id: string, costing: ProposalCosting) => void;
-  addDocument: (id: string, doc: ProposalDocument) => void;
-  removeDocument: (id: string, docId: string, category: "client_kam" | "internal_costing") => void;
-  updateStatus: (id: string, status: RequestStatus) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -153,6 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Restore the session from the cookie on load; never trust local state.
   useEffect(() => {
     localStorage.removeItem(LEGACY_STORAGE_KEY_USER);
+    localStorage.removeItem(STORAGE_KEY_REQUESTS);
     let cancelled = false;
     authApi
       .getMe()
@@ -179,50 +158,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const timer = window.setTimeout(clearSession, msUntilExpiry(expiresAt));
     return () => window.clearTimeout(timer);
   }, [expiresAt, clearSession]);
-
-  const [requests, setRequests] = useState<RequestItem[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_REQUESTS);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge with any new mock requests not yet in local storage
-          const existingIds = new Set(parsed.map((p: RequestItem) => p.id));
-          const missingMocks = MOCK_REQUESTS.filter((m) => !existingIds.has(m.id));
-          const combined = [...parsed, ...missingMocks];
-
-          return combined.map((item: RequestItem) => {
-            const mock = MOCK_REQUESTS.find((m) => m.id === item.id);
-            // No se fabrica un costeo por defecto: si ni el registro guardado
-            // ni el mock traen uno, la solicitud sigue sin costear.
-            const costing = item.costing ?? mock?.costing;
-            const clientKamDocuments = item.clientKamDocuments ?? mock?.clientKamDocuments ?? [];
-            const internalCostingDocuments = item.internalCostingDocuments ?? mock?.internalCostingDocuments ?? [];
-            return {
-              ...item,
-              costing,
-              clientKamDocuments,
-              internalCostingDocuments,
-              professorType: item.professorType ?? mock?.professorType ?? "planta",
-              externalProfessorData: item.externalProfessorData ?? mock?.externalProfessorData,
-              totalCostCop: item.totalCostCop ?? costing?.totalOfferedCop,
-            };
-          });
-        }
-      }
-    } catch {
-      // Fallback
-    }
-    return MOCK_REQUESTS;
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(requests));
-    } catch {
-      // Ignore storage errors
-    }
-  }, [requests]);
 
   const devLogin = useCallback(
     async (email: string) => {
@@ -263,90 +198,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void authApi.logout().catch(() => undefined);
   };
 
-  const updateRequest = (id: string, updates: Partial<RequestItem>) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        const updated = { ...r, ...updates };
-        if (updates.costing) {
-          updated.totalCostCop = updates.costing.totalOfferedCop;
-        }
-        // Se marca automáticamente aquí (no en cada pantalla que cambia el
-        // estado) para que "tiempo en esta fase" sea correcto sin importar
-        // si el cambio vino de updateStatus, de "Entregar" o de "Devolver
-        // con observaciones".
-        if (updates.status && updates.status !== r.status) {
-          updated.statusUpdatedAt = new Date().toISOString();
-        }
-        return updated;
-      }),
-    );
-  };
-
-  const deleteRequest = (id: string) => {
-    setRequests((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  const assignProfessorDetailed = (
-    id: string,
-    professorName: string,
-    type: "planta" | "externo",
-    externalData?: ExternalProfessorData,
-  ) => {
-    const current = requests.find((r) => r.id === id);
-    if (!current) return;
-    updateRequest(id, assignProfessorWithHistory(current, professorName, type, externalData, user.name));
-  };
-
-  const updateCosting = (id: string, costing: ProposalCosting) => {
-    updateRequest(id, {
-      costing,
-      totalCostCop: costing.totalOfferedCop,
-    });
-  };
-
-  const addDocument = (id: string, doc: ProposalDocument) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        if (doc.category === "client_kam") {
-          return {
-            ...r,
-            clientKamDocuments: [doc, ...(r.clientKamDocuments ?? [])],
-          };
-        } else {
-          return {
-            ...r,
-            internalCostingDocuments: [doc, ...(r.internalCostingDocuments ?? [])],
-          };
-        }
-      }),
-    );
-  };
-
-  const removeDocument = (id: string, docId: string, category: "client_kam" | "internal_costing") => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        if (category === "client_kam") {
-          return {
-            ...r,
-            clientKamDocuments: (r.clientKamDocuments ?? []).filter((d) => d.id !== docId),
-          };
-        } else {
-          return {
-            ...r,
-            internalCostingDocuments: (r.internalCostingDocuments ?? []).filter((d) => d.id !== docId),
-          };
-        }
-      }),
-    );
-  };
-
-  const updateStatus = (id: string, status: RequestStatus) => {
-    updateRequest(id, { status });
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -357,14 +208,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshSession,
         logout,
         sessionConflict,
-        requests,
-        updateRequest,
-        deleteRequest,
-        assignProfessorDetailed,
-        updateCosting,
-        addDocument,
-        removeDocument,
-        updateStatus,
       }}
     >
       {children}

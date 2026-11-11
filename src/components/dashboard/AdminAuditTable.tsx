@@ -458,11 +458,15 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
       "Aprobadas / Vendidas",
       "Monto Facturado Real ($ COP)",
       "Tasa de Conversión (Win Rate %)",
+      "Meta de Conversión (%)",
+      "Cumplimiento de Meta de Conversión (%)",
       "Ticket Promedio ($ COP)",
     ];
 
     const kamsRows = Array.from(kamsAgg.values()).map((k) => {
       const winRate = k.quotedCop > 0 ? Math.round((k.wonCop / k.quotedCop) * 1000) / 10 : 0;
+      const targetRate = 35;
+      const complianceRate = targetRate > 0 ? Math.round((winRate / targetRate) * 1000) / 10 : 0;
       const avgTicket = k.wonCount > 0 ? Math.round(k.wonCop / k.wonCount) : 0;
       return [
         k.name,
@@ -473,6 +477,8 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
         k.wonCount,
         k.wonCop,
         `${winRate}%`,
+        `${targetRate}%`,
+        `${complianceRate}%`,
         avgTicket,
       ];
     });

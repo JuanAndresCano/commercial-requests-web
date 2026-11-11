@@ -54,8 +54,8 @@ export function KamDeepTable({ kamRanking, totalCenterWonCop }: KamDeepTableProp
   const totalProposals = kamRanking.reduce((acc, k) => acc + k.totalProposals, 0);
   const totalPipelineCop = kamRanking.reduce((acc, k) => acc + k.pipelineTotalCop, 0);
   const totalDeliveredCop = kamRanking.reduce((acc, k) => acc + k.deliveredTotalCop, 0);
-  const totalWonCop = kamRanking.reduce((acc, k) => acc + (k.wonTotalCop ?? k.deliveredTotalCop), 0);
-  const totalWonCount = kamRanking.reduce((acc, k) => acc + (k.wonCount ?? k.deliveredCount), 0);
+  const totalWonCop = kamRanking.reduce((acc, k) => acc + (k.wonTotalCop ?? 0), 0);
+  const totalWonCount = kamRanking.reduce((acc, k) => acc + (k.wonCount ?? 0), 0);
   const centerWinRate = totalDeliveredCop > 0 ? Math.round((totalWonCop / totalDeliveredCop) * 1000) / 10 : 0;
   const centerAvgTicket = totalWonCount > 0 ? Math.round(totalWonCop / totalWonCount) : 0;
 
@@ -120,7 +120,7 @@ export function KamDeepTable({ kamRanking, totalCenterWonCop }: KamDeepTableProp
               </tr>
             ) : (
               paginatedKams.map((kam) => {
-                const wonCop = kam.wonTotalCop ?? kam.deliveredTotalCop;
+                const wonCop = kam.wonTotalCop ?? 0;
                 const sharePct =
                   kam.shareOfTotalSalesPercentage ??
                   (totalCenterWonCop > 0 ? Math.round((wonCop / totalCenterWonCop) * 1000) / 10 : 0);

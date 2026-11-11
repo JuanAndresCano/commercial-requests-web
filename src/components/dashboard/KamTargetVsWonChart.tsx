@@ -91,7 +91,7 @@ export function KamTargetVsWonChart({ kamRanking }: KamTargetVsWonChartProps) {
 
       <div className="space-y-6">
         {displayedKams.map((kam) => {
-          const wonCop = kam.wonTotalCop ?? kam.deliveredTotalCop;
+          const wonCop = kam.wonTotalCop ?? 0;
           const targetCop = kam.targetCop ?? 0;
           const hasTarget = targetCop > 0;
 

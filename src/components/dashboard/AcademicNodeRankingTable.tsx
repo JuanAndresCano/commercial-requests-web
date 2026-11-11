@@ -16,20 +16,23 @@ export function AcademicNodeRankingTable({ nodeDistribution, totalCenterWonCop }
   const totalWonCop = nodeDistribution.reduce((acc, n) => acc + (n.wonTotalCop ?? 0), 0);
   const centerWinRate = totalOfferedCop > 0 ? Math.round((totalWonCop / totalOfferedCop) * 1000) / 10 : 0;
 
-  // Average design and costing days
+  // Average design and costing days across nodes with sufficient historical data
+  const validTechNodes = nodeDistribution.filter(
+    (n) => n.avgTechnicalDesignDays !== null && n.avgTechnicalDesignDays !== undefined,
+  );
   const avgTechnicalDays =
-    nodeDistribution.length > 0
+    validTechNodes.length > 0
       ? Math.round(
-          (nodeDistribution.reduce((acc, n) => acc + (n.avgTechnicalDesignDays ?? 7), 0) / nodeDistribution.length) *
-            10,
+          (validTechNodes.reduce((acc, n) => acc + (n.avgTechnicalDesignDays ?? 0), 0) / validTechNodes.length) * 10,
         ) / 10
-      : 0;
+      : null;
+
+  const validCostNodes = nodeDistribution.filter((n) => n.avgCostingDays !== null && n.avgCostingDays !== undefined);
   const avgCostingDays =
-    nodeDistribution.length > 0
-      ? Math.round(
-          (nodeDistribution.reduce((acc, n) => acc + (n.avgCostingDays ?? 2), 0) / nodeDistribution.length) * 10,
-        ) / 10
-      : 0;
+    validCostNodes.length > 0
+      ? Math.round((validCostNodes.reduce((acc, n) => acc + (n.avgCostingDays ?? 0), 0) / validCostNodes.length) * 10) /
+        10
+      : null;
 
   return (
     <div
@@ -75,9 +78,6 @@ export function AcademicNodeRankingTable({ nodeDistribution, totalCenterWonCop }
               const share =
                 node.shareOfTotalSalesPercentage ??
                 (totalCenterWonCop > 0 ? Math.round((wonCop / totalCenterWonCop) * 1000) / 10 : 0);
-
-              const techDays = node.avgTechnicalDesignDays ?? 7;
-              const costDays = node.avgCostingDays ?? 2;
 
               return (
                 <tr key={node.nodeId || index} className="hover:bg-muted/30 transition-colors group">
@@ -137,36 +137,54 @@ export function AcademicNodeRankingTable({ nodeDistribution, totalCenterWonCop }
 
                   {/* Días en Diseño Técnico */}
                   <td className="py-3.5 px-3 text-center font-medium">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold",
-                        techDays <= 7
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          : techDays <= 10
-                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                            : "bg-red-500/10 text-red-600 dark:text-red-400",
-                      )}
-                    >
-                      <Clock className="h-3 w-3" />
-                      {techDays}d
-                    </span>
+                    {node.avgTechnicalDesignDays !== null && node.avgTechnicalDesignDays !== undefined ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold",
+                          node.avgTechnicalDesignDays <= 7
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : node.avgTechnicalDesignDays <= 10
+                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                              : "bg-red-500/10 text-red-600 dark:text-red-400",
+                        )}
+                      >
+                        <Clock className="h-3 w-3" />
+                        {node.avgTechnicalDesignDays}d
+                      </span>
+                    ) : (
+                      <span
+                        title="Sin datos suficientes (< 3 solicitudes cerradas)"
+                        className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-muted text-muted-foreground border border-border cursor-help"
+                      >
+                        S/D
+                      </span>
+                    )}
                   </td>
 
                   {/* Días en Costeo */}
                   <td className="py-3.5 px-4 text-center font-medium">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold",
-                        costDays <= 3
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          : costDays <= 5
-                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                            : "bg-red-500/10 text-red-600 dark:text-red-400",
-                      )}
-                    >
-                      <Clock className="h-3 w-3" />
-                      {costDays}d
-                    </span>
+                    {node.avgCostingDays !== null && node.avgCostingDays !== undefined ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold",
+                          node.avgCostingDays <= 3
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : node.avgCostingDays <= 5
+                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                              : "bg-red-500/10 text-red-600 dark:text-red-400",
+                        )}
+                      >
+                        <Clock className="h-3 w-3" />
+                        {node.avgCostingDays}d
+                      </span>
+                    ) : (
+                      <span
+                        title="Sin datos suficientes (< 3 solicitudes cerradas)"
+                        className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-muted text-muted-foreground border border-border cursor-help"
+                      >
+                        S/D
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
@@ -193,8 +211,12 @@ export function AcademicNodeRankingTable({ nodeDistribution, totalCenterWonCop }
                 </span>
               </td>
               <td className="py-3.5 px-3 text-center font-bold text-foreground">100%</td>
-              <td className="py-3.5 px-3 text-center font-bold text-muted-foreground">{avgTechnicalDays}d prom</td>
-              <td className="py-3.5 px-4 text-center font-bold text-muted-foreground">{avgCostingDays}d prom</td>
+              <td className="py-3.5 px-3 text-center font-bold text-muted-foreground">
+                {avgTechnicalDays !== null ? `${avgTechnicalDays}d prom` : "S/D"}
+              </td>
+              <td className="py-3.5 px-4 text-center font-bold text-muted-foreground">
+                {avgCostingDays !== null ? `${avgCostingDays}d prom` : "S/D"}
+              </td>
             </tr>
           </tfoot>
         </table>
