@@ -44,9 +44,30 @@ describe("KamTargetVsWonChart", () => {
     expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
   });
 
-  it("indicates when a KAM exceeds target quota", () => {
+  it("indicates when a KAM exceeds target quota or is in deficit", () => {
     render(<KamTargetVsWonChart kamRanking={mockRanking} />);
-    expect(screen.getByText(/Meta Superada \(110%\)/)).toBeInTheDocument();
-    expect(screen.getByText("75% de la meta")).toBeInTheDocument();
+    expect(screen.getByText(/Meta Cumplida \(110%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Déficit \(75%\)/)).toBeInTheDocument();
+  });
+
+  it("handles a KAM without assigned quota gracefully", () => {
+    const rankingWithNoQuota: KamRankingEntry[] = [
+      ...mockRanking,
+      {
+        kamId: "kam-3",
+        name: "Julián Duque",
+        totalProposals: 1,
+        deliveredCount: 1,
+        deliveredTotalCop: 18000000,
+        pipelineCount: 0,
+        pipelineTotalCop: 0,
+        wonCount: 1,
+        wonTotalCop: 18000000,
+        targetCop: 0,
+      },
+    ];
+    render(<KamTargetVsWonChart kamRanking={rankingWithNoQuota} />);
+    expect(screen.getByText("Sin meta asignada")).toBeInTheDocument();
+    expect(screen.getByText("Sin meta")).toBeInTheDocument();
   });
 });

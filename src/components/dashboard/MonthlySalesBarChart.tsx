@@ -98,11 +98,11 @@ export function MonthlySalesBarChart({ data, isLoading }: MonthlySalesBarChartPr
         {/* Contenedor del Gráfico */}
         <div className="relative h-64 flex-1 flex items-end gap-1.5 sm:gap-3 pt-6 pb-2 border-b border-l border-border/80">
           {/* Líneas guía de fondo coincidentes con los 5 ticks */}
-          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 py-2">
-            <div className="w-full border-b border-border border-dashed" />
-            <div className="w-full border-b border-border border-dashed" />
-            <div className="w-full border-b border-border border-dashed" />
-            <div className="w-full border-b border-border border-dashed" />
+          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none py-2">
+            <div className="w-full border-b border-foreground/10 border-dashed" />
+            <div className="w-full border-b border-foreground/10 border-dashed" />
+            <div className="w-full border-b border-foreground/10 border-dashed" />
+            <div className="w-full border-b border-foreground/10 border-dashed" />
             <div className="w-full border-b border-border" />
           </div>
 

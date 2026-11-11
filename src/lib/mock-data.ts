@@ -1649,36 +1649,24 @@ export function getNiceScale(maxValue: number, steps = 4): { max: number; step: 
 
   const rawStep = maxValue / steps;
   const power = Math.pow(10, Math.floor(Math.log10(rawStep)));
-  const fraction = rawStep / power;
 
-  let niceFraction = 10;
-  if (fraction <= 1) niceFraction = 1;
-  else if (fraction <= 2) niceFraction = 2;
-  else if (fraction <= 2.5) niceFraction = 2.5;
-  else if (fraction <= 5) niceFraction = 5;
-  else if (fraction <= 7.5) niceFraction = 7.5;
-  else niceFraction = 10;
+  // Standard friendly tick steps
+  const candidateFractions = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10];
 
-  let step = niceFraction * power;
-  let max = step * steps;
-
-  // Ensure max strictly covers maxValue with at least 5% breathing room if they are too close
-  if (max < maxValue * 1.05) {
-    if (niceFraction === 1) niceFraction = 2;
-    else if (niceFraction === 2) niceFraction = 2.5;
-    else if (niceFraction === 2.5) niceFraction = 5;
-    else if (niceFraction === 5) niceFraction = 7.5;
-    else if (niceFraction === 7.5) niceFraction = 10;
-    else niceFraction = 20;
-
-    step = niceFraction * power;
-    max = step * steps;
+  let selectedStep = 10 * power;
+  for (const fraction of candidateFractions) {
+    const candidateStep = fraction * power;
+    if (candidateStep * steps >= maxValue) {
+      selectedStep = candidateStep;
+      break;
+    }
   }
 
+  const max = selectedStep * steps;
   const ticks: number[] = [];
   for (let i = steps; i >= 0; i--) {
-    ticks.push(step * i);
+    ticks.push(selectedStep * i);
   }
 
-  return { max, step, ticks };
+  return { max, step: selectedStep, ticks };
 }

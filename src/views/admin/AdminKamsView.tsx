@@ -21,17 +21,44 @@ const QUARTERS = [
   { label: "Q4 (Oct - Dic)", value: 4 },
 ] as const;
 
+const MONTHS = [
+  { label: "Ene", fullName: "Enero", value: 1 },
+  { label: "Feb", fullName: "Febrero", value: 2 },
+  { label: "Mar", fullName: "Marzo", value: 3 },
+  { label: "Abr", fullName: "Abril", value: 4 },
+  { label: "May", fullName: "Mayo", value: 5 },
+  { label: "Jun", fullName: "Junio", value: 6 },
+  { label: "Jul", fullName: "Julio", value: 7 },
+  { label: "Ago", fullName: "Agosto", value: 8 },
+  { label: "Sep", fullName: "Septiembre", value: 9 },
+  { label: "Oct", fullName: "Octubre", value: 10 },
+  { label: "Nov", fullName: "Noviembre", value: 11 },
+  { label: "Dic", fullName: "Diciembre", value: 12 },
+] as const;
+
 export default function AdminKamsView() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedQuarter, setSelectedQuarter] = useState<number | undefined>(undefined);
+  const [selectedMonth, setSelectedMonth] = useState<number | undefined>(undefined);
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "metas" ? "metas" : "desempeno";
   const [activeTab, setActiveTab] = useState<"desempeno" | "metas">(initialTab);
 
+  const handleSelectQuarter = (q: number | undefined) => {
+    setSelectedQuarter(q);
+    setSelectedMonth(undefined);
+  };
+
+  const handleSelectMonth = (m: number | undefined) => {
+    setSelectedMonth(m);
+    setSelectedQuarter(undefined);
+  };
+
   const { data: dashboardData, isLoading: isDashboardLoading } = useAdminDashboard({
     year: selectedYear,
     quarter: selectedQuarter,
+    month: selectedMonth,
   });
 
   const { data: salesTargetsData, isLoading: isTargetsLoading } = useSalesTargets(selectedYear);
@@ -106,26 +133,66 @@ export default function AdminKamsView() {
               </Select>
             </div>
 
-            {/* Selector de Trimestres */}
+            {/* Selector de Trimestres y Todo el Año */}
             <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs shadow-xs">
-              {QUARTERS.map((q) => {
+              <button
+                type="button"
+                onClick={() => handleSelectQuarter(undefined)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer",
+                  selectedQuarter === undefined && selectedMonth === undefined
+                    ? "bg-card text-foreground shadow-xs border border-border/60"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Año Completo
+              </button>
+              {QUARTERS.slice(1).map((q) => {
                 const active = selectedQuarter === q.value;
                 return (
                   <button
                     key={q.label}
                     type="button"
-                    onClick={() => setSelectedQuarter(q.value)}
+                    onClick={() => handleSelectQuarter(q.value)}
                     className={cn(
-                      "rounded-md px-3 py-1 font-semibold transition-all cursor-pointer",
+                      "rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer",
                       active
                         ? "bg-card text-foreground shadow-xs border border-border/60"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    {q.label}
+                    {q.label.split(" ")[0]}
                   </button>
                 );
               })}
+            </div>
+
+            {/* Selector Opcional por Mes */}
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={selectedMonth !== undefined ? String(selectedMonth) : "none"}
+                onValueChange={(val) => handleSelectMonth(val === "none" ? undefined : Number(val))}
+              >
+                <SelectTrigger
+                  aria-label="Seleccionar mes específico"
+                  className={cn(
+                    "h-8 w-32 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-foreground shadow-xs focus:ring-1 focus:ring-icesi-blue cursor-pointer",
+                    selectedMonth !== undefined && "border-primary text-primary font-bold bg-primary/5",
+                  )}
+                >
+                  <SelectValue placeholder="Mes específico..." />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="none" className="text-xs text-muted-foreground cursor-pointer">
+                    Sin mes específico
+                  </SelectItem>
+                  {MONTHS.map((m) => (
+                    <SelectItem key={m.value} value={String(m.value)} className="text-xs font-semibold cursor-pointer">
+                      {m.label} ({m.fullName})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

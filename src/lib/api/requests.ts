@@ -782,10 +782,11 @@ export const requestsApi = {
     apiRequest<Company360Response>(`/requests/dashboard/admin/company/${companyId}`),
 
   /** Retrieves executive dashboard analytics for administrators */
-  getAdminDashboard: (params?: { year?: number; quarter?: number }) => {
+  getAdminDashboard: (params?: { year?: number; quarter?: number; month?: number }) => {
     const search = new URLSearchParams();
     if (params?.year) search.set("year", String(params.year));
     if (params?.quarter) search.set("quarter", String(params.quarter));
+    if (params?.month) search.set("month", String(params.month));
     const qs = search.toString();
     return apiRequest<AdminDashboardData>(`/requests/dashboard/admin${qs ? `?${qs}` : ""}`);
   },

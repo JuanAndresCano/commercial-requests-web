@@ -71,6 +71,13 @@ describe("getNiceScale", () => {
     expect(scale.ticks).toEqual([300_000_000, 225_000_000, 150_000_000, 75_000_000, 0]);
   });
 
+  it("scales 390M to 400M without excessive overshoot", () => {
+    const scale = getNiceScale(390_000_000, 4);
+    expect(scale.max).toBe(400_000_000);
+    expect(scale.step).toBe(100_000_000);
+    expect(scale.ticks).toEqual([400_000_000, 300_000_000, 200_000_000, 100_000_000, 0]);
+  });
+
   it("handles empty or zero values gracefully with fallback", () => {
     const scale = getNiceScale(0, 4);
     expect(scale.max).toBe(10_000_000);
