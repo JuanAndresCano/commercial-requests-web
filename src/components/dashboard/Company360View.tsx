@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "@/lib/app-router";
 import {
   Building2,
@@ -129,10 +129,22 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
   // Timeline pagination (10 initiatives per page)
   const [timelinePage, setTimelinePage] = useState<number>(1);
   const TIMELINE_PAGE_SIZE = 10;
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setTimelinePage(1);
   }, [selectedCompanyId, selectedYear]);
+
+  const handleTimelinePageChange = (newPage: number) => {
+    setTimelinePage(newPage);
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        if (typeof timelineRef.current?.scrollIntoView === "function") {
+          timelineRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 50);
+    }
+  };
 
   const totalTimelinePages = Math.max(1, Math.ceil(displayTimeline.length / TIMELINE_PAGE_SIZE));
   const paginatedTimeline = useMemo(() => {
@@ -586,7 +598,7 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* COLUMNA IZQUIERDA: LÍNEA DE TIEMPO (7 COLS) */}
         <div className="space-y-4 lg:col-span-7">
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+          <div ref={timelineRef} className="scroll-mt-24 rounded-xl border border-border bg-card p-5 shadow-xs">
             <div className="flex items-center justify-between border-b border-border pb-4">
               <div>
                 <h3 className="font-display text-base font-bold text-foreground">Línea de Tiempo de Intervenciones</h3>
@@ -759,7 +771,7 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
                   <button
                     type="button"
                     disabled={timelinePage === 1}
-                    onClick={() => setTimelinePage((p) => Math.max(1, p - 1))}
+                    onClick={() => handleTimelinePageChange(Math.max(1, timelinePage - 1))}
                     className="rounded-lg border border-border bg-card px-3 py-1 font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
                   >
                     Anterior
@@ -770,7 +782,7 @@ export function Company360View({ initialCompanyId, onBackToDirectory }: Company3
                   <button
                     type="button"
                     disabled={timelinePage >= totalTimelinePages}
-                    onClick={() => setTimelinePage((p) => Math.min(totalTimelinePages, p + 1))}
+                    onClick={() => handleTimelinePageChange(Math.min(totalTimelinePages, timelinePage + 1))}
                     className="rounded-lg border border-border bg-card px-3 py-1 font-semibold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
                   >
                     Siguiente
