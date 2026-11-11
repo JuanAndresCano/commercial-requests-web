@@ -208,19 +208,21 @@ export function KamDeepTable({ kamRanking, totalCenterWonCop }: KamDeepTableProp
                             </span>
                           </div>
                           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={cn(
-                                "h-full rounded-full transition-all duration-500",
-                                compliancePct >= 120
-                                  ? "bg-emerald-600"
-                                  : compliancePct >= 100
-                                    ? "bg-emerald-500"
-                                    : compliancePct >= 80
-                                      ? "bg-amber-500"
-                                      : "bg-destructive",
-                              )}
-                              style={{ width: `${Math.min(compliancePct, 100)}%` }}
-                            />
+                            {compliancePct > 0 && (
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-500",
+                                  compliancePct >= 120
+                                    ? "bg-emerald-600"
+                                    : compliancePct >= 100
+                                      ? "bg-emerald-500"
+                                      : compliancePct >= 80
+                                        ? "bg-amber-500"
+                                        : "bg-destructive",
+                                )}
+                                style={{ width: `${Math.min(compliancePct, 100)}%` }}
+                              />
+                            )}
                           </div>
                         </div>
                       )}

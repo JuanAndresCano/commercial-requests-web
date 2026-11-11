@@ -148,10 +148,12 @@ export function KamTargetVsWonChart({ kamRanking }: KamTargetVsWonChartProps) {
                 {/* Barra de Vendido Real */}
                 <div className="flex items-center gap-3">
                   <div className="h-4 flex-1 rounded-sm bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-sm bg-emerald-500 transition-all duration-500 flex items-center justify-end pr-1.5"
-                      style={{ width: `${wonWidth}%` }}
-                    />
+                    {wonWidth > 0 && (
+                      <div
+                        className="h-full rounded-sm bg-emerald-500 transition-all duration-500"
+                        style={{ width: `${wonWidth}%` }}
+                      />
+                    )}
                   </div>
                   <span className="w-24 text-right font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
                     {formatCompactCop(wonCop)}
@@ -161,10 +163,12 @@ export function KamTargetVsWonChart({ kamRanking }: KamTargetVsWonChartProps) {
                 {/* Barra de Meta Presupuestal */}
                 <div className="flex items-center gap-3">
                   <div className="h-3 flex-1 rounded-sm bg-muted/60 overflow-hidden">
-                    <div
-                      className="h-full rounded-sm bg-primary/60 transition-all duration-500 flex items-center justify-end pr-1.5"
-                      style={{ width: `${targetWidth}%` }}
-                    />
+                    {hasTarget && targetWidth > 0 && (
+                      <div
+                        className="h-full rounded-sm bg-primary/60 transition-all duration-500"
+                        style={{ width: `${targetWidth}%` }}
+                      />
+                    )}
                   </div>
                   <span className="w-24 text-right font-mono text-xs text-muted-foreground">
                     {hasTarget ? formatCompactCop(targetCop) : "Sin meta"}
