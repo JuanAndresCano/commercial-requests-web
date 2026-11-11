@@ -859,18 +859,19 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
                       </td>
 
                       {/* 5. Nodo Académico */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span
+                      <td className="py-3 px-3">
+                        <div
                           className={cn(
-                            "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold",
+                            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold max-w-[150px] leading-tight",
                             p.node
-                              ? "bg-muted text-foreground border border-border"
-                              : "bg-muted/40 text-muted-foreground",
+                              ? "bg-muted/70 text-foreground border border-border/80"
+                              : "bg-muted/30 text-muted-foreground",
                           )}
+                          title={nodeName}
                         >
-                          <Layers className="h-3 w-3 shrink-0 text-muted-foreground" />
-                          <span className="truncate max-w-[120px]">{nodeName}</span>
-                        </span>
+                          <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="line-clamp-2">{nodeName}</span>
+                        </div>
                       </td>
 
                       {/* 6. Monto COP */}
@@ -899,8 +900,8 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
                       </td>
 
                       {/* 8. Etiqueta Comercial */}
-                      <td className="py-3 px-3 max-w-[155px]">
-                        <div className="max-w-[150px] truncate" title={p.commercialStatus ?? undefined}>
+                      <td className="py-3 px-3 max-w-[160px]">
+                        <div className="max-w-[155px] leading-tight" title={p.commercialStatus ?? undefined}>
                           <CommercialStatusChip proposalId={p.id} status={p.commercialStatus} canEdit={false} />
                         </div>
                       </td>
