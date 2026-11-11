@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import {
   Search,
   Filter,
@@ -10,6 +11,7 @@ import {
   ChevronRight,
   User,
   Layers,
+  FileSpreadsheet,
 } from "@/components/icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
@@ -334,6 +336,254 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
   };
 
   // CSV Export
+  const handleExportExcel = () => {
+    if (filteredProposals.length === 0) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. HOJA: Sábana de Solicitudes (Detalle Operativo & Comercial)
+    const solicitudesHeaders = [
+      "Radicado / Código",
+      "Número Oficial",
+      "Empresa Aliada",
+      "NIT Empresa",
+      "Iniciativa / Título",
+      "Ejecutivo Comercial (KAM)",
+      "Líder de Producto",
+      "Nodo Académico",
+      "Monto Propuesta ($ COP)",
+      "Monto Vendido Real ($ COP)",
+      "Etapa Operativa",
+      "Etiqueta Comercial",
+      "Días en Fábrica (Ciclo)",
+      "Alerta SLA",
+      "Fecha de Radicación",
+    ];
+
+    const solicitudesRows = filteredProposals.map((p) => {
+      const { daysElapsed, isPendingProfessorAlert, isBottleneckAlert, amount } = getProposalMetrics(p);
+      let slaAlert = "Normal";
+      if (isPendingProfessorAlert && isBottleneckAlert) {
+        slaAlert = "Sin docente (>5d) y cuello de botella (>20d)";
+      } else if (isPendingProfessorAlert) {
+        slaAlert = "Sin docente asignado (>5d)";
+      } else if (isBottleneckAlert) {
+        slaAlert = "Cuello de botella (>20d)";
+      }
+
+      const kamName = p.creator ? `${p.creator.firstName} ${p.creator.lastName}`.trim() : "Sin asignar";
+      const leaderName = p.productLeader
+        ? `${p.productLeader.firstName} ${p.productLeader.lastName}`.trim()
+        : "Sin asignar";
+      const nodeName = p.node?.name ?? "Sin nodo";
+      const isWon = p.commercialStatus === "APPROVED";
+      const wonAmt = isWon ? amount : 0;
+
+      return [
+        p.code ?? p.id,
+        p.officialNumber ?? "",
+        p.company?.name ?? "",
+        p.company?.nit ?? "",
+        p.title ?? "",
+        kamName,
+        leaderName,
+        nodeName,
+        amount,
+        wonAmt,
+        getProposalStatusCode(p),
+        p.commercialStatus ?? "Sin etiqueta",
+        daysElapsed,
+        slaAlert,
+        new Date(p.createdAt).toISOString().split("T")[0],
+      ];
+    });
+
+    const wsSolicitudes = XLSX.utils.aoa_to_sheet([solicitudesHeaders, ...solicitudesRows]);
+    XLSX.utils.book_append_sheet(wb, wsSolicitudes, "Sábana Solicitudes");
+
+    // 2. HOJA: Desempeño por Asesor (KAMs)
+    const kamsAgg = new Map<
+      string,
+      {
+        name: string;
+        total: number;
+        quotedCop: number;
+        wonCop: number;
+        wonCount: number;
+        deliveredCount: number;
+        pipelineCount: number;
+      }
+    >();
+
+    for (const p of filteredProposals) {
+      const kamName = p.creator ? `${p.creator.firstName} ${p.creator.lastName}`.trim() : "Sin asignar";
+      const { amount } = getProposalMetrics(p);
+      const isWon = p.commercialStatus === "APPROVED";
+      const isDelivered = getProposalStatusCode(p) === "DELIVERED";
+      const curr = kamsAgg.get(kamName) ?? {
+        name: kamName,
+        total: 0,
+        quotedCop: 0,
+        wonCop: 0,
+        wonCount: 0,
+        deliveredCount: 0,
+        pipelineCount: 0,
+      };
+      curr.total += 1;
+      curr.quotedCop += amount;
+      if (isWon) {
+        curr.wonCop += amount;
+        curr.wonCount += 1;
+      }
+      if (isDelivered) {
+        curr.deliveredCount += 1;
+      } else {
+        curr.pipelineCount += 1;
+      }
+      kamsAgg.set(kamName, curr);
+    }
+
+    const kamsHeaders = [
+      "Ejecutivo Comercial (KAM)",
+      "Total Gestionadas",
+      "En Tubería (Fábrica)",
+      "Entregadas al Cliente",
+      "Monto Cotizado ($ COP)",
+      "Aprobadas / Vendidas",
+      "Monto Facturado Real ($ COP)",
+      "Tasa de Conversión (Win Rate %)",
+      "Ticket Promedio ($ COP)",
+    ];
+
+    const kamsRows = Array.from(kamsAgg.values()).map((k) => {
+      const winRate = k.quotedCop > 0 ? Math.round((k.wonCop / k.quotedCop) * 1000) / 10 : 0;
+      const avgTicket = k.wonCount > 0 ? Math.round(k.wonCop / k.wonCount) : 0;
+      return [
+        k.name,
+        k.total,
+        k.pipelineCount,
+        k.deliveredCount,
+        k.quotedCop,
+        k.wonCount,
+        k.wonCop,
+        `${winRate}%`,
+        avgTicket,
+      ];
+    });
+
+    const wsKams = XLSX.utils.aoa_to_sheet([kamsHeaders, ...kamsRows]);
+    XLSX.utils.book_append_sheet(wb, wsKams, "Desempeño KAMs");
+
+    // 3. HOJA: Nodos Temáticos & Fábrica
+    const nodesAgg = new Map<
+      string,
+      {
+        name: string;
+        total: number;
+        quotedCop: number;
+        wonCop: number;
+        wonCount: number;
+        totalDays: number;
+      }
+    >();
+
+    for (const p of filteredProposals) {
+      const nodeName = p.node?.name ?? "Sin nodo";
+      const { amount, daysElapsed } = getProposalMetrics(p);
+      const isWon = p.commercialStatus === "APPROVED";
+      const curr = nodesAgg.get(nodeName) ?? {
+        name: nodeName,
+        total: 0,
+        quotedCop: 0,
+        wonCop: 0,
+        wonCount: 0,
+        totalDays: 0,
+      };
+      curr.total += 1;
+      curr.quotedCop += amount;
+      curr.totalDays += daysElapsed;
+      if (isWon) {
+        curr.wonCop += amount;
+        curr.wonCount += 1;
+      }
+      nodesAgg.set(nodeName, curr);
+    }
+
+    const nodesHeaders = [
+      "Nodo Académico",
+      "Total Solicitudes",
+      "Monto Ofertado ($ COP)",
+      "Aprobadas / Ganadas",
+      "Monto Vendido ($ COP)",
+      "Tasa de Éxito (%)",
+      "Días Promedio en Proceso",
+    ];
+
+    const nodesRows = Array.from(nodesAgg.values()).map((n) => {
+      const winRate = n.quotedCop > 0 ? Math.round((n.wonCop / n.quotedCop) * 1000) / 10 : 0;
+      const avgDays = n.total > 0 ? Math.round((n.totalDays / n.total) * 10) / 10 : 0;
+      return [n.name, n.total, n.quotedCop, n.wonCount, n.wonCop, `${winRate}%`, avgDays];
+    });
+
+    const wsNodos = XLSX.utils.aoa_to_sheet([nodesHeaders, ...nodesRows]);
+    XLSX.utils.book_append_sheet(wb, wsNodos, "Nodos Académicos");
+
+    // 4. HOJA: Cuentas Corporativas (Directorio de Empresas)
+    const compAgg = new Map<
+      string,
+      {
+        name: string;
+        nit: string;
+        total: number;
+        quotedCop: number;
+        wonCop: number;
+        wonCount: number;
+      }
+    >();
+
+    for (const p of filteredProposals) {
+      const compName = p.company?.name ?? "Sin empresa";
+      const nit = p.company?.nit ?? "";
+      const { amount } = getProposalMetrics(p);
+      const isWon = p.commercialStatus === "APPROVED";
+      const curr = compAgg.get(compName) ?? {
+        name: compName,
+        nit,
+        total: 0,
+        quotedCop: 0,
+        wonCop: 0,
+        wonCount: 0,
+      };
+      curr.total += 1;
+      curr.quotedCop += amount;
+      if (isWon) {
+        curr.wonCop += amount;
+        curr.wonCount += 1;
+      }
+      compAgg.set(compName, curr);
+    }
+
+    const compHeaders = [
+      "Empresa Aliada",
+      "NIT",
+      "Total Solicitudes",
+      "Monto Ofertado ($ COP)",
+      "Propuestas Aprobadas",
+      "Monto Facturado Real ($ COP)",
+      "Tasa de Éxito (%)",
+    ];
+
+    const compRows = Array.from(compAgg.values()).map((c) => {
+      const winRate = c.quotedCop > 0 ? Math.round((c.wonCop / c.quotedCop) * 1000) / 10 : 0;
+      return [c.name, c.nit, c.total, c.quotedCop, c.wonCount, c.wonCop, `${winRate}%`];
+    });
+
+    const wsEmpresas = XLSX.utils.aoa_to_sheet([compHeaders, ...compRows]);
+    XLSX.utils.book_append_sheet(wb, wsEmpresas, "Cuentas Aliadas");
+
+    XLSX.writeFile(wb, `informe-ejecutivo-comercial-icesi-${new Date().toISOString().split("T")[0]}.xlsx`);
+  };
+
   const handleExportCsv = () => {
     const headers = [
       "Código de Radicación",
@@ -460,17 +710,32 @@ export function AdminAuditTable({ proposals, isLoading = false }: AdminAuditTabl
             </button>
           )}
 
-          <button
-            type="button"
-            data-testid="audit-export-csv-btn"
-            onClick={handleExportCsv}
-            disabled={filteredProposals.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-icesi-blue px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-icesi-blue/90 disabled:opacity-50 transition-colors cursor-pointer"
-            title="Exportar registros filtrados a formato Excel / CSV"
-          >
-            <Download className="h-4 w-4" />
-            <span>Exportar CSV ({filteredProposals.length})</span>
-          </button>
+          {/* Botones de Exportación */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              data-testid="audit-export-excel-btn"
+              onClick={handleExportExcel}
+              disabled={filteredProposals.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer"
+              title="Descargar libro de Excel completo (.xlsx) con pestañas analíticas de solicitudes, KAMs, nodos y cuentas aliadas"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              <span>Exportar Excel (.xlsx)</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="audit-export-csv-btn"
+              onClick={handleExportCsv}
+              disabled={filteredProposals.length === 0}
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors cursor-pointer"
+              title="Descargar archivo plano CSV delimitado por punto y coma"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>CSV</span>
+            </button>
+          </div>
         </div>
       </div>
 

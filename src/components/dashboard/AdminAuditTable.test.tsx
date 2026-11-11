@@ -303,6 +303,12 @@ describe("AdminAuditTable Component (Submódulo 5)", () => {
     expect(revokeObjectURLMock).toHaveBeenCalledTimes(1);
   });
 
+  it("renders both Excel (.xlsx) and CSV export buttons", () => {
+    render(<AdminAuditTable proposals={mockProposals} />);
+    expect(screen.getByTestId("audit-export-excel-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-export-csv-btn")).toBeInTheDocument();
+  });
+
   it("renders empty state when proposals array is empty", () => {
     render(<AdminAuditTable proposals={[]} />);
 

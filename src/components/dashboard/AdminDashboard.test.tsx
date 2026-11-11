@@ -59,6 +59,8 @@ const mockAdminData: AdminDashboardData = {
     totalProposals: 33,
     winRatePercentage: 15.2,
     averageCycleDays: 7.6,
+    wonTotalCop: 85000000,
+    wonCount: 2,
   },
   conversionFunnel: [
     {
@@ -251,6 +253,8 @@ describe("AdminDashboard Component", () => {
     expect(screen.queryByText("Administrador Icesi")).not.toBeInTheDocument();
 
     // 2. Macro KPIs
+    expect(screen.getByText("Total aprobado / vendido")).toBeInTheDocument();
+    expect(screen.getByText("2 propuestas ganadas")).toBeInTheDocument();
     expect(screen.getByText("Total entregado")).toBeInTheDocument();
     expect(screen.getAllByText("$ 203.5M COP").length).toBe(2);
     expect(screen.getByText("5 propuestas radicadas")).toBeInTheDocument();
@@ -260,7 +264,7 @@ describe("AdminDashboard Component", () => {
     expect(screen.getByText("28 en proceso")).toBeInTheDocument();
 
     expect(screen.getAllByText("33").length).toBeGreaterThan(0);
-    expect(screen.getByText(/15.2% tasa de entrega/)).toBeInTheDocument();
+    expect(screen.getByText(/15.2% tasa de éxito/)).toBeInTheDocument();
 
     expect(screen.getByText("7.6 días")).toBeInTheDocument();
 

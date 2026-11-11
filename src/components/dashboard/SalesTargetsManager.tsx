@@ -12,6 +12,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from "@/components/icons";
 import { fuzzyScore, normalizeText } from "@/lib/fuzzy";
 import { toast } from "sonner";
@@ -37,11 +38,14 @@ export const parseDotsToNumber = (str: string): number => {
 };
 
 export function SalesTargetsManager({ year, initialData, isLoading }: SalesTargetsManagerProps) {
+  const currentYear = new Date().getFullYear();
+  const isPastYear = year < currentYear;
+
   const updateTargetsMutation = useUpdateSalesTargets();
 
-  // Local state for Center global target
+  // Local state for University global target
   const [centerCop, setCenterCop] = useState<number>(2516000000);
-  const [centerProposals, setCenterProposals] = useState<number>(45);
+  const [centerConversionRate, setCenterConversionRate] = useState<number>(35);
 
   // Local state for KAM individual quotas
   const [kamRows, setKamRows] = useState<
@@ -63,7 +67,8 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
   useEffect(() => {
     if (initialData) {
       setCenterCop(initialData.centerTarget.annualTargetCop || 2516000000);
-      setCenterProposals(initialData.centerTarget.annualTargetProposals || 45);
+      const rawRate = initialData.centerTarget.annualTargetProposals;
+      setCenterConversionRate(rawRate > 0 && rawRate <= 100 ? rawRate : 35);
 
       if (initialData.kamTargets.length > 0) {
         setKamRows(
@@ -72,7 +77,8 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
             kamName: k.kamName,
             kamEmail: k.kamEmail,
             targetCop: k.annualTargetCop || 0,
-            targetProposals: k.annualTargetProposals || 0,
+            targetProposals:
+              k.annualTargetProposals > 0 && k.annualTargetProposals <= 100 ? k.annualTargetProposals : 35,
           })),
         );
       }
@@ -81,41 +87,41 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
 
   // Handle equal distribution among KAMs with exact remainder allocation
   const handleEqualDistribution = () => {
-    if (kamRows.length === 0) return;
+    if (isPastYear || kamRows.length === 0) return;
     const n = kamRows.length;
     const baseCop = Math.floor(centerCop / n);
     const remCop = centerCop % n;
-    const baseProposals = Math.floor(centerProposals / n);
-    const remProposals = centerProposals % n;
 
     setKamRows((prev) =>
       prev.map((r, i) => ({
         ...r,
         targetCop: baseCop + (i < remCop ? 1 : 0),
-        targetProposals: baseProposals + (i < remProposals ? 1 : 0),
+        targetProposals: centerConversionRate,
       })),
     );
     toast.info("Meta global distribuida equitativamente entre los KAMs");
   };
 
   const handleKamTargetChange = (kamId: string, field: "targetCop" | "targetProposals", value: number) => {
+    if (isPastYear) return;
     setKamRows((prev) => prev.map((r) => (r.kamId === kamId ? { ...r, [field]: Math.max(0, value) } : r)));
   };
 
   const handleKamPercentChange = (kamId: string, pctValue: number) => {
+    if (isPastYear) return;
     const validPct = Math.max(0, pctValue);
     const calculatedCop = Math.round(centerCop * (validPct / 100));
     handleKamTargetChange(kamId, "targetCop", calculatedCop);
   };
 
-  // Global calculations across all KAMs (not just filtered/paginated slice)
-  const totalAssignedCop = kamRows.reduce((acc, r) => acc + (r.targetCop || 0), 0);
-  const totalAssignedProposals = kamRows.reduce((acc, r) => acc + (r.targetProposals || 0), 0);
+  // Calculations for balance and validation
+  const totalAssignedCop = kamRows.reduce((acc, r) => acc + r.targetCop, 0);
+
   const diffCop = centerCop - totalAssignedCop;
-  const isBalanced = Math.abs(diffCop) < 1000;
+  const isBalanced = totalAssignedCop === centerCop;
   const totalSharePct = centerCop > 0 ? Math.round((totalAssignedCop / centerCop) * 1000) / 10 : 0;
 
-  // Filtered KAMs using fuzzy search
+  // Filter KAMs by query (Fuzzy + Substring)
   const filteredKams = useMemo(() => {
     const q = searchQuery.trim();
     if (!q) return kamRows;
@@ -129,50 +135,39 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
     });
   }, [kamRows, searchQuery]);
 
-  // Reset to page 1 on search change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
-
+  // Pagination
   const totalPages = Math.max(1, Math.ceil(filteredKams.length / pageSize));
-  const paginatedKams = showAll
-    ? filteredKams
-    : filteredKams.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedKams = useMemo(() => {
+    if (showAll) return filteredKams;
+    const start = (currentPage - 1) * pageSize;
+    return filteredKams.slice(start, start + pageSize);
+  }, [filteredKams, currentPage, showAll, pageSize]);
 
+  // Save handler
   const handleSave = async () => {
-    const hasCopImbalance = !isBalanced;
-    const hasProposalsImbalance = totalAssignedProposals !== centerProposals;
+    if (isPastYear) {
+      toast.warning("No es posible modificar metas de años pasados por políticas de auditoría institucional.");
+      return;
+    }
 
-    if (hasCopImbalance || hasProposalsImbalance) {
-      const warnings: string[] = [];
-      if (hasCopImbalance) {
-        warnings.push(
-          diffCop > 0
-            ? `faltan ${formatCompactCop(diffCop)} (${(100 - totalSharePct).toFixed(1)}%) COP`
-            : `supera la meta por ${formatCompactCop(Math.abs(diffCop))} (${(totalSharePct - 100).toFixed(1)}%) COP`,
-        );
-      }
-      if (hasProposalsImbalance) {
-        const diffProp = centerProposals - totalAssignedProposals;
-        warnings.push(diffProp > 0 ? `faltan ${diffProp} propuestas` : `supera por ${Math.abs(diffProp)} propuestas`);
-      }
-      toast.warning(`Atención: Desbalance en metas (${warnings.join(", ")}). Guardando con diferencias.`);
+    if (!isBalanced) {
+      toast.warning(
+        `Atención: Desbalance en metas. La suma de KAMs (${formatCompactCop(totalAssignedCop)}) difiere de la meta global (${formatCompactCop(centerCop)}). Guardando de todos modos...`,
+      );
     }
 
     const payloadTargets: SalesTargetEntryInput[] = [
-      // 1. Center Target
       {
         month: null,
         kamId: null,
         targetCop: centerCop,
-        targetProposals: centerProposals,
+        targetProposals: centerConversionRate,
       },
-      // 2. Individual KAM Targets
-      ...kamRows.map((r) => ({
+      ...kamRows.map((k) => ({
         month: null,
-        kamId: r.kamId,
-        targetCop: r.targetCop,
-        targetProposals: r.targetProposals,
+        kamId: k.kamId,
+        targetCop: k.targetCop,
+        targetProposals: k.targetProposals,
       })),
     ];
 
@@ -183,27 +178,28 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
       });
       toast.success("Metas institucionales actualizadas exitosamente");
     } catch {
-      toast.error("Ocurrió un error al guardar las metas presupuestales");
+      toast.error("Ocurrió un error al guardar las metas financieras. Intenta nuevamente.");
     }
   };
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-xs animate-pulse">
-        <div className="h-6 w-64 bg-muted rounded-md mb-2" />
-        <div className="h-4 w-96 bg-muted/60 rounded-md mb-6" />
-        <div className="h-48 bg-muted/30 rounded-xl" />
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-xs animate-pulse space-y-4">
+        <div className="h-6 w-48 bg-muted rounded-md" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="h-20 bg-muted/60 rounded-xl" />
+          <div className="h-20 bg-muted/60 rounded-xl" />
+          <div className="h-20 bg-muted/60 rounded-xl" />
+        </div>
+        <div className="h-64 bg-muted/40 rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div
-      data-testid="sales-targets-manager"
-      className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs space-y-6"
-    >
-      {/* 1. Cabecera */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4">
+    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs space-y-6">
+      {/* 1. Cabecera del Gestor con Selector de Acciones */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="font-display text-base font-bold text-foreground sm:text-lg">
@@ -212,49 +208,79 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
             <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">Año {year}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Configuración de cuotas de facturación anual y distribución de metas de propuestas por asesor
+            Configura la meta anual institucional de la Universidad y distribuye las cuotas comerciales por ejecutivo
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleEqualDistribution}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
-            title="Dividir en partes iguales entre los ejecutivos activos sin remanentes pendientes"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5 text-primary" />
-            <span>Reparto Equitativo</span>
-          </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {!isPastYear && (
+            <button
+              type="button"
+              onClick={handleEqualDistribution}
+              disabled={isPastYear}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Dividir en partes iguales entre los ejecutivos activos"
+            >
+              <ArrowLeftRight className="h-3.5 w-3.5 text-primary" />
+              <span>Reparto Equitativo</span>
+            </button>
+          )}
 
           <button
             type="button"
             onClick={handleSave}
-            disabled={updateTargetsMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50"
+            disabled={isPastYear || updateTargetsMutation.isPending}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {updateTargetsMutation.isPending ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+            {isPastYear ? (
+              <>
+                <Lock className="h-4 w-4" />
+                <span>Periodo Bloqueado</span>
+              </>
+            ) : updateTargetsMutation.isPending ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span>Guardando...</span>
+              </>
             ) : (
-              <Save className="h-4 w-4" />
+              <>
+                <Save className="h-4 w-4" />
+                <span>Guardar Metas</span>
+              </>
             )}
-            <span>Guardar Metas</span>
           </button>
         </div>
       </div>
 
-      {/* 2. Control Global de Meta del Centro */}
+      {/* Alerta de Periodo Fiscal Cerrado (Años Pasados) */}
+      {isPastYear && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-800 dark:text-amber-300">
+          <Lock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div>
+            <span className="font-bold">Periodo fiscal cerrado ({year}):</span>
+            <span className="ml-1">
+              Las metas financieras de años anteriores se encuentran en modo de solo lectura para preservar la
+              trazabilidad histórica y auditoría institucional.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Control Global de Meta de la Universidad */}
       <div className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-bold text-foreground mb-1.5">Meta Anual del Centro ($ COP)</label>
+            <label className="block text-xs font-bold text-foreground mb-1.5">
+              Meta Anual de la Universidad ($ COP)
+            </label>
             <input
               type="text"
               inputMode="numeric"
+              disabled={isPastYear}
               value={formatNumberWithDots(centerCop)}
               onChange={(e) => setCenterCop(parseDotsToNumber(e.target.value))}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              aria-label="Meta Anual del Centro COP"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:bg-muted/50 disabled:cursor-not-allowed"
+              aria-label="Meta Anual de la Universidad COP"
             />
             <span className="block text-[11px] text-muted-foreground mt-1">
               Base mensual: {formatCompactCop(Math.round(centerCop / 12))} / mes
@@ -262,17 +288,23 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-foreground mb-1.5">Propuestas Aprobadas Meta (#)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={formatNumberWithDots(centerProposals)}
-              onChange={(e) => setCenterProposals(parseDotsToNumber(e.target.value))}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              aria-label="Propuestas Aprobadas Meta"
-            />
+            <label className="block text-xs font-bold text-foreground mb-1.5">Tasa de Conversión Meta (%)</label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                step="1"
+                min="1"
+                max="100"
+                disabled={isPastYear}
+                value={centerConversionRate}
+                onChange={(e) => setCenterConversionRate(Math.max(1, Math.min(100, parseInt(e.target.value, 10) || 0)))}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:bg-muted/50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                aria-label="Tasa de Conversión Meta"
+              />
+              <span className="text-muted-foreground font-bold text-xs">%</span>
+            </div>
             <span className="block text-[11px] text-muted-foreground mt-1">
-              Base mensual: {Math.round((centerProposals / 12) * 10) / 10} propuestas / mes
+              Porcentaje meta de propuestas aprobadas / ganadas (Win Rate institucional)
             </span>
           </div>
 
@@ -346,7 +378,7 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
               <tr>
                 <th className="py-2.5 px-3">Ejecutivo Comercial</th>
                 <th className="py-2.5 px-3 text-right">Meta Presupuestal ($ COP)</th>
-                <th className="py-2.5 px-3 text-center">Propuestas Meta (#)</th>
+                <th className="py-2.5 px-3 text-center">Tasa Conversión Meta (%)</th>
                 <th className="py-2.5 px-3 text-right">Participación en la Meta (%)</th>
               </tr>
             </thead>
@@ -372,26 +404,37 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
                         <input
                           type="text"
                           inputMode="numeric"
+                          disabled={isPastYear}
                           value={formatNumberWithDots(kam.targetCop)}
                           onChange={(e) =>
                             handleKamTargetChange(kam.kamId, "targetCop", parseDotsToNumber(e.target.value))
                           }
-                          className="w-36 rounded-md border border-border bg-background px-2.5 py-1 text-right font-mono text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="w-36 rounded-md border border-border bg-background px-2.5 py-1 text-right font-mono text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:bg-muted/50 disabled:cursor-not-allowed"
                           aria-label={`Meta para ${kam.kamName}`}
                         />
                       </td>
 
                       <td className="py-3 px-3 text-center">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={formatNumberWithDots(kam.targetProposals)}
-                          onChange={(e) =>
-                            handleKamTargetChange(kam.kamId, "targetProposals", parseDotsToNumber(e.target.value))
-                          }
-                          className="w-20 rounded-md border border-border bg-background px-2.5 py-1 text-center font-mono text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                          aria-label={`Propuestas meta para ${kam.kamName}`}
-                        />
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            min="1"
+                            max="100"
+                            disabled={isPastYear}
+                            value={kam.targetProposals}
+                            onChange={(e) =>
+                              handleKamTargetChange(
+                                kam.kamId,
+                                "targetProposals",
+                                Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)),
+                              )
+                            }
+                            className="w-16 rounded-md border border-border bg-background px-2 py-1 text-center font-mono text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:bg-muted/50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            aria-label={`Conversión meta para ${kam.kamName}`}
+                          />
+                          <span className="text-muted-foreground font-bold text-xs">%</span>
+                        </div>
                       </td>
 
                       <td className="py-3 px-3 text-right">
@@ -401,9 +444,10 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
                             step="0.1"
                             min="0"
                             max="100"
+                            disabled={isPastYear}
                             value={shareOfBudgetPct}
                             onChange={(e) => handleKamPercentChange(kam.kamId, parseFloat(e.target.value) || 0)}
-                            className="w-16 rounded-md border border-border bg-background px-1.5 py-1 text-right font-mono text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-16 rounded-md border border-border bg-background px-1.5 py-1 text-right font-mono text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:bg-muted/50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             aria-label={`Porcentaje de meta para ${kam.kamName}`}
                           />
                           <span className="text-muted-foreground font-bold text-xs">%</span>
@@ -418,7 +462,7 @@ export function SalesTargetsManager({ year, initialData, isLoading }: SalesTarge
               <tr>
                 <td className="py-2.5 px-3">Suma Asignada a KAMs ({kamRows.length} en total)</td>
                 <td className="py-2.5 px-3 text-right font-mono text-primary">{formatCompactCop(totalAssignedCop)}</td>
-                <td className="py-2.5 px-3 text-center font-mono">{totalAssignedProposals} propuestas</td>
+                <td className="py-2.5 px-3 text-center font-mono">{centerConversionRate}% promedio</td>
                 <td className="py-2.5 px-3 text-right font-mono">
                   <span
                     className={cn(

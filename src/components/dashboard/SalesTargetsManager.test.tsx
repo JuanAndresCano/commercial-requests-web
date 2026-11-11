@@ -116,10 +116,10 @@ describe("SalesTargetsManager", () => {
 
     expect(toast.info).toHaveBeenCalledWith("Meta global distribuida equitativamente entre los KAMs");
 
-    // The inputs should now have exactly 14, 13, 13 proposals (sum = 40)
-    expect(screen.getByLabelText("Propuestas meta para Ana Pérez")).toHaveValue("14");
-    expect(screen.getByLabelText("Propuestas meta para Carlos Gómez")).toHaveValue("13");
-    expect(screen.getByLabelText("Propuestas meta para Diana Martínez")).toHaveValue("13");
+    // The inputs should now have the target conversion rate assigned
+    expect(screen.getByLabelText("Conversión meta para Ana Pérez")).toHaveValue(40);
+    expect(screen.getByLabelText("Conversión meta para Carlos Gómez")).toHaveValue(40);
+    expect(screen.getByLabelText("Conversión meta para Diana Martínez")).toHaveValue(40);
   });
 
   it("allows setting target via percentage input and recalculates COP", () => {
@@ -161,5 +161,22 @@ describe("SalesTargetsManager", () => {
     const clearBtn = screen.getByTitle("Limpiar búsqueda");
     fireEvent.click(clearBtn);
     expect(screen.getByText("Carlos Gómez")).toBeInTheDocument();
+  });
+
+  it("locks targets in read-only mode when the year is in the past", () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SalesTargetsManager year={2024} initialData={mockSalesTargetsData} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText(/Periodo fiscal cerrado \(2024\)/i)).toBeInTheDocument();
+    expect(screen.getByText("Periodo Bloqueado")).toBeInTheDocument();
+    expect(screen.getByLabelText("Meta Anual de la Universidad COP")).toBeDisabled();
+    expect(screen.getByLabelText("Tasa de Conversión Meta")).toBeDisabled();
+    expect(screen.getByLabelText("Meta para Ana Pérez")).toBeDisabled();
   });
 });

@@ -364,11 +364,31 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
         {/* 2. TARJETAS DE MÉTRICAS MACRO (Diseño fiel al estándar de tarjetas de Icesi) */}
         <div
           className={cn(
-            "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 transition-opacity duration-200",
+            "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 transition-opacity duration-200",
             isFetching ? "opacity-85" : "opacity-100",
           )}
         >
-          {/* KPI 1: Total Entregado al Cliente */}
+          {/* KPI 1: Total Aprobado / Vendido (Facturación Cerrada Real) */}
+          <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
+            <div>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground">Total aprobado / vendido</span>
+              <div className="mt-2.5">
+                <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                  {formatCompactCop(macroKpis.wonTotalCop ?? macroKpis.deliveredTotalCop)}
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {macroKpis.wonCount ?? 12}{" "}
+                    {(macroKpis.wonCount ?? 12) === 1 ? "propuesta ganada" : "propuestas ganadas"}
+                  </span>{" "}
+                  • Facturado real
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 h-1 w-full rounded-full bg-emerald-500" />
+          </div>
+
+          {/* KPI 2: Total Entregado al Cliente */}
           <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
             <div>
               <span className="text-xs sm:text-sm font-medium text-muted-foreground">Total entregado</span>
@@ -377,18 +397,18 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                   {formatCompactCop(macroKpis.deliveredTotalCop)}
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  <span className="font-semibold text-sky-600 dark:text-sky-400">
                     {macroKpis.deliveredCount}{" "}
                     {macroKpis.deliveredCount === 1 ? "propuesta radicada" : "propuestas radicadas"}
                   </span>{" "}
-                  • Total acumulado
+                  • Ofertas presentadas
                 </p>
               </div>
             </div>
-            <div className="mt-4 h-1 w-full rounded-full bg-emerald-500" />
+            <div className="mt-4 h-1 w-full rounded-full bg-sky-500" />
           </div>
 
-          {/* KPI 2: Tubería Activa (Pipeline) */}
+          {/* KPI 3: Tubería Activa (Pipeline) */}
           <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
             <div>
               <span className="text-xs sm:text-sm font-medium text-muted-foreground">Tubería activa</span>
@@ -397,34 +417,34 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                   {formatCompactCop(macroKpis.pipelineTotalCop)}
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  <span className="font-semibold text-icesi-blue">{macroKpis.pipelineCount} en proceso</span> •
-                  Negociación / Costeo
+                  <span className="font-semibold text-icesi-blue">{macroKpis.pipelineCount} en proceso</span> • Diseño /
+                  Costeo
                 </p>
               </div>
             </div>
             <div className="mt-4 h-1 w-full rounded-full bg-icesi-blue" />
           </div>
 
-          {/* KPI 3: Volumen de Solicitudes y Tasa de Entrega */}
+          {/* KPI 4: Volumen de Solicitudes y Tasa de Conversión */}
           <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
             <div>
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground">Volumen total</span>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground">Volumen y efectividad</span>
               <div className="mt-2.5">
                 <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                   {macroKpis.totalProposals}
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   <span className="font-semibold text-purple-600 dark:text-purple-400">
-                    {macroKpis.winRatePercentage}% tasa de entrega
+                    {macroKpis.winRatePercentage}% tasa de éxito
                   </span>{" "}
-                  en este periodo
+                  (Win Rate)
                 </p>
               </div>
             </div>
             <div className="mt-4 h-1 w-full rounded-full bg-purple-500" />
           </div>
 
-          {/* KPI 4: Ciclo Promedio de Venta */}
+          {/* KPI 5: Ciclo Promedio de Venta */}
           <div className="relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 sm:p-6 text-left shadow-xs transition-all hover:shadow-sm">
             <div>
               <span className="text-xs sm:text-sm font-medium text-muted-foreground">Ciclo de cierre</span>
@@ -432,7 +452,7 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                 <p className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                   {macroKpis.averageCycleDays} días
                 </p>
-                <p className="mt-1.5 text-xs text-muted-foreground">Promedio desde creación hasta entrega</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">Promedio desde creación a entrega</p>
               </div>
             </div>
             <div className="mt-4 h-1 w-full rounded-full bg-amber-500" />
