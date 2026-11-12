@@ -264,7 +264,7 @@ describe("AdminDashboard Component", () => {
     expect(screen.getByText("28 en proceso")).toBeInTheDocument();
 
     expect(screen.getAllByText("33").length).toBeGreaterThan(0);
-    expect(screen.getByText(/15.2% tasa de éxito/)).toBeInTheDocument();
+    expect(screen.getByText(/15.2% conversión/)).toBeInTheDocument();
 
     expect(screen.getByText("7.6 días")).toBeInTheDocument();
 

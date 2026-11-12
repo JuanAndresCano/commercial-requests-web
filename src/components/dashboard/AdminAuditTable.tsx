@@ -16,7 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OfficialNumberBadge } from "@/components/OfficialNumberBadge";
 import { CommercialStatusChip } from "@/components/CommercialStatusChip";
-import { formatCop, formatCompactCop } from "@/lib/mock-data";
+import { formatCop, formatCompactCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import type { ProposalListItem } from "@/lib/api/requests";
 

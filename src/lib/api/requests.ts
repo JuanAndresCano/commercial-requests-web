@@ -311,6 +311,8 @@ export interface AdminDashboardTimeframe {
   availableYears: number[];
   startDate: string;
   endDate: string;
+  minAvailableDate?: string;
+  maxAvailableDate?: string;
 }
 
 export interface AdminMacroKpis {
@@ -332,6 +334,8 @@ export interface AdminMacroKpis {
   targetProposals?: number;
   targetCompliancePercentage?: number;
   gapToTargetCop?: number;
+  deliveryRatePercentage?: number;
+  financialWinRatePercentage?: number;
 }
 
 export interface MonthlyDataPoint {
@@ -397,6 +401,7 @@ export interface KamRankingEntry {
   rejectedCount?: number;
   winRatePercentage?: number;
   actualWinRatePercentage?: number;
+  financialWinRatePercentage?: number;
   averageTicketCop?: number;
   targetCop?: number;
   targetConversionRate?: number | null;

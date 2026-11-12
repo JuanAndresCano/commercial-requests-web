@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { MonthlyTrendsData, MonthlyDataPoint } from "@/lib/api/requests";
-import { formatCompactCop, formatCop, getNiceScale } from "@/lib/mock-data";
+import { formatCompactCop, formatCop, getNiceScale } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 interface MonthlySalesBarChartProps {

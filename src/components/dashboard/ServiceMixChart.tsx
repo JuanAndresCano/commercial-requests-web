@@ -1,6 +1,6 @@
 import React from "react";
 import type { ServiceMixEntry } from "@/lib/api/requests";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { PieChart, Briefcase } from "@/components/icons";
 
 interface ServiceMixChartProps {

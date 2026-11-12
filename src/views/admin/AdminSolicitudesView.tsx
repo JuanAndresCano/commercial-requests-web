@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { AdminAuditTable } from "@/components/dashboard/AdminAuditTable";
 import { useRequests } from "@/hooks/use-requests";
 import { FileSpreadsheet, AlertTriangle, Clock, CheckCircle2, RefreshCw, AlertCircle } from "@/components/icons";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 
 export default function AdminSolicitudesView() {
   const { data: proposals = [], isLoading, isError, refetch } = useRequests();

@@ -20,7 +20,8 @@ import { useMonthlyTrends } from "@/hooks/use-monthly-trends";
 import { MonthlySalesBarChart } from "./MonthlySalesBarChart";
 import { YoySalesCurveChart } from "./YoySalesCurveChart";
 import { AdminDashboardSkeleton } from "./AdminDashboardSkeleton";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
+import { isPeriodInFuture, isPeriodBeforeHistory } from "@/lib/date-periods";
 import { fuzzyScore, normalizeText } from "@/lib/fuzzy";
 import { cn } from "@/lib/utils";
 
@@ -287,17 +288,25 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
             <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs shadow-xs">
               {QUARTERS.map((q) => {
                 const active = selectedQuarter === q.value;
+                const isFuture = q.value !== undefined && isPeriodInFuture(selectedYear, { quarter: q.value });
+                const isBefore =
+                  q.value !== undefined &&
+                  isPeriodBeforeHistory(selectedYear, { quarter: q.value }, timeframe.minAvailableDate);
+                const disabled = isFuture || isBefore;
                 return (
                   <button
                     key={q.label}
                     type="button"
+                    disabled={disabled}
                     onClick={() => setSelectedQuarter(q.value)}
                     className={cn(
-                      "rounded-md px-3 py-1 font-semibold transition-all cursor-pointer",
+                      "rounded-md px-3 py-1 font-semibold transition-all",
+                      disabled ? "opacity-35 cursor-not-allowed text-muted-foreground" : "cursor-pointer",
                       active
                         ? "bg-card text-foreground shadow-xs border border-border/60"
-                        : "text-muted-foreground hover:text-foreground",
+                        : !disabled && "text-muted-foreground hover:text-foreground",
                     )}
+                    title={disabled ? (isFuture ? "Periodo futuro sin datos" : "Sin registros previos") : undefined}
                   >
                     {q.label}
                   </button>
@@ -468,9 +477,11 @@ export function AdminDashboard({ user }: AdminDashboardProps) {
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   <span className="font-semibold text-purple-600 dark:text-purple-400">
-                    {macroKpis.winRatePercentage}% tasa de éxito
+                    {macroKpis.winRatePercentage}% conversión
                   </span>{" "}
-                  (Win Rate)
+                  {macroKpis.financialWinRatePercentage !== undefined && (
+                    <span className="text-muted-foreground">({macroKpis.financialWinRatePercentage}% en dinero)</span>
+                  )}
                 </p>
               </div>
             </div>

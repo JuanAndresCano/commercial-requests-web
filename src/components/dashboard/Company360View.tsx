@@ -22,7 +22,7 @@ import {
 import { CompanySelectCombobox } from "./CompanySelectCombobox";
 import { useAdminCompanies, useAdminCompany360 } from "@/hooks/use-admin-company-360";
 import { Company360Skeleton } from "./Company360Skeleton";
-import { formatCop } from "@/lib/mock-data";
+import { formatCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 interface Company360ViewProps {

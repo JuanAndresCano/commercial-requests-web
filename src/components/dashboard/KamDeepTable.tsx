@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import type { KamRankingEntry } from "@/lib/api/requests";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { Search, X, ChevronLeft, ChevronRight } from "@/components/icons";
 import { fuzzyScore, normalizeText } from "@/lib/fuzzy";

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import type { CompanyListItem } from "@/lib/api/requests";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { fuzzyScore, normalizeText } from "@/lib/fuzzy";
 import {

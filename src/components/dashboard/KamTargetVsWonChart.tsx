@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { KamRankingEntry } from "@/lib/api/requests";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { CheckCircle2, AlertTriangle, AlertCircle, ChevronLeft, ChevronRight } from "@/components/icons";
 
 interface KamTargetVsWonChartProps {

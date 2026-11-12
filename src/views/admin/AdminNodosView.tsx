@@ -8,8 +8,9 @@ import { useAdminDashboard } from "@/hooks/use-admin-dashboard";
 import { AcademicNodeRankingTable } from "@/components/dashboard/AcademicNodeRankingTable";
 import { ProductLeadersTable } from "@/components/dashboard/ProductLeadersTable";
 import { ServiceMixChart } from "@/components/dashboard/ServiceMixChart";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
+import { isPeriodInFuture, isPeriodBeforeHistory } from "@/lib/date-periods";
 
 const QUARTERS = [
   { label: "Todo el año", value: undefined },
@@ -46,6 +47,13 @@ export default function AdminNodosView() {
       </AppShell>
     );
   }
+
+  const timeframe = dashboardData?.timeframe;
+  const availableYears =
+    timeframe?.availableYears && timeframe.availableYears.length > 0
+      ? timeframe.availableYears
+      : [currentYear - 1, currentYear];
+  const minAvailableDate = timeframe?.minAvailableDate;
 
   const nodeDistribution = dashboardData?.nodeDistribution || [];
   const productLeaders = dashboardData?.productLeaders || [];
@@ -107,7 +115,7 @@ export default function AdminNodosView() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {[2025, 2026].map((yr) => (
+                  {availableYears.map((yr) => (
                     <SelectItem key={yr} value={String(yr)} className="text-xs font-semibold cursor-pointer">
                       {yr}
                     </SelectItem>
@@ -120,17 +128,24 @@ export default function AdminNodosView() {
             <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs shadow-xs">
               {QUARTERS.map((q) => {
                 const active = selectedQuarter === q.value;
+                const isFuture = q.value !== undefined && isPeriodInFuture(selectedYear, { quarter: q.value });
+                const isBefore =
+                  q.value !== undefined && isPeriodBeforeHistory(selectedYear, { quarter: q.value }, minAvailableDate);
+                const disabled = isFuture || isBefore;
                 return (
                   <button
                     key={q.label}
                     type="button"
+                    disabled={disabled}
                     onClick={() => setSelectedQuarter(q.value)}
                     className={cn(
-                      "rounded-md px-3 py-1 font-semibold transition-all cursor-pointer",
+                      "rounded-md px-3 py-1 font-semibold transition-all",
+                      disabled ? "opacity-35 cursor-not-allowed text-muted-foreground" : "cursor-pointer",
                       active
                         ? "bg-card text-foreground shadow-xs border border-border/60"
-                        : "text-muted-foreground hover:text-foreground",
+                        : !disabled && "text-muted-foreground hover:text-foreground",
                     )}
+                    title={disabled ? (isFuture ? "Periodo futuro sin datos" : "Sin registros previos") : undefined}
                   >
                     {q.label}
                   </button>

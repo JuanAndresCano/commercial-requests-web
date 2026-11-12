@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import type { SalesTargetsResponse, SalesTargetEntryInput } from "@/lib/api/requests";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import {
   Save,

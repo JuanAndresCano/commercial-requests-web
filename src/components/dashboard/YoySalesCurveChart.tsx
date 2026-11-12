@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { MonthlyTrendsData, YoYComparisonPoint } from "@/lib/api/requests";
-import { formatCompactCop, getNiceScale } from "@/lib/mock-data";
+import { formatCompactCop, getNiceScale } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { ArrowUpRight } from "@/components/icons";
 

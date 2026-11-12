@@ -6,7 +6,7 @@ import { Company360View } from "@/components/dashboard/Company360View";
 import { CompanyDirectoryRankingTable } from "@/components/dashboard/CompanyDirectoryRankingTable";
 import { Building2, Layers, Award, TrendingUp } from "@/components/icons";
 import { useAdminCompanies } from "@/hooks/use-admin-company-360";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 export default function AdminEmpresasView() {

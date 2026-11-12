@@ -10,8 +10,9 @@ import { useSalesTargets } from "@/hooks/use-sales-targets";
 import { KamDeepTable } from "@/components/dashboard/KamDeepTable";
 import { KamTargetVsWonChart } from "@/components/dashboard/KamTargetVsWonChart";
 import { SalesTargetsManager } from "@/components/dashboard/SalesTargetsManager";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
+import { isPeriodInFuture, isPeriodBeforeHistory } from "@/lib/date-periods";
 
 const QUARTERS = [
   { label: "Todo el año", value: undefined },
@@ -95,6 +96,13 @@ export default function AdminKamsView() {
       ? [...kamsWithWinRate].sort((a, b) => (b.winRatePercentage ?? 0) - (a.winRatePercentage ?? 0))[0]
       : null;
 
+  const timeframe = dashboardData?.timeframe;
+  const availableYears =
+    timeframe?.availableYears && timeframe.availableYears.length > 0
+      ? timeframe.availableYears
+      : [currentYear - 1, currentYear];
+  const minAvailableDate = timeframe?.minAvailableDate;
+
   const universityTargetCop =
     macroKpis?.targetCop ??
     salesTargetsData?.universityTarget?.annualTargetCop ??
@@ -134,7 +142,7 @@ export default function AdminKamsView() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {[2025, 2026].map((yr) => (
+                  {availableYears.map((yr) => (
                     <SelectItem key={yr} value={String(yr)} className="text-xs font-semibold cursor-pointer">
                       {yr}
                     </SelectItem>
@@ -161,17 +169,23 @@ export default function AdminKamsView() {
                   </button>
                   {QUARTERS.slice(1).map((q) => {
                     const active = selectedQuarter === q.value;
+                    const isFuture = isPeriodInFuture(selectedYear, { quarter: q.value });
+                    const isBefore = isPeriodBeforeHistory(selectedYear, { quarter: q.value }, minAvailableDate);
+                    const disabled = isFuture || isBefore;
                     return (
                       <button
                         key={q.label}
                         type="button"
+                        disabled={disabled}
                         onClick={() => handleSelectQuarter(q.value)}
                         className={cn(
-                          "rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer",
+                          "rounded-md px-2.5 py-1 font-semibold transition-all",
+                          disabled ? "opacity-35 cursor-not-allowed text-muted-foreground" : "cursor-pointer",
                           active
                             ? "bg-card text-foreground shadow-xs border border-border/60"
-                            : "text-muted-foreground hover:text-foreground",
+                            : !disabled && "text-muted-foreground hover:text-foreground",
                         )}
+                        title={disabled ? (isFuture ? "Periodo futuro sin datos" : "Sin registros previos") : undefined}
                       >
                         {q.label.split(" ")[0]}
                       </button>
@@ -198,15 +212,24 @@ export default function AdminKamsView() {
                       <SelectItem value="none" className="text-xs text-muted-foreground cursor-pointer">
                         Sin mes específico
                       </SelectItem>
-                      {MONTHS.map((m) => (
-                        <SelectItem
-                          key={m.value}
-                          value={String(m.value)}
-                          className="text-xs font-semibold cursor-pointer"
-                        >
-                          {m.label} ({m.fullName})
-                        </SelectItem>
-                      ))}
+                      {MONTHS.map((m) => {
+                        const isFuture = isPeriodInFuture(selectedYear, { month: m.value });
+                        const isBefore = isPeriodBeforeHistory(selectedYear, { month: m.value }, minAvailableDate);
+                        const disabled = isFuture || isBefore;
+                        return (
+                          <SelectItem
+                            key={m.value}
+                            value={String(m.value)}
+                            disabled={disabled}
+                            className={cn(
+                              "text-xs font-semibold cursor-pointer",
+                              disabled && "opacity-40 cursor-not-allowed",
+                            )}
+                          >
+                            {m.label} ({m.fullName}) {disabled ? "— N/D" : ""}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>

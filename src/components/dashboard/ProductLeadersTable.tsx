@@ -1,6 +1,6 @@
 import React from "react";
 import type { ProductLeaderEntry } from "@/lib/api/requests";
-import { formatCompactCop } from "@/lib/mock-data";
+import { formatCompactCop } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { Users, Layers, Award } from "@/components/icons";
 
