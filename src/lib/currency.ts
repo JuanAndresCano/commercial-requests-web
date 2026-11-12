@@ -63,3 +63,56 @@ export function calculateProCulturaReference(
   const applies = serviceCategory === PRO_CULTURA_CATEGORY;
   return { applies, amount: applies ? Math.round(totalOfferedCop * (PRO_CULTURA_PERCENT / 100)) : 0 };
 }
+
+export function formatCop(amount: number): string {
+  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(
+    amount,
+  );
+}
+
+export function formatCompactCop(amount: number): string {
+  if (typeof amount !== "number" || Number.isNaN(amount)) {
+    return "$ 0 COP";
+  }
+  const isNegative = amount < 0;
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000) {
+    const millions = abs / 1_000_000;
+    const formatted = Number.isInteger(millions) ? millions.toString() : millions.toFixed(1);
+    return `${isNegative ? "-$ " : "$ "}${formatted}M COP`;
+  }
+  return isNegative ? `-${formatCop(abs)}` : formatCop(abs);
+}
+
+/**
+ * Calculates a clean rounded scale (nice max, step size, and tick values)
+ * for charts, ensuring grid lines and axis labels align on friendly numbers.
+ */
+export function getNiceScale(maxValue: number, steps = 4): { max: number; step: number; ticks: number[] } {
+  if (typeof maxValue !== "number" || Number.isNaN(maxValue) || maxValue <= 0) {
+    return { max: 10_000_000, step: 2_500_000, ticks: [10_000_000, 7_500_000, 5_000_000, 2_500_000, 0] };
+  }
+
+  const rawStep = maxValue / steps;
+  const power = Math.pow(10, Math.floor(Math.log10(rawStep)));
+
+  // Standard friendly tick steps
+  const candidateFractions = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10];
+
+  let selectedStep = 10 * power;
+  for (const fraction of candidateFractions) {
+    const candidateStep = fraction * power;
+    if (candidateStep * steps >= maxValue) {
+      selectedStep = candidateStep;
+      break;
+    }
+  }
+
+  const max = selectedStep * steps;
+  const ticks: number[] = [];
+  for (let i = steps; i >= 0; i--) {
+    ticks.push(selectedStep * i);
+  }
+
+  return { max, step: selectedStep, ticks };
+}

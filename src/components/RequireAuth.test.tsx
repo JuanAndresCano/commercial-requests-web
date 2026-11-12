@@ -17,6 +17,7 @@ function renderAt(route: string) {
           </RequireAuth>
         ),
         "/login": <div>Pantalla de login</div>,
+        "/onboarding/pending": <div>Pantalla de espera</div>,
       }}
     />,
   );
@@ -36,6 +37,13 @@ describe("RequireAuth", () => {
     useAuthMock.mockReturnValue({ status: "unauthenticated" });
     renderAt("/dashboard");
     expect(await screen.findByText("Pantalla de login")).toBeInTheDocument();
+    expect(screen.queryByText("Contenido privado")).not.toBeInTheDocument();
+  });
+
+  it("sends users with pending-role status to /onboarding/pending", async () => {
+    useAuthMock.mockReturnValue({ status: "pending-role" });
+    renderAt("/dashboard");
+    expect(await screen.findByText("Pantalla de espera")).toBeInTheDocument();
     expect(screen.queryByText("Contenido privado")).not.toBeInTheDocument();
   });
 

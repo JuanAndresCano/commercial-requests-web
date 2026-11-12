@@ -1,0 +1,449 @@
+import React from "react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { TestRouter } from "@/test/router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AdminDashboard } from "./AdminDashboard";
+import * as adminHook from "@/hooks/use-admin-dashboard";
+import * as trendsHook from "@/hooks/use-monthly-trends";
+import type { AdminDashboardData, MonthlyTrendsData } from "@/lib/api/requests";
+
+vi.mock("@/hooks/use-admin-dashboard");
+vi.mock("@/hooks/use-monthly-trends");
+
+const SelectContext = React.createContext<(val: string) => void>(() => {});
+
+vi.mock("./Company360View", () => ({
+  Company360View: () => <div data-testid="mock-company-360-view">Mocked Company 360 View</div>,
+}));
+
+vi.mock("@/components/ui/select", () => ({
+  Select: ({
+    children,
+    onValueChange,
+  }: {
+    children: React.ReactNode;
+    value?: string;
+    onValueChange?: (val: string) => void;
+  }) => (
+    <SelectContext.Provider value={onValueChange || (() => {})}>
+      <div data-testid="mock-select">{children}</div>
+    </SelectContext.Provider>
+  ),
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectValue: () => <span>SelectValue</span>,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => {
+    const onValueChange = React.useContext(SelectContext);
+    return (
+      <button type="button" role="option" data-value={value} onClick={() => onValueChange(value)}>
+        {children}
+      </button>
+    );
+  },
+}));
+
+const mockAdminData: AdminDashboardData = {
+  timeframe: {
+    selectedYear: 2026,
+    selectedQuarter: null,
+    availableYears: [2025, 2026],
+    startDate: "2026-01-01T00:00:00.000Z",
+    endDate: "2026-12-31T23:59:59.999Z",
+  },
+  macroKpis: {
+    deliveredTotalCop: 203500000,
+    pipelineTotalCop: 262000000,
+    deliveredCount: 5,
+    pipelineCount: 28,
+    totalProposals: 33,
+    winRatePercentage: 15.2,
+    averageCycleDays: 7.6,
+    wonTotalCop: 85000000,
+    wonCount: 2,
+  },
+  conversionFunnel: [
+    {
+      stage: "NEW",
+      label: "Nueva / Entregada al Líder",
+      count: 11,
+      totalCop: 0,
+      percentage: 33,
+    },
+    {
+      stage: "IN_PROGRESS",
+      label: "En Experto",
+      count: 9,
+      totalCop: 0,
+      percentage: 27,
+    },
+    {
+      stage: "IN_COSTING",
+      label: "En Costeo",
+      count: 5,
+      totalCop: 154500000,
+      percentage: 15,
+    },
+    {
+      stage: "READY_FOR_DELIVERY",
+      label: "Lista para Entregar",
+      count: 3,
+      totalCop: 107500000,
+      percentage: 9,
+    },
+    {
+      stage: "DELIVERED",
+      label: "Entregada al Cliente",
+      count: 5,
+      totalCop: 203500000,
+      percentage: 15,
+    },
+  ],
+  kamRanking: [
+    {
+      kamId: "kam-1",
+      name: "Diana Martínez",
+      email: "diana.martinez@icesi.edu.co",
+      totalProposals: 29,
+      deliveredCount: 4,
+      deliveredTotalCop: 175500000,
+      pipelineCount: 25,
+      pipelineTotalCop: 262000000,
+    },
+    {
+      kamId: "kam-2",
+      name: "Carlos Ramírez",
+      email: "carlos.ramirez@icesi.edu.co",
+      totalProposals: 4,
+      deliveredCount: 1,
+      deliveredTotalCop: 28000000,
+      pipelineCount: 3,
+      pipelineTotalCop: 0,
+    },
+  ],
+  nodeDistribution: [
+    {
+      nodeId: "node-1",
+      name: "Gestión de Innovación",
+      totalProposals: 12,
+      deliveredTotalCop: 94000000,
+      pipelineTotalCop: 48000000,
+    },
+    {
+      nodeId: "node-2",
+      name: "IA+ Tech Digital",
+      totalProposals: 6,
+      deliveredTotalCop: 0,
+      pipelineTotalCop: 0,
+    },
+  ],
+};
+
+function renderComponent(initialEntries?: string[] | string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const route = typeof initialEntries === "string" ? initialEntries : (initialEntries?.[0] ?? "/dashboard");
+  return render(
+    <TestRouter route={route}>
+      <QueryClientProvider client={queryClient}>
+        <AdminDashboard
+          user={{
+            name: "Lina Ayala",
+            email: "admin@icesi.edu.co",
+            roleLabel: "Administrador",
+          }}
+        />
+      </QueryClientProvider>
+    </TestRouter>,
+  );
+}
+
+const mockTrendsData: MonthlyTrendsData = {
+  year: 2026,
+  previousYear: 2025,
+  annualTargetCop: 2516000000,
+  annualTargetProposals: 45,
+  totalQuotedCop: 18800000000,
+  totalWonCop: 2420000000,
+  totalWonCount: 64,
+  annualCompliancePercentage: 96.2,
+  monthlyData: [
+    {
+      month: 1,
+      monthName: "Ene",
+      quotedCop: 1200000000,
+      wonCop: 150000000,
+      pipelineCop: 1050000000,
+      proposalsQuotedCount: 15,
+      proposalsWonCount: 3,
+      targetCop: 209600000,
+      targetProposals: 4,
+      compliancePercentage: 71.6,
+    },
+  ],
+  yoyComparison: [
+    {
+      month: 1,
+      monthName: "Ene",
+      currentYearWonCop: 150000000,
+      previousYearWonCop: 120000000,
+      varianceCop: 30000000,
+      growthPercentage: 25.0,
+    },
+  ],
+  previousYearSummary: {
+    year: 2025,
+    totalQuotedCop: 16000000000,
+    totalWonCop: 2100000000,
+    totalWonCount: 55,
+  },
+};
+
+describe("AdminDashboard Component", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(trendsHook, "useMonthlyTrends").mockReturnValue({
+      data: mockTrendsData,
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof trendsHook.useMonthlyTrends>);
+  });
+
+  it("renders loading skeleton when fetching data", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+    expect(screen.getByTestId("admin-dashboard-skeleton")).toBeInTheDocument();
+  });
+
+  it("renders error state with retry button on failure", () => {
+    const refetchMock = vi.fn();
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: refetchMock,
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+    expect(screen.getByText("No se pudo cargar el panel administrativo")).toBeInTheDocument();
+    const retryBtn = screen.getByRole("button", { name: /Reintentar/i });
+    fireEvent.click(retryBtn);
+    expect(refetchMock).toHaveBeenCalled();
+  });
+
+  it("renders executive dashboard KPIs, conversion funnel, KAMs and Nodes", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    // 1. Header
+    expect(screen.getByText("Hola, Lina")).toBeInTheDocument();
+    expect(screen.queryByText("Administrador Icesi")).not.toBeInTheDocument();
+
+    // 2. Macro KPIs
+    expect(screen.getByText("Total aprobado / vendido")).toBeInTheDocument();
+    expect(screen.getByText("2 propuestas ganadas")).toBeInTheDocument();
+    expect(screen.getByText("Total entregado")).toBeInTheDocument();
+    expect(screen.getAllByText("$ 203.5M COP").length).toBe(2);
+    expect(screen.getByText("5 propuestas radicadas")).toBeInTheDocument();
+
+    expect(screen.getByText("Tubería activa")).toBeInTheDocument();
+    expect(screen.getAllByText("$ 262M COP").length).toBe(2);
+    expect(screen.getByText("28 en proceso")).toBeInTheDocument();
+
+    expect(screen.getAllByText("33").length).toBeGreaterThan(0);
+    expect(screen.getByText(/15.2% conversión/)).toBeInTheDocument();
+
+    expect(screen.getByText("7.6 días")).toBeInTheDocument();
+
+    // 3. Conversion Funnel
+    expect(screen.getByText("Embudo de Conversión Comercial")).toBeInTheDocument();
+    expect(screen.getByText("Nueva / Entregada al Líder")).toBeInTheDocument();
+    expect(screen.getByText("En Experto")).toBeInTheDocument();
+    expect(screen.getByText("En Costeo")).toBeInTheDocument();
+    expect(screen.getByText("Lista para Entregar")).toBeInTheDocument();
+    expect(screen.getByText("Entregada al Cliente")).toBeInTheDocument();
+
+    // 4. KAMs Table
+    expect(screen.getByText("Rendimiento por Ejecutivo Comercial (KAM)")).toBeInTheDocument();
+    expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
+    expect(screen.getByText("diana.martinez@icesi.edu.co")).toBeInTheDocument();
+    expect(screen.getByText("Carlos Ramírez")).toBeInTheDocument();
+    expect(screen.getByText("carlos.ramirez@icesi.edu.co")).toBeInTheDocument();
+
+    // 5. Node Distribution
+    expect(screen.getByText("Demanda por Nodo")).toBeInTheDocument();
+    expect(screen.getByText("Gestión de Innovación")).toBeInTheDocument();
+    expect(screen.getByText("IA+ Tech Digital")).toBeInTheDocument();
+
+    // 6. Institutional Sales Target & Trends Charts (Phase 3)
+    expect(screen.getByText(/Meta Anual (de la Universidad|Institucional)/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Asignar Metas/i })).toBeInTheDocument();
+    expect(screen.getByText("Cotizado vs. Vendido por Mes")).toBeInTheDocument();
+    expect(screen.getByText("Curva Comparativa Interanual de Ventas")).toBeInTheDocument();
+  });
+
+  it("allows selecting quarters to filter the dashboard", () => {
+    const hookSpy = vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    // Click on Q2
+    const q2Button = screen.getByRole("button", { name: "Q2 (Abr - Jun)" });
+    fireEvent.click(q2Button);
+
+    expect(hookSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quarter: 2,
+      }),
+    );
+
+    // Click on Todo el año
+    const allYearButton = screen.getByRole("button", { name: "Todo el año" });
+    fireEvent.click(allYearButton);
+
+    expect(hookSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quarter: undefined,
+      }),
+    );
+  });
+
+  it("allows changing year from the dropdown", () => {
+    const hookSpy = vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    const option2025 = screen.getByRole("option", { name: "2025" });
+    fireEvent.click(option2025);
+
+    expect(hookSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        year: 2025,
+      }),
+    );
+  });
+
+  it("renders the Executive Summary directly without tab toggles or redundant role badge", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    expect(screen.getByText("Hola, Lina")).toBeInTheDocument();
+    expect(screen.queryByText("Administrador Icesi")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Impacto por Empresa/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Embudo de Conversión Comercial")).toBeInTheDocument();
+  });
+
+  it("paginates KAM ranking table by 10 items when there are multiple KAMs", () => {
+    const manyKams = Array.from({ length: 15 }, (_, i) => ({
+      kamId: `kam-${i + 1}`,
+      name: `Ejecutivo Comercial ${i + 1}`,
+      email: `kam${i + 1}@icesi.edu.co`,
+      totalProposals: 5,
+      pipelineCount: 3,
+      deliveredCount: 2,
+      deliveredTotalCop: 100000000,
+      pipelineTotalCop: 50000000,
+      winRatePercentage: 40,
+    }));
+
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: {
+        ...mockAdminData,
+        kamRanking: manyKams,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    // First page shows KAM 1 and KAM 10, but not KAM 11
+    expect(screen.getByText("Ejecutivo Comercial 1")).toBeInTheDocument();
+    expect(screen.getByText("Ejecutivo Comercial 10")).toBeInTheDocument();
+    expect(screen.queryByText("Ejecutivo Comercial 11")).not.toBeInTheDocument();
+
+    // Click "Siguiente"
+    const nextBtn = screen.getByRole("button", { name: "Siguiente" });
+    fireEvent.click(nextBtn);
+
+    // Second page shows KAM 11 and KAM 15
+    expect(screen.queryByText("Ejecutivo Comercial 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Ejecutivo Comercial 11")).toBeInTheDocument();
+    expect(screen.getByText("Ejecutivo Comercial 15")).toBeInTheDocument();
+  });
+
+  it("filters KAM ranking table in real-time with fuzzy search", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
+    expect(screen.getByText("Carlos Ramírez")).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText("Buscar KAM por nombre o correo...");
+    fireEvent.change(searchInput, { target: { value: "Diana" } });
+
+    expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
+    expect(screen.queryByText("Carlos Ramírez")).not.toBeInTheDocument();
+    expect(screen.getByText(/filtrado de 2/)).toBeInTheDocument();
+
+    // Clear search
+    const clearBtn = screen.getByRole("button", { name: "Limpiar búsqueda" });
+    fireEvent.click(clearBtn);
+
+    expect(screen.getByText("Diana Martínez")).toBeInTheDocument();
+    expect(screen.getByText("Carlos Ramírez")).toBeInTheDocument();
+  });
+
+  it("displays tiered budget pacing badge with deviation percentage", () => {
+    vi.spyOn(adminHook, "useAdminDashboard").mockReturnValue({
+      data: mockAdminData,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof adminHook.useAdminDashboard>);
+
+    renderComponent();
+
+    // Should render a pacing status with percentage and monetary difference
+    expect(
+      screen.getByText(/Superávit Destacado|En Ritmo Esperado|Alerta Moderada|Déficit Crítico/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Avance Presupuestal/)).toBeInTheDocument();
+  });
+});

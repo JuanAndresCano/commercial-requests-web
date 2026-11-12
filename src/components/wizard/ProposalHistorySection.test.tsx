@@ -59,7 +59,7 @@ vi.mock("@/context/AuthContext", () => ({
 describe("ProposalHistorySection", () => {
   beforeEach(() => {
     useRequestsMock.mockReset();
-    useRequestsMock.mockReturnValue({ data: undefined });
+    useRequestsMock.mockReturnValue({ data: mockRequests });
   });
 
   it("lists only the proposals that match the company being registered", () => {

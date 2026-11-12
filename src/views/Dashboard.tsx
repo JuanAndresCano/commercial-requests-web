@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import { KamCommandCenter } from "@/components/dashboard/KamCommandCenter";
 import { ProductLeaderDashboard } from "@/components/dashboard/ProductLeaderDashboard";
+import { AdminDashboard } from "@/components/dashboard/AdminDashboard";
 import { useRequests } from "@/hooks/use-requests";
 import { useUpdateRequestStatus } from "@/hooks/use-update-request-status";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
@@ -31,12 +32,12 @@ const KANBAN_TARGET_STATUS: Partial<Record<RequestStatus, BackendStatusCode>> = 
  * branch stays on mocks until HU 3.x connects it.
  */
 export default function Dashboard() {
-  const { user, requests, updateRequest } = useAuth();
+  const { user } = useAuth();
 
   if (user.role === "kam") {
     return (
       <AppShell>
-        <KamCommandCenter requests={requests} userName={user.name} />
+        <KamCommandCenter userName={user.name} />
       </AppShell>
     );
   }
@@ -44,7 +45,15 @@ export default function Dashboard() {
   if (user.role === "lider-producto") {
     return (
       <AppShell>
-        <ProductLeaderDashboardConnected user={user} updateRequest={updateRequest} />
+        <ProductLeaderDashboardConnected user={user} />
+      </AppShell>
+    );
+  }
+
+  if (user.role === "administrador") {
+    return (
+      <AppShell>
+        <AdminDashboard user={user} />
       </AppShell>
     );
   }
@@ -64,13 +73,9 @@ export default function Dashboard() {
 
 interface ProductLeaderDashboardConnectedProps {
   user: { name: string; email: string; roleLabel: string };
-  // Still the mock context's updateRequest — ProductLeaderDashboard requires it in its
-  // props but never actually calls it (only `updateStatus` has a call site); kept as a
-  // harmless pass-through instead of changing that component's public interface.
-  updateRequest: (id: string, updates: Partial<import("@/lib/mock-data").RequestItem>) => void;
 }
 
-function ProductLeaderDashboardConnected({ user, updateRequest }: ProductLeaderDashboardConnectedProps) {
+function ProductLeaderDashboardConnected({ user }: ProductLeaderDashboardConnectedProps) {
   const { data: proposals, isLoading, isError, refetch } = useRequests();
   const requests = proposals?.map((p) => mapProposalToRequestItem(p));
   const updateProposalStatus = useUpdateRequestStatus();
@@ -114,7 +119,7 @@ function ProductLeaderDashboardConnected({ user, updateRequest }: ProductLeaderD
     <ProductLeaderDashboard
       requests={requests ?? []}
       user={user}
-      updateRequest={updateRequest}
+      updateRequest={() => undefined}
       updateStatus={handleUpdateStatus}
     />
   );

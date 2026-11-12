@@ -53,6 +53,7 @@ function StaticChip({ status, className }: { status: CommercialStatus | null; cl
   const theme = status
     ? themeOf(status)
     : { chip: "border-border bg-muted/50 text-muted-foreground", dot: "bg-muted-foreground/50" };
+  const textClass = className?.includes("truncate") ? "truncate" : "line-clamp-2 break-words leading-tight";
   return (
     <span
       data-commercial-status={status ?? "none"}
@@ -60,7 +61,7 @@ function StaticChip({ status, className }: { status: CommercialStatus | null; cl
       className={cn(CHIP_BASE, theme.chip, className)}
     >
       <Dot className={theme.dot} />
-      <span className="truncate">{status ? labelOf(status) : COMMERCIAL_STATUS_BASE_LABEL}</span>
+      <span className={textClass}>{status ? labelOf(status) : COMMERCIAL_STATUS_BASE_LABEL}</span>
     </span>
   );
 }

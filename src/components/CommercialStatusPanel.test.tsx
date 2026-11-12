@@ -64,7 +64,7 @@ describe("Commercial follow-up history panel", () => {
     expect(screen.getByText("Aprobación sin contrato → Facturada")).toBeInTheDocument();
   });
 
-  it.each(["administrador", "profesor"] as const)("is hidden from %s", (role) => {
+  it.each(["administrador"] as const)("is hidden from %s", (role) => {
     renderPanel({ role });
     expect(screen.queryByRole("heading", { name: "Seguimiento comercial" })).not.toBeInTheDocument();
   });

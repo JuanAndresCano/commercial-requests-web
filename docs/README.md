@@ -49,15 +49,15 @@ La aplicación se pondrá en producción en pocos días. El objetivo central de 
 | [`07-gaps-conocidos-y-deuda-tecnica.md`](./07-gaps-conocidos-y-deuda-tecnica.md) | Inventario de huecos funcionales, placeholders sin conectar y atajos de prototipo que **no deben replicarse en producción**. |
 | [`08-preguntas-abiertas-negocio.md`](./08-preguntas-abiertas-negocio.md) | Bitácora de preguntas de negocio que necesitaban decisión de la Líder de Producto (Dianis) — la mayoría ya respondidas e implementadas; quedan unas pocas pendientes de una siguiente ronda. |
 | [`09-guion-de-prueba-dianis.md`](./09-guion-de-prueba-dianis.md) | Guion corto, click a click, para que la Líder de Producto pruebe el prototipo de punta a punta y dé el aval para construir la versión real. |
-| [`10-decisiones-pendientes-equipo.md`](./10-decisiones-pendientes-equipo.md) | Decisiones de gobernanza del repositorio (no de negocio) que deben resolverse entre Tomás y Juan Andrés antes de ejecutarse. |
 | [`09-r7-valor-entregado-kam.md`](./09-r7-valor-entregado-kam.md) | R7: valor total presentado al cliente en el tablero del KAM (total entregado exacto). |
+| [`10-decisiones-pendientes-equipo.md`](./10-decisiones-pendientes-equipo.md) | Decisiones de gobernanza del repositorio (no de negocio) que deben resolverse entre Tomás y Juan Andrés antes de ejecutarse. |
 | [`10-ajustes-reunion-2026-10-22.md`](./10-ajustes-reunion-2026-10-22.md) | Registro histórico de la primera interpretación (4-nov) de los ajustes de la reunión del 22-oct; lo vigente está en `13`. |
+| [`11-metricas-y-racional-analitico.md`](./11-metricas-y-racional-analitico.md) | Catálogo de métricas y sustentación analítica para Administrador, KAM y Líder de Producto: decisiones de inclusión/exclusión y guía UAT. |
 | [`12-campos-obligatorios-r4.md`](./12-campos-obligatorios-r4.md) | R4: campos obligatorios al enviar una solicitud y datos que pueden quedar «Pendiente». |
+| [`12-blueprint-analitica-admin-y-metas.md`](./12-blueprint-analitica-admin-y-metas.md) | **Master Blueprint Analítica y Metas**: Arquitectura de los 5 submódulos de administración, fórmulas y hoja de ruta. |
 | [`13-acuerdos-finales-2026-11-06.md`](./13-acuerdos-finales-2026-11-06.md) | **Acuerdos finales del 6-nov**: etiqueta comercial, total bruto, sustentación y ajustes, creación flexible, edición del cliente. Prevalece sobre los textos históricos. |
 | [`14-spec-mejoras-ux.md`](./14-spec-mejoras-ux.md) | Evaluación heurística UX/UI (Nielsen, Norman, Krug) y qué se implementó. |
 | [`CAMBIOS_UX.md`](./CAMBIOS_UX.md) | Registro de cambios UX, cada uno ligado a su hallazgo de `14`. |
-
-Nota de numeración: hay dos archivos `09-*`, dos `10-*` y ningún `11`; no se renumeraron para conservar el historial de git (ver `07`, gap 32).
 
 ## Cómo correr el prototipo localmente
 

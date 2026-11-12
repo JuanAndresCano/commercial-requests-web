@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import { ThemeProvider, useTheme } from "./ThemeContext";
 
 vi.mock("@/lib/api/auth", () => ({
-  authApi: { login: vi.fn(), getMe: vi.fn(), logout: vi.fn() },
+  authApi: { login: vi.fn(), devLogin: vi.fn(), getMe: vi.fn(), logout: vi.fn() },
 }));
 
 const tabChannel = vi.hoisted(() => ({
@@ -111,17 +111,12 @@ describe("AuthProvider session handling", () => {
     await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
   });
 
-  it("rejects accounts without any role the UI supports", async () => {
-    mocked.getMe.mockRejectedValueOnce(new ApiError(401, "no cookie"));
+  it("sets pending-role status for an account that has no valid roles yet", async () => {
+    mocked.getMe.mockResolvedValue(session({ roles: [] }));
     const auth = mountProvider();
-    await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
 
-    mocked.login.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
-    mocked.getMe.mockResolvedValue(session({ roles: ["ASSISTANT"] }));
-    await act(async () => {
-      await expect(auth.current.login("a@icesi.edu.co", "x")).rejects.toThrow();
-    });
-    expect(auth.current.status).toBe("unauthenticated");
+    await waitFor(() => expect(auth.current.status).toBe("pending-role"));
+    expect(auth.current.user.roleLabel).toBe("Pendiente de Aprobación");
   });
 
   it("signs in and takes the role from the backend session", async () => {
@@ -129,10 +124,10 @@ describe("AuthProvider session handling", () => {
     const auth = mountProvider();
     await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
 
-    mocked.login.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
+    mocked.devLogin.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
     mocked.getMe.mockResolvedValue(session());
     await act(async () => {
-      await auth.current.login("ana@icesi.edu.co", "secret");
+      await auth.current.login("ana@icesi.edu.co");
     });
     expect(auth.current.status).toBe("authenticated");
     expect(auth.current.user.role).toBe("kam");
@@ -190,7 +185,7 @@ describe("AuthProvider session handling", () => {
     window.localStorage.setItem("icesi_kam_dashboard_isolated_v1", JSON.stringify("entregada"));
     window.localStorage.setItem("icesi_kam_dashboard_view_v1", JSON.stringify("tabla"));
 
-    mocked.login.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
+    mocked.devLogin.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
     mocked.getMe.mockResolvedValue(session());
     await act(async () => {
       await auth.current.login("ana@icesi.edu.co", "secret");
@@ -229,7 +224,7 @@ describe("AuthProvider session handling", () => {
     const auth = mountProvider();
     await waitFor(() => expect(auth.current.status).toBe("unauthenticated"));
 
-    mocked.login.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
+    mocked.devLogin.mockResolvedValue({ accessToken: "t", expiresAt: Date.now() + 60_000 });
     mocked.getMe.mockResolvedValue(session({ id: "u-7" }));
     await act(async () => {
       await auth.current.login("ana@icesi.edu.co", "secret");

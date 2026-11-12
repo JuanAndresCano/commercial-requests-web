@@ -10,8 +10,8 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-/** Key of the old remembered theme; it is no longer read so the app always opens in light mode. */
-const LEGACY_THEME_KEY = "icesi_theme_mode";
+/** Storage key to remember user's light/dark mode preference across sessions */
+const THEME_STORAGE_KEY = "icesi_theme_mode";
 
 export const DEFAULT_THEME: Theme = "light";
 
@@ -21,20 +21,25 @@ export function systemTheme(): Theme {
 }
 
 /**
- * The app always opens in light mode. Dark mode can be toggled, but only lasts
- * until the page reloads or the session changes (see AuthContext).
+ * ThemeProvider persists user preference in localStorage so returning to the app
+ * preserves dark or light mode smoothly across page reloads and sessions.
  */
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
 
+  // Initialize theme from localStorage if available
   useEffect(() => {
     try {
-      localStorage.removeItem(LEGACY_THEME_KEY);
+      const stored = localStorage.getItem(THEME_STORAGE_KEY);
+      if (stored === "dark" || stored === "light") {
+        setThemeState(stored);
+      }
     } catch {
       // ignore
     }
   }, []);
 
+  // Sync class on root document and update localStorage
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") {
@@ -43,6 +48,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       root.classList.remove("dark");
       root.classList.add("light");
+    }
+
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // ignore
     }
   }, [theme]);
 
@@ -59,7 +70,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
 export function useTheme() {
   const context = useContext(ThemeContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;

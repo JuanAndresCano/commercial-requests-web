@@ -6,9 +6,12 @@ name: PR hygiene
 on:
   pull_request:
     branches: [main, develop]
+    # `edited` re-checks the PR title after it is fixed (re-running a job reuses the old title).
+    types: [opened, synchronize, reopened, edited]
 
+# Title edits get their own group so they never cancel a run that is scanning the code.
 concurrency:
-  group: hygiene-${{ github.ref }}
+  group: hygiene-${{ github.ref }}-${{ github.event.action == 'edited' && 'title' || 'code' }}
   cancel-in-progress: true
 
 permissions:

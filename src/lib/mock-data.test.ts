@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculateCosting, MOCK_REQUESTS } from "@/lib/mock-data";
+import { calculateCosting, MOCK_REQUESTS, getNiceScale } from "@/lib/mock-data";
 
 describe("calculateCosting", () => {
   it("calcula el impuesto Pro-Cultura (1.5%) cuando el tipo es Capacitación", () => {
@@ -60,5 +60,28 @@ describe("REQ-2026-0135 (backfill de negociación pre-historial, docs/04)", () =
       clientResponse: "rechazada",
       clientObservation: req?.clientObservations,
     });
+  });
+});
+
+describe("getNiceScale", () => {
+  it("generates a clean rounded scale with 5 ticks for 271.5M", () => {
+    const scale = getNiceScale(271_500_000, 4);
+    expect(scale.max).toBe(300_000_000);
+    expect(scale.step).toBe(75_000_000);
+    expect(scale.ticks).toEqual([300_000_000, 225_000_000, 150_000_000, 75_000_000, 0]);
+  });
+
+  it("scales 390M to 400M without excessive overshoot", () => {
+    const scale = getNiceScale(390_000_000, 4);
+    expect(scale.max).toBe(400_000_000);
+    expect(scale.step).toBe(100_000_000);
+    expect(scale.ticks).toEqual([400_000_000, 300_000_000, 200_000_000, 100_000_000, 0]);
+  });
+
+  it("handles empty or zero values gracefully with fallback", () => {
+    const scale = getNiceScale(0, 4);
+    expect(scale.max).toBe(10_000_000);
+    expect(scale.ticks).toHaveLength(5);
+    expect(scale.ticks[4]).toBe(0);
   });
 });

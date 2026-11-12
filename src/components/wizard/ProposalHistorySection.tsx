@@ -13,9 +13,9 @@ import {
 import { Clock, Eye, FileText, History, Info, Search, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { STATUS_META, URGENCY_META, formatCop, type RequestItem } from "@/lib/mock-data";
-import { useAuth } from "@/context/AuthContext";
 import { useRequests } from "@/hooks/use-requests";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
+import type { ProposalListItem } from "@/lib/api/requests";
 import { findCompanyProposals, parseHistorySearchTerm } from "@/lib/proposal-history";
 
 /**
@@ -27,11 +27,12 @@ import { findCompanyProposals, parseHistorySearchTerm } from "@/lib/proposal-his
 export function ProposalHistorySection({
   empresaNombre,
   empresaNit = "",
+  requests,
 }: {
   empresaNombre: string;
   empresaNit?: string;
+  requests?: RequestItem[];
 }) {
-  const { requests } = useAuth();
   const { data: apiProposals } = useRequests();
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [proposalTab, setProposalTab] = useState<"todas" | "entregadas" | "en_proceso">("todas");
@@ -39,9 +40,23 @@ export function ProposalHistorySection({
 
   const allRequests = useMemo(() => {
     if (apiProposals && apiProposals.length > 0) {
-      return apiProposals.map((p) => mapProposalToRequestItem(p));
+      return (apiProposals as unknown[]).map((p) => {
+        if (
+          p &&
+          typeof p === "object" &&
+          ("workflow" in p ||
+            "assignments" in p ||
+            ("company" in p && typeof (p as Record<string, unknown>).company === "object"))
+        ) {
+          return mapProposalToRequestItem(p as ProposalListItem);
+        }
+        return p as RequestItem;
+      });
     }
-    return requests;
+    if (requests && requests.length > 0) {
+      return requests;
+    }
+    return [];
   }, [apiProposals, requests]);
 
   // Lo escrito en el buscador reemplaza a la empresa (nombre y NIT) del asistente.

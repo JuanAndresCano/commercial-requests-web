@@ -91,10 +91,10 @@ describe("R7 — the KAM's delivered portfolio value", () => {
     },
   );
 
-  it("marks the total as loading until the server has answered", () => {
+  it("marks the total as loading until the server has answered", async () => {
     vi.mocked(requestsApi.getDashboardMetrics).mockReturnValue(new Promise(() => {}));
-    renderBoard();
-    expect(screen.getByText("Calculando total...")).toBeInTheDocument();
+    renderBoard([]);
+    expect(await screen.findByText("Calculando total...")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
