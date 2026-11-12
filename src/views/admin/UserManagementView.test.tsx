@@ -160,4 +160,33 @@ describe("UserManagementView (Admin)", () => {
     expect(screen.getByText("diana.martinez@icesi.edu.co")).toBeInTheDocument();
     expect(screen.queryByText("ldp@icesi.edu.co")).not.toBeInTheDocument();
   });
+
+  it("pre-selects the user's requested role in the approval queue", async () => {
+    (usersApi.getPendingUsers as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "p2",
+        email: "leader@icesi.edu.co",
+        firstName: "María",
+        lastName: "Gómez",
+        azureOid: "oid-2",
+        requestedRole: "PRODUCT_LEADER",
+        createdAt: "2026-11-09T10:00:00.000Z",
+      },
+    ]);
+    (usersApi.approveUser as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      message: "Aprobado",
+    });
+
+    render(<UserManagementView />);
+
+    expect(await screen.findByText("Solicitó: Líder de Producto")).toBeInTheDocument();
+
+    const approveBtn = screen.getByRole("button", { name: /Aprobar/i });
+    fireEvent.click(approveBtn);
+
+    await waitFor(() => {
+      expect(usersApi.approveUser).toHaveBeenCalledWith("p2", "PRODUCT_LEADER");
+    });
+  });
 });

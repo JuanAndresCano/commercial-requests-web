@@ -16,6 +16,7 @@ export interface SessionUser {
   /** Backend role codes, e.g. KAM, PRODUCT_LEADER. */
   roles: string[];
   isPendingRole?: boolean;
+  requestedRole?: "KAM" | "PRODUCT_LEADER" | null;
   expiresAt: number;
 }
 
@@ -34,5 +35,10 @@ export const authApi = {
     }),
   /** Fails with 401 when there is no valid session cookie. */
   getMe: () => apiRequest<SessionUser>("/auth/me"),
+  requestRole: (role: "KAM" | "PRODUCT_LEADER") =>
+    apiRequest<{ success: boolean; requestedRole: string }>("/auth/request-role", {
+      method: "POST",
+      body: { role },
+    }),
   logout: () => apiRequest<void>("/auth/logout", { method: "POST" }),
 };

@@ -17,6 +17,7 @@ export interface User {
   name: string;
   email: string;
   node?: string;
+  requestedRole?: "KAM" | "PRODUCT_LEADER" | null;
 }
 
 export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = {
@@ -44,6 +45,7 @@ interface AuthContextType {
   login: (email: string, password?: string) => Promise<void>;
   devLogin: (email: string) => Promise<void>;
   refreshSession: () => Promise<SessionUser | null>;
+  requestRole: (role: "KAM" | "PRODUCT_LEADER") => Promise<void>;
   logout: () => void;
   /**
    * Another tab of this browser signed in as someone else (or signed out), so the
@@ -98,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           roleLabel: "Pendiente de Aprobación",
           name: fullName || session.email,
           email: session.email,
+          requestedRole: session.requestedRole,
         });
         setUserId(session.id);
         setExpiresAt(session.expiresAt);
@@ -119,6 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: fullName || session.email,
         email: session.email,
         node: cfg.node,
+        requestedRole: session.requestedRole,
       });
       setUserId(session.id);
       setExpiresAt(session.expiresAt);
@@ -190,6 +194,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [devLogin],
   );
 
+  const requestRole = useCallback(async (role: "KAM" | "PRODUCT_LEADER") => {
+    await authApi.requestRole(role);
+    setUser((prev) => ({ ...prev, requestedRole: role }));
+  }, []);
+
   const logout = () => {
     // Clear local state first; the request still carries the cookie and bumps
     // tokenVersion server-side so the token cannot be replayed.
@@ -206,6 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         devLogin,
         refreshSession,
+        requestRole,
         logout,
         sessionConflict,
       }}

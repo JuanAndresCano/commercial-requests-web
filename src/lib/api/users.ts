@@ -14,6 +14,7 @@ export interface PendingUser {
   firstName: string | null;
   lastName: string | null;
   azureOid: string | null;
+  requestedRole?: "KAM" | "PRODUCT_LEADER" | null;
   createdAt: string;
 }
 

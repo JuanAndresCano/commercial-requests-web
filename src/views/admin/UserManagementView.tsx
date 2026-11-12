@@ -80,7 +80,9 @@ export default function UserManagementView() {
       setRoleSelections((prev) => {
         const next: Record<string, OperationalRole> = { ...prev };
         pending.forEach((u) => {
-          if (!next[u.id]) next[u.id] = "KAM";
+          if (!next[u.id]) {
+            next[u.id] = (u.requestedRole as OperationalRole) || "KAM";
+          }
         });
         return next;
       });
@@ -391,6 +393,15 @@ export default function UserManagementView() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-sm text-foreground truncate">{fullName}</span>
+                            {u.requestedRole ? (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:text-icesi-purple border border-primary/20">
+                                Solicitó: {u.requestedRole === "KAM" ? "KAM" : "Líder de Producto"}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                Sin solicitud de rol
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 sm:gap-4 mt-0.5 text-xs text-muted-foreground flex-wrap">
                             <span className="truncate">{u.email}</span>

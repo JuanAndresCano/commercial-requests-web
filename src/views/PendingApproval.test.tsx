@@ -25,9 +25,10 @@ vi.mock("sonner", () => ({
   },
 }));
 
-describe("PendingApproval view (Onboarding)", () => {
+describe("PendingApproval view (Onboarding & Role Selection)", () => {
   const replaceMock = vi.fn();
   const refreshSessionMock = vi.fn();
+  const requestRoleMock = vi.fn();
   const logoutMock = vi.fn();
 
   beforeEach(() => {
@@ -37,24 +38,83 @@ describe("PendingApproval view (Onboarding)", () => {
     });
   });
 
-  it("renders the institutional waiting view with user details", () => {
+  it("renders role selection cards when user has not yet requested a role", () => {
     (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       status: "pending-role",
       user: {
         name: "Carlos Mora",
         email: "carlos.mora@icesi.edu.co",
+        requestedRole: null,
       },
       refreshSession: refreshSessionMock,
+      requestRole: requestRoleMock,
       logout: logoutMock,
     });
 
     render(<PendingApproval />);
 
-    expect(screen.getByText("Tu cuenta está pendiente de aprobación")).toBeInTheDocument();
-    expect(screen.getAllByText("Carlos Mora").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("carlos.mora@icesi.edu.co").length).toBeGreaterThan(0);
-    expect(screen.getByText("Comprobar estado")).toBeInTheDocument();
+    expect(screen.getByText("Selecciona tu Rol Operativo")).toBeInTheDocument();
+    expect(screen.getByText("Asesor Comercial (KAM)")).toBeInTheDocument();
+    expect(screen.getByText("Líder de Producto")).toBeInTheDocument();
+    expect(screen.getByText("Enviar solicitud de rol")).toBeInTheDocument();
     expect(screen.getByText("Cerrar sesión")).toBeInTheDocument();
+  });
+
+  it("opens confirmation dialog and submits requested role", async () => {
+    requestRoleMock.mockResolvedValue(undefined);
+
+    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      status: "pending-role",
+      user: {
+        name: "Carlos Mora",
+        email: "carlos.mora@icesi.edu.co",
+        requestedRole: null,
+      },
+      refreshSession: refreshSessionMock,
+      requestRole: requestRoleMock,
+      logout: logoutMock,
+    });
+
+    render(<PendingApproval />);
+
+    // Click on Líder de Producto
+    fireEvent.click(screen.getByText("Líder de Producto"));
+
+    // Click on Enviar solicitud de rol
+    fireEvent.click(screen.getByText("Enviar solicitud de rol"));
+
+    // Confirmation dialog should be open
+    expect(screen.getByText(/¿Confirmas tu rol como Líder de Producto\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/No podrás cambiar esta elección una vez enviada/i)).toBeInTheDocument();
+
+    // Confirm submission
+    fireEvent.click(screen.getByText("Confirmar y enviar"));
+
+    await waitFor(() => {
+      expect(requestRoleMock).toHaveBeenCalledWith("PRODUCT_LEADER");
+      expect(toast.success).toHaveBeenCalledWith("¡Solicitud enviada!", expect.any(Object));
+    });
+  });
+
+  it("renders the locked state when user has already submitted their role choice", () => {
+    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      status: "pending-role",
+      user: {
+        name: "Carlos Mora",
+        email: "carlos.mora@icesi.edu.co",
+        requestedRole: "KAM",
+      },
+      refreshSession: refreshSessionMock,
+      requestRole: requestRoleMock,
+      logout: logoutMock,
+    });
+
+    render(<PendingApproval />);
+
+    expect(screen.getByText("Solicitud de Rol en Proceso")).toBeInTheDocument();
+    expect(screen.getByText("Has solicitado el rol de Asesor Comercial (KAM)")).toBeInTheDocument();
+    expect(screen.getByText("Solo puedes enviar esta solicitud una vez")).toBeInTheDocument();
+    expect(screen.queryByText("Enviar solicitud de rol")).not.toBeInTheDocument();
   });
 
   it("calls logout and redirects to /login when clicking Cerrar sesión", () => {
@@ -63,8 +123,10 @@ describe("PendingApproval view (Onboarding)", () => {
       user: {
         name: "Carlos Mora",
         email: "carlos.mora@icesi.edu.co",
+        requestedRole: "KAM",
       },
       refreshSession: refreshSessionMock,
+      requestRole: requestRoleMock,
       logout: logoutMock,
     });
 
@@ -74,62 +136,5 @@ describe("PendingApproval view (Onboarding)", () => {
 
     expect(logoutMock).toHaveBeenCalled();
     expect(replaceMock).toHaveBeenCalledWith("/login");
-  });
-
-  it("checks status and shows info toast when still pending", async () => {
-    refreshSessionMock.mockResolvedValue({
-      id: "u1",
-      email: "carlos.mora@icesi.edu.co",
-      roles: [],
-      isPendingRole: true,
-    });
-
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      status: "pending-role",
-      user: {
-        name: "Carlos Mora",
-        email: "carlos.mora@icesi.edu.co",
-      },
-      refreshSession: refreshSessionMock,
-      logout: logoutMock,
-    });
-
-    render(<PendingApproval />);
-
-    fireEvent.click(screen.getByText("Comprobar estado"));
-
-    await waitFor(() => {
-      expect(refreshSessionMock).toHaveBeenCalled();
-      expect(toast.info).toHaveBeenCalledWith("Aún no tienes rol asignado", expect.any(Object));
-    });
-  });
-
-  it("redirects to /dashboard and shows success toast when approved", async () => {
-    refreshSessionMock.mockResolvedValue({
-      id: "u1",
-      email: "carlos.mora@icesi.edu.co",
-      roles: ["KAM"],
-      isPendingRole: false,
-    });
-
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      status: "pending-role",
-      user: {
-        name: "Carlos Mora",
-        email: "carlos.mora@icesi.edu.co",
-      },
-      refreshSession: refreshSessionMock,
-      logout: logoutMock,
-    });
-
-    render(<PendingApproval />);
-
-    fireEvent.click(screen.getByText("Comprobar estado"));
-
-    await waitFor(() => {
-      expect(refreshSessionMock).toHaveBeenCalled();
-      expect(toast.success).toHaveBeenCalledWith("¡Acceso aprobado!", expect.any(Object));
-      expect(replaceMock).toHaveBeenCalledWith("/dashboard");
-    });
   });
 });
