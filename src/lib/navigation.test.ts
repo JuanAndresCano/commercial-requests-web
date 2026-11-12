@@ -16,6 +16,7 @@ describe("getNavItems", () => {
       "Rendimiento KAMs",
       "Nodos y Portafolio",
       "Inteligencia Empresas",
+      "Segmentos",
       "Gestión Solicitudes",
       "Gestión de Accesos",
     ]);
@@ -24,6 +25,7 @@ describe("getNavItems", () => {
       "/admin/kams",
       "/admin/nodos",
       "/admin/empresas",
+      "/admin/segmentos",
       "/admin/solicitudes",
       "/admin/usuarios",
     ]);
@@ -68,6 +70,9 @@ describe("isNavItemActive", () => {
     expect(isNavItemActive("/admin/solicitudes", "/admin/solicitudes", "")).toBe(true);
     expect(isNavItemActive("/admin/empresas", "/admin/empresas", "")).toBe(true);
     expect(isNavItemActive("/admin/empresas", "/dashboard", "?tab=empresas")).toBe(true);
+    expect(isNavItemActive("/admin/segmentos", "/admin/segmentos", "?v=b")).toBe(true);
+    expect(isNavItemActive("/admin/segmentos", "/admin/empresas", "")).toBe(false);
+    expect(isNavItemActive("/admin/empresas", "/admin/segmentos", "")).toBe(false);
     expect(isNavItemActive("/admin/usuarios", "/admin/usuarios", "")).toBe(true);
     expect(isNavItemActive("/admin/usuarios", "/dashboard", "")).toBe(false);
   });
