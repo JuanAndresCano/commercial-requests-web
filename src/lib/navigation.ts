@@ -8,6 +8,7 @@ import {
   Users,
   FileSpreadsheet,
   UserCheck,
+  LayoutGrid,
 } from "@/components/icons";
 import type { UserRole } from "@/context/AuthContext";
 
@@ -33,6 +34,7 @@ export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { to: "/admin/kams", label: "Rendimiento KAMs", icon: Users },
     { to: "/admin/nodos", label: "Nodos y Portafolio", icon: Network },
     { to: "/admin/empresas", label: "Inteligencia Empresas", icon: Building2 },
+    { to: "/admin/segmentos", label: "Segmentos", icon: LayoutGrid },
     { to: "/admin/solicitudes", label: "Gestión Solicitudes", icon: FileSpreadsheet },
     { to: "/admin/usuarios", label: "Gestión de Accesos", icon: UserCheck },
   ],
@@ -60,6 +62,9 @@ export function isNavItemActive(itemTo: string, pathname: string, search: string
     if (pathname === "/admin/empresas" || pathname.startsWith("/admin/empresas/")) return true;
     if (pathname === "/dashboard" && search.includes("tab=empresas")) return true;
     return false;
+  }
+  if (itemTo === "/admin/segmentos") {
+    return pathname === "/admin/segmentos" || pathname.startsWith("/admin/segmentos/");
   }
   if (itemTo === "/admin/kams") {
     return pathname === "/admin/kams" || pathname.startsWith("/admin/kams/");

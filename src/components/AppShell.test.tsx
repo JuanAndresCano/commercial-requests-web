@@ -57,6 +57,7 @@ describe("AppShell role-based menu", () => {
         "Rendimiento KAMs",
         "Nodos y Portafolio",
         "Inteligencia Empresas",
+        "Segmentos",
         "Gestión Solicitudes",
         "Gestión de Accesos",
       ],

@@ -17,6 +17,7 @@ import AdminKamsPage from "./(private)/admin/kams/page";
 import AdminNodosPage from "./(private)/admin/nodos/page";
 import AdminEmpresasPage from "./(private)/admin/empresas/page";
 import AdminSolicitudesPage from "./(private)/admin/solicitudes/page";
+import AdminSegmentosPage from "./(private)/admin/segmentos/page";
 
 vi.mock("@/views/Index", () => ({ default: () => <div>vista-index</div> }));
 vi.mock("@/views/Login", () => ({ default: () => <div>vista-login</div> }));
@@ -32,6 +33,7 @@ vi.mock("@/views/admin/AdminKamsView", () => ({ default: () => <div>vista-admin-
 vi.mock("@/views/admin/AdminNodosView", () => ({ default: () => <div>vista-admin-nodos</div> }));
 vi.mock("@/views/admin/AdminEmpresasView", () => ({ default: () => <div>vista-admin-empresas</div> }));
 vi.mock("@/views/admin/AdminSolicitudesView", () => ({ default: () => <div>vista-admin-solicitudes</div> }));
+vi.mock("@/views/admin/AdminSegmentosView", () => ({ default: () => <div>vista-admin-segmentos</div> }));
 
 vi.mock("@/components/RequireAuth", () => ({
   RequireAuth: ({ children }: { children: ReactElement }) => <div data-testid="guard">{children}</div>,
@@ -58,6 +60,7 @@ describe("app routes", () => {
     ["/admin/nodos", AdminNodosPage, "vista-admin-nodos"],
     ["/admin/empresas", AdminEmpresasPage, "vista-admin-empresas"],
     ["/admin/solicitudes", AdminSolicitudesPage, "vista-admin-solicitudes"],
+    ["/admin/segmentos", AdminSegmentosPage, "vista-admin-segmentos"],
   ])("%s renders its view", async (_route, Page, marker) => {
     render(<Page />);
     expect(await screen.findByText(marker)).toBeInTheDocument();
