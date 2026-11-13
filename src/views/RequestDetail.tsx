@@ -22,6 +22,7 @@ import {
   Edit3,
   ClipboardList,
   History,
+  Printer,
 } from "@/components/icons";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -60,6 +61,7 @@ import { AdvisorAssignmentModal } from "@/components/costing/AdvisorAssignmentMo
 import { AdvisorContactDialog } from "@/components/costing/AdvisorContactDialog";
 import { ProposalCostingModule } from "@/components/costing/ProposalCostingModule";
 import { ProposalDocumentsSection } from "@/components/costing/ProposalDocumentsSection";
+import { ProposalDossierDialog } from "@/components/costing/ProposalDossierDialog";
 import {
   ReassignLeaderDialog,
   REASSIGN_REASONS,
@@ -184,6 +186,7 @@ export default function RequestDetail() {
 
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isDossierModalOpen, setIsDossierModalOpen] = useState(false);
   const [isContactAdvisorModalOpen, setIsContactAdvisorModalOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
   const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
@@ -1204,6 +1207,24 @@ export default function RequestDetail() {
 
             {/* BOTONES DE ACCIÓN ARRIBA A LA DERECHA */}
             <div className="flex flex-wrap items-center gap-2.5 pt-1 lg:pt-0 shrink-0">
+              {/* BOTÓN EXPORTAR FICHA PARA DOCENTE */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDossierModalOpen(true)}
+                disabled={req.status === "nueva" && !req.professor}
+                title={
+                  req.status === "nueva" && !req.professor
+                    ? "Asigna un docente antes de exportar la ficha técnica"
+                    : "Exportar ficha técnica y descargar adjuntos para el docente"
+                }
+                className="h-9 px-3 text-xs font-semibold border-slate-300 hover:border-icesi-blue hover:text-icesi-blue hover:bg-slate-50 dark:border-border dark:hover:bg-secondary inline-flex items-center gap-1.5 shadow-2xs"
+              >
+                <Printer className="h-3.5 w-3.5 text-icesi-blue dark:text-sky-400" />
+                <span>Exportar Ficha para Docente</span>
+              </Button>
+
               {role === "lider-producto" ? (
                 <>
                   {req.status === "nueva" && (
@@ -1509,6 +1530,7 @@ export default function RequestDetail() {
               onUploadFile={handleUploadDocument}
               onRemoveDocument={handleRemoveDocument}
               onDownloadDocument={handleDownloadDocument}
+              onOpenDossier={() => setIsDossierModalOpen(true)}
               isUploading={uploadAttachmentReal.isPending}
               userRole={role}
             />
@@ -2341,6 +2363,16 @@ export default function RequestDetail() {
         request={req}
         onSaveAssignment={handleSaveAssignment}
         onAdvanceToExpert={req.status === "nueva" ? handleAdvanceAfterAssign : undefined}
+      />
+
+      {/* ========================================================================= */}
+      {/* MODAL: DOSSIER ACADÉMICO PARA DOCENTE (EXPORTACIÓN PDF Y ADJUNTOS) */}
+      {/* ========================================================================= */}
+      <ProposalDossierDialog
+        isOpen={isDossierModalOpen}
+        onClose={() => setIsDossierModalOpen(false)}
+        request={req}
+        onDownloadDocument={handleDownloadDocument}
       />
 
       {/* ========================================================================= */}
