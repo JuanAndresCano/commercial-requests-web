@@ -9,6 +9,7 @@ import {
   Lock,
   Eye,
   Plus,
+  Printer,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,6 +32,7 @@ interface ProposalDocumentsSectionProps {
   onUploadFile: (file: File, category: DocumentCategory, tag?: string) => void;
   onRemoveDocument: (doc: ProposalDocument) => void;
   onDownloadDocument: (doc: ProposalDocument) => void;
+  onOpenDossier?: () => void;
   isUploading?: boolean;
   userRole: string;
 }
@@ -41,6 +43,7 @@ export function ProposalDocumentsSection({
   onUploadFile,
   onRemoveDocument,
   onDownloadDocument,
+  onOpenDossier,
   isUploading = false,
   userRole,
 }: ProposalDocumentsSectionProps) {
@@ -245,6 +248,19 @@ export function ProposalDocumentsSection({
             Archivos adjuntos para presentación comercial y respaldo interno
           </p>
         </div>
+
+        {onOpenDossier && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onOpenDossier}
+            className="h-8 px-3 text-xs font-semibold inline-flex items-center gap-1.5 self-start sm:self-center border-slate-300 hover:border-icesi-blue hover:text-icesi-blue dark:border-border"
+          >
+            <Printer className="h-3.5 w-3.5 text-icesi-blue dark:text-sky-400" />
+            <span>Ficha para Docente</span>
+          </Button>
+        )}
       </div>
 
       {/* UNIFIED TABS */}
