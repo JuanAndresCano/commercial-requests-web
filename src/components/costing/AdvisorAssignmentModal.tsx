@@ -337,7 +337,7 @@ export function AdvisorAssignmentModal({
                 />
               </div>
               {errors.email && (
-                <p id="advisor-email-error" role="alert" className="text-[11px] font-medium text-destructive">
+                <p id="advisor-email-error" role="alert" className="text-xs font-medium text-destructive">
                   {errors.email}
                 </p>
               )}

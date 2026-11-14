@@ -1,22 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { authApi, type SessionUser } from "@/lib/api/auth";
 import { setUnauthorizedHandler } from "@/lib/api/client";
 import { isSessionActive, mapBackendRoles, msUntilExpiry } from "@/lib/session";
 import { useSessionSync } from "@/hooks/use-session-sync";
 import type { SessionConflictReason } from "@/lib/session-sync";
-import {
-  MOCK_REQUESTS,
-  RequestItem,
-  RequestStatus,
-  ProposalCosting,
-  ProposalDocument,
-  ExternalProfessorData,
-} from "@/lib/mock-data";
-import { assignProfessorWithHistory } from "@/lib/professor-assignment";
 import { resetDashboardUiState } from "@/lib/dashboard-ui-state";
 import { useTheme } from "@/context/ThemeContext";
+import { toTitleCase } from "@/lib/format-name";
 
-export type UserRole = "kam" | "lider-nodo" | "lider-producto" | "profesor" | "administrador";
+export type UserRole = "kam" | "lider-producto" | "administrador";
 
 export interface User {
   role: UserRole;
@@ -24,6 +17,7 @@ export interface User {
   name: string;
   email: string;
   node?: string;
+  requestedRole?: "KAM" | "PRODUCT_LEADER" | null;
 }
 
 export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = {
@@ -32,19 +26,14 @@ export const ROLE_CONFIGS: Record<UserRole, { label: string; node?: string }> = 
     label: "Líder de Producto",
     node: "Inteligencia Artificial y Tecnologías Digitales",
   },
-  "lider-nodo": {
-    label: "Líder de Nodo",
-    node: "Competitividad Organizacional, Economías Creativas",
-  },
-  profesor: { label: "Profesor" },
   administrador: { label: "Administrador" },
 };
 
-// Legacy key of the mock login; the session now lives in an httpOnly cookie.
+// Legacy keys for previous mock login and mock storage; session now lives in httpOnly cookies.
 const LEGACY_STORAGE_KEY_USER = "icesi_auth_user_v3";
 const STORAGE_KEY_REQUESTS = "icesi_requests_data_v3";
 
-export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "pending-role";
 
 // Placeholder while nobody is signed in. Routes are guarded by RequireAuth, so
 // no page renders with it; it only keeps `user` non-nullable for consumers.
@@ -53,32 +42,22 @@ const ANONYMOUS_USER: User = { role: "kam", roleLabel: "", name: "", email: "" }
 interface AuthContextType {
   user: User;
   status: AuthStatus;
-  /** Signs in against the backend; rejects with ApiError (401 = bad credentials). */
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password?: string) => Promise<void>;
+  devLogin: (email: string) => Promise<void>;
+  refreshSession: () => Promise<SessionUser | null>;
+  requestRole: (role: "KAM" | "PRODUCT_LEADER") => Promise<void>;
   logout: () => void;
   /**
    * Another tab of this browser signed in as someone else (or signed out), so the
    * session cookie no longer belongs to the user this tab shows. Reload to continue.
    */
   sessionConflict: SessionConflictReason | null;
-  requests: RequestItem[];
-  updateRequest: (id: string, updates: Partial<RequestItem>) => void;
-  deleteRequest: (id: string) => void;
-  assignProfessorDetailed: (
-    id: string,
-    professorName: string,
-    type: "planta" | "externo",
-    externalData?: ExternalProfessorData,
-  ) => void;
-  updateCosting: (id: string, costing: ProposalCosting) => void;
-  addDocument: (id: string, doc: ProposalDocument) => void;
-  removeDocument: (id: string, docId: string, category: "client_kam" | "internal_costing") => void;
-  updateStatus: (id: string, status: RequestStatus) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User>(ANONYMOUS_USER);
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
@@ -94,25 +73,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [setTheme]);
 
   const clearSession = useCallback(() => {
+    // Query keys are shared by authenticated screens. Destroying the old queries
+    // also cancels their in-flight results, so a late A response cannot populate
+    // B's dashboard after this tab changes account (money, lists and details).
+    queryClient.clear();
     setUser(ANONYMOUS_USER);
     setUserId(null);
     setExpiresAt(null);
     setStatus("unauthenticated");
     resetUiForNewSession();
-  }, [resetUiForNewSession]);
+  }, [queryClient, resetUiForNewSession]);
 
   // Returns false (and leaves the user signed out) when the session is expired
   // or the account has no role the UI knows about.
   const applySession = useCallback(
     (session: SessionUser): boolean => {
-      const roles = mapBackendRoles(session.roles);
-      if (roles.length === 0 || !isSessionActive(session.expiresAt)) {
+      if (!isSessionActive(session.expiresAt)) {
         clearSession();
         return false;
       }
-      // An account has exactly one role. More than one means badly migrated data:
-      // say so loudly instead of silently picking one (the first is used so the
-      // user is not locked out, and the menu never mixes modules of several roles).
+      const roles = mapBackendRoles(session.roles);
+      if (session.isPendingRole || roles.length === 0) {
+        const fullName = toTitleCase([session.firstName, session.lastName].filter(Boolean).join(" "));
+        setUser({
+          role: "kam",
+          roleLabel: "Pendiente de Aprobación",
+          name: fullName || session.email,
+          email: session.email,
+          requestedRole: session.requestedRole,
+        });
+        setUserId(session.id);
+        setExpiresAt(session.expiresAt);
+        setStatus("pending-role");
+        return true;
+      }
       if (roles.length > 1) {
         console.warn(
           `[auth] Session for user ${session.id} arrived with ${roles.length} roles; expected exactly one. ` +
@@ -120,25 +114,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
       }
       const cfg = ROLE_CONFIGS[roles[0]];
-      const fullName = [session.firstName, session.lastName].filter(Boolean).join(" ");
+      const fullName = toTitleCase([session.firstName, session.lastName].filter(Boolean).join(" "));
+      queryClient.clear();
       setUser({
         role: roles[0],
         roleLabel: cfg.label,
         name: fullName || session.email,
         email: session.email,
         node: cfg.node,
+        requestedRole: session.requestedRole,
       });
       setUserId(session.id);
       setExpiresAt(session.expiresAt);
       setStatus("authenticated");
       return true;
     },
-    [clearSession],
+    [clearSession, queryClient],
   );
 
   // Restore the session from the cookie on load; never trust local state.
   useEffect(() => {
     localStorage.removeItem(LEGACY_STORAGE_KEY_USER);
+    localStorage.removeItem(STORAGE_KEY_REQUESTS);
     let cancelled = false;
     authApi
       .getMe()
@@ -166,59 +163,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.clearTimeout(timer);
   }, [expiresAt, clearSession]);
 
-  const [requests, setRequests] = useState<RequestItem[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_REQUESTS);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge with any new mock requests not yet in local storage
-          const existingIds = new Set(parsed.map((p: RequestItem) => p.id));
-          const missingMocks = MOCK_REQUESTS.filter((m) => !existingIds.has(m.id));
-          const combined = [...parsed, ...missingMocks];
-
-          return combined.map((item: RequestItem) => {
-            const mock = MOCK_REQUESTS.find((m) => m.id === item.id);
-            // No se fabrica un costeo por defecto: si ni el registro guardado
-            // ni el mock traen uno, la solicitud sigue sin costear.
-            const costing = item.costing ?? mock?.costing;
-            const clientKamDocuments = item.clientKamDocuments ?? mock?.clientKamDocuments ?? [];
-            const internalCostingDocuments = item.internalCostingDocuments ?? mock?.internalCostingDocuments ?? [];
-            return {
-              ...item,
-              costing,
-              clientKamDocuments,
-              internalCostingDocuments,
-              professorType: item.professorType ?? mock?.professorType ?? "planta",
-              externalProfessorData: item.externalProfessorData ?? mock?.externalProfessorData,
-              totalCostCop: item.totalCostCop ?? costing?.totalOfferedCop,
-            };
-          });
-        }
+  const devLogin = useCallback(
+    async (email: string) => {
+      resetUiForNewSession();
+      await authApi.devLogin(email);
+      const session = await authApi.getMe();
+      if (!applySession(session)) {
+        throw new Error("No se pudo iniciar sesión con la cuenta seleccionada.");
       }
-    } catch {
-      // Fallback
-    }
-    return MOCK_REQUESTS;
-  });
+      announce({ type: "login", userId: session.id });
+    },
+    [applySession, announce, resetUiForNewSession],
+  );
 
-  useEffect(() => {
+  const refreshSession = useCallback(async (): Promise<SessionUser | null> => {
     try {
-      localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(requests));
+      const session = await authApi.getMe();
+      applySession(session);
+      return session;
     } catch {
-      // Ignore storage errors
+      clearSession();
+      return null;
     }
-  }, [requests]);
+  }, [applySession, clearSession]);
 
-  const login = async (email: string, password: string) => {
-    await authApi.login(email, password);
-    resetUiForNewSession();
-    const session = await authApi.getMe();
-    if (!applySession(session)) {
-      throw new Error("La cuenta no tiene un rol habilitado en esta plataforma.");
-    }
-    announce({ type: "login", userId: session.id });
-  };
+  const login = useCallback(
+    async (email: string, _password?: string) => {
+      await devLogin(email);
+    },
+    [devLogin],
+  );
+
+  const requestRole = useCallback(async (role: "KAM" | "PRODUCT_LEADER") => {
+    await authApi.requestRole(role);
+    setUser((prev) => ({ ...prev, requestedRole: role }));
+  }, []);
 
   const logout = () => {
     // Clear local state first; the request still carries the cookie and bumps
@@ -228,106 +207,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void authApi.logout().catch(() => undefined);
   };
 
-  const updateRequest = (id: string, updates: Partial<RequestItem>) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        const updated = { ...r, ...updates };
-        if (updates.costing) {
-          updated.totalCostCop = updates.costing.totalOfferedCop;
-        }
-        // Se marca automáticamente aquí (no en cada pantalla que cambia el
-        // estado) para que "tiempo en esta fase" sea correcto sin importar
-        // si el cambio vino de updateStatus, de "Entregar" o de "Devolver
-        // con observaciones".
-        if (updates.status && updates.status !== r.status) {
-          updated.statusUpdatedAt = new Date().toISOString();
-        }
-        return updated;
-      }),
-    );
-  };
-
-  const deleteRequest = (id: string) => {
-    setRequests((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  const assignProfessorDetailed = (
-    id: string,
-    professorName: string,
-    type: "planta" | "externo",
-    externalData?: ExternalProfessorData,
-  ) => {
-    const current = requests.find((r) => r.id === id);
-    if (!current) return;
-    updateRequest(id, assignProfessorWithHistory(current, professorName, type, externalData, user.name));
-  };
-
-  const updateCosting = (id: string, costing: ProposalCosting) => {
-    updateRequest(id, {
-      costing,
-      totalCostCop: costing.totalOfferedCop,
-    });
-  };
-
-  const addDocument = (id: string, doc: ProposalDocument) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        if (doc.category === "client_kam") {
-          return {
-            ...r,
-            clientKamDocuments: [doc, ...(r.clientKamDocuments ?? [])],
-          };
-        } else {
-          return {
-            ...r,
-            internalCostingDocuments: [doc, ...(r.internalCostingDocuments ?? [])],
-          };
-        }
-      }),
-    );
-  };
-
-  const removeDocument = (id: string, docId: string, category: "client_kam" | "internal_costing") => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        if (category === "client_kam") {
-          return {
-            ...r,
-            clientKamDocuments: (r.clientKamDocuments ?? []).filter((d) => d.id !== docId),
-          };
-        } else {
-          return {
-            ...r,
-            internalCostingDocuments: (r.internalCostingDocuments ?? []).filter((d) => d.id !== docId),
-          };
-        }
-      }),
-    );
-  };
-
-  const updateStatus = (id: string, status: RequestStatus) => {
-    updateRequest(id, { status });
-  };
-
   return (
     <AuthContext.Provider
       value={{
         user,
         status,
         login,
+        devLogin,
+        refreshSession,
+        requestRole,
         logout,
         sessionConflict,
-        requests,
-        updateRequest,
-        deleteRequest,
-        assignProfessorDetailed,
-        updateCosting,
-        addDocument,
-        removeDocument,
-        updateStatus,
       }}
     >
       {children}

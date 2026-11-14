@@ -2,11 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   calculateProCulturaReference,
   formatCopPreview,
+  formatCop,
+  formatCompactCop,
+  getNiceScale,
   isLikelyFraction,
   parseCopInput,
   parsePercentInput,
 } from "@/lib/currency";
-import { calculateCosting, formatCop } from "@/lib/mock-data";
+import { calculateCosting } from "@/lib/mock-data";
 
 describe("parseCopInput", () => {
   it.each([
@@ -224,5 +227,29 @@ describe("calculateProCulturaReference", () => {
       const costing = calculateCosting(type as Parameters<typeof calculateCosting>[0], total, 30);
       expect(calculateProCulturaReference(total, type).amount).toBe(costing.proCulturaTaxAmount);
     }
+  });
+});
+
+describe("formatCop and formatCompactCop", () => {
+  it("formats COP amounts with currency symbol and no decimals", () => {
+    const formatted = formatCop(1_500_000);
+    expect(formatted).toContain("1.500.000");
+  });
+
+  it("formats compact COP for millions and handles negative values", () => {
+    expect(formatCompactCop(25_000_000)).toBe("$ 25M COP");
+    expect(formatCompactCop(25_500_000)).toBe("$ 25.5M COP");
+    expect(formatCompactCop(-10_000_000)).toBe("-$ 10M COP");
+    expect(formatCompactCop(0)).toBe(formatCop(0));
+    expect(formatCompactCop(Number.NaN)).toBe("$ 0 COP");
+  });
+});
+
+describe("getNiceScale", () => {
+  it("calculates clean step and ticks", () => {
+    const scale = getNiceScale(100_000_000, 4);
+    expect(scale.max).toBe(100_000_000);
+    expect(scale.step).toBe(25_000_000);
+    expect(scale.ticks).toEqual([100_000_000, 75_000_000, 50_000_000, 25_000_000, 0]);
   });
 });

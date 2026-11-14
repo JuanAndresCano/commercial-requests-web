@@ -129,9 +129,9 @@ export function ProfessorNameField({ value, onChange, onSelect, disabled, error,
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium text-foreground">{professor.fullName}</span>
-                    {detail && <span className="block truncate text-[11px] text-muted-foreground">{detail}</span>}
+                    {detail && <span className="block truncate text-xs text-muted-foreground">{detail}</span>}
                   </span>
-                  <span className="shrink-0 rounded border border-border px-1.5 text-[10px] font-semibold text-muted-foreground">
+                  <span className="shrink-0 rounded border border-border px-1.5 text-xs font-semibold text-muted-foreground">
                     {kindLabel(professor)}
                   </span>
                 </li>
@@ -140,11 +140,11 @@ export function ProfessorNameField({ value, onChange, onSelect, disabled, error,
           </ul>
         )}
       </div>
-      <p id={hintId} role="status" className="text-[11px] text-muted-foreground">
+      <p id={hintId} role="status" className="text-xs text-muted-foreground">
         {hint}
       </p>
       {error && (
-        <p id={errorId} role="alert" className="text-[11px] font-medium text-destructive">
+        <p id={errorId} role="alert" className="text-xs font-medium text-destructive">
           {error}
         </p>
       )}

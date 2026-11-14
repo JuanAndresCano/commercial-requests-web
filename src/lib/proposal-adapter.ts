@@ -384,7 +384,11 @@ export function mapProposalToRequestItem(p: ProposalListItem | ProposalDetail, c
       readyForKam: isReady,
       costingSentAt: currentEconomics?.readyForKamAt ?? undefined,
     },
+    commercialStatus: p.commercialStatus,
+    deliveredValueCop: p.deliveredValueCop,
     clientObservations: returnedNote,
+    adjustmentCount: p.adjustmentCount,
+    hasPendingAdjustment: p.hasPendingAdjustment,
     // "N - M", or "Más de N" for the open-ended option of the closed Select (HU 4.5).
     participantes: participantsLabel(p.program?.minParticipants, p.program?.maxParticipants),
     // Spanish label, not the raw backend code — HU 4.5's Select and modalityToBackend

@@ -84,7 +84,7 @@ describe("ProductLeaderDashboard stages (C-03)", () => {
     renderDashboard();
     expect(screen.getByRole("button", { name: /^3\. En Costeo\s*1/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^4\. Enviadas al KAM\s*1/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^5\. Entregadas\s*1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^5\. Entregada\s*1/ })).toBeInTheDocument();
   });
 
   it("isolates the stage when its header is clicked and names five stages in the way back", () => {

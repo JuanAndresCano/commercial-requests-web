@@ -214,7 +214,12 @@ vi.mock("@/lib/api/requests", async (importOriginal) => {
           code: found.id,
           title: found.title,
           priority: "ALTA",
-          company: { id: "comp-1", name: found.company, nit: found.companyNit },
+          company: {
+            id: "comp-1",
+            name: found.company,
+            nit: found.companyNit,
+            email: found.status === "en-costeo" ? "empresa@cliente.co" : undefined,
+          },
           workflow: {
             currentStatus: {
               code:
@@ -470,26 +475,11 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       });
     });
 
-    it("falls back to local updateRequest when apiProposal is null (pure mock)", async () => {
-      // Return null from API so it behaves as local mock
+    it("renders not found and does not update when apiProposal is null", async () => {
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
       renderPage("REQ-2026-0001");
 
-      const editBtn = await screen.findByRole("button", { name: /Editar información/i });
-      fireEvent.click(editBtn);
-
-      const titleInput = screen.getByLabelText(/Título de la propuesta/i);
-      fireEvent.change(titleInput, { target: { value: "Edición Local Mock" } });
-
-      const saveBtn = screen.getByRole("button", { name: /Guardar información/i });
-      fireEvent.click(saveBtn);
-
-      expect(authMock.updateRequest).toHaveBeenCalledWith(
-        "REQ-2026-0001",
-        expect.objectContaining({
-          title: "Edición Local Mock",
-        }),
-      );
+      expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
       expect(requestsApi.updateInfo).not.toHaveBeenCalled();
     });
 
@@ -708,23 +698,12 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(await screen.findByText("Tablero Dashboard")).toBeInTheDocument();
     });
 
-    it("falls back to local deleteRequest when apiProposal is null (pure mock)", async () => {
+    it("renders not found and does not delete when apiProposal is null", async () => {
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
       renderPage("REQ-2026-0001");
 
-      const cancelBtn = await screen.findByRole("button", { name: /Cancelar solicitud/i });
-      fireEvent.click(cancelBtn);
-
-      // Select preset
-      const chipPreset = screen.getByRole("button", { name: /Cliente desistió de la propuesta/i });
-      fireEvent.click(chipPreset);
-
-      const confirmBtn = screen.getByRole("button", { name: /Sí, cancelar solicitud/i });
-      fireEvent.click(confirmBtn);
-
-      expect(authMock.deleteRequest).toHaveBeenCalledWith("REQ-2026-0001");
+      expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
       expect(requestsApi.delete).not.toHaveBeenCalled();
-      expect(await screen.findByText("Tablero Dashboard")).toBeInTheDocument();
     });
   });
 
@@ -753,7 +732,7 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(sendBtn).toBeInTheDocument();
       fireEvent.click(sendBtn);
 
-      const confirmBtn = screen.getByRole("button", { name: /Sí, marcar entregada/i });
+      const confirmBtn = screen.getByRole("button", { name: /Sí, confirmar presentación/i });
       fireEvent.click(confirmBtn);
 
       await waitFor(() => {
@@ -765,22 +744,60 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(authMock.updateRequest).not.toHaveBeenCalled();
     });
 
-    it("falls back to local updateRequest when apiProposal is null", async () => {
+    it("requires completing a real customer channel before presenting a legacy proposal", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+        proposalInStatus("IN_COSTING", {
+          economics: [{ id: "e1", isCurrent: true, grossValue: "20000000", readyForKam: true, readyForKamAt: null }],
+        }),
+      );
+      renderPage("REQ-2026-0002");
+      const sendBtn = await screen.findByRole("button", { name: /Enviar a cliente/i });
+      expect(sendBtn).toBeDisabled();
+      expect(sendBtn).toHaveAttribute(
+        "title",
+        "Completa al menos un teléfono o correo válido en Empresa y contacto antes de enviar.",
+      );
+      expect(screen.getByRole("button", { name: "Editar empresa y contacto" })).toBeInTheDocument();
+      expect(
+        screen.getByText("Completa al menos un teléfono o correo válido en Empresa y contacto antes de enviar."),
+      ).toBeVisible();
+      expect(requestsApi.updateStatus).not.toHaveBeenCalled();
+    });
+
+    // UX H2: the point of no return shows what is being remitted to the client.
+    it("shows company, proposal, value and contact channel before confirming the delivery", async () => {
+      renderPage("REQ-2026-0002");
+      fireEvent.click(await screen.findByRole("button", { name: /Enviar a cliente/i }));
+      const summary = await screen.findByLabelText("Resumen de lo que se remite al cliente");
+      expect(summary).toHaveTextContent("Empresa:");
+      expect(summary).toHaveTextContent("Propuesta:");
+      expect(summary).toHaveTextContent("Valor ofrecido:");
+      expect(summary).toHaveTextContent("Canal de contacto:");
+    });
+
+    // UX H3: the reason a disabled button is disabled is visible text, not only a tooltip.
+    it("says in visible text why the delivery is blocked while the leader has not confirmed", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+        proposalInStatus("IN_COSTING", {
+          company: { id: "comp-1", name: "Argos S.A.", email: "info@argos.co" },
+          economics: [{ id: "e1", isCurrent: true, grossValue: "20000000", readyForKam: false, readyForKamAt: null }],
+        }),
+      );
+      renderPage("REQ-2026-0002");
+      const sendBtn = await screen.findByRole("button", { name: /Enviar a cliente/i });
+      expect(sendBtn).toBeDisabled();
+      const reason = screen.getByText("El Líder de Producto aún no ha confirmado el envío del costeo", {
+        selector: "p",
+      });
+      expect(reason).toBeVisible();
+      expect(sendBtn).toHaveAttribute("aria-describedby", reason.id);
+    });
+
+    it("renders not found and does not deliver when apiProposal is null", async () => {
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
       renderPage("REQ-2026-0002");
 
-      const sendBtn = await screen.findByRole("button", { name: /Enviar a cliente/i });
-      fireEvent.click(sendBtn);
-
-      const confirmBtn = screen.getByRole("button", { name: /Sí, marcar entregada/i });
-      fireEvent.click(confirmBtn);
-
-      expect(authMock.updateRequest).toHaveBeenCalledWith(
-        "REQ-2026-0002",
-        expect.objectContaining({
-          status: "entregada",
-        }),
-      );
+      expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
       expect(requestsApi.updateStatus).not.toHaveBeenCalled();
     });
   });
@@ -809,28 +826,96 @@ describe("RequestDetail - KAM Management and Security (HUs 3.3, 3.4, 3.5)", () =
       expect(authMock.updateRequest).not.toHaveBeenCalled();
     });
 
-    it("falls back to local updateRequest when apiProposal is null", async () => {
+    it("requires completing a real customer channel before presenting a legacy proposal", async () => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+        proposalInStatus("IN_COSTING", {
+          economics: [{ id: "e1", isCurrent: true, grossValue: "20000000", readyForKam: true, readyForKamAt: null }],
+        }),
+      );
+      renderPage("REQ-2026-0002");
+      const sendBtn = await screen.findByRole("button", { name: /Enviar a cliente/i });
+      expect(sendBtn).toBeDisabled();
+      expect(sendBtn).toHaveAttribute(
+        "title",
+        "Completa al menos un teléfono o correo válido en Empresa y contacto antes de enviar.",
+      );
+      expect(screen.getByRole("button", { name: "Editar empresa y contacto" })).toBeInTheDocument();
+      expect(
+        screen.getByText("Completa al menos un teléfono o correo válido en Empresa y contacto antes de enviar."),
+      ).toBeVisible();
+      expect(requestsApi.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it("renders not found and does not return when apiProposal is null", async () => {
       vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
       renderPage("REQ-2026-0003");
 
-      const returnBtn = await screen.findByRole("button", { name: /Devolver con observaciones/i });
-      fireEvent.click(returnBtn);
-
-      const textarea = screen.getByLabelText(/Observaciones del cliente/i);
-      fireEvent.change(textarea, { target: { value: "Ajuste local mock" } });
-
-      const confirmBtn = screen.getByRole("button", { name: /Devolver a costeo/i });
-      fireEvent.click(confirmBtn);
-
-      expect(authMock.updateRequest).toHaveBeenCalledWith(
-        "REQ-2026-0003",
-        expect.objectContaining({
-          status: "en-costeo",
-          clientObservations: "Ajuste local mock",
-        }),
-      );
+      expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
       expect(requestsApi.updateStatus).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("RequestDetail - commercial follow-up chip in the header", () => {
+  beforeEach(() => {
+    authMock.user = { role: "kam", roleLabel: "KAM", name: "Andrea Martínez", email: "andrea@icesi.edu.co" };
+    authMock.requests = [...mockRequests];
+    vi.clearAllMocks();
+  });
+
+  it("shows [Entregada] → [● Facturada] as the quick selector for the owner KAM", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+      proposalInStatus("DELIVERED", { commercialStatus: "INVOICED", commercialStatusHistory: [] }),
+    );
+    renderPage("REQ-2026-0002");
+    const chip = await screen.findByRole("button", { name: "Cambiar seguimiento comercial: Facturada" });
+    expect(chip).toBeInTheDocument();
+    // The stage badge stays "Entregada"; the chip follows it after an arrow, in the same metadata row.
+    const row = chip.parentElement?.parentElement as HTMLElement;
+    expect(within(row).getByText("Entregada")).toBeInTheDocument();
+    expect(within(row).getByText("→")).toBeInTheDocument();
+  });
+
+  it("offers '+ Asignar estado' to the owner when the delivered proposal has no tag", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalInStatus("DELIVERED", { commercialStatus: null }));
+    renderPage("REQ-2026-0002");
+    expect(await screen.findByRole("button", { name: "Asignar seguimiento comercial" })).toBeInTheDocument();
+  });
+
+  it("shows the Product Leader the tag read-only: no button, no menu", async () => {
+    authMock.user = {
+      role: "lider-producto",
+      roleLabel: "Líder de Producto",
+      name: "Juan Pablo Corrales",
+      email: "jcorrales@icesi.edu.co",
+    };
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(
+      proposalInStatus("DELIVERED", { commercialStatus: "APPROVED_WITH_CONTRACT" }),
+    );
+    renderPage("REQ-2026-0002");
+    expect(await screen.findByText("Aprobada con contrato / Orden de servicio")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /seguimiento comercial/i })).not.toBeInTheDocument();
+  });
+
+  it("shows nothing extra to a Product Leader when the proposal has no tag", async () => {
+    authMock.user = {
+      role: "lider-producto",
+      roleLabel: "Líder de Producto",
+      name: "Juan Pablo Corrales",
+      email: "jcorrales@icesi.edu.co",
+    };
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalInStatus("DELIVERED", { commercialStatus: null }));
+    renderPage("REQ-2026-0002");
+    await screen.findByText("Equipo Asignado");
+    expect(screen.queryByText(/Asignar estado/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Presentación de propuesta")).not.toBeInTheDocument();
+  });
+
+  it("does not show the chip before the proposal is delivered", async () => {
+    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalInStatus("IN_COSTING", { commercialStatus: null }));
+    renderPage("REQ-2026-0002");
+    await screen.findByText("Equipo Asignado");
+    expect(screen.queryByText(/Asignar estado/)).not.toBeInTheDocument();
   });
 });
 
@@ -1186,23 +1271,18 @@ describe("RequestDetail - costing wiring (HU 5.1)", () => {
     );
   });
 
-  it("keeps a mock proposal on the local path: no request to the backend", async () => {
+  it("renders not found and does not update costing when apiProposal is null", async () => {
     vi.mocked(requestsApi.getById).mockResolvedValueOnce(null as unknown as ProposalDetail);
     renderPage("REQ-2026-0002");
 
-    await typeMarginPercent("35");
-
-    expect(authMock.updateCosting).toHaveBeenCalledWith(
-      "REQ-2026-0002",
-      expect.objectContaining({ expectedMarginPercent: 35 }),
-    );
+    expect(await screen.findByText("Solicitud no encontrada")).toBeInTheDocument();
     expect(requestsApi.upsertCosting).not.toHaveBeenCalled();
   });
 });
 
 describe("RequestDetail - negotiation history and returned notice (HU 5.4)", () => {
   const PROPOSAL_UUID = "9c858901-8a57-4791-81fe-4c455b099bc9";
-  const BANNER = "El cliente pidió ajustes — propuesta devuelta a costeo";
+  const BANNER = "Sustentación y ajustes — el cliente solicitó cambios";
 
   const round = (roundNumber: number, clientResponse: "PENDING" | "CHANGES_REQUESTED", clientNote: string | null) => ({
     id: `r${roundNumber}`,
@@ -1236,7 +1316,8 @@ describe("RequestDetail - negotiation history and returned notice (HU 5.4)", () 
       negotiationRounds: rounds,
     }) as unknown as ProposalDetail;
 
-  const roundCard = (n: number) => screen.getByText(`Ronda ${n}`).closest("div.rounded-lg") as HTMLElement;
+  const roundCard = (n: number) =>
+    screen.getByText(`Sustentación y ajuste ${n}`).closest("div.rounded-lg") as HTMLElement;
 
   beforeEach(() => {
     authMock.requests = [...mockRequests];
@@ -1262,30 +1343,36 @@ describe("RequestDetail - negotiation history and returned notice (HU 5.4)", () 
   it.each([
     ["ascending", threeRounds],
     ["descending", [...threeRounds].reverse()],
-  ])("marks 'Ronda vigente' on round 3 and 'Reemplazada' on round 2 with 3 rounds sent %s", async (_order, rounds) => {
-    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith(rounds));
-    renderPage("REQ-2026-0002");
+  ])(
+    "marks 'Sustentación y ajuste vigente' on round 3 and 'Reemplazada' on round 2 with 3 rounds sent %s",
+    async (_order, rounds) => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith(rounds));
+      renderPage("REQ-2026-0002");
 
-    await screen.findByText("Historial de Negociación");
-    expect(screen.getAllByText("Ronda vigente")).toHaveLength(1);
-    expect(within(roundCard(3)).getByText("Ronda vigente")).toBeInTheDocument();
-    expect(screen.getAllByText(/Reemplazada por una ronda posterior/)).toHaveLength(1);
-    expect(within(roundCard(2)).getByText(/Reemplazada por una ronda posterior/)).toBeInTheDocument();
-    expect(within(roundCard(1)).getByText("Devuelta por el cliente")).toBeInTheDocument();
-    expect(within(roundCard(1)).queryByText("Ronda vigente")).not.toBeInTheDocument();
-  });
+      await screen.findByText("Historial de Negociación");
+      expect(screen.getAllByText("Sustentación y ajuste vigente")).toHaveLength(1);
+      expect(within(roundCard(3)).getByText("Sustentación y ajuste vigente")).toBeInTheDocument();
+      expect(screen.getAllByText(/Reemplazada por un ajuste posterior/)).toHaveLength(1);
+      expect(within(roundCard(2)).getByText(/Reemplazada por un ajuste posterior/)).toBeInTheDocument();
+      expect(within(roundCard(1)).getByText("Devuelta por el cliente")).toBeInTheDocument();
+      expect(within(roundCard(1)).queryByText("Sustentación y ajuste vigente")).not.toBeInTheDocument();
+    },
+  );
 
   it.each([
     ["ascending", [round(1, "CHANGES_REQUESTED", "Bajar el precio"), round(2, "PENDING", null)]],
     ["descending", [round(2, "PENDING", null), round(1, "CHANGES_REQUESTED", "Bajar el precio")]],
-  ])("marks 'Ronda vigente' on round 2 and nothing is 'Reemplazada' with 2 rounds sent %s", async (_order, rounds) => {
-    vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith(rounds));
-    renderPage("REQ-2026-0002");
+  ])(
+    "marks 'Sustentación y ajuste vigente' on round 2 and nothing is 'Reemplazada' with 2 rounds sent %s",
+    async (_order, rounds) => {
+      vi.mocked(requestsApi.getById).mockResolvedValueOnce(proposalWith(rounds));
+      renderPage("REQ-2026-0002");
 
-    await screen.findByText("Historial de Negociación");
-    expect(within(roundCard(2)).getByText("Ronda vigente")).toBeInTheDocument();
-    expect(screen.queryByText(/Reemplazada por una ronda posterior/)).not.toBeInTheDocument();
-  });
+      await screen.findByText("Historial de Negociación");
+      expect(within(roundCard(2)).getByText("Sustentación y ajuste vigente")).toBeInTheDocument();
+      expect(screen.queryByText(/Reemplazada por un ajuste posterior/)).not.toBeInTheDocument();
+    },
+  );
 
   it("shows the banner while the latest round came back with changes", async () => {
     vi.mocked(requestsApi.getById).mockResolvedValueOnce(
@@ -1324,11 +1411,11 @@ describe("RequestDetail - negotiation history and returned notice (HU 5.4)", () 
     renderPage("REQ-2026-0002");
 
     await screen.findByText("Historial de Negociación");
-    expect(within(roundCard(1)).getByText(/entregada al cliente el/)).toHaveTextContent("22 de septiembre, 2026");
+    expect(within(roundCard(1)).getByText(/presentada al cliente el/)).toHaveTextContent("22 de septiembre, 2026");
     expect(within(roundCard(1)).getByText(/Devuelta el/)).toHaveTextContent("25 de septiembre, 2026");
-    expect(within(roundCard(2)).getByText("Cambios frente a la ronda anterior")).toBeInTheDocument();
+    expect(within(roundCard(2)).getByText("Cambios frente al ajuste anterior")).toBeInTheDocument();
     expect(within(roundCard(2)).getByText("Horas: 40 → 24")).toBeInTheDocument();
-    expect(within(roundCard(1)).queryByText("Cambios frente a la ronda anterior")).not.toBeInTheDocument();
+    expect(within(roundCard(1)).queryByText("Cambios frente al ajuste anterior")).not.toBeInTheDocument();
   });
 
   it("lists the price change and a scope field that was empty in the previous round", async () => {

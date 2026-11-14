@@ -38,20 +38,25 @@ describe("ThemeProvider", () => {
     expect(document.documentElement).not.toHaveClass("dark");
   });
 
-  it("opens in light mode even if dark was remembered before, and drops that key", () => {
+  it("restores dark mode when remembered in localStorage", () => {
     window.localStorage.setItem("icesi_theme_mode", "dark");
-    expect(mountProvider().current.theme).toBe("light");
-    expect(document.documentElement).not.toHaveClass("dark");
-    expect(window.localStorage.getItem("icesi_theme_mode")).toBeNull();
+    const theme = mountProvider();
+    expect(theme.current.theme).toBe("dark");
+    expect(document.documentElement).toHaveClass("dark");
   });
 
-  it("toggles dark mode for the current page without remembering it", () => {
+  it("toggles dark mode and persists the preference in localStorage", () => {
     const theme = mountProvider();
     expect(theme.current.theme).toBe("light");
     act(() => theme.current.toggleTheme());
     expect(theme.current.theme).toBe("dark");
     expect(document.documentElement).toHaveClass("dark");
-    expect(window.localStorage.getItem("icesi_theme_mode")).toBeNull();
+    expect(window.localStorage.getItem("icesi_theme_mode")).toBe("dark");
+
+    act(() => theme.current.toggleTheme());
+    expect(theme.current.theme).toBe("light");
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(window.localStorage.getItem("icesi_theme_mode")).toBe("light");
   });
 });
 
@@ -60,9 +65,7 @@ describe("systemTheme", () => {
     window.matchMedia = realMatchMedia;
   });
 
-  it("falls back to light when matchMedia is unavailable", () => {
-    // @ts-expect-error simulating an environment without matchMedia
-    window.matchMedia = undefined;
+  it("defaults to institutional light mode", () => {
     expect(systemTheme()).toBe("light");
   });
 });

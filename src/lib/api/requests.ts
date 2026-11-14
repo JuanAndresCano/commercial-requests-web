@@ -1,6 +1,7 @@
 import { apiRequest } from "./client";
 import type { Company, CompanyType } from "./companies";
 import type { ProfessorInput } from "./professors";
+import type { CommercialStatus, CommercialStatusChange } from "./commercial-status";
 
 export type { Company, CompanyType };
 
@@ -229,12 +230,21 @@ export interface ProposalAttachment {
 }
 
 export interface ProposalListItem {
+  /** Single commercial follow-up tag; it never replaces the operational status. */
+  commercialStatus?: CommercialStatus | null;
+  /** Exact last amount actually delivered to the client, provided by the API. */
+  deliveredValueCop?: string | null;
+  /** Times the client returned the proposal with observations ("Sustentación y ajuste N"). Optional: an older server omits it. */
+  adjustmentCount?: number;
+  /** True while the last return has not been presented to the client again. Optional: an older server omits it. */
+  hasPendingAdjustment?: boolean;
   id: string;
   code: string | null;
   companyId: string;
   contactId: string | null;
   /** The node is optional (C-06): a request may have none. */
   nodeId: string | null;
+  node?: ProposalNode | null;
   title: string | null;
   generalDescription: string | null;
   creatorId: string;
@@ -270,6 +280,7 @@ export interface ProposalListItem {
 }
 
 export interface ProposalDetail extends ProposalListItem {
+  commercialStatusHistory?: CommercialStatusChange[];
   contact: ProposalContact | null;
   additionalContacts?: ProposalAdditionalContact[];
   node: ProposalNode | null;
@@ -294,11 +305,320 @@ export interface ProposalStatusChange {
   changedAt: string;
 }
 
+export interface AdminDashboardTimeframe {
+  selectedYear: number;
+  selectedQuarter: number | null;
+  availableYears: number[];
+  startDate: string;
+  endDate: string;
+  minAvailableDate?: string;
+  maxAvailableDate?: string;
+}
+
+export interface AdminMacroKpis {
+  deliveredTotalCop: number;
+  pipelineTotalCop: number;
+  deliveredCount: number;
+  pipelineCount: number;
+  totalProposals: number;
+  winRatePercentage: number;
+  averageCycleDays: number;
+  wonTotalCop?: number;
+  wonCount?: number;
+  rejectedTotalCop?: number;
+  rejectedCount?: number;
+  targetCop?: number;
+  targetConversionRate?: number | null;
+  actualWinRatePercentage?: number;
+  conversionCompliancePercentage?: number;
+  targetProposals?: number;
+  targetCompliancePercentage?: number;
+  gapToTargetCop?: number;
+  deliveryRatePercentage?: number;
+  financialWinRatePercentage?: number;
+}
+
+export interface MonthlyDataPoint {
+  month: number;
+  monthName: string;
+  quotedCop: number;
+  wonCop: number;
+  pipelineCop: number;
+  proposalsQuotedCount: number;
+  proposalsWonCount: number;
+  targetCop: number;
+  targetProposals: number;
+  compliancePercentage: number;
+}
+
+export interface YoYComparisonPoint {
+  month: number;
+  monthName: string;
+  currentYearWonCop: number;
+  previousYearWonCop: number;
+  varianceCop: number;
+  growthPercentage: number;
+}
+
+export interface MonthlyTrendsData {
+  year: number;
+  previousYear: number;
+  annualTargetCop: number;
+  annualTargetProposals: number;
+  totalQuotedCop: number;
+  totalWonCop: number;
+  totalWonCount: number;
+  annualCompliancePercentage: number;
+  monthlyData: MonthlyDataPoint[];
+  yoyComparison: YoYComparisonPoint[];
+  previousYearSummary: {
+    year: number;
+    totalQuotedCop: number;
+    totalWonCop: number;
+    totalWonCount: number;
+  };
+}
+
+export interface FunnelStage {
+  stage: string;
+  label: string;
+  count: number;
+  totalCop: number;
+  percentage: number;
+}
+
+export interface KamRankingEntry {
+  kamId: string;
+  name: string;
+  email: string;
+  totalProposals: number;
+  deliveredCount: number;
+  deliveredTotalCop: number;
+  pipelineCount: number;
+  pipelineTotalCop: number;
+  wonCount?: number;
+  wonTotalCop?: number;
+  rejectedCount?: number;
+  winRatePercentage?: number;
+  actualWinRatePercentage?: number;
+  financialWinRatePercentage?: number;
+  averageTicketCop?: number;
+  targetCop?: number;
+  targetConversionRate?: number | null;
+  conversionCompliancePercentage?: number;
+  targetProposals?: number;
+  targetCompliancePercentage?: number;
+  shareOfTotalSalesPercentage?: number;
+}
+
+export interface KamSalesTargetSummary {
+  kamId: string;
+  kamName: string;
+  kamEmail: string;
+  annualTargetCop: number;
+  annualTargetConversionRate?: number | null;
+  annualTargetProposals: number;
+  monthlyTargets: Array<{
+    month: number;
+    targetCop: number;
+    targetConversionRate?: number | null;
+    targetProposals: number;
+  }>;
+}
+
+export interface UniversityTargetSummary {
+  annualTargetCop: number;
+  annualTargetConversionRate?: number | null;
+  annualTargetProposals: number;
+  monthlyTargets: Array<{
+    month: number;
+    targetCop: number;
+    targetConversionRate?: number | null;
+    targetProposals: number;
+  }>;
+}
+
+export interface SalesTargetsResponse {
+  year: number;
+  universityTarget?: UniversityTargetSummary;
+  centerTarget: UniversityTargetSummary;
+  kamTargets: KamSalesTargetSummary[];
+}
+
+export interface SalesTargetEntryInput {
+  month?: number | null;
+  kamId?: string | null;
+  targetCop: number;
+  targetConversionRate?: number | null;
+  targetProposals?: number | null;
+}
+
+export interface UpsertSalesTargetsPayload {
+  year: number;
+  targets: SalesTargetEntryInput[];
+}
+
+export interface NodeDistributionEntry {
+  nodeId: string;
+  name: string;
+  totalProposals: number;
+  deliveredTotalCop: number;
+  pipelineTotalCop: number;
+  wonTotalCop?: number;
+  wonCount?: number;
+  winRatePercentage?: number;
+  shareOfTotalSalesPercentage?: number;
+  avgTechnicalDesignDays?: number | null;
+  avgCostingDays?: number | null;
+}
+
+export interface ProductLeaderEntry {
+  leaderId: string;
+  name: string;
+  email: string;
+  totalAssigned: number;
+  quotedTotalCop: number;
+  wonTotalCop: number;
+  wonCount: number;
+  winRatePercentage: number;
+  shareOfTotalSalesPercentage?: number;
+}
+
+export interface ServiceMixEntry {
+  category: string;
+  label: string;
+  proposalsCount: number;
+  quotedCop: number;
+  wonCop: number;
+  wonCount: number;
+  shareOfWonPercentage: number;
+}
+
+export interface AdminDashboardData {
+  timeframe: AdminDashboardTimeframe;
+  macroKpis: AdminMacroKpis;
+  conversionFunnel: FunnelStage[];
+  kamRanking: KamRankingEntry[];
+  nodeDistribution: NodeDistributionEntry[];
+  productLeaders?: ProductLeaderEntry[];
+  serviceMix?: ServiceMixEntry[];
+}
+
+export interface CompanyListItem {
+  id: string;
+  name: string;
+  nit: string | null;
+  sector: string | null;
+  type?: string | null;
+  totalProposals: number;
+  deliveredCount: number;
+  deliveredTotalCop: number;
+  pipelineTotalCop: number;
+  wonCount?: number;
+  wonTotalCop?: number;
+  winRatePercentage?: number;
+}
+
+export interface CompanyTimelineEvent {
+  proposalId: string;
+  code: string;
+  title: string;
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  year: number;
+  quarter: number | string;
+  statusCode?: string;
+  status?: string;
+  statusLabel?: string;
+  commercialStatus?: string | null;
+  commercialStatusLabel?: string | null;
+  grossValue?: number;
+  estimatedValueCop?: number;
+  nodeName: string;
+  kamName?: string;
+  kam?: { id: string; name: string; email?: string };
+  leaderName?: string;
+  academicLeaderName?: string;
+  professorName?: string | null;
+  assignedDocenteName?: string | null;
+  programType?: string | null;
+  serviceType?: string;
+  modality?: string | null;
+  totalHours?: number;
+  participants?: number;
+}
+
+export interface Company360Impact {
+  totalHours?: number;
+  totalParticipants?: number;
+  successMetrics: string[];
+  expectedResults: string[];
+  competencies: string[];
+}
+
+export interface CompanyNodeBreakdown {
+  nodeId: string;
+  nodeName: string;
+  proposalsCount: number;
+  deliveredCount?: number;
+  deliveredCop?: number;
+  pipelineCop?: number;
+  totalValueCop?: number;
+}
+
+export interface Company360Response {
+  company: {
+    id: string;
+    name: string;
+    nit: string | null;
+    sector: string | null;
+    ciiuCode: string | null;
+    type: string | null;
+    description: string | null;
+    website: string | null;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    contacts: Array<{
+      id?: string;
+      name: string | null;
+      role: string | null;
+      areaDependency?: string | null;
+      email: string | null;
+      phone: string | null;
+    }>;
+  };
+  metrics: {
+    totalProposals: number;
+    deliveredCount: number;
+    pipelineCount: number;
+    deliveredTotalCop: number;
+    pipelineTotalCop: number;
+    totalPortfolioCop?: number;
+    wonCount?: number;
+    wonTotalCop?: number;
+    winRatePercentage?: number;
+    averageTicketCop?: number;
+    totalHours: number;
+    impactedParticipants: number;
+    activeNodesCount: number;
+    firstEngagementDate: string | null;
+    lastEngagementDate: string | null;
+    impact?: Company360Impact;
+  };
+  timeline: CompanyTimelineEvent[];
+  impact: Company360Impact;
+  nodeBreakdown: CompanyNodeBreakdown[];
+}
+
 export interface ProposalDashboardMetrics {
   total: number;
   nuevas: number;
   listas: number;
   entregadas: number;
+  /** Exact COP decimal: one last client-facing value per currently delivered proposal. */
+  deliveredValueCop: string;
   urgentes: number;
   proximas: number;
   sinDocente: number;
@@ -309,6 +629,10 @@ export interface ProposalDashboardMetrics {
 }
 
 export interface RequestsQueryParams {
+  commercialStatus?: CommercialStatus | "none";
+  creatorId?: string;
+  companyId?: string;
+  nodeId?: string;
   q?: string;
   status?: string;
   urgency?: "urgente" | "proximo" | "sinfecha" | "all";
@@ -469,9 +793,109 @@ export const requestsApi = {
   /** Retrieves aggregated KPI metrics for the authenticated user based on role */
   getDashboardMetrics: () => apiRequest<ProposalDashboardMetrics>("/requests/dashboard/metrics"),
 
+  /** Retrieves summary of all companies for executive admin review */
+  getAdminCompanies: () => apiRequest<CompanyListItem[]>("/requests/dashboard/admin/companies"),
+
+  /** Retrieves full 360-degree account intelligence, timeline and impact for a company */
+  getAdminCompany360: (companyId: string) =>
+    apiRequest<Company360Response>(`/requests/dashboard/admin/company/${companyId}`),
+
+  /** Retrieves executive dashboard analytics for administrators */
+  getAdminDashboard: (params?: { year?: number; quarter?: number; month?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.year) search.set("year", String(params.year));
+    if (params?.quarter) search.set("quarter", String(params.quarter));
+    if (params?.month) search.set("month", String(params.month));
+    const qs = search.toString();
+    return apiRequest<AdminDashboardData>(`/requests/dashboard/admin${qs ? `?${qs}` : ""}`);
+  },
+
+  /** Retrieves monthly sales and quoting trends plus YoY comparison */
+  getMonthlyTrends: async (year?: number) => {
+    const qs = year ? `?year=${year}` : "";
+    const res = await apiRequest<Record<string, unknown>>(`/requests/dashboard/admin/monthly-trends${qs}`);
+    const monthlyData = Array.isArray(res.monthlyData) ? (res.monthlyData as MonthlyTrendsData["monthlyData"]) : [];
+    const prevComparison = res.previousYearComparison as
+      | {
+          year?: number;
+          totalQuotedCop?: number;
+          totalWonCop?: number;
+          totalWonCount?: number;
+          monthlyWonCop?: number[];
+        }
+      | undefined;
+    const annualSummary = res.annualSummary as
+      | {
+          totalQuotedCop?: number;
+          totalWonCop?: number;
+          totalWonCount?: number;
+          annualTargetCop?: number;
+          annualTargetProposals?: number;
+          annualCompliancePercentage?: number;
+        }
+      | undefined;
+
+    const yoyComparison =
+      Array.isArray(res.yoyComparison) && res.yoyComparison.length > 0
+        ? (res.yoyComparison as MonthlyTrendsData["yoyComparison"])
+        : monthlyData.map((d, i) => {
+            const prev = prevComparison?.monthlyWonCop?.[i] ?? 0;
+            return {
+              month: d.month,
+              monthName: d.monthName,
+              currentYearWonCop: d.wonCop,
+              previousYearWonCop: prev,
+              varianceCop: d.wonCop - prev,
+              growthPercentage: 0,
+            };
+          });
+
+    const normalized: MonthlyTrendsData = {
+      year: (res.year as number) ?? new Date().getFullYear(),
+      previousYear:
+        (res.previousYear as number) ?? (typeof res.year === "number" ? res.year - 1 : new Date().getFullYear() - 1),
+      annualTargetCop: (res.annualTargetCop as number) ?? annualSummary?.annualTargetCop ?? 0,
+      annualTargetProposals: (res.annualTargetProposals as number) ?? annualSummary?.annualTargetProposals ?? 0,
+      totalQuotedCop: (res.totalQuotedCop as number) ?? annualSummary?.totalQuotedCop ?? 0,
+      totalWonCop: (res.totalWonCop as number) ?? annualSummary?.totalWonCop ?? 0,
+      totalWonCount: (res.totalWonCount as number) ?? annualSummary?.totalWonCount ?? 0,
+      annualCompliancePercentage:
+        (res.annualCompliancePercentage as number) ?? annualSummary?.annualCompliancePercentage ?? 0,
+      monthlyData,
+      yoyComparison,
+      previousYearSummary: (res.previousYearSummary as MonthlyTrendsData["previousYearSummary"]) ?? {
+        year: prevComparison?.year ?? (typeof res.year === "number" ? res.year - 1 : new Date().getFullYear() - 1),
+        totalQuotedCop: prevComparison?.totalQuotedCop ?? 0,
+        totalWonCop: prevComparison?.totalWonCop ?? 0,
+        totalWonCount: prevComparison?.totalWonCount ?? 0,
+      },
+    };
+    return normalized;
+  },
+
+  /** Retrieves annual and monthly sales targets for the center and KAMs */
+  getSalesTargets: (year?: number, kamId?: string) => {
+    const search = new URLSearchParams();
+    if (year) search.set("year", String(year));
+    if (kamId) search.set("kamId", kamId);
+    const qs = search.toString();
+    return apiRequest<SalesTargetsResponse>(`/requests/dashboard/admin/sales-targets${qs ? `?${qs}` : ""}`);
+  },
+
+  /** Creates or updates sales targets for the center and KAMs */
+  upsertSalesTargets: (payload: UpsertSalesTargetsPayload) =>
+    apiRequest<SalesTargetsResponse>("/requests/dashboard/admin/sales-targets", {
+      method: "PUT",
+      body: payload,
+    }),
+
   /** Retrieves filtered list of proposals */
   list: (params: RequestsQueryParams = {}) => {
     const search = new URLSearchParams();
+    if (params.commercialStatus) search.set("commercialStatus", params.commercialStatus);
+    if (params.creatorId) search.set("creatorId", params.creatorId);
+    if (params.companyId) search.set("companyId", params.companyId);
+    if (params.nodeId) search.set("nodeId", params.nodeId);
     if (params.q) search.set("q", params.q);
     if (params.status && params.status !== "all") search.set("status", params.status);
     if (params.urgency && params.urgency !== "all") search.set("urgency", params.urgency);

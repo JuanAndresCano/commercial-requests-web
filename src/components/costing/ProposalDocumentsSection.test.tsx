@@ -58,4 +58,40 @@ describe("ProposalDocumentsSection .xlsm handling", () => {
     expect(onUploadFile).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith("La Propuesta Comercial requiere formato Word (.docx) o PDF (.pdf)");
   });
+
+  it("renders read-only audit mode for administrator role (no file inputs or dropzones)", () => {
+    const { container } = render(
+      <ProposalDocumentsSection
+        clientKamDocuments={[
+          {
+            id: "doc-1",
+            category: "client_kam",
+            name: "Propuesta_Comercial.pdf",
+            type: "pdf",
+            size: "1.2 MB",
+            date: "10/02/2026",
+            canDelete: true,
+          },
+        ]}
+        internalCostingDocuments={[]}
+        onUploadFile={onUploadFile}
+        onRemoveDocument={vi.fn()}
+        onDownloadDocument={vi.fn()}
+        userRole="administrador"
+      />,
+    );
+
+    // Shows audit badge
+    expect(screen.getByText(/Auditoría · Solo lectura/i)).toBeInTheDocument();
+
+    // No file input or upload dropzones
+    expect(fileInputs(container).length).toBe(0);
+
+    // No delete buttons
+    expect(screen.queryByTitle("Eliminar archivo")).not.toBeInTheDocument();
+
+    // Allows viewing/downloading document
+    expect(screen.getByText("Propuesta_Comercial.pdf")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Descargar/i })).toBeInTheDocument();
+  });
 });

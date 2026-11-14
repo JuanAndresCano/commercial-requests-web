@@ -15,6 +15,12 @@ src/
 │   └── ThemeContext.tsx       # Tema claro/oscuro
 ├── lib/
 │   ├── mock-data.ts           # Todo el "modelo de datos" + datos semilla + cálculos
+│   ├── commercial-status.ts   # Etiquetas, tema (clases Tailwind), filtro y suma exacta del total entregado
+│   ├── adjustments.ts         # Regla única de «Sustentación y ajustes» (pending/resent/none), filtro, textos de la insignia
+│   ├── customer-contact.ts    # «Pendiente» = ausencia, regla de teléfono, contactabilidad, mensajes del servidor
+│   ├── ciiu.ts / nit.ts       # CIIU de 4 dígitos; NIT de 9/10 dígitos con cálculo del dígito de verificación (front)
+│   ├── cop-total.ts           # Formatea el decimal COP del servidor sin pasarlo por `number`
+│   ├── api/commercial-status.ts / api/customer.ts # Clientes de PATCH /requests/:id/commercial-status y /customer
 │   ├── app-router/            # Fachada de navegación (Link, useRouter, usePathname, useSearchParams, useParams) sobre next/link y next/navigation
 │   └── utils.ts                # helper cn() (clsx + tailwind-merge)
 ├── views/                     # Una vista por ruta (antes src/pages; las páginas de src/app las cargan con dynamic ssr:false; ver tabla abajo)
@@ -27,7 +33,12 @@ src/
 │   ├── ReassignLeaderDialog.tsx # Modal compartido de reasignación de Líder de Producto (antes triplicado, ver `07` gap #9)
 │   ├── ScrollToTop.tsx         # Resetea el scroll a (0,0) en cada cambio de ruta (ver `07` gap #19)
 │   ├── RoleBadge.tsx           # Insignia de rol junto al saludo ("Hola, X [Rol]") — 1 solo color, reutilizada en 3 pantallas
-│   ├── StatusBadge.tsx         # Badge de estado + badge de urgencia
+│   ├── StatusBadge.tsx         # Badge de estado + badge de urgencia (+ aviso «Sustentación y ajustes» con la prop `pendingAdjustment`)
+│   ├── CommercialStatusChip.tsx   # Chip de seguimiento comercial (menú para el KAM dueño; estático para el resto)
+│   ├── CommercialStatusPanel.tsx  # Bloque «Seguimiento comercial» del detalle: historial de etiquetas
+│   ├── CustomerInfoEditor.tsx     # Botón + diálogo «Editar empresa y contacto» (PATCH /requests/:id/customer)
+│   ├── ResentAdjustmentBadge.tsx  # Insignia neutra «↻ N ajustes» de propuestas ya reenviadas
+│   ├── OfflineBanner.tsx          # Banner global «Sin conexión» (montado en AppShell y en NewRequest)
 │   ├── IcesiLogo.tsx           # Logo, símbolo y "cenefa" de marca Icesi (SVG)
 │   ├── ThemeToggle.tsx         # Switch de tema (variantes icon/pill, con o sin etiqueta)
 │   ├── NavLink.tsx
@@ -35,7 +46,8 @@ src/
 │   │   ├── KanbanColumn.tsx    # Columna de Kanban genérica y reutilizable (usada por los 3 tableros)
 │   │   └── StageKpiCard.tsx    # Tarjeta KPI genérica y reutilizable (usada por los 2 dashboards)
 │   ├── dashboard/
-│   │   ├── KamCommandCenter.tsx       # Dashboard específico de KAM
+│   │   ├── KamCommandCenter.tsx       # Dashboard específico de KAM (filtros de etiqueta y de ajustes, total entregado)
+│   │   ├── AdjustmentFilterControls.tsx # `AdjustmentFilterSelect` y `PendingAdjustmentsCounter`, compartidos por los dos tableros
 │   │   └── ProductLeaderDashboard.tsx # Dashboard específico de Líder de Producto
 │   ├── costing/
 │   │   ├── ProposalCostingModule.tsx      # Módulo interactivo de costeo (solo Líder de Producto)
@@ -69,7 +81,7 @@ Archivos de ruta bajo `src/app/` (Next): `/` → `page.tsx`, `/login` → `login
 ### Journey KAM
 - `KamCommandCenter.tsx` — dashboard con KPIs clicables + tabla de actividad.
 - `NewRequest.tsx` — wizard completo, incluye subcomponentes internos `Step1`..`Step5`, `Field`, `RadioGroup`, `SectionHeader`, `SuccessScreen` (todos definidos dentro del mismo archivo, no exportados aparte).
-- `RequestDetail.tsx` (rama KAM) — tarjeta de propuesta económica de solo lectura, tarjeta "Equipo Asignado", sección colapsable "Información completa de la solicitud" (editable solo por el KAM dueño mientras el estado es "Nueva" y no haya docente asignado, vía modal con 6 pestañas). También ve (compartida con Líder de Producto) la tarjeta lateral "Especificaciones del Servicio", que ya lee los datos reales capturados en el wizard (`horas`, `modalidad`, `participantes`) — el gap que documentaba valores hardcodeados ("60 horas", "Híbrida") ya está resuelto.
+- `RequestDetail.tsx` (rama KAM) — tarjeta de propuesta económica de solo lectura, tarjeta "Equipo Asignado", sección colapsable "Información completa de la solicitud" (formulario completo editable solo por el KAM dueño mientras el estado es "Nueva" y no haya docente asignado, vía modal con 6 pestañas; empresa y contacto, además, con `CustomerInfoEditor` hasta la entrega y durante ajustes) y, si está entregada, chip de etiqueta comercial + `CommercialStatusPanel`. También ve (compartida con Líder de Producto) la tarjeta lateral "Especificaciones del Servicio", que ya lee los datos reales capturados en el wizard (`horas`, `modalidad`, `participantes`) — el gap que documentaba valores hardcodeados ("60 horas", "Híbrida") ya está resuelto.
 
 ### Journey Líder de Producto
 - `ProductLeaderDashboard.tsx` — Kanban de 4 columnas con KPIs-filtro y acciones de avance inline.
@@ -84,6 +96,25 @@ Archivos de ruta bajo `src/app/` (Next): `/` → `page.tsx`, `/login` → `login
 - `KanbanColumn.tsx` / `StageKpiCard.tsx` — genéricos, parametrizados por `RequestStatus` vía `STAGE_THEME` (`kanban-theme.ts`). `KanbanColumn` soporta un modo `isolated` (una sola columna a ancho completo, tarjetas en cuadrícula de hasta 3 por fila) usado cuando el usuario "aísla" una fase desde una tarjeta KPI en vista Kanban.
 - `StatusBadge.tsx` — exporta `StatusBadge` (por `RequestStatus`) y `UrgencyBadge` (por `Urgency`).
 - `ProposalDocumentsSection.tsx` — usado en el detalle para ambos roles (con matices de permisos vía prop `userRole`).
+
+## Seguimiento comercial, ajustes y datos del cliente (2026-11-06)
+
+Reglas en [`13-acuerdos-finales-2026-11-06.md`](13-acuerdos-finales-2026-11-06.md); datos en `04`.
+
+| Componente / archivo | Qué hace | Dónde se monta |
+|---|---|---|
+| `CommercialStatusChip` | Punto de color + etiqueta. Con `canEdit` (KAM dueño, propuesta entregada) es un botón con menú radio de las 4 etiquetas y «Quitar etiqueta»; actualización optimista con reversión y toasts; invalida `requests` y `dashboard-metrics`. Sin permiso: chip estático (sin etiqueta muestra «Presentación de propuesta»; el KAM dueño ve «+ Asignar estado»). Detiene el clic para no navegar a la tarjeta. | `RequestCard` (solo `status === "entregada"`), tabla de `KamCommandCenter`, cabecera de `RequestDetail` (tras la etapa, si la propuesta está entregada y hay permiso o etiqueta) |
+| `CommercialStatusPanel` | Bloque «Seguimiento comercial»: texto aclaratorio e «Historial de etiquetas» (anterior → nueva, quién, cuándo). Se renderiza solo con la propuesta `DELIVERED` y para el KAM dueño o el Líder de Producto. No contiene el selector (está en el chip de la cabecera). | `RequestDetail` |
+| `AdjustmentFilterSelect` | Lista nativa «Sustentación y ajustes» (Todas / Pendientes / Ya reenviadas / Sin ajustes) con punto de color y «Quitar ajustes». | `KamCommandCenter` y `ProductLeaderDashboard` |
+| `PendingAdjustmentsCounter` | Botón-píldora ámbar «N en sustentación y ajustes» con `aria-pressed`; un clic filtra solo las pendientes. | Encabezado de ambos tableros |
+| `ResentAdjustmentBadge` | Insignia neutra «↻ N ajustes» (solo estado `resent`). El ámbar queda reservado para el aviso pendiente. | `RequestCard`, tabla KAM y Kanban del Líder (columna Entregada) |
+| `StatusBadge` | Nueva prop `pendingAdjustment`: agrega el aviso «Sustentación y ajustes» junto a la etapa. | Detalle y tabla del Líder |
+| `CustomerInfoEditor` | Botón «Editar empresa y contacto» + diálogo «Empresa y contacto de la solicitud» (16 campos de texto, naturaleza jurídica, CIIU secundarios). Exige la razón social; valida teléfonos, correos, NIT y CIIU solo si el KAM los cambió; avisa si falta un canal válido; manda solo los campos cambiados. | `RequestDetail`, sección «Información completa de la solicitud», cuando `canEditCustomer && !canEditFullInfo` |
+| Modal «Editar información» (en `RequestDetail.tsx`, no es archivo aparte) | Modal de 6 pestañas del formulario completo; solo en «Nueva» sin docente (KAM dueño) o Líder tras rechazo. **Un solo botón de edición a la vez**: «Editar información» si aplica el modal; si no, «Editar empresa y contacto». Los puntos rojos marcan las pestañas Empresa/Contacto con error. | `RequestDetail` |
+| `OfflineBanner` | Franja ámbar con `role="status"` «Sin conexión. Tus cambios no se guardarán hasta que vuelva internet.» según `navigator.onLine`. | `AppShell` y el asistente `NewRequest` |
+| `StageKpiCard` | Cambio: expone `aria-pressed={active}`. En la tarjeta «Entregada» de `KamCommandCenter` la línea secundaria muestra «$ X total entregado» o «Filtradas: N de M · $ Y» (ver `03`, A.9). | Ambos tableros |
+
+Lectura de lo que ve cada rol: el Líder ve el chip solo en el detalle (las tarjetas del Líder no lo muestran); el Líder y el KAM ven el aviso/insignia de ajustes en sus tableros.
 
 ## Navegación por rol (`AppShell.tsx`, función `navItems`)
 

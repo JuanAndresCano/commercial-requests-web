@@ -19,6 +19,16 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 
+// jsdom 20 bundles nwsapi 2.2.x, whose `:modal` matcher recurses into jsdom's own `matches` until the
+// stack overflows (the RangeError is swallowed, so the result is `false`, but each call costs ~200 ms).
+// @floating-ui (Radix Popper: DropdownMenu, Popover, Select, Tooltip...) calls `el.matches(":modal")`
+// many times per positioning pass, which made every open menu take 10-15 s. jsdom has no native modal
+// <dialog> support, so `false` is exactly what the call already returned; this only skips the overflow.
+const nativeMatches = Element.prototype.matches;
+Element.prototype.matches = function matches(this: Element, selector: string) {
+  return selector === ":modal" ? false : nativeMatches.call(this, selector);
+};
+
 window.HTMLElement.prototype.scrollIntoView = () => {};
 window.HTMLElement.prototype.hasPointerCapture = () => false;
 window.HTMLElement.prototype.setPointerCapture = () => {};

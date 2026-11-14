@@ -12,9 +12,19 @@ interface ProposalCostingModuleProps {
   request: RequestItem;
   onUpdateCosting: (newCosting: ProposalCosting) => void;
   isReadOnly?: boolean;
+  /** Hora del último guardado confirmado por el servidor (HH:MM), si la hay. */
+  savedAt?: string | null;
+  /** true mientras el costeo se está enviando al servidor. */
+  isSaving?: boolean;
 }
 
-export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = false }: ProposalCostingModuleProps) {
+export function ProposalCostingModule({
+  request,
+  onUpdateCosting,
+  isReadOnly = false,
+  savedAt = null,
+  isSaving = false,
+}: ProposalCostingModuleProps) {
   const reqType = request.type;
   const isCapacitacion = reqType === "Capacitación";
 
@@ -157,6 +167,11 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
           <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">
             Registro directo del valor final de la propuesta comercial
           </p>
+          {(isSaving || savedAt) && (
+            <p role="status" className="mt-1 text-xs text-muted-foreground">
+              {isSaving ? "Guardando…" : `Guardado a las ${savedAt}`}
+            </p>
+          )}
         </div>
 
         <Badge
@@ -193,11 +208,11 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
               />
             </div>
             {draft.invalid.total ? (
-              <p className="text-[11px] text-destructive font-mono">
+              <p className="text-xs text-destructive font-mono">
                 Valor no válido, no se guardó. Escribe solo números, por ejemplo $32.000.000
               </p>
             ) : (
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-xs text-slate-400 font-mono">
                 Equivale a {formatCopPreview(totalOfferedCop)} COP — valor oficial para presentación al cliente
               </p>
             )}
@@ -233,7 +248,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                     )}
                   </div>
                   {advisorSubtitle && (
-                    <span className="text-[11px] text-slate-500 dark:text-muted-foreground block truncate">
+                    <span className="text-xs text-slate-500 dark:text-muted-foreground block truncate">
                       {advisorSubtitle}
                     </span>
                   )}
@@ -245,13 +260,13 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                   docente en ese punto sin dejar rastro fue el bug encontrado. El
                   historial completo vive en la tarjeta "Docente / Asesor". */}
               <span
-                className="text-muted-foreground text-[11px] inline-flex items-center gap-0.5 shrink-0 italic"
+                className="text-muted-foreground text-xs inline-flex items-center gap-0.5 shrink-0 italic"
                 title='No editable desde el costeo: la solicitud ya pasó por "En proceso por experto"'
               >
                 No editable
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-400">
               Derivado del docente/asesor asignado en "Equipo Asignado" — ya no es un campo independiente del costeo.
             </p>
           </div>
@@ -283,7 +298,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
               <div
                 data-testid="margin-percent-message"
                 aria-live="polite"
-                className="mt-1 min-h-[2.75em] text-[11px] leading-snug"
+                className="mt-1 min-h-[2.75em] text-xs leading-snug"
               >
                 {draft.invalid.percent ? (
                   <p className="text-destructive">El % debe estar entre 0 y 100, no se guardó</p>
@@ -310,7 +325,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                 />
               </div>
               {draft.invalid.amount && (
-                <p className="text-[11px] text-destructive leading-snug">Valor no válido, no se guardó</p>
+                <p className="text-xs text-destructive leading-snug">Valor no válido, no se guardó</p>
               )}
               {/* Referencia calculada, no editable y no guardada (docs/04):
                   el margen manual y el valor final siguen siendo campos
@@ -321,11 +336,11 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                 <div className="space-y-0.5">
                   <p
                     data-testid="margin-base-caption"
-                    className="text-[11px] text-slate-500 dark:text-muted-foreground leading-snug"
+                    className="text-xs text-slate-500 dark:text-muted-foreground leading-snug"
                   >
                     El porcentaje se calcula sobre el valor final ofrecido al cliente, no sobre el costo.
                   </p>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">
                     {marginPercent ?? 0}% de {formatCop(totalOfferedCop)} ={" "}
                     <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
                       {formatCop(marginReferenceAmount)}
@@ -335,7 +350,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
               </div>
             </div>
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-xs text-slate-400">
             El % y el valor en pesos son campos informativos independientes — no se recalculan entre sí ni afectan el
             valor final de la propuesta.
           </p>
@@ -343,7 +358,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
 
         {/* 3. DESGLOSE FINANCIERO INLINE EN UNA TABLA / LISTA LIMPIA DE RESUMEN */}
         <div className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-4 dark:border-border dark:bg-secondary/15 space-y-2.5">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-muted-foreground pb-1 border-b border-slate-200/60 dark:border-border">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-muted-foreground pb-1 border-b border-slate-200/60 dark:border-border">
             Desglose Financiero de la Propuesta
           </div>
 
@@ -354,7 +369,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
                 <span className="text-xs uppercase tracking-wider font-semibold text-slate-900 dark:text-slate-100 block">
                   Valor Final de la Propuesta
                 </span>
-                <span className="text-[11px] text-slate-500 dark:text-muted-foreground block">
+                <span className="text-xs text-slate-500 dark:text-muted-foreground block">
                   Valor oficial para presentación al cliente (COP)
                 </span>
               </div>
@@ -367,7 +382,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
             <div className="flex items-center justify-between py-2">
               <div className="flex items-center gap-1.5">
                 <span className="text-slate-600 dark:text-slate-400">Margen de Contribución</span>
-                <span className="text-[11px] text-slate-400">({marginPercent ?? 0}%)</span>
+                <span className="text-xs text-slate-400">({marginPercent ?? 0}%)</span>
               </div>
               <span className="font-mono font-medium text-emerald-700 dark:text-emerald-400">
                 {formatCop(marginAmountCop ?? 0)}
@@ -394,7 +409,7 @@ export function ProposalCostingModule({ request, onUpdateCosting, isReadOnly = f
           </div>
 
           {isCapacitacion && (
-            <p className="text-[11px] text-slate-400 flex items-start gap-1.5 pt-1">
+            <p className="text-xs text-slate-400 flex items-start gap-1.5 pt-1">
               <ShieldCheck className="h-3 w-3 shrink-0 mt-0.5" />
               Referencia Pro-Cultura (1.5%): {formatCop(proCulturaTaxAmount)} — ya debe estar contemplado en tu valor
               final. No se suma ni se resta automáticamente.

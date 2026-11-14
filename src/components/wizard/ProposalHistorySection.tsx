@@ -13,9 +13,9 @@ import {
 import { Clock, Eye, FileText, History, Info, Search, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { STATUS_META, URGENCY_META, formatCop, type RequestItem } from "@/lib/mock-data";
-import { useAuth } from "@/context/AuthContext";
 import { useRequests } from "@/hooks/use-requests";
 import { mapProposalToRequestItem } from "@/lib/proposal-adapter";
+import type { ProposalListItem } from "@/lib/api/requests";
 import { findCompanyProposals, parseHistorySearchTerm } from "@/lib/proposal-history";
 
 /**
@@ -27,11 +27,12 @@ import { findCompanyProposals, parseHistorySearchTerm } from "@/lib/proposal-his
 export function ProposalHistorySection({
   empresaNombre,
   empresaNit = "",
+  requests,
 }: {
   empresaNombre: string;
   empresaNit?: string;
+  requests?: RequestItem[];
 }) {
-  const { requests } = useAuth();
   const { data: apiProposals } = useRequests();
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [proposalTab, setProposalTab] = useState<"todas" | "entregadas" | "en_proceso">("todas");
@@ -39,9 +40,23 @@ export function ProposalHistorySection({
 
   const allRequests = useMemo(() => {
     if (apiProposals && apiProposals.length > 0) {
-      return apiProposals.map((p) => mapProposalToRequestItem(p));
+      return (apiProposals as unknown[]).map((p) => {
+        if (
+          p &&
+          typeof p === "object" &&
+          ("workflow" in p ||
+            "assignments" in p ||
+            ("company" in p && typeof (p as Record<string, unknown>).company === "object"))
+        ) {
+          return mapProposalToRequestItem(p as ProposalListItem);
+        }
+        return p as RequestItem;
+      });
     }
-    return requests;
+    if (requests && requests.length > 0) {
+      return requests;
+    }
+    return [];
   }, [apiProposals, requests]);
 
   // Lo escrito en el buscador reemplaza a la empresa (nombre y NIT) del asistente.
@@ -186,7 +201,7 @@ export function ProposalHistorySection({
                             <span className="font-mono text-xs font-bold text-foreground">{item.code ?? item.id}</span>
                             <span
                               className={cn(
-                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border",
+                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold border",
                                 statusInfo.tone,
                               )}
                             >
@@ -201,7 +216,7 @@ export function ProposalHistorySection({
                             >
                               Urgencia: {urgencyInfo.label}
                             </span>
-                            <span className="text-[11px] text-muted-foreground font-medium bg-secondary px-2 py-0.5 rounded">
+                            <span className="text-xs text-muted-foreground font-medium bg-secondary px-2 py-0.5 rounded">
                               {item.type}
                             </span>
                           </div>
@@ -258,7 +273,7 @@ export function ProposalHistorySection({
               <p className="text-xs font-medium text-foreground">
                 No se encontraron propuestas registradas para &ldquo;{consultedLabel}&rdquo;
               </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 No constan propuestas previas entregadas ni solicitudes en curso para esta entidad.
               </p>
             </div>
@@ -292,7 +307,7 @@ export function ProposalHistorySection({
               {selectedProposalModal && (
                 <span
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border",
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold border",
                     STATUS_META[selectedProposalModal.status].tone,
                   )}
                 >
@@ -313,27 +328,27 @@ export function ProposalHistorySection({
             <div className="space-y-4 py-2 text-xs">
               <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-secondary/30 p-3">
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">Tipo de Requerimiento</span>
+                  <span className="text-muted-foreground block text-xs">Tipo de Requerimiento</span>
                   <span className="font-semibold text-foreground">{selectedProposalModal.type}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">Nivel de Urgencia</span>
+                  <span className="text-muted-foreground block text-xs">Nivel de Urgencia</span>
                   <span className="font-semibold text-foreground capitalize">{selectedProposalModal.urgency}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">Nodo Asignado</span>
+                  <span className="text-muted-foreground block text-xs">Nodo Asignado</span>
                   <span className="font-semibold text-foreground">{selectedProposalModal.node}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">Líder de Producto</span>
+                  <span className="text-muted-foreground block text-xs">Líder de Producto</span>
                   <span className="font-semibold text-foreground">{selectedProposalModal.productLeader}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">KAM a cargo</span>
+                  <span className="text-muted-foreground block text-xs">KAM a cargo</span>
                   <span className="font-semibold text-foreground">{selectedProposalModal.kam}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[11px]">Valor de la Oferta</span>
+                  <span className="text-muted-foreground block text-xs">Valor de la Oferta</span>
                   <span className="font-bold text-foreground font-mono text-sm">
                     {formatCop(selectedProposalModal.totalCostCop ?? 0)}
                   </span>
@@ -354,9 +369,9 @@ export function ProposalHistorySection({
                         <div className="flex items-center gap-2 truncate">
                           <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                           <span className="font-medium text-foreground truncate">{doc.name}</span>
-                          <span className="text-muted-foreground text-[10px]">({doc.size})</span>
+                          <span className="text-muted-foreground text-xs">({doc.size})</span>
                         </div>
-                        <span className="text-[10px] text-muted-foreground font-mono">{doc.date}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{doc.date}</span>
                       </div>
                     ))}
                   </div>

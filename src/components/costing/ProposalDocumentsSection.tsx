@@ -9,6 +9,7 @@ import {
   Lock,
   Eye,
   Plus,
+  Printer,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,6 +32,7 @@ interface ProposalDocumentsSectionProps {
   onUploadFile: (file: File, category: DocumentCategory, tag?: string) => void;
   onRemoveDocument: (doc: ProposalDocument) => void;
   onDownloadDocument: (doc: ProposalDocument) => void;
+  onOpenDossier?: () => void;
   isUploading?: boolean;
   userRole: string;
 }
@@ -41,10 +43,12 @@ export function ProposalDocumentsSection({
   onUploadFile,
   onRemoveDocument,
   onDownloadDocument,
+  onOpenDossier,
   isUploading = false,
   userRole,
 }: ProposalDocumentsSectionProps) {
-  const isLeader = userRole === "lider-producto" || userRole === "lider-nodo";
+  const isLeader = userRole === "lider-producto";
+  const isAdmin = userRole === "administrador";
 
   const clientFileInputRef = useRef<HTMLInputElement>(null);
   const internalFileInputRef = useRef<HTMLInputElement>(null);
@@ -54,12 +58,13 @@ export function ProposalDocumentsSection({
   const [internalDocTag, setInternalDocTag] = useState<string>("Matriz de Costeo");
 
   // Real documents carry the backend's verdict; mock ones keep the prototype's rule
-  // (only the Leader deletes).
-  const canDelete = (doc: ProposalDocument) => doc.canDelete ?? isLeader;
+  // (only the Leader deletes; Admin has read-only audit access).
+  const canDelete = (doc: ProposalDocument) => !isAdmin && (doc.canDelete ?? isLeader);
   const canDownload = (doc: ProposalDocument) => doc.downloadable !== false;
   const noFileHint = "Este documento se registró solo con su nombre; no tiene archivo almacenado";
 
   const handleFileUpload = (file: File, category: DocumentCategory, tag?: string) => {
+    if (isAdmin) return;
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
 
     if (category === "client_kam" && !CLIENT_KAM_EXTENSIONS.includes(ext)) {
@@ -97,7 +102,7 @@ export function ProposalDocumentsSection({
   // =========================================================================
   // VISTA KAM: SIN SELECTOR DE PESTAÑAS, SOLO PROPUESTA COMERCIAL
   // =========================================================================
-  if (!isLeader) {
+  if (!isLeader && !isAdmin) {
     return (
       <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-border dark:bg-card">
         {/* HEADER COMERCIAL DIRECTO */}
@@ -161,7 +166,7 @@ export function ProposalDocumentsSection({
               <span className="font-medium text-slate-700 dark:text-slate-200">
                 {isUploading ? "Subiendo archivo…" : "Adjuntar documento para el cliente (.pdf, .docx)"}
               </span>
-              <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o haz clic</span>
+              <span className="text-slate-400 text-xs hidden sm:inline">· Arrastra o haz clic</span>
             </div>
           </div>
 
@@ -182,7 +187,7 @@ export function ProposalDocumentsSection({
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{doc.name}</p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-xs text-slate-400">
                         {doc.size} · Subido el {doc.date} {doc.uploadedBy ? `por ${doc.uploadedBy}` : ""}
                       </p>
                     </div>
@@ -229,13 +234,33 @@ export function ProposalDocumentsSection({
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-4 dark:border-border">
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            Gestión de Documentos
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+              Gestión de Documentos
+            </h2>
+            {isAdmin && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground border border-border">
+                <Lock className="h-2.5 w-2.5" /> Auditoría · Solo lectura
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">
             Archivos adjuntos para presentación comercial y respaldo interno
           </p>
         </div>
+
+        {onOpenDossier && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onOpenDossier}
+            className="h-8 px-3 text-xs font-semibold inline-flex items-center gap-1.5 self-start sm:self-center border-slate-300 hover:border-icesi-blue hover:text-icesi-blue dark:border-border"
+          >
+            <Printer className="h-3.5 w-3.5 text-icesi-blue dark:text-sky-400" />
+            <span>Ficha para Docente</span>
+          </Button>
+        )}
       </div>
 
       {/* UNIFIED TABS */}
@@ -251,7 +276,7 @@ export function ProposalDocumentsSection({
               <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.2 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300">
                 <Eye className="h-2.5 w-2.5" /> KAM y Cliente
               </span>
-              <span className="text-[11px] text-slate-400">({clientKamDocuments.length})</span>
+              <span className="text-xs text-slate-400">({clientKamDocuments.length})</span>
             </TabsTrigger>
 
             {/* TAB B: REPOSITORIO INTERNO */}
@@ -263,7 +288,7 @@ export function ProposalDocumentsSection({
               <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.2 text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300">
                 <Lock className="h-2.5 w-2.5" /> Privado
               </span>
-              <span className="text-[11px] text-slate-400">({internalCostingDocuments.length})</span>
+              <span className="text-xs text-slate-400">({internalCostingDocuments.length})</span>
             </TabsTrigger>
           </TabsList>
 
@@ -272,7 +297,7 @@ export function ProposalDocumentsSection({
           {/* ======================================================== */}
           <TabsContent value="client_kam" className="mt-4 space-y-3">
             {/* DROPZONE COMPACTO */}
-            {isLeader && (
+            {isLeader && !isAdmin && (
               <div
                 className={`rounded-lg border border-dashed p-3 text-center transition-colors cursor-pointer ${
                   isDraggingClient
@@ -310,7 +335,7 @@ export function ProposalDocumentsSection({
                   <span className="font-medium text-slate-700 dark:text-slate-200">
                     {isUploading ? "Subiendo archivo…" : "Subir propuesta comercial (.pdf, .docx)"}
                   </span>
-                  <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o haz clic</span>
+                  <span className="text-slate-400 text-xs hidden sm:inline">· Arrastra o haz clic</span>
                 </div>
               </div>
             )}
@@ -333,7 +358,7 @@ export function ProposalDocumentsSection({
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">{doc.name}</p>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-xs text-slate-400">
                           {doc.size} · Subido el {doc.date} {doc.uploadedBy ? `por ${doc.uploadedBy}` : ""}
                         </p>
                       </div>
@@ -375,7 +400,7 @@ export function ProposalDocumentsSection({
           {/* ======================================================== */}
           <TabsContent value="internal_costing" className="mt-4 space-y-3">
             {/* DROPZONE COMPACTO CON SELECTOR DE ETIQUETA */}
-            {isLeader && (
+            {isLeader && !isAdmin && (
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div
                   className={`flex-1 rounded-lg border border-dashed p-3 text-center transition-colors cursor-pointer ${
@@ -414,7 +439,7 @@ export function ProposalDocumentsSection({
                     <span className="font-medium text-slate-700 dark:text-slate-200">
                       Subir archivo interno (.xlsx, .xlsm, .pdf, .docx)
                     </span>
-                    <span className="text-slate-400 text-[11px] hidden sm:inline">· Arrastra o selecciona</span>
+                    <span className="text-slate-400 text-xs hidden sm:inline">· Arrastra o selecciona</span>
                   </div>
                 </div>
 
@@ -470,7 +495,7 @@ export function ProposalDocumentsSection({
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-xs text-slate-400">
                           {doc.size} · Subido el {doc.date} {doc.uploadedBy ? `por ${doc.uploadedBy}` : ""}
                         </p>
                       </div>
